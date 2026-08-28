@@ -154,7 +154,12 @@
     <div class="sub">Rooftops of Jianghu</div>
     <h1>飛　簷</h1>
     <div class="seal">屋顶轻功</div>
-    <p>三更天，你踩着青瓦向北去。街上是巡夜的灯，头顶是月。<br><b style="color:#d8443c">身后有几个捕快，一直追。被他们摸到，就是铁链上身。</b><br>六回路：夜巷、长街、雨夜、雪夜、皇城，直到破晓出城。<br>别停，也别落到地上——落地的人，走不出这座城。</p>
+    <p>三更天，你踩着青瓦向北去。街上是巡夜的灯，头顶是月。<br>
+      屋顶上有刀客和弓手拦路。<b style="color:#d8443c">一旦动手取了人命，就有人报官——<br>
+      捕快循声追来，这一回都甩不掉，被摸到就是铁链上身。</b><br>
+      潜过去，还是杀过去，你自己定。<br>
+      六回路：夜巷、长街、雨夜、雪夜、皇城，直到破晓出城。<br>
+      别落到地上——落地的人，走不出这座城。</p>
     <div class="keys">
       <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>奔行</div>
       <div><kbd>鼠标</kbd>转视角（点击锁定）</div>
@@ -165,7 +170,7 @@
       <div><kbd>Ctrl</kbd>或 <kbd>C</kbd>滑铲</div>
       <div><kbd>P</kbd>暂停　<kbd>R</kbd>重来</div>
     </div>
-    <p class="hint">顶上那条是追兵距离，红了就是贴到身后了 · 回身一剑能把捕快逼退七八步，但打不死</p>
+    <p class="hint">杀人才会招来捕快，杀得越多来得越多 · 顶上那条是追兵距离，红了就是贴到身后 · 回身一剑能逼退，但打不死</p>
     <p class="hint">空中掠过吊索会自动挂上滑行 · 跑上竹跳板会被高高弹起 · 水缸推得动，也推得下去</p>
     <p class="hint">手机横屏会出现虚拟手柄，右半屏拖动转视角。</p>
     <div class="go">点击画面 · 起　纵</div>
@@ -2654,6 +2659,7 @@ function hitFoe(f, nx, nz, dmg) {
   if (f.hp <= 0) {
     f.dead = true; f.deadT = 2.6; f.vy = 3.2;
     Hero.kills++; Game.score += f.type === 'boss' ? 500 : 60;
+    if (f.type !== 'boss') Chase.alarm();       // 取了人命，捕快就来了
     Game.combo++; Game.comboT = 2.4;
     spawnBurst(f.x, f.y + 1.0, f.z, 18, PAL.cloth);
     spawnRing(f.x, f.y + 0.9, f.z, PAL.cloth);
@@ -2666,6 +2672,9 @@ function hitFoe(f, nx, nz, dmg) {
 /* ==========================================================================
    追捕：几个捕快在后面撵，追上就把你绑了。
 
+   不杀人就没有捕快。你在屋顶上潜过去，没人报官，一路太平；一旦出手取了
+   人命，捕快才循声赶来，之后这一回都甩不掉。杀得越多来得越多。
+
    屋顶上做真正的寻路不现实（满城的跳跃、吊索、木桩、会塌的台子），所以
    捕快跟的是主角自己留下的轨迹：主角每跑半米落一个点，捕快按弧长沿这条
    折线推进。你怎么跳过去的，他们就怎么跳过去，永远卡不住；而且「还差
@@ -2673,26 +2682,44 @@ function hitFoe(f, nx, nz, dmg) {
    ========================================================================== */
 const Chase = {
   on: false, pts: [], s: 0, cops: [], speed: 9.2, hold: 0,
-  warnT: 0, minGap: 999, headS: 0,
+  warnT: 0, minGap: 999, headS: 0, kills: 0, maxCops: 3, baseSpeed: 7.4,
   reset(chapter) {
-    this.on = true;
+    this.on = true;                                // 轨迹一直在记，捕快未必来
+    this.kills = 0; this.cops.length = 0;
+    this.maxCops = 3 + Math.min(3, Math.floor((chapter - 1) / 2));
     this.pts.length = 0; this.s = 0; this.warnT = 0; this.minGap = 999;
     // 比对的不是疾奔峰值 10.9，而是主角沿轨迹的实际配速（实测约 9.4 m/s）。
     // 留出余量：跑干净就能拉开，一出错就被咬住。
-    this.speed = 7.4 + (chapter - 1) * 0.26;
-    this.hold = 2.6;                               // 开局先让你跑几步
-    const n = 3 + Math.min(2, Math.floor((chapter - 1) / 2));
-    this.cops = [];
-    for (let i = 0; i < n; i++) {
+    this.baseSpeed = 7.4 + (chapter - 1) * 0.26;
+    this.speed = this.baseSpeed;
+    this.hold = 0;
+    this.record(true);
+  },
+  /* 取了一条人命就会有人报官。第一次来两个，之后每杀一个再添一个，
+     人越多脚程也越快一点。 */
+  alarm() {
+    this.kills++;
+    const add = this.kills === 1 ? 2 : 1;
+    this.speed = this.baseSpeed + Math.min(this.kills - 1, 4) * 0.13;
+    let added = 0;
+    for (let i = 0; i < add && this.cops.length < this.maxCops; i++) {
+      const n = this.cops.length;
       this.cops.push({
-        prog: 0, stun: 0, side: (i - (n - 1) / 2) * 1.15,
+        prog: this.headS - 46 - n * 5, stun: 0, side: 0,   // 可以为负，posAt 会把人停在起点那边
         x: Hero.x, y: Hero.y, z: Hero.z, yaw: Hero.yaw, vy: 0,
         phase: Math.random() * 6, anim: 'run', animSpeed: 9,
         atk: 0, atkDur: 0.3, atkVariant: 0, hurtT: 0, deadT: 0,
         sword: true, bow: false, pose: newPose()
       });
+      added++;
     }
-    this.record(true);
+    // 队形横向铺开
+    const m = this.cops.length;
+    for (let i = 0; i < m; i++) this.cops[i].side = (i - (m - 1) / 2) * 1.15;
+    if (added) {
+      SFX.whistle(1); SFX.gong(0.35);
+      Game.toast(this.kills === 1 ? '有　人　报　官' : '又　来　一　个');
+    }
   },
   // 记录主角轨迹。间隔太密没意义，太疏会切掉转弯。
   record(force) {
@@ -2722,10 +2749,11 @@ const Chase = {
     out[0] = lerp(a.x, b.x, t); out[1] = lerp(a.y, b.y, t); out[2] = lerp(a.z, b.z, t);
   },
   update(dt) {
-    if (!this.on || !this.cops.length) return;
+    if (!this.on) return;
     this.record(false);
     const p = this.pts, last = p[p.length - 1];
     this.headS = this.s + Math.hypot(Hero.x - last.x, Hero.y - last.y, Hero.z - last.z);
+    if (!this.cops.length) { this.minGap = 999; return; }   // 没杀人就没人追
     if (this.hold > 0) this.hold -= dt;
     // 上了钟楼就安全了：捕快堵在塔下，不然第六回一边打头目一边被抓没法玩
     const g = World.goal;
@@ -3538,7 +3566,7 @@ function updateHUD() {
   } else UI.combo.classList.remove('on');
 
   // 追捕读数
-  if (Chase.on && Chase.cops.length) {
+  if (Chase.cops.length) {
     UI.chaseBar.style.opacity = '1';
     const gap = Chase.minGap;
     if (Chase.atGoal) {
@@ -3547,7 +3575,8 @@ function updateHUD() {
       UI.danger.style.opacity = '0';
     } else {
       const near = 1 - clamp(gap / 45, 0, 1);
-      UI.chaseTxt.textContent = gap > 900 ? '捕快在后' : '捕快 · 距 ' + Math.round(gap) + ' 步';
+      UI.chaseTxt.textContent = gap > 900 ? '捕快在后'
+        : '捕快 ×' + Chase.cops.length + ' · 距 ' + Math.round(gap) + ' 步';
       UI.chaseFill.style.width = (near * 100).toFixed(0) + '%';
       UI.danger.style.opacity = gap < 16
         ? (0.30 + 0.55 * (1 - gap / 16) * (0.65 + 0.35 * Math.sin(Game.time * 11))).toFixed(2)
@@ -3631,7 +3660,8 @@ const Game = {
     this.state = 'clear';
     const t = this.time, par = SCENES[this.chapter - 1].par;
     const rank = t < par * 0.7 ? '甲' : t < par ? '乙' : '丙';
-    this.totalScore += this.score + Math.max(0, Math.round((par - t) * 12)) + Hero.hp * 200;
+    const clean = Hero.kills === 0 ? 800 : 0;
+    this.totalScore += this.score + Math.max(0, Math.round((par - t) * 12)) + Hero.hp * 200 + clean;
     this.chapterTimes.push(t);
     SFX.gong(1.2);
     Cam.shake = 0.7;
@@ -3644,7 +3674,8 @@ const Game = {
         '总用时 ' + fmtTime(this.chapterTimes.reduce((a, b) => a + b, 0)) +
         ' · 总计 ' + this.totalScore + ' 分'
       : '本回用时 ' + fmtTime(t) + ' · 评 <b style="color:#e6b64c">' + rank + '</b> 等<br>' +
-        '铜钱 ' + Hero.coins + ' · 伏敌 ' + Hero.kills + ' · 余命 ' + Hero.hp;
+        '铜钱 ' + Hero.coins + ' · 伏敌 ' + Hero.kills + ' · 余命 ' + Hero.hp +
+        (clean ? '<br><b style="color:#5fc8b4">未曾伤人　+800</b>' : '');
     setTimeout(() => { if (Game.state === 'clear') UI.sClear.classList.remove('hide'); }, 1500);
     if (Input.locked) document.exitPointerLock();
   },

@@ -204,26 +204,47 @@ console.log('\n追捕');
 {
   chaseOn = true;
   const C = G.Chase;
-  // 站着不动一定会被绑
-  Game.startChapter(1); idle();
-  let f = 0;
-  while (f++ < 900 && !Hero.dead) G.tick();
-  ok(Hero.dead && Hero.deathKind === 'caught', '站着不动会被追上绑走',
-     '第 ' + (f / 60).toFixed(1) + 's');
 
-  // 捕快数量随回数增加
-  const counts = [];
-  for (let ch = 1; ch <= SCENES.length; ch++) { Game.startChapter(ch); counts.push(C.cops.length); }
-  ok(counts[0] >= 3 && counts[counts.length - 1] > counts[0], '捕快人数随回数增加', counts.join(' '));
+  // 不杀人就没人追
+  Game.startChapter(1); idle();
+  G.Input.ay = 1; G.Cam.yaw = Math.PI / 2;
+  for (let i = 0; i < 600; i++) { Hero.hp = Hero.maxHp; G.tick(); }
+  ok(C.cops.length === 0, '不杀人，整回没有捕快', '跑了 10s，追兵 ' + C.cops.length + ' 人');
+  ok(!Hero.dead, '也不会平白无故被抓');
+
+  // 取一条人命就有人报官
+  const foe = G.Foes.find(f => !f.dead && f.type !== 'boss');
+  ok(!!foe, '关里有可杀的敌人');
+  const gapAtKill = C.headS;
+  G.hitFoe(foe, 1, 0, 99);
+  ok(C.cops.length >= 2, '杀第一个人，两个捕快循声赶来', C.cops.length + ' 人');
+  ok(C.headS - C.cops[0].prog > 30, '捕快从后面赶来，不是凭空贴在脸上',
+     '出现时距离 ' + (C.headS - C.cops[0].prog).toFixed(0) + 'm');
+
+  // 杀得越多来得越多，且脚程更快
+  const n1 = C.cops.length, sp1 = C.speed;
+  for (const f of G.Foes.filter(f => !f.dead && f.type !== 'boss').slice(0, 3)) G.hitFoe(f, 1, 0, 99);
+  ok(C.cops.length > n1 && C.speed > sp1, '杀得越多，人越多、脚程越快',
+     n1 + '→' + C.cops.length + ' 人，' + sp1.toFixed(2) + '→' + C.speed.toFixed(2) + ' m/s');
+  ok(C.cops.length <= C.maxCops, '人数有上限', C.cops.length + '/' + C.maxCops);
+
+  // 报了官之后站着不动，一定被绑
+  idle();
+  let f2 = 0;
+  while (f2++ < 1200 && !Hero.dead) { G.tick(); }
+  ok(Hero.dead && Hero.deathKind === 'caught', '报官之后站着不动会被追上绑走',
+     '第 ' + (f2 / 60).toFixed(1) + 's');
 
   // 摔一跤要丢掉从检查点跑到失足处的那段路，不能反而赚
   Game.startChapter(2); idle();
   G.Input.ay = 1; G.Cam.yaw = Math.PI / 2;
-  for (let i = 0; i < 420; i++) { Hero.hp = Hero.maxHp; G.tick(); }
+  for (let i = 0; i < 300; i++) { Hero.hp = Hero.maxHp; G.tick(); }
+  G.hitFoe(G.Foes.find(f => !f.dead && f.type !== 'boss'), 1, 0, 99);
+  for (let i = 0; i < 240; i++) { Hero.hp = Hero.maxHp; G.tick(); }
   const before = C.s, gapBefore = C.minGap;
-  Hero.invuln = 0; Hero.y = 0.5;               // 失足
+  Hero.invuln = 0; Hero.y = 0.5;
   for (let i = 0; i < 6; i++) G.tick();
-  ok(C.s < before - 5, '摔下去会把轨迹弧长退回检查点', 
+  ok(C.s < before - 5, '摔下去会把轨迹弧长退回检查点',
      '丢掉 ' + (before - C.s).toFixed(0) + 'm（原本瞬移会白赚这一段）');
   ok(C.minGap <= gapBefore + 1, '摔完距离不会反而变大',
      gapBefore.toFixed(0) + 'm → ' + C.minGap.toFixed(0) + 'm');
@@ -231,11 +252,12 @@ console.log('\n追捕');
   // 一剑打不死捕快，但能把人逼退
   Game.startChapter(1); idle();
   G.Input.ay = 1; G.Cam.yaw = Math.PI / 2;
-  for (let i = 0; i < 60; i++) G.tick();
+  for (let i = 0; i < 90; i++) G.tick();
+  G.hitFoe(G.Foes.find(f => !f.dead && f.type !== 'boss'), 1, 0, 99);
   idle();
-  for (let i = 0; i < 30; i++) G.tick();        // 先停下来，否则出剑那一刻会转身朝前
-  const cop = C.cops[0];
-  C.speed = 0;                                  // 冻住捕快，专测击退
+  for (let i = 0; i < 30; i++) G.tick();
+  const cop = C.cops[0], nCops = C.cops.length;
+  C.speed = 0;
   cop.prog = C.headS - 2.2;
   G.tick();
   const progBefore = cop.prog;
@@ -244,14 +266,17 @@ console.log('\n追捕');
   for (let i = 0; i < 20; i++) G.tick();
   ok(cop.stun > 0 || cop.prog < progBefore - 3, '一棍子能把捕快逼退',
      '退了 ' + (progBefore - cop.prog).toFixed(1) + 'm');
-  ok(C.cops.length === counts[0], '捕快打不死，人数不变');
+  ok(C.cops.length === nCops, '捕快打不死，人数不变');
 
   // 上了钟楼就安全
   Game.startChapter(1); idle();
+  G.hitFoe(G.Foes.find(f => !f.dead && f.type !== 'boss'), 1, 0, 99);
   const g = World.goal;
-  Hero.x = g.x - 6; Hero.y = g.y + 0.2; Hero.z = g.z;
-  Hero.dead = false; Hero.hp = Hero.maxHp;
-  for (let i = 0; i < 240; i++) { Hero.x = g.x - 6; Hero.y = g.y + 0.2; Hero.z = g.z; G.tick(); }
+  for (let i = 0; i < 240; i++) {
+    Hero.x = g.x - 6; Hero.y = g.y + 0.2; Hero.z = g.z;
+    Hero.dead = false; Hero.hp = Hero.maxHp;
+    G.tick();
+  }
   ok(C.atGoal, '上了钟楼判定为安全区');
   ok(!Hero.dead, '在钟楼上不会被抓（否则第六回没法打头目）');
 }
