@@ -154,7 +154,7 @@
     <div class="sub">Rooftops of Jianghu</div>
     <h1>飛　簷</h1>
     <div class="seal">屋顶轻功</div>
-    <p>三更天，你踩着青瓦向北去。街上是巡夜的灯，头顶是月。<br>别落到地上——落地的人，走不出这座城。</p>
+    <p>三更天，你踩着青瓦向北去。街上是巡夜的灯，头顶是月。<br>六回路：夜巷、长街、雨夜、雪夜、皇城，直到破晓出城。<br>别落到地上——落地的人，走不出这座城。</p>
     <div class="keys">
       <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>奔行</div>
       <div><kbd>鼠标</kbd>转视角（点击锁定）</div>
@@ -334,15 +334,18 @@ void main(){
   gl_Position = uVP * w;
 }`, `
 precision mediump float;
-uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol, uFogCol, uCam, uTint;
-uniform float uFogD, uUnlit, uEmis, uAlpha;
+uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol, uFogCol, uCam, uTint, uSnowCol;
+uniform float uFogD, uUnlit, uEmis, uAlpha, uSnow, uWet;
 varying vec3 vN; varying vec4 vC; varying vec3 vW;
 void main(){
   vec3 n = normalize(vN);
   float d  = max(dot(n, uSunDir), 0.0);
   float hm = 0.5 + 0.5 * n.y;
   vec3 base = vC.rgb * uTint;
-  vec3 lit  = base * (mix(uGndCol, uSkyCol, hm) + uSunCol * d) + base * uEmis;
+  // 朝上的面积雪：不用改一个顶点，屋脊、栏杆、檐口自然就白了
+  vec3 sb = mix(base, uSnowCol, uSnow * smoothstep(0.42, 0.86, n.y));
+  sb *= (1.0 - uWet * 0.30);                     // 打湿的瓦更深
+  vec3 lit  = sb * (mix(uGndCol, uSkyCol, hm) + uSunCol * d) + sb * uEmis;
   lit = mix(lit, base, uUnlit);
   float dist = length(vW - uCam);
   float f = clamp(1.0 - exp(-dist * uFogD), 0.0, 1.0) * (1.0 - uUnlit * 0.65);
@@ -360,42 +363,60 @@ void main(){
   gl_Position = vec4(aP, 0.9999, 1.0);
 }`, `
 precision mediump float;
-uniform vec3 uMoon, uZen, uHor, uFogCol; uniform float uTime;
+uniform vec3 uMoon, uZen, uHor, uFogCol, uBodyCol, uGlowCol;
+uniform float uTime, uStar, uMilky, uCloud, uCut, uPow, uFlash;
 varying vec3 vR;
 float h11(float p){ return fract(sin(p * 127.13) * 43758.5453); }
 float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 uv){
+  vec2 c = floor(uv), f = fract(uv);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(c), h21(c + vec2(1.0, 0.0)), f.x),
+             mix(h21(c + vec2(0.0, 1.0)), h21(c + vec2(1.0, 1.0)), f.x), f.y);
+}
+// 把视线投到一个很高的平面上取噪声，得到会飘的云层
+float clouds(vec3 r){
+  vec2 uv = r.xz / max(r.y, 0.09) * 0.34 + vec2(uTime * 0.007, uTime * 0.0035);
+  float v = 0.0, a = 0.55;
+  for (int i = 0; i < 3; i++){ v += vnoise(uv) * a; a *= 0.5; uv *= 2.07; }
+  return v;
+}
 // 一层随机高低的城郭剪影
 float skyline(float a, float k, float seed){
   float x = a * k + seed;
   float i = floor(x), f = fract(x);
   float h = 0.35 + 0.65 * h11(i + seed);
-  // 屋脊中间高两端低，做出坡屋顶轮廓
   h *= 0.62 + 0.38 * sin(f * 3.1416);
   return h;
 }
 void main(){
   vec3 r = normalize(vR);
   float e = r.y;
-  // 天穹渐变
   vec3 col = mix(uHor, uZen, pow(clamp(e * 1.15 + 0.06, 0.0, 1.0), 0.62));
-  // 银河一抹
   float mw = exp(-pow((e - 0.42 + 0.16 * sin(atan(r.z, r.x) * 1.3)) * 6.0, 2.0));
-  col += vec3(0.05, 0.06, 0.10) * mw;
-  // 星
-  vec3 q = r * 190.0;
-  vec2 cell = floor(q.xz + q.y * 0.37);
-  float st = h21(cell);
-  if (st > 0.9955 && e > 0.02) {
-    float tw = 0.55 + 0.45 * sin(uTime * 2.2 + st * 90.0);
-    col += vec3(0.85, 0.88, 1.0) * (st - 0.9955) * 230.0 * tw * clamp(e * 3.0, 0.0, 1.0);
+  col += vec3(0.05, 0.06, 0.10) * mw * uMilky;
+  if (uStar > 0.01) {
+    vec3 q = r * 190.0;
+    vec2 cell = floor(q.xz + q.y * 0.37);
+    float st = h21(cell);
+    if (st > 0.9955 && e > 0.02) {
+      float tw = 0.55 + 0.45 * sin(uTime * 2.2 + st * 90.0);
+      col += vec3(0.85, 0.88, 1.0) * (st - 0.9955) * 230.0 * tw * clamp(e * 3.0, 0.0, 1.0) * uStar;
+    }
   }
-  // 月：本体 + 晕 + 月边淡淡的海
+  // 天上那颗：晕 + 盘
   float m = dot(r, uMoon);
-  col += vec3(0.34, 0.40, 0.52) * pow(max(m, 0.0), 340.0);
-  float disc = smoothstep(0.9967, 0.9975, m);
+  col += uGlowCol * pow(max(m, 0.0), uPow);
+  float disc = smoothstep(uCut, uCut + 0.0009, m);
   float blot = 0.86 + 0.14 * h21(r.xz * 60.0 + 3.0);
-  col = mix(col, vec3(0.97, 0.95, 0.88) * blot, disc);
-  // 地平线两层城郭
+  col = mix(col, uBodyCol * blot, disc);
+  // 云：越接近天顶越厚，地平线附近淡出
+  if (uCloud > 0.01) {
+    float c = clouds(r);
+    float cover = smoothstep(0.42, 0.86, c) * uCloud * smoothstep(0.01, 0.34, e);
+    vec3 cc = mix(uFogCol * 1.22, vec3(1.0), uFlash * 0.85);
+    col = mix(col, cc, clamp(cover, 0.0, 1.0));
+  }
   float a = atan(r.z, r.x);
   float far  = skyline(a, 9.0,  1.7) * 0.055 + 0.004;
   float near = skyline(a, 15.0, 9.3) * 0.036 - 0.006;
@@ -403,9 +424,9 @@ void main(){
   vec3 nearC = mix(uFogCol, vec3(0.05, 0.07, 0.11), 0.75);
   col = mix(col, farC,  smoothstep(far + 0.004, far - 0.004, e));
   col = mix(col, nearC, smoothstep(near + 0.003, near - 0.003, e));
-  // 地平线雾带
   col = mix(col, uFogCol, smoothstep(0.10, -0.02, e) * 0.72);
   if (e < -0.002) col = mix(col, uFogCol * 0.55, smoothstep(-0.002, -0.09, e));
+  col += uFlash * vec3(0.30, 0.33, 0.42);
   gl_FragColor = vec4(col, 1.0);
 }`, ['aP']);
 
@@ -1023,8 +1044,8 @@ function genPath(chapter) {
   World.chapter = chapter;
   const rng = makeRng(0x9e37 + chapter * 7919);
   const m = World.mesh, gm = World.glow;
-  const nodes = 30 + chapter * 8;
-  const diff = (chapter - 1) / 2;                  // 0 → 1
+  const nodes = 26 + chapter * 4;
+  const diff = (chapter - 1) / 5;                  // 0 → 1
   const path = World.path;
 
   // ---- 起点：客栈的露台
@@ -1348,7 +1369,7 @@ function addStreets(rng, m, gm) {
 function genLevel(chapter) {
   const g = genPath(chapter);
   const rng = g.rng, m = g.m, gm = g.gm;
-  const diff = (chapter - 1) / 2;
+  const diff = (chapter - 1) / 5;
 
   // ---- 终点：钟楼。塔的层数按最后一个屋顶的高度挑，保证接得上。
   const lastNode = World.path[World.path.length - 1];
@@ -1400,7 +1421,7 @@ function genLevel(chapter) {
 
   // ---- 敌人与拾取
   const path = World.path;
-  const foes = Math.round(5 + chapter * 4.5);
+  const foes = Math.round(4 + chapter * 2.4);
   const usable = [];
   for (let i = 5; i < path.length - 2; i++) {
     const n = path[i];
@@ -1428,7 +1449,7 @@ function genLevel(chapter) {
     const n = path[i];
     World.spawns.push({ type: 'gourd', x: n.cx, y: n.y + 1.0, z: n.cz });
   }
-  if (chapter === 3) World.spawns.push({ type: 'boss', x: gx - 2.5, y: bell.top, z: gz });
+  if (chapter === SCENES.length) World.spawns.push({ type: 'boss', x: gx - 2.5, y: bell.top, z: gz });
 
   buildGrid();
   m.upload(); gm.upload();
@@ -2054,6 +2075,13 @@ function tryGrabZip() {
   }
 }
 
+// 脚下是什么：雨雪盖过材质，否则看碰撞体的标签
+const WOODY = { plank: 1, pole: 1, frail: 1, step: 1, deck: 1, spring: 1 };
+function stepSurface() {
+  if (Env.step !== 'tile') return Env.step;
+  return (Hero.ground && WOODY[Hero.ground.tag]) ? 'wood' : 'tile';
+}
+
 function updateHero(dt) {
   const H = Hero;
   if (H.dead) { H.deadT += dt; H.anim = 'dead'; return; }
@@ -2134,13 +2162,13 @@ function updateHero(dt) {
     const sp = Math.hypot(H.vx, H.vz);
     if (sp > 0.01) { const k = Math.max(0, sp - f * dt) / sp; H.vx *= k; H.vz *= k; }
   } else {
-    const acc = H.onGround ? ACC_G : ACC_A;
+    const acc = H.onGround ? ACC_G * Env.grip : ACC_A;
     if (moving) {
       H.vx += (wx * target - H.vx) * Math.min(1, acc / target * dt);
       H.vz += (wz * target - H.vz) * Math.min(1, acc / target * dt);
     } else if (H.onGround) {
       const sp = Math.hypot(H.vx, H.vz);
-      if (sp > 0.01) { const k = Math.max(0, sp - FRIC * dt) / sp; H.vx *= k; H.vz *= k; }
+      if (sp > 0.01) { const k = Math.max(0, sp - FRIC * Env.grip * dt) / sp; H.vx *= k; H.vz *= k; }
     }
   }
   const speed = Math.hypot(H.vx, H.vz);
@@ -2217,6 +2245,7 @@ function updateHero(dt) {
     const impact = -Math.min(H.vyLast || 0, 0);
     H.landT = 0.18;
     SFX.land(clamp(impact / 18, 0.25, 1));
+    if (Env.step !== 'tile') SFX.step(Env.step, 1);
     spawnDust(H.x, H.y, H.z, impact > 13 ? 14 : 6, impact > 13 ? 1 : 0.55);
     if (impact > 17) { Cam.shake = Math.max(Cam.shake, 0.55); H.vx *= 0.55; H.vz *= 0.55; }
     if (gr.s.frail && gr.s.dyn && gr.s.dyn.t < 0) gr.s.dyn.t = 0.75;   // 朽木台开始塌
@@ -2258,6 +2287,11 @@ function updateHero(dt) {
   else H.anim = 'idle';
   const cadence = H.anim === 'wall' ? 12 : clamp(speed * 1.15, 0, 14);
   H.phase += cadence * dt;
+  // 一个跑步周期落两次脚，取 sin 的过零点
+  const sn = Math.sin(H.phase);
+  if (H.onGround && H.anim === 'run' && speed > 1.6 && sn * (H.lastSin || 0) < 0)
+    SFX.step(stepSurface(), clamp(speed / 11, 0.35, 1));
+  H.lastSin = sn;
   if (H.phase > TAU * 64) H.phase -= TAU * 64;
 }
 
@@ -2298,7 +2332,7 @@ function spawnDust(x, y, z, n, s) {
     const a = Math.random() * TAU, v = 0.6 + Math.random() * 2.4 * s;
     addP(x + Math.cos(a) * 0.3, y + 0.06, z + Math.sin(a) * 0.3,
          Math.cos(a) * v, 0.5 + Math.random() * 1.4 * s, Math.sin(a) * v,
-         0.5 + Math.random() * 0.5, (0.14 + Math.random() * 0.2) * s, PAL.stone, 2.2, false);
+         0.5 + Math.random() * 0.5, (0.14 + Math.random() * 0.2) * s, Env.dust || PAL.stone, 2.2, false);
   }
 }
 function spawnBurst(x, y, z, n, col) {
@@ -2459,7 +2493,7 @@ function updateFoes(dt) {
     f.animSpeed = 0;
     if (f.type === 'boss') { updateBoss(f, dt, dist, dx, dz); foeGround(f, dt); f.phase += Math.max(1.5, f.animSpeed * 1.2) * dt; continue; }
 
-    const canSee = dist < (f.type === 'archer' ? 34 : 17) && Math.abs(dy) < 7 && !H.dead;
+    const canSee = dist < (f.type === 'archer' ? 34 : 17) * Env.sight && Math.abs(dy) < 7 && !H.dead;
     if (canSee && !f.alerted) { f.alerted = true; f.cool = 0.35 + Math.random() * 0.4; }
     if (!canSee) { f.alerted = false; f.state = 'idle'; }
 
@@ -2701,6 +2735,8 @@ const SFX = {
     this.noiseBuf = b;
     this.wind();
     this.ready = true;
+    this.rainOn(Env.weather === 'rain' ? 1 : 0);
+    this.windLevel(Env.snow ? 2.2 : 1);
   },
   resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
   now() { return this.ctx ? this.ctx.currentTime : 0; },
@@ -2734,6 +2770,7 @@ const SFX = {
     const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
     const g = c.createGain(); g.gain.value = 0.045;
+    this.windGain = g;
     const lfo = c.createOscillator(); lfo.frequency.value = 0.07;
     const lg = c.createGain(); lg.gain.value = 0.03;
     lfo.connect(lg); lg.connect(g.gain); lfo.start();
@@ -2778,6 +2815,65 @@ const SFX = {
   slide()  { this.noise(0.55, 0.13, 2600, 500, 'bandpass'); },
   dash()   { this.noise(0.3, 0.16, 500, 2600, 'bandpass'); },
   fall()   { this.tone(700, 90, 0.7, 0.14, 'sine'); },
+  // 雨是一直在响的，两层：高频的沙沙 + 低频的雨幕
+  rainOn(level) {
+    const c = this.ctx; if (!c) return;
+    if (!this.rainG) {
+      const mk = (loF, hiF, type) => {
+        const src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+        const f1 = c.createBiquadFilter(); f1.type = 'highpass'; f1.frequency.value = loF;
+        const f2 = c.createBiquadFilter(); f2.type = 'lowpass';  f2.frequency.value = hiF;
+        const g = c.createGain(); g.gain.value = 0;
+        src.connect(f1); f1.connect(f2); f2.connect(g); g.connect(this.master);
+        src.start(); return g;
+      };
+      this.rainG = mk(500, 6000);      // 打在瓦上的沙沙
+      this.rainG2 = mk(40, 620);       // 远处成片的雨幕
+    }
+    const t = c.currentTime;
+    this.rainG.gain.cancelScheduledValues(t);
+    this.rainG2.gain.cancelScheduledValues(t);
+    this.rainG.gain.linearRampToValueAtTime(level * 0.15, t + 0.9);
+    this.rainG2.gain.linearRampToValueAtTime(level * 0.11, t + 0.9);
+  },
+  windLevel(x) {
+    if (this.windGain && this.ctx)
+      this.windGain.gain.linearRampToValueAtTime(0.045 * x, this.ctx.currentTime + 1.2);
+  },
+  thunder() {
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime;
+    const src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, t);
+    lp.frequency.exponentialRampToValueAtTime(90, t + 2.2);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.30, t + 0.10);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + 2.6);
+    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 2.7);
+    this.tone(70, 32, 2.0, 0.12, 'sine', null, t + 0.05);
+  },
+  // 脚步：踩雪要有颗粒感，所以是两段很短的噪声加随机音高
+  step(kind, v) {
+    v = v || 1;
+    if (kind === 'snow') {
+      const f = 1100 + Math.random() * 900;
+      this.noise(0.055, 0.15 * v, f, f * 0.32, 'bandpass');
+      this.noise(0.085, 0.085 * v, 2600 + Math.random() * 1300, 700, 'highpass');
+    } else if (kind === 'wet') {
+      this.noise(0.07, 0.13 * v, 900 + Math.random() * 500, 260, 'bandpass');
+      this.tone(215 + Math.random() * 70, 90, 0.06, 0.045 * v, 'sine');
+    } else if (kind === 'wood') {
+      this.tone(320 + Math.random() * 90, 150, 0.055, 0.070 * v, 'triangle');
+      this.noise(0.04, 0.055 * v, 1600, 600);
+    } else {
+      this.noise(0.038, 0.080 * v, 2400 + Math.random() * 800, 900);
+      this.tone(520 + Math.random() * 130, 260, 0.04, 0.032 * v, 'triangle');
+    }
+  },
   spring() { this.tone(190, 880, 0.16, 0.16, 'triangle'); this.tone(880, 300, 0.22, 0.09, 'sine'); this.noise(0.2, 0.10, 600, 2200); },
   zipGrab(){ this.noise(0.5, 0.14, 900, 3200, 'bandpass'); this.tone(420, 700, 0.4, 0.05, 'triangle'); },
   smash()  { this.noise(0.35, 0.22, 4200, 500); this.tone(320, 90, 0.22, 0.12, 'square'); this.noise(0.5, 0.09, 900, 180); },
@@ -2794,7 +2890,7 @@ const SFX = {
     const bpm = 74 + chapter * 5 + (tense ? 18 : 0);
     const spb = 60 / bpm;
     const scale = [0, 3, 5, 7, 10];
-    const root = [146.83, 164.81, 130.81][(chapter - 1) % 3];
+    const root = [146.83, 164.81, 123.47, 130.81, 155.56, 174.61][(chapter - 1) % 6];
     while (this.mNext < t + 0.6) {
       const b = this.mBeat, tt = this.mNext;
       if (b % 8 === 0) this.drum(tt, 0.22);
@@ -2812,16 +2908,184 @@ const SFX = {
 /* ==========================================================================
    渲染
    ========================================================================== */
-const alphaB = new DynBatch(9000, false), addB = new DynBatch(9000, true);
-const SKIES = [
-  { zen: [0.030,0.048,0.105], hor: [0.115,0.140,0.215], fog: [0.085,0.105,0.165],
-    sun: [0.40,0.46,0.62], sky: [0.19,0.23,0.33], gnd: [0.13,0.10,0.09], fogD: 0.0040 },
-  { zen: [0.045,0.055,0.095], hor: [0.170,0.150,0.180], fog: [0.125,0.115,0.135],
-    sun: [0.46,0.46,0.56], sky: [0.22,0.22,0.29], gnd: [0.17,0.12,0.09], fogD: 0.0052 },
-  { zen: [0.055,0.030,0.075], hor: [0.190,0.110,0.130], fog: [0.135,0.085,0.105],
-    sun: [0.56,0.44,0.50], sky: [0.24,0.19,0.27], gnd: [0.19,0.11,0.09], fogD: 0.0046 }
+const alphaB = new DynBatch(14000, false), addB = new DynBatch(9000, true);
+const SNOW_COL = new Float32Array([0.90, 0.93, 0.99]);
+/* 六个场景。颜色、天气、关卡信息放在一起——以前分成 SKIES / CHAPTERS 两张
+   平行数组，加一个场景要改两个地方，迟早对不上。
+   body 是天上那颗（月或日）：dir 方向、cut 越小盘面越大、pow 越小晕越散。 */
+const SCENES = [
+  { name: '第一回 · 夜　巷', sub: 'Chapter I — Night Alleys', par: 120, weather: 'none',
+    zen: [0.030,0.048,0.105], hor: [0.115,0.140,0.215], fog: [0.085,0.105,0.165],
+    sun: [0.40,0.46,0.62], sky: [0.19,0.23,0.33], gnd: [0.13,0.10,0.09], fogD: 0.0040,
+    dir: [-0.42,0.66,-0.62], bodyCol: [0.97,0.95,0.88], glow: [0.34,0.40,0.52],
+    cut: 0.9967, pow: 340, star: 1.0, milky: 1.0, cloud: 0, snow: 0, wet: 0 },
+
+  { name: '第二回 · 长　街', sub: 'Chapter II — The Long Street', par: 150, weather: 'none',
+    zen: [0.045,0.055,0.095], hor: [0.170,0.150,0.180], fog: [0.125,0.115,0.135],
+    sun: [0.46,0.46,0.56], sky: [0.22,0.22,0.29], gnd: [0.17,0.12,0.09], fogD: 0.0052,
+    dir: [-0.30,0.58,-0.76], bodyCol: [0.96,0.93,0.86], glow: [0.38,0.40,0.48],
+    cut: 0.9962, pow: 260, star: 0.55, milky: 0.4, cloud: 0.25, snow: 0, wet: 0 },
+
+  { name: '第三回 · 雨　夜', sub: 'Chapter III — Rain', par: 165, weather: 'rain',
+    zen: [0.036,0.042,0.058], hor: [0.105,0.108,0.128], fog: [0.088,0.092,0.110],
+    sun: [0.26,0.29,0.36], sky: [0.20,0.22,0.27], gnd: [0.12,0.11,0.11], fogD: 0.0092,
+    dir: [-0.25,0.72,-0.65], bodyCol: [0.55,0.58,0.64], glow: [0.20,0.22,0.28],
+    cut: 0.9930, pow: 90, star: 0, milky: 0, cloud: 1.0, snow: 0, wet: 1 },
+
+  { name: '第四回 · 雪　夜', sub: 'Chapter IV — Snowfall', par: 165, weather: 'snow',
+    zen: [0.075,0.083,0.115], hor: [0.215,0.220,0.255], fog: [0.180,0.188,0.222],
+    sun: [0.40,0.42,0.50], sky: [0.34,0.36,0.43], gnd: [0.26,0.26,0.30], fogD: 0.0078,
+    dir: [-0.36,0.70,-0.62], bodyCol: [0.92,0.94,1.00], glow: [0.40,0.44,0.55],
+    cut: 0.9950, pow: 120, star: 0.2, milky: 0, cloud: 0.7, snow: 1, wet: 0 },
+
+  { name: '第五回 · 皇　城', sub: 'Chapter V — The Forbidden City', par: 180, weather: 'none',
+    zen: [0.055,0.030,0.075], hor: [0.190,0.110,0.130], fog: [0.135,0.085,0.105],
+    sun: [0.56,0.44,0.50], sky: [0.24,0.19,0.27], gnd: [0.19,0.11,0.09], fogD: 0.0046,
+    dir: [-0.45,0.62,-0.64], bodyCol: [0.99,0.90,0.84], glow: [0.46,0.34,0.40],
+    cut: 0.9960, pow: 300, star: 0.8, milky: 0.7, cloud: 0.15, snow: 0, wet: 0 },
+
+  { name: '第六回 · 破　晓', sub: 'Chapter VI — Daybreak', par: 210, weather: 'dawn',
+    zen: [0.105,0.140,0.260], hor: [0.520,0.330,0.240], fog: [0.400,0.290,0.245],
+    sun: [0.95,0.62,0.38], sky: [0.42,0.40,0.46], gnd: [0.32,0.22,0.17], fogD: 0.0050,
+    dir: [0.95,0.14,0.28], bodyCol: [1.00,0.88,0.62], glow: [1.00,0.52,0.24],
+    cut: 0.9945, pow: 26, star: 0, milky: 0, cloud: 0.35, snow: 0, wet: 0 }
 ];
-const MOON = (() => { const v = [-0.42, 0.66, -0.62]; const l = Math.hypot(v[0],v[1],v[2]); return [v[0]/l, v[1]/l, v[2]/l]; })();
+// 每一回的天气参数，开局时装好
+const Env = { snow: 0, wet: 0, grip: 1, sight: 1, weather: 'none', step: 'tile' };
+function applyScene(sc) {
+  Env.snow = sc.snow; Env.wet = sc.wet; Env.weather = sc.weather;
+  Env.grip = sc.wet ? 0.72 : sc.snow ? 0.88 : 1;      // 湿瓦打滑，雪面稍软
+  Env.sight = (sc.wet || sc.snow) ? 0.75 : 1;         // 雨雪里敌人看得没那么远
+  Env.step = sc.snow ? 'snow' : sc.wet ? 'wet' : 'tile';
+  Env.dust = sc.snow ? [0.92, 0.95, 1.00] : sc.wet ? [0.50, 0.58, 0.68] : PAL.stone;
+  Weather.set(sc.weather);
+  if (SFX.ctx) { SFX.rainOn(sc.weather === 'rain' ? 1 : 0); SFX.windLevel(sc.snow ? 2.2 : 1); }
+}
+function norm3(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0]/l, v[1]/l, v[2]/l]; }
+SCENES.forEach(sc => sc.ndir = norm3(sc.dir));
+
+/* ==========================================================================
+   天气：雨、雪、破晓的浮尘。粒子只在摄像机周围一个盒子里循环使用。
+   ========================================================================== */
+const RAIN_COL = [0.62, 0.70, 0.82], SNOWF_COL = [0.95, 0.97, 1.0], MOTE_COL = [1.0, 0.82, 0.55];
+const Weather = {
+  kind: 'none', n: 0, px: null, py: null, pz: null, ph: null,
+  flash: 0, boltT: 8, thunderT: -1, splash: [],
+  box: 46, top: 30,
+  set(kind) {
+    this.kind = kind;
+    this.splash.length = 0; this.flash = 0; this.thunderT = -1;
+    this.boltT = 5 + Math.random() * 10;
+    const n = kind === 'rain' ? 560 : kind === 'snow' ? 460 : kind === 'dawn' ? 150 : 0;
+    this.n = n;
+    if (!n) return;
+    this.box = kind === 'rain' ? 46 : kind === 'snow' ? 42 : 40;
+    this.top = kind === 'rain' ? 30 : 24;
+    this.px = new Float32Array(n); this.py = new Float32Array(n);
+    this.pz = new Float32Array(n); this.ph = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      this.px[i] = Cam.x + (Math.random() - 0.5) * this.box;
+      this.py[i] = Cam.y + (Math.random() - 0.5) * this.top;
+      this.pz[i] = Cam.z + (Math.random() - 0.5) * this.box;
+      this.ph[i] = Math.random() * TAU;
+    }
+  },
+  update(dt, t) {
+    // 闪电：亮两下，雷声按距离延后
+    if (this.kind === 'rain') {
+      this.flash = Math.max(0, this.flash - dt * 7);
+      this.boltT -= dt;
+      if (this.boltT <= 0) {
+        this.flash = 0.85 + Math.random() * 0.5;
+        this.boltT = 7 + Math.random() * 16;
+        this.thunderT = 0.5 + Math.random() * 2.4;   // 先见光，隔一会儿才闻雷
+      }
+      if (this.thunderT > 0) { this.thunderT -= dt; if (this.thunderT <= 0) { SFX.thunder(); this.thunderT = -1; } }
+    } else this.flash = 0;
+
+    if (!this.n) return;
+    const hb = this.box / 2, ht = this.top / 2;
+    const cx = Cam.x, cy = Cam.y, cz = Cam.z;
+    if (this.kind === 'rain') {
+      for (let i = 0; i < this.n; i++) {
+        this.py[i] -= 27 * dt; this.px[i] += 3.2 * dt; this.pz[i] += 1.4 * dt;
+        if (this.py[i] < cy - ht) { this.py[i] = cy + ht; this.px[i] = cx + (Math.random() - 0.5) * this.box; this.pz[i] = cz + (Math.random() - 0.5) * this.box; }
+        if (this.px[i] < cx - hb) this.px[i] += this.box; else if (this.px[i] > cx + hb) this.px[i] -= this.box;
+        if (this.pz[i] < cz - hb) this.pz[i] += this.box; else if (this.pz[i] > cz + hb) this.pz[i] -= this.box;
+      }
+      // 打在瓦上溅起来的一圈
+      for (let k = 0; k < 4; k++) {
+        const x = Hero.x + (Math.random() - 0.5) * 22, z = Hero.z + (Math.random() - 0.5) * 22;
+        const g = groundAt(x, z, Hero.y + 9, 0);
+        if (g.s) this.splash.push({ x, y: g.y + 0.03, z, t: 0 });
+      }
+    } else if (this.kind === 'snow') {
+      for (let i = 0; i < this.n; i++) {
+        this.ph[i] += dt * 1.6;
+        this.py[i] -= (1.3 + 0.4 * Math.sin(this.ph[i] * 0.7)) * dt;
+        this.px[i] += Math.sin(this.ph[i]) * 0.55 * dt + 0.5 * dt;
+        this.pz[i] += Math.cos(this.ph[i] * 0.8) * 0.5 * dt;
+        if (this.py[i] < cy - ht) { this.py[i] = cy + ht; this.px[i] = cx + (Math.random() - 0.5) * this.box; this.pz[i] = cz + (Math.random() - 0.5) * this.box; }
+        if (this.px[i] < cx - hb) this.px[i] += this.box; else if (this.px[i] > cx + hb) this.px[i] -= this.box;
+        if (this.pz[i] < cz - hb) this.pz[i] += this.box; else if (this.pz[i] > cz + hb) this.pz[i] -= this.box;
+      }
+    } else {                                    // 破晓：逆着光的浮尘
+      for (let i = 0; i < this.n; i++) {
+        this.ph[i] += dt * 0.9;
+        this.py[i] += Math.sin(this.ph[i]) * 0.20 * dt;
+        this.px[i] += Math.cos(this.ph[i] * 0.6) * 0.30 * dt;
+        this.pz[i] += Math.sin(this.ph[i] * 0.4) * 0.30 * dt;
+        if (Math.abs(this.px[i] - cx) > hb || Math.abs(this.pz[i] - cz) > hb || Math.abs(this.py[i] - cy) > ht) {
+          this.px[i] = cx + (Math.random() - 0.5) * this.box;
+          this.py[i] = cy + (Math.random() - 0.5) * this.top;
+          this.pz[i] = cz + (Math.random() - 0.5) * this.box;
+        }
+      }
+    }
+    for (let i = this.splash.length - 1; i >= 0; i--) {
+      this.splash[i].t += dt;
+      if (this.splash[i].t > 0.30) this.splash.splice(i, 1);
+    }
+  },
+  draw() {
+    if (!this.n) return;
+    const R = Cam.right;
+    if (this.kind === 'rain') {
+      const w = 0.028, L = 1.35;
+      for (let i = 0; i < this.n; i++) {
+        const x = this.px[i], y = this.py[i], z = this.pz[i];
+        const dx = x - Cam.x, dy = y - Cam.y, dz = z - Cam.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > 900) continue;
+        const a = 0.34 * (1 - d2 / 900);
+        const bx = x - 0.16 * L, by = y + L, bz = z - 0.07 * L;
+        alphaB.quad([x - R[0]*w, y - R[1]*w, z - R[2]*w], [x + R[0]*w, y + R[1]*w, z + R[2]*w],
+                    [bx + R[0]*w, by + R[1]*w, bz + R[2]*w], [bx - R[0]*w, by - R[1]*w, bz - R[2]*w],
+                    RAIN_COL, a);
+      }
+      for (let i = 0; i < this.splash.length; i++) {
+        const s = this.splash[i], k = s.t / 0.30;
+        alphaB.disc(s.x, s.y, s.z, 0.06 + k * 0.30, RAIN_COL, (1 - k) * 0.30, 7);
+      }
+    } else if (this.kind === 'snow') {
+      for (let i = 0; i < this.n; i++) {
+        const x = this.px[i], y = this.py[i], z = this.pz[i];
+        const dx = x - Cam.x, dy = y - Cam.y, dz = z - Cam.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > 1100) continue;
+        alphaB.bill(x, y, z, 0.045 + (i % 5) * 0.014, SNOWF_COL, 0.80 * (1 - d2 / 1100));
+      }
+    } else {
+      for (let i = 0; i < this.n; i++) {
+        const x = this.px[i], y = this.py[i], z = this.pz[i];
+        const dx = x - Cam.x, dy = y - Cam.y, dz = z - Cam.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > 900) continue;
+        addB.bill(x, y, z, 0.035 + (i % 4) * 0.012, MOTE_COL, 0.32 * (1 - d2 / 900));
+      }
+    }
+  }
+};
 
 function shadowFor(x, y, z, rad) {
   const gr = groundAt(x, z, y + 0.4, 0);
@@ -2871,7 +3135,7 @@ function drawCharacter(fig, ch, tint) {
 }
 
 function renderScene(aspect) {
-  const S = SKIES[(Game.chapter - 1) % 3];
+  const S = SCENES[Game.chapter - 1];
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(S.fog[0], S.fog[1], S.fog[2], 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -2881,10 +3145,18 @@ function renderScene(aspect) {
   gl.useProgram(SH_SKY.p);
   gl.uniformMatrix4fv(SH_SKY.u.uInvVP, false, Cam.invVP);
   gl.uniform3f(SH_SKY.u.uCam, Cam.x, Cam.y, Cam.z);
-  gl.uniform3fv(SH_SKY.u.uMoon, MOON);
+  gl.uniform3fv(SH_SKY.u.uMoon, S.ndir);
   gl.uniform3fv(SH_SKY.u.uZen, S.zen);
   gl.uniform3fv(SH_SKY.u.uHor, S.hor);
   gl.uniform3fv(SH_SKY.u.uFogCol, S.fog);
+  gl.uniform3fv(SH_SKY.u.uBodyCol, S.bodyCol);
+  gl.uniform3fv(SH_SKY.u.uGlowCol, S.glow);
+  gl.uniform1f(SH_SKY.u.uCut, S.cut);
+  gl.uniform1f(SH_SKY.u.uPow, S.pow);
+  gl.uniform1f(SH_SKY.u.uStar, S.star);
+  gl.uniform1f(SH_SKY.u.uMilky, S.milky);
+  gl.uniform1f(SH_SKY.u.uCloud, S.cloud);
+  gl.uniform1f(SH_SKY.u.uFlash, Weather.flash);
   gl.uniform1f(SH_SKY.u.uTime, Game.time);
   gl.disableVertexAttribArray(1); gl.disableVertexAttribArray(2);
   gl.bindBuffer(gl.ARRAY_BUFFER, skyVBO);
@@ -2897,9 +3169,13 @@ function renderScene(aspect) {
   const U = SH_MAIN.u;
   gl.uniformMatrix4fv(U.uVP, false, Cam.vp);
   gl.uniform3f(U.uCam, Cam.x, Cam.y, Cam.z);
-  gl.uniform3fv(U.uSunDir, MOON);
-  gl.uniform3fv(U.uSunCol, S.sun);
-  gl.uniform3fv(U.uSkyCol, S.sky);
+  gl.uniform3fv(U.uSunDir, S.ndir);
+  const fl = Weather.flash;
+  gl.uniform3f(U.uSunCol, S.sun[0] + fl * 1.2, S.sun[1] + fl * 1.25, S.sun[2] + fl * 1.4);
+  gl.uniform3f(U.uSkyCol, S.sky[0] + fl * 0.5, S.sky[1] + fl * 0.52, S.sky[2] + fl * 0.6);
+  gl.uniform1f(U.uSnow, S.snow);
+  gl.uniform1f(U.uWet, S.wet);
+  gl.uniform3fv(U.uSnowCol, SNOW_COL);
   gl.uniform3fv(U.uGndCol, S.gnd);
   gl.uniform3fv(U.uFogCol, S.fog);
   gl.uniform1f(U.uFogD, S.fogD);
@@ -2960,6 +3236,7 @@ function renderScene(aspect) {
     const a = p.add ? k : k * 0.75;
     (p.add ? addB : alphaB).bill(p.x, p.y, p.z, p.size * (p.add ? k * 1.4 + 0.2 : 1), p.col, a);
   }
+  Weather.draw();
   // 灯笼光晕
   for (let i = 0; i < LANTERNS.length; i++) {
     const L = LANTERNS[i];
@@ -3030,11 +3307,6 @@ const UI = {
   UI.hud.appendChild(w);
   UI.bossBar = w; UI.bossFill = w.querySelector('#bossFill');
 })();
-const CHAPTERS = [
-  { name: '第一回 · 夜　巷', sub: 'Chapter I — Night Alleys', par: 140 },
-  { name: '第二回 · 长　街', sub: 'Chapter II — The Long Street', par: 175 },
-  { name: '第三回 · 皇　城', sub: 'Chapter III — The Forbidden City', par: 205 }
-];
 function fmtTime(t) {
   const m = Math.floor(t / 60), s = t - m * 60;
   return m + "'" + (s < 10 ? '0' : '') + s.toFixed(1);
@@ -3048,7 +3320,7 @@ function updateHUD() {
     UI.hp.innerHTML = html;
   }
   UI.qi.style.width = (H.qi / QI_MAX * 100) + '%';
-  const C = CHAPTERS[Game.chapter - 1];
+  const C = SCENES[Game.chapter - 1];
   UI.chapter.textContent = C.name;
   const d = Math.max(0, World.goal.x - H.x);
   UI.dist.textContent = '距钟楼 ' + String(Math.round(d)).padStart(3, '0') + ' 步';
@@ -3088,6 +3360,7 @@ const Game = {
   hitStop: 0, ringT: 0, totalScore: 0, chapterTimes: [],
   boot() {
     buildAllFigures(); buildProps();
+    applyScene(SCENES[0]);
     genLevel(1); spawnEntities(); heroReset(0);
     Hero.hp = Hero.maxHp; Hero.coins = 0;
     Cam.yaw = PI / 2 + 0.5; Cam.pitch = -0.08; Cam.dist = 8;
@@ -3102,11 +3375,12 @@ const Game = {
     Parts.length = 0; Rings.length = 0;
     Cam.yaw = PI / 2; Cam.pitch = -0.14; Cam.dist = 6.2; Cam.distNow = 6.2;
     Cam.tx = Hero.x; Cam.ty = Hero.y + 1.35; Cam.tz = Hero.z;
+    applyScene(SCENES[n - 1]);
     this.state = 'play';
     UI.sTitle.classList.add('hide'); UI.sOver.classList.add('hide');
     UI.sClear.classList.add('hide'); UI.sPause.classList.add('hide');
     UI.hud.classList.remove('hide');
-    this.toast(CHAPTERS[n - 1].name.replace(/ /g, ''));
+    this.toast(SCENES[n - 1].name.replace(/ /g, ''));
     SFX.init(); SFX.resume();
   },
   restartChapter() {
@@ -3129,18 +3403,18 @@ const Game = {
   clearChapter() {
     if (this.state !== 'play') return;
     this.state = 'clear';
-    const t = this.time, par = CHAPTERS[this.chapter - 1].par;
+    const t = this.time, par = SCENES[this.chapter - 1].par;
     const rank = t < par * 0.7 ? '甲' : t < par ? '乙' : '丙';
     this.totalScore += this.score + Math.max(0, Math.round((par - t) * 12)) + Hero.hp * 200;
     this.chapterTimes.push(t);
     SFX.gong(1.2);
     Cam.shake = 0.7;
     spawnRing(World.goal.x, World.goal.y + 2, World.goal.z, PAL.gold, true);
-    const last = this.chapter >= 3;
+    const last = this.chapter >= SCENES.length;
     UI.clearSub.textContent = last ? 'The End' : 'Chapter Clear';
     UI.clearT.textContent = last ? '出　城' : '钟　鸣';
     UI.clearP.innerHTML = last
-      ? '钟声传出十里。城门在身后合上，你站在瓦上，天要亮了。<br><br>' +
+      ? '钟声传出十里。城门在身后合上，你站在瓦上——<br>日头正从东边上来，照得满城的雪都亮了。<br><br>' +
         '总用时 ' + fmtTime(this.chapterTimes.reduce((a, b) => a + b, 0)) +
         ' · 总计 ' + this.totalScore + ' 分'
       : '本回用时 ' + fmtTime(t) + ' · 评 <b style="color:#e6b64c">' + rank + '</b> 等<br>' +
@@ -3166,7 +3440,7 @@ function primaryClick() {
   if (Game.state === 'title') { Game.startChapter(1); lockPointer(); return; }
   if (Game.state === 'over') { Game.startChapter(Game.chapter); lockPointer(); return; }
   if (Game.state === 'clear') {
-    if (Game.chapter >= 3) { Game.totalScore = 0; Game.chapterTimes = []; Game.startChapter(1); }
+    if (Game.chapter >= SCENES.length) { Game.totalScore = 0; Game.chapterTimes = []; Game.startChapter(1); }
     else Game.startChapter(Game.chapter + 1);
     lockPointer();
     return;
@@ -3269,9 +3543,11 @@ function step(dt) {
   updateItems(dt);
   updateParts(dt);
   updateWorldDyn(dt);
+  Weather.update(dt, Game.time);
   if (!Hero.dead) checkGoal();
   // 飘落的花瓣
-  if (Math.random() < 0.55) spawnPetal(Cam.x + (Math.random() - 0.5) * 46, Cam.y + 14 + Math.random() * 8, Cam.z + (Math.random() - 0.5) * 46);
+  if (Weather.kind === 'none' && Math.random() < 0.55)
+    spawnPetal(Cam.x + (Math.random() - 0.5) * 46, Cam.y + 14 + Math.random() * 8, Cam.z + (Math.random() - 0.5) * 46);
   if (Hero.dead && Hero.deadT > 2.2 && Game.state === 'play') Game.over('剑　折', '这一趟，走到这里。');
 }
 function frame(now) {

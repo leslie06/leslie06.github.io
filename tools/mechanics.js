@@ -11,6 +11,7 @@ const { loadGame } = require('./env.js');
 
 const G = loadGame();
 const { World, Hero, Game, groundAt } = G;
+const SCENES = G.SCENES;
 let fails = 0;
 function ok(cond, msg, detail) {
   console.log('  ' + (cond ? '✓' : '✗') + ' ' + msg + (detail ? '   ' + detail : ''));
@@ -97,7 +98,7 @@ function testVat(ch) {
 /* 路段是随机抽的，某一回没抽到某种是正常的。所以先扫一遍三回，
    看每种至少出现过，再对真正生成了的那些回做行为断言。 */
 const have = { zip: [], spring: [], vat: [] };
-for (const ch of [1, 2, 3]) {
+for (let ch = 1; ch <= G.SCENES.length; ch++) {
   Game.startChapter(ch);
   if (World.zips.length) have.zip.push(ch);
   if (World.solids.some(s => s.spring)) have.spring.push(ch);
@@ -119,5 +120,72 @@ console.log('\n水缸');
 ok(have.vat.length > 0, '至少有一回生成了水缸');
 have.vat.slice(0, 2).forEach(testVat);
 
-console.log(fails ? '\n✗ ' + fails + ' 项不通过' : '\n✓ 三样机制全部正常');
+/* ------------------------------------------------------------------ 天气 */
+console.log('\n天气');
+{
+  const want = { none: [0, 0, 'tile'], rain: [0, 1, 'wet'], snow: [1, 0, 'snow'], dawn: [0, 0, 'tile'] };
+  let allOk = true, line = [];
+  for (let ch = 1; ch <= SCENES.length; ch++) {
+    Game.startChapter(ch);
+    const sc = SCENES[ch - 1], w = want[sc.weather];
+    const good = G.Env.snow === w[0] && G.Env.wet === w[1] && G.Env.step === w[2] &&
+                 G.Weather.kind === sc.weather;
+    if (!good) allOk = false;
+    line.push(ch + sc.weather[0]);
+  }
+  ok(allOk, '六回各自装上了对的天气参数', line.join(' '));
+
+  // 雨：粒子在动，溅点在生成
+  const rainCh = SCENES.findIndex(s => s.weather === 'rain') + 1;
+  Game.startChapter(rainCh);
+  const W = G.Weather;
+  ok(W.n > 300, '雨滴数量够铺满视野', W.n + ' 滴');
+  const y0 = W.py[0];
+  for (let i = 0; i < 10; i++) G.tick();
+  ok(W.py[0] !== y0, '雨滴在下落');
+  ok(W.splash.length > 0, '雨打在瓦上会溅起来', W.splash.length + ' 个溅点');
+  // 粒子始终跟着摄像机走，不会飘走
+  for (let i = 0; i < 400; i++) G.tick();
+  let out = 0;
+  for (let i = 0; i < W.n; i++)
+    if (Math.abs(W.px[i] - G.Cam.x) > W.box || Math.abs(W.pz[i] - G.Cam.z) > W.box) out++;
+  ok(out === 0, '雨滴始终跟着摄像机循环，不会掉队', out + ' 滴跑掉');
+
+  // 闪电：先闪，隔一会儿才打雷
+  let thunders = 0;
+  const realThunder = G.SFX.thunder;
+  G.SFX.thunder = function () { thunders++; };
+  W.boltT = 0.001;
+  for (let i = 0; i < 5; i++) G.tick();
+  ok(W.flash > 0.5, '会闪电', 'flash=' + W.flash.toFixed(2));
+  ok(W.thunderT > 0, '雷声排在闪光之后', '延后 ' + W.thunderT.toFixed(1) + 's');
+  for (let i = 0; i < 300; i++) G.tick();
+  ok(thunders >= 1, '延时之后打雷', thunders + ' 声');
+  G.SFX.thunder = realThunder;
+
+  // 脚步：拦截 SFX.step，跑一段看踩出什么声
+  function runSteps(ch, frames) {
+    Game.startChapter(ch);
+    const kinds = {};
+    const real = G.SFX.step;
+    G.SFX.step = function (kind) { kinds[kind] = (kinds[kind] || 0) + 1; };
+    G.Input.touch = true; G.Input.ax = 0; G.Input.ay = 1;
+    G.Cam.yaw = Math.PI / 2;
+    for (let i = 0; i < frames; i++) { Hero.hp = Hero.maxHp; G.tick(); }
+    G.SFX.step = real;
+    return kinds;
+  }
+  // 只断言「响了」和「只响对的那种」，不去卡具体次数——跑动节奏本来就是浮动的
+  const total = k => Object.keys(k).reduce((a, b) => a + k[b], 0);
+  const snowCh = SCENES.findIndex(s => s.weather === 'snow') + 1;
+  const sk = runSteps(snowCh, 500);
+  ok((sk.snow || 0) >= 4 && (sk.snow || 0) === total(sk), '雪地里只踩出踩雪声', JSON.stringify(sk));
+  const rk = runSteps(rainCh, 500);
+  ok((rk.wet || 0) >= 4 && (rk.wet || 0) === total(rk), '雨夜里只踩出湿脚步', JSON.stringify(rk));
+  const nk = runSteps(1, 500);
+  const dry = (nk.tile || 0) + (nk.wood || 0);
+  ok(dry >= 4 && dry === total(nk), '晴夜按脚下材质分瓦声和木声，不会混进雨雪', JSON.stringify(nk));
+}
+
+console.log(fails ? '\n✗ ' + fails + ' 项不通过' : '\n✓ 机制与天气全部正常');
 process.exit(fails ? 1 : 0);

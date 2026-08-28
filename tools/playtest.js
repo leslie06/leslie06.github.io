@@ -69,18 +69,19 @@ function playChapter(G, ch) {
 
 const G = loadGame();
 let bad = 0;
-console.log('回   结果    用时     路点        摔  头目');
-for (const ch of [1, 2, 3]) {
+console.log('回  场景      结果    用时     路点        摔  头目');
+for (let ch = 1; ch <= G.SCENES.length; ch++) {
   const r = playChapter(G, ch);
   const ok = r.cleared && !r.hot.length && !r.stuck;
   if (!ok) bad++;
+  const wname = { none: '夜　', rain: '雨夜', snow: '雪夜', dawn: '破晓' }[G.SCENES[ch - 1].weather];
   console.log(
-    ' ' + r.ch + '   ' + (r.cleared ? '通关  ' : r.stuck ? '卡死  ' : '未通  ') +
+    ' ' + r.ch + '  ' + wname + '      ' + (r.cleared ? '通关  ' : r.stuck ? '卡死  ' : '未通  ') +
     String(r.seconds).padStart(6) + 's  ' +
     String(r.node + '/' + r.of).padStart(7) + '  ' +
     String(r.falls).padStart(4) + '  ' + r.boss +
     (r.hot.length ? '   ← 热点 ' + r.hot.map(h => h[0] + '×' + h[1]).join(' ') : ''));
 }
 if (G.errors.length) { console.log('\n运行时异常：'); G.errors.forEach(e => console.log('  ' + e.stack.split('\n')[0])); bad++; }
-console.log(bad ? '\n✗ ' + bad + ' 回有问题' : '\n✓ 三回全部可通关，无重复失败点');
+console.log(bad ? '\n✗ ' + bad + ' 回有问题' : '\n✓ ' + G.SCENES.length + ' 回全部可通关，无重复失败点');
 process.exit(bad ? 1 : 0);
