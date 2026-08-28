@@ -228,11 +228,63 @@ console.log('\n追捕');
      n1 + '→' + C.cops.length + ' 人，' + sp1.toFixed(2) + '→' + C.speed.toFixed(2) + ' m/s');
   ok(C.cops.length <= C.maxCops, '人数有上限', C.cops.length + '/' + C.maxCops);
 
-  // 报了官之后站着不动，一定被绑
+  // 被摸到先上绳，不是当场判负
   idle();
+  C.hold = 0;                                   // 摔跤复活的宽限期，测试里直接清掉
+  Game.hitStop = 0;                             // 击杀顿帧期间物理不推进，会误判
+  for (let i = 0; i < 4; i++) G.tick();         // 等主角停稳
+  C.cops[0].prog = C.headS - 1.0;
+  let gt = 0;
+  while (gt++ < 8 && !Hero.grabbed) G.tick();
+  ok(Hero.grabbed && !Hero.dead, '被摸到先上绳，不是当场就输',
+     'bound=' + Hero.bound.toFixed(2) + '，' + gt + ' 帧内触发');
+  const b0 = Hero.bound;
+  for (let i = 0; i < 12; i++) G.tick();
+  ok(Hero.bound > b0, '不挣扎，绳子一直在收紧', b0.toFixed(2) + ' → ' + Hero.bound.toFixed(2));
+
+  // 连打能挣脱，挣完能继续跑
+  const progBeforeFree = C.cops[0].prog;
+  let mashes = 0, tk = 0;
+  while (tk++ < 300 && Hero.grabbed && !Hero.dead) {
+    if (tk % 7 === 0) { G.Input.jumpEdge = true; mashes++; }   // 约每秒 8 下，真人手速
+    G.tick();
+  }
+  ok(!Hero.grabbed && !Hero.dead, '连打能挣脱',
+     '按了 ' + mashes + ' 下，用了 ' + (tk / 60).toFixed(1) + 's');
+  ok(C.cops[0].prog < progBeforeFree - 5, '挣脱时把捕快推开',
+     '退了 ' + (progBeforeFree - C.cops[0].prog).toFixed(0) + 'm');
+  idle();
+  for (let i = 0; i < 30; i++) G.tick();
+  ok(!Hero.dead, '挣脱后还能继续跑，不会立刻又被按住');
+
+  // 围的人越多，绑得越快
+  // 量收绳速度：先让人贴稳，再测一段，避开上绳瞬间那一跳
+  function bindRate(k) {
+    Game.startChapter(1); idle();
+    G.hitFoe(G.Foes.find(f => !f.dead && f.type !== 'boss'), 1, 0, 99);
+    while (C.cops.length < k) C.alarm();
+    C.cops.length = k;                          // 精确控制围上来几个人
+    C.hold = 0; Game.hitStop = 0;
+    for (let i = 0; i < 4; i++) G.tick();
+    for (const c of C.cops) c.prog = C.headS - 1.0;
+    let g0 = 0;
+    while (g0++ < 8 && !Hero.grabbed) G.tick();
+    if (!Hero.grabbed) return { rate: -1, g: 0 };
+    for (let i = 0; i < 20; i++) G.tick();      // 等人都贴上来
+    const a = Hero.bound;
+    for (let i = 0; i < 24; i++) G.tick();
+    return { rate: (Hero.bound - a) / (24 / 60), g: C.grabbers };
+  }
+  const r1 = bindRate(1), r3 = bindRate(3);
+  ok(r1.rate > 0 && r3.rate > r1.rate * 1.35, '围上来的人越多，绳子收得越快',
+     r1.g + ' 人 ' + r1.rate.toFixed(2) + '/s，' + r3.g + ' 人 ' + r3.rate.toFixed(2) + '/s');
+
+  // 完全不动，绳子会上满
+  Game.startChapter(1); idle();
+  G.hitFoe(G.Foes.find(f => !f.dead && f.type !== 'boss'), 1, 0, 99);
   let f2 = 0;
-  while (f2++ < 1200 && !Hero.dead) { G.tick(); }
-  ok(Hero.dead && Hero.deathKind === 'caught', '报官之后站着不动会被追上绑走',
+  while (f2++ < 1500 && !Hero.dead) { G.tick(); }
+  ok(Hero.dead && Hero.deathKind === 'caught', '一直不挣扎，绳子上满就被擒',
      '第 ' + (f2 / 60).toFixed(1) + 's');
 
   // 摔一跤要丢掉从检查点跑到失足处的那段路，不能反而赚

@@ -161,7 +161,8 @@
     <div class="seal">屋顶轻功</div>
     <p>三更天，你踩着青瓦向北去。街上是巡夜的灯，头顶是月。<br>
       屋顶上有刀客和弓手拦路。<b style="color:#d8443c">一旦动手取了人命，就有人报官——<br>
-      捕快循声追来，这一回都甩不掉，被摸到就是铁链上身。</b><br>
+      捕快循声追来，这一回都甩不掉。被摸到会按住你上绳，<br>
+      连打空格能挣开；绳子上满，就走不了了。</b><br>
       潜过去，还是杀过去，你自己定。<br>
       六回路：夜巷、长街、雨夜、雪夜、皇城，直到破晓出城。<br>
       别落到地上——落地的人，走不出这座城。</p>
@@ -176,6 +177,7 @@
       <div><kbd>P</kbd>暂停　<kbd>R</kbd>重来</div>
     </div>
     <p class="hint">杀人才会招来捕快，杀得越多来得越多 · 顶上那条是追兵距离，红了就是贴到身后 · 回身一剑能逼退，但打不死</p>
+    <p class="hint">听见吆喝和铜哨就是人贴近了 · 被按住时连打 <kbd>空格</kbd> 或 <kbd>左键</kbd> 挣脱，围的人越多越难挣</p>
     <p class="hint">空中掠过吊索会自动挂上滑行 · 跑上竹跳板会被高高弹起 · 水缸推得动，也推得下去</p>
     <p class="hint">手机横屏会出现虚拟手柄，右半屏拖动转视角。</p>
     <div class="go">点击画面 · 起　纵</div>
@@ -1723,6 +1725,22 @@ function animate(c, P, t) {
     P.armLRx = 0.9; P.armLRz = 0.7; P.armRRx = -1.5; P.armRRz = -0.35; P.foreRRx = -0.7;
     P.swordRx = -0.5; return P;
   }
+  if (st === 'grab') {
+    const sh = (c.boundFx || 0) * 5;
+    P.hipY = 0.90;
+    P.spineRx = 0.30 + Math.sin(t * 9.0) * 0.05 * (1 + sh);
+    P.spineRy = Math.sin(t * 7.3) * (0.12 + 0.16 * sh);
+    P.roll = Math.sin(t * 6.1) * (0.06 + 0.09 * sh);
+    P.armLRx = -0.70; P.armRRx = -0.70;
+    P.armLRz = 1.15;  P.armRRz = -1.15;              // 双臂被反剪
+    P.foreLRx = -1.55; P.foreRRx = -1.55;
+    P.legLRx = -0.35 + Math.sin(t * 8.2) * 0.16;
+    P.legRRx = 0.25 - Math.sin(t * 8.2) * 0.16;
+    P.shinLRx = 0.62; P.shinRRx = 0.42;
+    P.headRx = -0.26; P.headRy = Math.sin(t * 5.1) * 0.30;
+    P.sword = false;
+    return P;
+  }
   if (st === 'zip') {
     P.hipY = 0.92; P.pitch = -0.10;
     P.spineRx = 0.12 + Math.sin(t * 3.2) * 0.05;
@@ -1988,6 +2006,7 @@ const Hero = {
   wallT: 0, wallSide: 1, wallNx: 0, wallNz: 0, wallCool: 0,
   slideT: 0, sword: true, node: 0, coins: 0, kills: 0,
   zip: null, zipT: 0, zipV: 0, zipCool: 0,
+  grabbed: false, bound: 0, freeT: 0, boundFx: 0, ropeT: 0,
   ribbon: [], trail: [], landT: 0, spawnX: 0, spawnY: 0, spawnZ: 0
 };
 const _tipBuf = [0,0,0,0,0,0];
@@ -2047,6 +2066,7 @@ function heroReset(node) {
   Hero.onGround = true; Hero.jumps = 0; Hero.wallT = 0; Hero.slideT = 0;
   Hero.atk = 0; Hero.combo = 0; Hero.spin = 0; Hero.qi = QI_MAX;
   Hero.zip = null; Hero.zipCool = 0;
+  Hero.grabbed = false; Hero.bound = 0; Hero.freeT = 0;
   Hero.ribbon.length = 0; Hero.trail.length = 0;
   for (let i = 0; i < 7; i++) Hero.ribbon.push({ x: Hero.x, y: Hero.y + 1, z: Hero.z });
 }
@@ -2121,6 +2141,8 @@ function updateHero(dt) {
   if (moving) { wx /= inLen; wz /= inLen; }
 
   H.comboT -= dt; H.invuln -= dt; H.hurtT -= dt; H.landT -= dt; H.wallCool -= dt;
+  H.freeT -= dt;
+  if (H.grabbed) { struggle(dt); return; }     // 要抢在 jumpEdge 被消费之前
   if (Input.jumpEdge) { H.jumpBuf = 0.14; Input.jumpEdge = false; }
   H.jumpBuf -= dt; H.zipCool -= dt;
   if (H.zip) { rideZip(dt); return; }
@@ -2764,6 +2786,7 @@ const Chase = {
     const g = World.goal;
     this.atGoal = !!g && Math.hypot(Hero.x - g.x, Hero.z - g.z) < 17 && Hero.y > g.y - 7;
     this.minGap = 999;
+    let grabbers = 0;
     for (let i = 0; i < this.cops.length; i++) {
       const c = this.cops[i];
       c.stun -= dt; c.hurtT -= dt;
@@ -2786,17 +2809,30 @@ const Chase = {
       c.x = _cp[0] - dz * spread; c.y = _cp[1]; c.z = _cp[2] + dx * spread;
       c.yaw = towards(c.yaw, Math.atan2(dx, dz), 10 * dt);
       c.vy = dt > 0 ? (c.y - py) / dt : 0;
-      c.anim = Math.abs(c.vy) > 4.5 ? 'air' : 'run';
+      c.anim = (Hero.grabbed && gap < 2.4) ? 'idle' : (Math.abs(c.vy) > 4.5 ? 'air' : 'run');
       c.animSpeed = c.stun > 0 ? 0 : this.speed;
       c.phase += (c.stun > 0 ? 1 : this.speed * 1.15) * dt;
       if (gap < this.minGap) this.minGap = gap;
-      if (gap < 1.9 && Math.abs(c.y - Hero.y) < 3.2 && this.hold <= 0 && !this.atGoal) heroCaught();
+      if (gap < 2.0 && Math.abs(c.y - Hero.y) < 3.2 && this.hold <= 0 && !this.atGoal) grabbers++;
     }
-    // 越近哨子吹得越勤
+    this.grabbers = grabbers;
+    if (grabbers > 0 && !Hero.grabbed && Hero.freeT <= 0 && !Hero.dead) heroGrab();
+    // 越近喊得越勤：哨子和吆喝轮着来，好知道他们贴到多近了
     this.warnT -= dt;
-    if (this.minGap < 30 && this.warnT <= 0 && !Hero.dead && !this.atGoal) {
-      SFX.whistle(clamp(1 - this.minGap / 30, 0.25, 1));
-      this.warnT = 0.9 + (this.minGap / 30) * 2.2;
+    if (this.minGap < 32 && this.warnT <= 0 && !Hero.dead && !this.atGoal) {
+      const near = clamp(1 - this.minGap / 32, 0.22, 1);
+      if (this.alt) SFX.shout(near); else SFX.whistle(near);
+      this.alt = !this.alt;
+      this.warnT = 0.55 + (this.minGap / 32) * 2.3;
+    }
+  },
+  // 被挣脱：捕快踉跄着退开
+  shoved(dist, stun) {
+    for (let i = 0; i < this.cops.length; i++) {
+      const c = this.cops[i];
+      c.prog -= dist + i * 1.5;
+      c.stun = Math.max(c.stun, stun);
+      c.hurtT = 0.3;
     }
   },
   /* 主角摔下去被拉回检查点。复活是瞬移，如果照直记进轨迹，弧长会凭空
@@ -2822,14 +2858,61 @@ const Chase = {
 };
 const _cp = [0, 0, 0], _cp2 = [0, 0, 0];
 
-function heroCaught() {
+/* 被摸到不是当场就输：捕快先按住你上绳，绳子上满才算擒住。
+   这段时间里连打跳/攻击可以挣脱，挣开了照样跑。 */
+function heroGrab() {
+  const H = Hero;
+  if (H.dead || H.grabbed || H.freeT > 0) return;
+  H.grabbed = true; H.bound = 0.22; H.boundFx = 0;
+  H.vx = 0; H.vz = 0; H.vy = 0; H.zip = null; H.slideT = 0; H.wallT = 0; H.atk = 0;
+  Cam.shake = Math.max(Cam.shake, 0.5);
+  SFX.shout(1); SFX.rope();
+  Game.toast('连　打　挣　脱');
+}
+function heroBreakFree() {
+  const H = Hero;
+  H.grabbed = false; H.bound = 0; H.freeT = 1.5;
+  H.vy = 5.4;
+  H.vx = Math.sin(H.yaw) * 7.5; H.vz = Math.cos(H.yaw) * 7.5;
+  H.onGround = false; H.jumps = 1; H.invuln = Math.max(H.invuln, 0.9);
+  Chase.shoved(13, 0.75);
+  Cam.shake = Math.max(Cam.shake, 0.45);
+  SFX.snap(); spawnBurst(H.x, H.y + 1.0, H.z, 16, PAL.cloth);
+  spawnRing(H.x, H.y + 0.6, H.z, PAL.jade);
+  Game.toast('挣　脱');
+}
+function heroBound() {
   const H = Hero;
   if (H.dead) return;
-  H.dead = true; H.deadT = 0; H.deathKind = 'caught';
-  H.vx = 0; H.vz = 0;
+  H.dead = true; H.deadT = 0; H.deathKind = 'caught'; H.grabbed = false;
   Cam.shake = 0.85; Game.flash(0.8);
-  SFX.whistle(1); SFX.hurt();
-  Game.over('被　擒', '铁链上身。这一趟，到此为止。');
+  SFX.chain(); SFX.hurt();
+  Game.over('被　擒', '绳子上了身。这一趟，到此为止。');
+}
+// 上绳期间：绳子自己在涨，连打能往回拽
+function struggle(dt) {
+  const H = Hero;
+  /* 一个人按着，八下/秒就能挣开（约 0.8 秒）；三个人围上来基本挣不动了。
+     不挣扎的话，一个人 2 秒绑完，三个人 1.2 秒。 */
+  const n = Math.min(Chase.grabbers || 1, 3);
+  H.bound += (0.40 + 0.13 * (n - 1)) * dt;
+  let mash = 0;
+  if (Input.jumpEdge) { Input.jumpEdge = false; mash++; }
+  if (Input.atkEdge)  { Input.atkEdge = false;  mash++; }
+  if (mash) {
+    H.bound -= 0.085 * mash;
+    H.boundFx = 0.2;
+    Cam.shake = Math.max(Cam.shake, 0.16);
+    SFX.rope();
+    spawnBurst(H.x, H.y + 1.0, H.z, 3, PAL.cloth);
+  }
+  H.boundFx = Math.max(0, (H.boundFx || 0) - dt);
+  H.anim = 'grab'; H.animSpeed = 0; H.phase += dt * 2;
+  if (H.ropeT === undefined) H.ropeT = 0;
+  H.ropeT -= dt;
+  if (H.ropeT <= 0) { H.ropeT = 0.42 + Math.random() * 0.3; SFX.rope(); }
+  if (H.bound >= 1) heroBound();
+  else if (H.bound <= 0) heroBreakFree();
 }
 
 /* ---------------------------------------------------------------- 大内高手 */
@@ -3011,6 +3094,29 @@ const SFX = {
   heal()   { const t = this.now(); [0, 3, 7, 10].forEach((s, i) => this.pluck(294 * Math.pow(2, s / 12), t + i * 0.07, 0.10)); },
   bow()    { this.noise(0.16, 0.13, 1600, 400); this.tone(520, 180, 0.12, 0.05, 'triangle'); },
   wall()   { this.noise(0.4, 0.09, 1800, 700, 'bandpass'); },
+  // 一声吆喝：锯齿波下滑 + 带通扫频，粗糙感靠滤波器出
+  shout(v) {
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime, f0 = 148 + Math.random() * 64;
+    const o = c.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0 * 1.55, t);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.72, t + 0.34);
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3.0;
+    bp.frequency.setValueAtTime(950, t);
+    bp.frequency.exponentialRampToValueAtTime(520, t + 0.34);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.10 * v, t + 0.045);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + 0.38);
+    o.connect(bp); bp.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.42);
+    this.noise(0.20, 0.028 * v, 1400, 620);
+  },
+  rope()  { this.noise(0.13, 0.10, 700 + Math.random() * 500, 220, 'bandpass'); },
+  snap()  { this.noise(0.10, 0.24, 5200, 900); this.tone(760, 190, 0.13, 0.10, 'square'); },
+  chain() { const t = this.now();
+            for (let i = 0; i < 5; i++) this.tone(1500 + Math.random() * 900, 400, 0.10, 0.07, 'square', null, t + i * 0.075);
+            this.noise(0.6, 0.14, 2600, 400); },
   whistle(v) {                                  // 差役的铜哨，两短一长
     const t = this.now(), f = 2050 + Math.random() * 320;
     this.tone(f, f * 1.14, 0.10, 0.085 * v, 'square', null, t);
@@ -3547,6 +3653,21 @@ const UI = {
     'background:linear-gradient(90deg,#6e2620,#d8443c);box-shadow:0 0 10px rgba(216,68,60,.7)"></div></div>';
   UI.hud.appendChild(w);
   UI.chaseBar = w; UI.chaseFill = w.querySelector('#chaseFill'); UI.chaseTxt = w.querySelector('#chaseTxt');
+
+  const b = document.createElement('div');
+  b.id = 'bind';
+  b.style.cssText = 'position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);' +
+    'text-align:center;opacity:0;transition:opacity .12s;';
+  b.innerHTML =
+    '<div style="font-family:var(--han);font-size:clamp(19px,3.8vw,28px);letter-spacing:.24em;' +
+    'color:#ffd9c8;text-shadow:0 0 20px rgba(0,0,0,.95)">上　绳　了</div>' +
+    '<div style="margin:10px auto 0;width:min(330px,64vw);height:13px;background:rgba(8,10,16,.8);' +
+    'border:1px solid rgba(232,228,210,.30)"><div id="bindFill" style="height:100%;width:0%;' +
+    'background:linear-gradient(90deg,#e8b64c,#d8443c);box-shadow:0 0 14px rgba(216,68,60,.8)"></div></div>' +
+    '<div id="bindKey" style="margin-top:9px;font-family:var(--han);font-size:13px;' +
+    'letter-spacing:.16em;color:#ece4d2;text-shadow:0 0 10px rgba(0,0,0,.9)"></div>';
+  UI.hud.appendChild(b);
+  UI.bind = b; UI.bindFill = b.querySelector('#bindFill'); UI.bindKey = b.querySelector('#bindKey');
 })();
 function fmtTime(t) {
   const m = Math.floor(t / 60), s = t - m * 60;
@@ -3571,6 +3692,13 @@ function updateHUD() {
     UI.combo.classList.add('on');
   } else UI.combo.classList.remove('on');
 
+  // 上绳进度
+  if (H.grabbed) {
+    UI.bind.style.opacity = '1';
+    UI.bindFill.style.width = (clamp(H.bound, 0, 1) * 100).toFixed(0) + '%';
+    UI.bindKey.textContent = Input.touch ? '连拍「跃」或「斩」挣脱' : '连打 空格 或 左键 挣脱';
+  } else UI.bind.style.opacity = '0';
+
   // 追捕读数
   if (Chase.cops.length) {
     UI.chaseBar.style.opacity = '1';
@@ -3584,7 +3712,7 @@ function updateHUD() {
       UI.chaseTxt.textContent = gap > 900 ? '捕快在后'
         : '捕快 ×' + Chase.cops.length + ' · 距 ' + Math.round(gap) + ' 步';
       UI.chaseFill.style.width = (near * 100).toFixed(0) + '%';
-      UI.danger.style.opacity = gap < 16
+      UI.danger.style.opacity = H.grabbed ? '0.85' : gap < 16
         ? (0.30 + 0.55 * (1 - gap / 16) * (0.65 + 0.35 * Math.sin(Game.time * 11))).toFixed(2)
         : '0';
     }
