@@ -165,6 +165,7 @@
       <div><kbd>Ctrl</kbd>或 <kbd>C</kbd>滑铲</div>
       <div><kbd>P</kbd>暂停　<kbd>R</kbd>重来</div>
     </div>
+    <p class="hint">空中掠过吊索会自动挂上滑行 · 跑上竹跳板会被高高弹起 · 水缸推得动，也推得下去</p>
     <p class="hint">手机横屏会出现虚拟手柄，右半屏拖动转视角。</p>
     <div class="go">点击画面 · 起　纵</div>
   </div>
@@ -688,6 +689,59 @@ function addRailing(m, x0, x1, z0, z1, y, c) {
     m.box(px - 0.055, y, pz - 0.055, px + 0.055, y + h, pz + 0.055, c);
   }
 }
+/* ------------------------------------------------------------ 任意朝向的管 */
+// 绳、索、竹竿这类不是轴对齐的细长体。基向量的手性要和 prism 一致，
+// 否则法线朝里、开了背面剔除就整根看不见。
+function addTube(m, ax, ay, az, bx, by, bz, r, col, sides) {
+  sides = sides || 4;
+  let dx = bx - ax, dy = by - ay, dz = bz - az;
+  const L = Math.hypot(dx, dy, dz) || 1;
+  dx /= L; dy /= L; dz /= L;
+  // 随便找个不与轴平行的参考向量，叉出正交基
+  const rx = Math.abs(dy) < 0.9 ? 0 : 1, ry = Math.abs(dy) < 0.9 ? 1 : 0, rz = 0;
+  let ux = dy * rz - dz * ry, uy = dz * rx - dx * rz, uz = dx * ry - dy * rx;
+  const ul = Math.hypot(ux, uy, uz) || 1; ux /= ul; uy /= ul; uz /= ul;
+  const qx = uy * dz - uz * dy, qy = uz * dx - ux * dz, qz = ux * dy - uy * dx;  // q = u × d
+  for (let i = 0; i < sides; i++) {
+    const a0 = i / sides * TAU, a1 = (i + 1) / sides * TAU;
+    const c0 = Math.cos(a0) * r, s0 = Math.sin(a0) * r;
+    const c1 = Math.cos(a1) * r, s1 = Math.sin(a1) * r;
+    const o0x = ux * c0 + qx * s0, o0y = uy * c0 + qy * s0, o0z = uz * c0 + qz * s0;
+    const o1x = ux * c1 + qx * s1, o1y = uy * c1 + qy * s1, o1z = uz * c1 + qz * s1;
+    const sh = 0.70 + 0.30 * (0.5 + 0.5 * Math.cos(a0 + 0.7));
+    const cc = [col[0] * sh, col[1] * sh, col[2] * sh];
+    m.quad([ax + o1x, ay + o1y, az + o1z], [ax + o0x, ay + o0y, az + o0z],
+           [bx + o0x, by + o0y, bz + o0z], [bx + o1x, by + o1y, bz + o1z], cc);
+  }
+}
+
+/* ------------------------------------------------------------------ 吊索 */
+// 两端立柱之间一条下垂的索。画面和判定都走同一个 zipPoint，跟屋面一个道理。
+function zipPoint(z, t, out) {
+  const sag = z.sag * 4 * t * (1 - t);
+  out[0] = lerp(z.ax, z.bx, t);
+  out[1] = lerp(z.ay, z.by, t) - sag;
+  out[2] = lerp(z.az, z.bz, t);
+  return out;
+}
+const _zp = [0, 0, 0], _zp2 = [0, 0, 0];
+function addZipline(m, gm, z) {
+  const N = 14;
+  for (let i = 0; i < N; i++) {
+    zipPoint(z, i / N, _zp); zipPoint(z, (i + 1) / N, _zp2);
+    addTube(m, _zp[0], _zp[1], _zp[2], _zp2[0], _zp2[1], _zp2[2], 0.055, PAL.woodL, 4);
+  }
+  // 两端的木柱与斜撑：柱脚落在各自那片屋面上，所以高矮由 ayBase/byBase 决定
+  for (const e of [[z.ax, z.ay, z.az, 1, z.ayBase], [z.bx, z.by, z.bz, -1, z.byBase]]) {
+    const base = e[4] !== undefined ? e[4] : e[1] - 3.0;
+    m.box(e[0] - 0.16, base, e[2] - 0.16, e[0] + 0.16, e[1] + 0.25, e[2] + 0.16, PAL.wood);
+    m.box(e[0] - 0.34, e[1] + 0.10, e[2] - 0.34, e[0] + 0.34, e[1] + 0.34, e[2] + 0.34, PAL.eaveWood);
+    addTube(m, e[0], e[1] - 0.4, e[2], e[0] + e[3] * 1.1, Math.max(base + 0.2, e[1] - 2.6), e[2], 0.07, PAL.wood, 4);
+  }
+  // 起点挂一盏灯，远远就看得见有索可搭
+  addLantern(m, gm, z.ax, z.ay - 0.75, z.az, 0.26, true);
+}
+
 /* -------------------------------------------------------------------- 树 */
 function addTree(m, x, z, rng, scale) {
   const s = scale || 1;
@@ -874,7 +928,7 @@ function surfaceY(s, x, z) {
 }
 
 const World = {
-  mesh: null, glow: null, dyn: [], solids: [], grid: new Map(), cell: 18,
+  mesh: null, glow: null, dyn: [], solids: [], zips: [], grid: new Map(), cell: 18,
   path: [], spawns: [], goal: null, chapter: 1, endX: 0, rects: []
 };
 
@@ -883,8 +937,11 @@ function buildGrid() {
   World.grid.clear();
   const c = World.cell;
   World.solids.forEach((s, i) => {
-    const ix0 = Math.floor(s.x0 / c), ix1 = Math.floor(s.x1 / c);
-    const iz0 = Math.floor(s.z0 / c), iz1 = Math.floor(s.z1 / c);
+    // 可推的东西按它能到达的范围登记，之后挪动就不必重建格子
+    const gx0 = s.gx0 !== undefined ? s.gx0 : s.x0, gx1 = s.gx1 !== undefined ? s.gx1 : s.x1;
+    const gz0 = s.gz0 !== undefined ? s.gz0 : s.z0, gz1 = s.gz1 !== undefined ? s.gz1 : s.z1;
+    const ix0 = Math.floor(gx0 / c), ix1 = Math.floor(gx1 / c);
+    const iz0 = Math.floor(gz0 / c), iz1 = Math.floor(gz1 / c);
     for (let ix = ix0; ix <= ix1; ix++) for (let iz = iz0; iz <= iz1; iz++) {
       const k = gridKey(ix, iz);
       let a = World.grid.get(k); if (!a) { a = []; World.grid.set(k, a); }
@@ -925,9 +982,9 @@ function groundAt(x, z, y, step) {
 function resetWorld() {
   if (World.mesh && World.mesh.buf) gl.deleteBuffer(World.mesh.buf);
   if (World.glow && World.glow.buf) gl.deleteBuffer(World.glow.buf);
-  World.dyn.forEach(d => { if (d.mesh.buf) gl.deleteBuffer(d.mesh.buf); });
+  World.dyn.forEach(d => { if (d.own && d.mesh.buf) gl.deleteBuffer(d.mesh.buf); });
   World.mesh = new Mesh(); World.glow = new Mesh();
-  World.dyn = []; World.solids = []; World.path = []; World.spawns = [];
+  World.dyn = []; World.solids = []; World.zips = []; World.path = []; World.spawns = [];
   World.rects = []; LANTERNS.length = 0;
 }
 function rectFree(x0, z0, x1, z1, pad) {
@@ -938,6 +995,28 @@ function rectFree(x0, z0, x1, z1, pad) {
   return true;
 }
 function claim(x0, z0, x1, z1) { World.rects.push({ x0, z0, x1, z1 }); }
+
+// 索的方向、长度、包围球一次算好，判定时不用反复求
+function finishZip(z) {
+  const dx = z.bx - z.ax, dy = z.by - z.ay, dz = z.bz - z.az;
+  z.len = Math.hypot(dx, dy, dz) || 1;
+  z.dx = dx / z.len; z.dy = dy / z.len; z.dz = dz / z.len;
+  z.cx = (z.ax + z.bx) / 2; z.cz = (z.az + z.bz) / 2;
+  z.rad = Math.hypot(dx, dz) / 2 + 3.5;
+  return z;
+}
+// 一口能踩能推的水缸。碰撞体会跟着挪，所以按整片屋顶登记到格子里。
+function addVat(x, y, z, node) {
+  const r = 0.62;
+  const sol = solFlat(x - r, z - r, x + r, z + r, y + 1.08, 'vat');
+  sol.gx0 = node.x0 - 3; sol.gx1 = node.x1 + 3;
+  sol.gz0 = node.z0 - 3; sol.gz1 = node.z1 + 3;
+  const d = { kind: 'vat', mesh: MESH.vat, x, y, z, r, vx: 0, vz: 0, vy: 0,
+              pushT: 0, pvx: 0, pvz: 0, sol, falling: false, gone: false, ry: Math.random() * 6 };
+  sol.vat = d;
+  World.solids.push(sol); World.dyn.push(d);
+  return d;
+}
 
 function genPath(chapter) {
   resetWorld();
@@ -968,9 +1047,10 @@ function genPath(chapter) {
     const last = i === nodes;
     let kind = 'roof';
     if (--special <= 0 && !last && i > 3) {
-      const r = rng();
-      kind = r < 0.28 ? 'plank' : r < 0.52 ? 'poles' : r < 0.74 ? 'wall' : 'frail';
-      special = 5 + (rng() * 4 | 0);
+      const table = ['plank', 'plank', 'poles', 'poles', 'wall', 'wall', 'frail',
+                     'zip', 'zip', 'zip', 'spring', 'spring', 'vat', 'vat'];
+      kind = table[(rng() * table.length) | 0];
+      special = 4 + (rng() * 4 | 0);
     }
 
     // 落差与横向偏移，保证跳得过去
@@ -1047,6 +1127,96 @@ function genPath(chapter) {
       continue;
     }
 
+    if (kind === 'zip') {
+      // 从檐口拉一条索，滑到远处一座低矮的楼台。这段距离是跳不过去的。
+      const sx = prev.x1 - 1.4, sz = clamp(prev.cz, -24, 24);
+      const span = 17 + rng() * 9;
+      const landTop = clamp(h - (4.5 + rng() * 3), 6.5, 23);
+      // 落点被高度下限夹住时索会变平，滑不动——那就把起点的柱子拔高补回坡度
+      const sy = Math.max(h + 3.0, landTop + 2.7 + 4.2);
+      const w = 10 + rng() * 5, d = 9 + rng() * 4;
+      const rx0 = sx + span, rx1 = rx0 + w;
+      const nz2 = clamp(sz + (rng() * 2 - 1) * 5, -25, 25);
+      const eave = 0.85;
+      const B = { x0: rx0, x1: rx1, z0: nz2 - d / 2, z1: nz2 + d / 2, top: landTop, rise: 0,
+                  kind: 'flat', axis: 'x', eave, style: 2, detail: true };
+      addBuilding(m, gm, B, rng);
+      const ex0 = B.x0 - eave, ex1 = B.x1 + eave, ez0 = B.z0 - eave, ez1 = B.z1 + eave;
+      const sol = solFlat(ex0, ez0, ex1, ez1, landTop + 0.18, 'roof');
+      World.solids.push(sol);
+      claim(B.x0 - 1.6, B.z0 - 1.6, B.x1 + 1.6, B.z1 + 1.6);
+      claim(sx - 2, Math.min(sz, nz2) - 3, rx0 + 2, Math.max(sz, nz2) + 3);
+      const zp = finishZip({ ax: sx, ay: sy, az: sz, bx: rx0 + 1.8, by: landTop + 2.7, bz: nz2, sag: 1.0,
+                             ayBase: surfaceY(prev.s, sx, sz), byBase: landTop + 0.18 });
+      addZipline(m, gm, zp);
+      World.zips.push(zp);
+      path.push({ x0: ex0, x1: ex1, z0: ez0, z1: ez1, cx: (ex0 + ex1) / 2, cz: nz2,
+                  y: landTop + 0.18, s: sol, kind: 'roof' });
+      cursor = ex1; cz = nz2; h = landTop;
+      continue;
+    }
+    if (kind === 'spring') {
+      // 跳板架在这片屋顶的檐口上：跑过去必然踩到，被弹上一座平时够不着的高楼
+      // 板子横向铺满整个出檐口。猜主角从哪条线出去是猜不准的，索性堵死。
+      const w = 10 + rng() * 6, d = 9 + rng() * 5;
+      const rx0 = prev.x1 + 6.0 + rng() * 3.5, rx1 = rx0 + w;
+      const nz2 = clamp(prev.cz + (rng() * 2 - 1) * 3.5, -25, 25);
+      const bx = prev.x1 - 2.0;
+      const bz0 = prev.z0 + 0.3, bz1 = prev.z1 - 0.3;
+      const nb2 = Math.max(2, Math.round((bz1 - bz0) / 4.8));
+      const hz2 = (bz1 - bz0) / nb2 / 2;
+      let byMid = 0;
+      for (let k = 0; k < nb2; k++) {
+        const bz = lerp(bz0, bz1, (k + 0.5) / nb2);
+        const by2 = surfaceY(prev.s, bx, bz) + 0.42;
+        if (k === (nb2 >> 1)) byMid = by2;
+        const sp = solFlat(bx - 1.78, bz - hz2, bx + 1.78, bz + hz2, by2, 'spring');
+        sp.spring = 15.8;
+        World.solids.push(sp);
+        const bd = { kind: 'spring', mesh: MESH.board, x: bx, y: by2, z: bz, base: by2, press: 0, sol: sp };
+        sp.dyn = bd; World.dyn.push(bd);
+      }
+      const by = byMid;
+      addLanternPole(m, gm, bx - 3.0, surfaceY(prev.s, bx - 3.0, bz1 - 0.6), bz1 - 0.6, 2.2, false);
+      const nh2 = clamp(by + 5.0 + rng() * 2.5, 10, 27);
+      const rise = 1.0 + rng() * 1.1, eave = 0.85, axis = w >= d ? 'x' : 'z';
+      addBuilding(m, gm, { x0: rx0, x1: rx1, z0: nz2 - d / 2, z1: nz2 + d / 2, top: nh2,
+                           rise, kind: 'ridge', axis, eave, style: (rng() * 3 | 0), detail: true }, rng);
+      const ex0 = rx0 - eave, ex1 = rx1 + eave, ez0 = nz2 - d / 2 - eave, ez1 = nz2 + d / 2 + eave;
+      const sol = solRidge(ex0, ez0, ex1, ez1, nh2 + rise, nh2 - 0.30 * rise, axis, 'roof');
+      World.solids.push(sol);
+      claim(rx0 - 1.6, ez0 - 1.6, rx1 + 1.6, ez1 + 1.6);
+      path.push({ x0: ex0, x1: ex1, z0: ez0, z1: ez1, cx: (ex0 + ex1) / 2, cz: nz2,
+                  y: surfaceY(sol, (ex0 + ex1) / 2, nz2), s: sol, kind: 'roof' });
+      cursor = ex1; cz = nz2; h = nh2;
+      continue;
+    }
+    if (kind === 'vat') {
+      // 平顶的院子，摆着几口大水缸。能踩上去，也能推着走、推下去。
+      const w = 10 + rng() * 5, d = 9.5 + rng() * 4;
+      const rx0 = prev.x1 + gap, rx1 = rx0 + w;
+      const nz2 = clamp(cz + dz, -25, 25);
+      const nh2 = clamp(h + dy, 7, 24);
+      const eave = 0.85;
+      addBuilding(m, gm, { x0: rx0, x1: rx1, z0: nz2 - d / 2, z1: nz2 + d / 2, top: nh2,
+                           rise: 0, kind: 'flat', axis: 'x', eave, style: 0, detail: true }, rng);
+      const ex0 = rx0 - eave, ex1 = rx1 + eave, ez0 = nz2 - d / 2 - eave, ez1 = nz2 + d / 2 + eave;
+      const sol = solFlat(ex0, ez0, ex1, ez1, nh2 + 0.18, 'roof');
+      World.solids.push(sol);
+      claim(rx0 - 1.6, ez0 - 1.6, rx1 + 1.6, ez1 + 1.6);
+      const nd = { x0: ex0, x1: ex1, z0: ez0, z1: ez1, cx: (ex0 + ex1) / 2, cz: nz2,
+                   y: nh2 + 0.18, s: sol, kind: 'roof' };
+      path.push(nd);
+      const nv = 2 + (rng() * 2 | 0);
+      for (let k = 0; k < nv; k++)
+        addVat(lerp(rx0 + 1.8, rx1 - 1.8, (k + 0.5) / nv),
+               nh2 + 0.18,
+               clamp(nz2 + (rng() * 2 - 1) * (d / 2 - 1.8), ez0 + 1.4, ez1 - 1.4), nd);
+      World.spawns.push({ type: 'archer', x: rx1 - 2.2, z: nz2, node: nd });
+      cursor = ex1; cz = nz2; h = nh2;
+      continue;
+    }
+
     // ---- 普通屋顶（frail 是同样大小的朽木台，踩上去会塌）
     const w = 8 + rng() * 8, d = 8 + rng() * 7;
     const rx0 = prev.x1 + gap, rx1 = rx0 + w;
@@ -1064,7 +1234,7 @@ function genPath(chapter) {
       const s = solFlat(rx0 - hw2 + 2.4, nz - hd2, rx0 + hw2 + 2.4, nz + hd2, nh, 'frail');
       s.frail = true;
       World.solids.push(s);
-      const dobj = { mesh: fm, x: rx0 + 2.4, y: nh, z: nz, vy: 0, spin: 0, sol: s, t: -1 };
+      const dobj = { kind: 'frail', own: true, mesh: fm, x: rx0 + 2.4, y: nh, z: nz, vy: 0, spin: 0, sol: s, t: -1 };
       s.dyn = dobj; World.dyn.push(dobj);
       claim(rx0 - 1, nz - 4, rx0 + 6, nz + 4);
       path.push({ x0: s.x0, x1: s.x1, z0: s.z0, z1: s.z1, cx: rx0 + 2.4, cz: nz, y: nh, s, kind });
@@ -1508,6 +1678,17 @@ function animate(c, P, t) {
     P.armLRx = 0.9; P.armLRz = 0.7; P.armRRx = -1.5; P.armRRz = -0.35; P.foreRRx = -0.7;
     P.swordRx = -0.5; return P;
   }
+  if (st === 'zip') {
+    P.hipY = 0.92; P.pitch = -0.10;
+    P.spineRx = 0.12 + Math.sin(t * 3.2) * 0.05;
+    P.armLRx = -2.62; P.armRRx = -2.62; P.armLRz = 0.20; P.armRRz = -0.20;
+    P.foreLRx = -0.14; P.foreRRx = -0.14;
+    const sw = Math.sin(t * 4.4);
+    P.legLRx = -0.46 + sw * 0.16; P.legRRx = -0.14 - sw * 0.16;
+    P.shinLRx = 0.55; P.shinRRx = 0.28;
+    P.sword = false;                       // 两只手都抓着索
+    return P;
+  }
   if (st === 'wall') {
     const w = c.wallSide || 1;
     P.roll = -w * 0.42; P.spineRx = 0.28;
@@ -1761,16 +1942,18 @@ const Hero = {
   hurtT: 0, invuln: 0, dead: false, deadT: 0, deathKind: '',
   wallT: 0, wallSide: 1, wallNx: 0, wallNz: 0, wallCool: 0,
   slideT: 0, sword: true, node: 0, coins: 0, kills: 0,
+  zip: null, zipT: 0, zipV: 0, zipCool: 0,
   ribbon: [], trail: [], landT: 0, spawnX: 0, spawnY: 0, spawnZ: 0
 };
 const _tipBuf = [0,0,0,0,0,0];
 
 // 圆柱体对所有实体的水平推出。返回接触法线，壁走要用。
-function collideXZ(px, pz, py, r) {
+function collideXZ(px, pz, py, r, ignore) {
   const list = nearSolids(px, pz, r + 1.2);
   let hit = false, hnx = 0, hnz = 0, hs = null, deep = 0;
   for (let i = 0; i < list.length; i++) {
     const s = list[i];
+    if (s === ignore) continue;
     const cx = clamp(px, s.x0, s.x1), cz = clamp(pz, s.z0, s.z1);
     let dx = px - cx, dz = pz - cz;
     const d2 = dx * dx + dz * dz;
@@ -1818,8 +2001,57 @@ function heroReset(node) {
   Hero.yaw = PI / 2;
   Hero.onGround = true; Hero.jumps = 0; Hero.wallT = 0; Hero.slideT = 0;
   Hero.atk = 0; Hero.combo = 0; Hero.spin = 0; Hero.qi = QI_MAX;
+  Hero.zip = null; Hero.zipCool = 0;
   Hero.ribbon.length = 0; Hero.trail.length = 0;
   for (let i = 0; i < 7; i++) Hero.ribbon.push({ x: Hero.x, y: Hero.y + 1, z: Hero.z });
+}
+
+// 滑索：抓上之后由索接管位置，重力和碰撞都不走了
+function rideZip(dt) {
+  const H = Hero, z = H.zip;
+  H.zipV = clamp(H.zipV - z.dy * 26 * dt - 1.4 * dt, 3.5, 24);   // 顺坡加速
+  H.zipT += H.zipV / z.len * dt;
+  const t = clamp(H.zipT, 0, 1);
+  zipPoint(z, t, _zp);
+  H.x = _zp[0]; H.y = _zp[1] - 1.86; H.z = _zp[2];
+  H.vx = z.dx * H.zipV; H.vz = z.dz * H.zipV; H.vy = 0;
+  H.yaw = towards(H.yaw, Math.atan2(z.dx, z.dz), 9 * dt);
+  H.onGround = false; H.ground = null; H.jumps = 1;
+  H.anim = 'zip'; H.animSpeed = H.zipV; H.phase += 3 * dt;
+  H.qi = Math.min(QI_MAX, H.qi + QI_REGEN * 0.45 * dt);
+  if (Math.random() < 0.35) spawnSpark(_zp[0], _zp[1] + 0.04, _zp[2], PAL.gold);
+  const bail = H.jumpBuf > 0;
+  if (t >= 0.965 || bail) {
+    H.zip = null; H.zipCool = 0.55; H.jumpBuf = 0; H.jumps = 1;
+    H.vy = bail ? 7.6 : 3.2;
+    SFX.jump(bail ? 1.2 : 0.9);
+    if (bail) spawnBurst(H.x, H.y + 1.0, H.z, 8, PAL.jade);
+  }
+}
+// 空中掠过索就自动挂上去，不另占一个键
+function tryGrabZip() {
+  const H = Hero;
+  if (H.zip || H.zipCool > 0 || H.onGround || H.vy > 6.5) return;
+  const hy = H.y + 1.86;
+  for (let i = 0; i < World.zips.length; i++) {
+    const z = World.zips[i];
+    if (Math.abs(H.x - z.cx) > z.rad || Math.abs(H.z - z.cz) > z.rad) continue;
+    let bt = -1, bd = 1e9;
+    for (let k = 0; k <= 14; k++) {
+      const t = k / 14;
+      zipPoint(z, t, _zp);
+      const dx = _zp[0] - H.x, dy = _zp[1] - hy, dz = _zp[2] - H.z;
+      const d2 = dx * dx + dy * dy * 0.7 + dz * dz;
+      if (d2 < bd) { bd = d2; bt = t; }
+    }
+    if (bd < 3.6 && bt < 0.92) {
+      H.zip = z; H.zipT = bt;
+      H.zipV = Math.max(6.5, Math.hypot(H.vx, H.vz));
+      H.slideT = 0; H.wallT = 0; H.atk = 0;
+      SFX.zipGrab(); spawnBurst(H.x, hy, H.z, 6, PAL.gold);
+      return;
+    }
+  }
 }
 
 function updateHero(dt) {
@@ -1838,7 +2070,8 @@ function updateHero(dt) {
 
   H.comboT -= dt; H.invuln -= dt; H.hurtT -= dt; H.landT -= dt; H.wallCool -= dt;
   if (Input.jumpEdge) { H.jumpBuf = 0.14; Input.jumpEdge = false; }
-  H.jumpBuf -= dt;
+  H.jumpBuf -= dt; H.zipCool -= dt;
+  if (H.zip) { rideZip(dt); return; }
 
   // ---- 出剑
   if (Input.atkEdge) {
@@ -1952,6 +2185,10 @@ function updateHero(dt) {
   let nx2 = H.x + H.vx * dt, nz2 = H.z + H.vz * dt;
   const col = collideXZ(nx2, nz2, H.y, H.r);
   H.x = col.x; H.z = col.z;
+  if (col.hit && col.s && col.s.vat && !col.s.vat.gone && H.onGround) {
+    const v = col.s.vat;                       // 撞上水缸就推着走
+    v.pvx = -col.nx; v.pvz = -col.nz; v.pushT = 0.12;
+  }
   if (col.hit) {
     // 速度沿墙滑
     const dot = H.vx * col.nx + H.vz * col.nz;
@@ -1984,6 +2221,20 @@ function updateHero(dt) {
     if (impact > 17) { Cam.shake = Math.max(Cam.shake, 0.55); H.vx *= 0.55; H.vz *= 0.55; }
     if (gr.s.frail && gr.s.dyn && gr.s.dyn.t < 0) gr.s.dyn.t = 0.75;   // 朽木台开始塌
   }
+  // 跳板站不住，一沾就弹
+  if (H.onGround && H.ground && H.ground.spring) {
+    const imp = -Math.min(H.vyLast || 0, 0);
+    H.vy = H.ground.spring + Math.min(imp * 0.28, 4.5);
+    const hs = Math.hypot(H.vx, H.vz);
+    if (hs < 7) { const k = 7 / (hs || 1); H.vx = hs < 0.5 ? Math.sin(H.yaw) * 7 : H.vx * k;
+                  H.vz = hs < 0.5 ? Math.cos(H.yaw) * 7 : H.vz * k; }
+    H.onGround = false; H.coyote = 0; H.jumps = 1; H.slideT = 0;
+    if (H.ground.dyn) H.ground.dyn.press = 1;
+    Cam.shake = Math.max(Cam.shake, 0.3);
+    SFX.spring(); spawnRing(H.x, H.ground.top + 0.12, H.z, PAL.bamboo);
+    H.ground = null;
+  }
+  tryGrabZip();
   H.vyLast = H.vy;
   if (H.onGround) H.qi = Math.min(QI_MAX, H.qi + QI_REGEN * dt);
   else if (!onWall) H.qi = Math.min(QI_MAX, H.qi + QI_REGEN * 0.22 * dt);
@@ -2106,6 +2357,22 @@ function buildProps() {
   m.prism(0, 0, -0.22, 0.22, 0.30, 0.05, 7, [0.72, 0.42, 0.86]);
   m.prism(0, 0, 0.0, 0.30, 0.22, 0.02, 7, [0.92, 0.66, 1.0]);
   MESH.palm = m.upload();
+  // 水缸：原点在缸底中心
+  m = new Mesh();
+  m.prism(0, 0, 0, 1.02, 0.50, 0.60, 10, PAL.stoneD);
+  m.prism(0, 0, 0.98, 1.10, 0.62, 0.58, 10, PAL.stone);
+  m.prism(0, 0, 0.86, 0.90, 0.50, 0.50, 10, [0.10, 0.19, 0.24]);   // 水面
+  MESH.vat = m.upload();
+  // 跳板：原点在板面中心，竹片铺面 + 底下的架子
+  m = new Mesh();
+  const bamD = [PAL.bamboo[0] * 0.78, PAL.bamboo[1] * 0.78, PAL.bamboo[2] * 0.78];
+  for (let i = -6; i <= 6; i++)
+    m.box(-1.72, -0.10, i * 0.36 - 0.15, 1.72, 0, i * 0.36 + 0.15, (i & 1) ? PAL.bamboo : bamD);
+  m.box(-1.78, -0.17, -2.40, 1.78, -0.10, 2.40, PAL.woodL);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1])
+    m.box(sx * 1.55 - 0.10, -0.42, sz * 2.10 - 0.10, sx * 1.55 + 0.10, -0.15, sz * 2.10 + 0.10, PAL.wood);
+  m.box(-1.78, -0.34, -0.11, 1.78, -0.22, 0.11, PAL.wood);
+  MESH.board = m.upload();
 }
 function drawMesh(mesh, x, y, z, ry, rx, rz, tint, emis) {
   M4.trs(_tmpM, x, y, z, ry, rx || 0, rz || 0);
@@ -2511,6 +2778,9 @@ const SFX = {
   slide()  { this.noise(0.55, 0.13, 2600, 500, 'bandpass'); },
   dash()   { this.noise(0.3, 0.16, 500, 2600, 'bandpass'); },
   fall()   { this.tone(700, 90, 0.7, 0.14, 'sine'); },
+  spring() { this.tone(190, 880, 0.16, 0.16, 'triangle'); this.tone(880, 300, 0.22, 0.09, 'sine'); this.noise(0.2, 0.10, 600, 2200); },
+  zipGrab(){ this.noise(0.5, 0.14, 900, 3200, 'bandpass'); this.tone(420, 700, 0.4, 0.05, 'triangle'); },
+  smash()  { this.noise(0.35, 0.22, 4200, 500); this.tone(320, 90, 0.22, 0.12, 'square'); this.noise(0.5, 0.09, 900, 180); },
   palm()   { this.tone(160, 520, 0.35, 0.14, 'sawtooth'); this.noise(0.35, 0.12, 400, 1800); },
   slam()   { this.tone(90, 34, 0.7, 0.28, 'sine'); this.noise(0.5, 0.2, 1200, 90); },
   gong(k)  { const t = this.now(); [1, 1.51, 2.02, 2.67, 3.41].forEach((r, i) =>
@@ -2645,7 +2915,10 @@ function renderScene(aspect) {
 
   // 会塌的木台
   for (const d of World.dyn) {
-    M4.trs(_tmpM, d.x, d.y, d.z, 0, d.spin * 0.6, d.spin);
+    if (d.gone) continue;
+    const frail = d.kind === 'frail';
+    M4.trs(_tmpM, d.x, d.y, d.z, d.ry || 0,
+           frail ? d.spin * 0.6 : 0, frail ? d.spin : -(d.press || 0) * 0.09);
     gl.uniformMatrix4fv(U.uM, false, _tmpM);
     gl.bindBuffer(gl.ARRAY_BUFFER, d.mesh.buf); bindFormat();
     gl.drawArrays(gl.TRIANGLES, 0, d.mesh.count);
@@ -2914,8 +3187,58 @@ function resize() {
 }
 addEventListener('resize', resize);
 
+function smashVat(d) {
+  d.gone = true; d.sol.dead = true;
+  for (let i = 0; i < 18; i++) {                 // 陶片
+    const a = Math.random() * TAU, v = 2 + Math.random() * 5;
+    addP(d.x, d.y + 0.5, d.z, Math.cos(a) * v, 2 + Math.random() * 4, Math.sin(a) * v,
+         0.7 + Math.random() * 0.4, 0.10 + Math.random() * 0.12, PAL.stoneD, 14, false);
+  }
+  for (let i = 0; i < 10; i++) {                 // 泼出来的水
+    const a = Math.random() * TAU, v = 1 + Math.random() * 3;
+    addP(d.x, d.y + 0.9, d.z, Math.cos(a) * v, 2.5 + Math.random() * 3, Math.sin(a) * v,
+         0.6, 0.13, [0.34, 0.60, 0.70], 11, true);
+  }
+  spawnRing(d.x, d.y + 0.1, d.z, [0.40, 0.62, 0.72]);
+  SFX.smash();
+}
+function updateVat(d, dt) {
+  if (d.gone) return;
+  if (d.pushT > 0) { d.pushT -= dt; d.vx = d.pvx * 2.8; d.vz = d.pvz * 2.8; }
+  else { const f = Math.exp(-9 * dt); d.vx *= f; d.vz *= f; }
+  const sp = Math.hypot(d.vx, d.vz);
+  if (sp > 0.05) {
+    const c = collideXZ(d.x + d.vx * dt, d.z + d.vz * dt, d.y + 0.25, d.r, d.sol);
+    if (c.hit) { d.vx = 0; d.vz = 0; }
+    d.x = c.x; d.z = c.z; d.ry += sp * dt * 0.45;
+    for (const f of Foes) {                      // 推过去能把人撞下屋顶
+      if (f.dead || f.type === 'boss' || Math.abs(f.y - d.y) > 1.6) continue;
+      const dx = f.x - d.x, dz = f.z - d.z;
+      if (dx * dx + dz * dz < 1.35) {
+        const l = Math.hypot(dx, dz) || 1;
+        hitFoe(f, dx / l, dz / l, 3);
+        f.x += dx / l * 1.1; f.z += dz / l * 1.1;
+        d.vx *= 0.4; d.vz *= 0.4;
+      }
+    }
+  }
+  const gr = groundAt(d.x, d.z, d.y + 0.35, 0);
+  if (gr.s && d.vy <= 0 && d.y <= gr.y + 0.06) {
+    if (d.falling && d.fallFrom - gr.y > 2.5) { smashVat(d); return; }
+    d.y = gr.y; d.vy = 0; d.falling = false;
+  } else {
+    if (!d.falling) { d.falling = true; d.fallFrom = d.y; }
+    d.vy -= GRAV * dt; d.y += d.vy * dt;
+    if (d.y < 1.2) { smashVat(d); return; }
+  }
+  d.sol.x0 = d.x - d.r; d.sol.x1 = d.x + d.r;
+  d.sol.z0 = d.z - d.r; d.sol.z1 = d.z + d.r;
+  d.sol.top = d.y + 1.08; d.sol.maxY = d.sol.top;
+}
 function updateWorldDyn(dt) {
   for (const d of World.dyn) {
+    if (d.kind === 'spring') { d.press = Math.max(0, d.press - dt * 4.5); d.y = d.base - d.press * 0.30; continue; }
+    if (d.kind === 'vat') { updateVat(d, dt); continue; }
     if (d.t < 0) continue;
     d.t -= dt;
     if (d.t > 0) { d.x += (Math.random() - 0.5) * 0.03; continue; }   // 抖两下
