@@ -12,10 +12,21 @@ const { loadGame } = require('./env.js');
 const G = loadGame();
 const { World, Hero, Game, groundAt } = G;
 const SCENES = G.SCENES;
+/* 追捕默认关掉：不然测吊索、跳板、脚步声的时候捕快照追不误，把主角抓死，
+   后面的断言全成了噪声。到追捕那一节再打开。 */
+let chaseOn = false;
+const realStart = Game.startChapter.bind(Game);
+Game.startChapter = function (n) { realStart(n); G.Chase.on = chaseOn; };
 let fails = 0;
 function ok(cond, msg, detail) {
   console.log('  ' + (cond ? '✓' : '✗') + ' ' + msg + (detail ? '   ' + detail : ''));
   if (!cond) fails++;
+}
+// 清掉输入残留：不清的话上一段测试的「一直向前」会带进下一段
+function idle() {
+  G.Input.ax = 0; G.Input.ay = 0; G.Input.touch = true;
+  G.Input.jumpEdge = false; G.Input.atkEdge = false; G.Input.slideEdge = false;
+  for (const k in G.Keys) G.Keys[k] = false;
 }
 // 把主角摆到指定位置，清掉一切状态
 function place(x, y, z, vx, vy) {
@@ -156,8 +167,9 @@ console.log('\n天气');
   const realThunder = G.SFX.thunder;
   G.SFX.thunder = function () { thunders++; };
   W.boltT = 0.001;
-  for (let i = 0; i < 5; i++) G.tick();
-  ok(W.flash > 0.5, '会闪电', 'flash=' + W.flash.toFixed(2));
+  let peak = 0;
+  for (let i = 0; i < 5; i++) { G.tick(); peak = Math.max(peak, W.flash); }
+  ok(peak > 0.7, '会闪电', '峰值 flash=' + peak.toFixed(2) + '（衰减很快，取峰值）');
   ok(W.thunderT > 0, '雷声排在闪光之后', '延后 ' + W.thunderT.toFixed(1) + 's');
   for (let i = 0; i < 300; i++) G.tick();
   ok(thunders >= 1, '延时之后打雷', thunders + ' 声');
@@ -187,5 +199,62 @@ console.log('\n天气');
   ok(dry >= 4 && dry === total(nk), '晴夜按脚下材质分瓦声和木声，不会混进雨雪', JSON.stringify(nk));
 }
 
-console.log(fails ? '\n✗ ' + fails + ' 项不通过' : '\n✓ 机制与天气全部正常');
+/* ------------------------------------------------------------------ 追捕 */
+console.log('\n追捕');
+{
+  chaseOn = true;
+  const C = G.Chase;
+  // 站着不动一定会被绑
+  Game.startChapter(1); idle();
+  let f = 0;
+  while (f++ < 900 && !Hero.dead) G.tick();
+  ok(Hero.dead && Hero.deathKind === 'caught', '站着不动会被追上绑走',
+     '第 ' + (f / 60).toFixed(1) + 's');
+
+  // 捕快数量随回数增加
+  const counts = [];
+  for (let ch = 1; ch <= SCENES.length; ch++) { Game.startChapter(ch); counts.push(C.cops.length); }
+  ok(counts[0] >= 3 && counts[counts.length - 1] > counts[0], '捕快人数随回数增加', counts.join(' '));
+
+  // 摔一跤要丢掉从检查点跑到失足处的那段路，不能反而赚
+  Game.startChapter(2); idle();
+  G.Input.ay = 1; G.Cam.yaw = Math.PI / 2;
+  for (let i = 0; i < 420; i++) { Hero.hp = Hero.maxHp; G.tick(); }
+  const before = C.s, gapBefore = C.minGap;
+  Hero.invuln = 0; Hero.y = 0.5;               // 失足
+  for (let i = 0; i < 6; i++) G.tick();
+  ok(C.s < before - 5, '摔下去会把轨迹弧长退回检查点', 
+     '丢掉 ' + (before - C.s).toFixed(0) + 'm（原本瞬移会白赚这一段）');
+  ok(C.minGap <= gapBefore + 1, '摔完距离不会反而变大',
+     gapBefore.toFixed(0) + 'm → ' + C.minGap.toFixed(0) + 'm');
+
+  // 一剑打不死捕快，但能把人逼退
+  Game.startChapter(1); idle();
+  G.Input.ay = 1; G.Cam.yaw = Math.PI / 2;
+  for (let i = 0; i < 60; i++) G.tick();
+  idle();
+  for (let i = 0; i < 30; i++) G.tick();        // 先停下来，否则出剑那一刻会转身朝前
+  const cop = C.cops[0];
+  C.speed = 0;                                  // 冻住捕快，专测击退
+  cop.prog = C.headS - 2.2;
+  G.tick();
+  const progBefore = cop.prog;
+  Hero.yaw = Math.atan2(cop.x - Hero.x, cop.z - Hero.z);
+  G.Input.atkEdge = true;
+  for (let i = 0; i < 20; i++) G.tick();
+  ok(cop.stun > 0 || cop.prog < progBefore - 3, '一棍子能把捕快逼退',
+     '退了 ' + (progBefore - cop.prog).toFixed(1) + 'm');
+  ok(C.cops.length === counts[0], '捕快打不死，人数不变');
+
+  // 上了钟楼就安全
+  Game.startChapter(1); idle();
+  const g = World.goal;
+  Hero.x = g.x - 6; Hero.y = g.y + 0.2; Hero.z = g.z;
+  Hero.dead = false; Hero.hp = Hero.maxHp;
+  for (let i = 0; i < 240; i++) { Hero.x = g.x - 6; Hero.y = g.y + 0.2; Hero.z = g.z; G.tick(); }
+  ok(C.atGoal, '上了钟楼判定为安全区');
+  ok(!Hero.dead, '在钟楼上不会被抓（否则第六回没法打头目）');
+}
+
+console.log(fails ? '\n✗ ' + fails + ' 项不通过' : '\n✓ 机制、天气、追捕全部正常');
 process.exit(fails ? 1 : 0);

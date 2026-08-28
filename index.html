@@ -154,7 +154,7 @@
     <div class="sub">Rooftops of Jianghu</div>
     <h1>飛　簷</h1>
     <div class="seal">屋顶轻功</div>
-    <p>三更天，你踩着青瓦向北去。街上是巡夜的灯，头顶是月。<br>六回路：夜巷、长街、雨夜、雪夜、皇城，直到破晓出城。<br>别落到地上——落地的人，走不出这座城。</p>
+    <p>三更天，你踩着青瓦向北去。街上是巡夜的灯，头顶是月。<br><b style="color:#d8443c">身后有几个捕快，一直追。被他们摸到，就是铁链上身。</b><br>六回路：夜巷、长街、雨夜、雪夜、皇城，直到破晓出城。<br>别停，也别落到地上——落地的人，走不出这座城。</p>
     <div class="keys">
       <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>奔行</div>
       <div><kbd>鼠标</kbd>转视角（点击锁定）</div>
@@ -165,6 +165,7 @@
       <div><kbd>Ctrl</kbd>或 <kbd>C</kbd>滑铲</div>
       <div><kbd>P</kbd>暂停　<kbd>R</kbd>重来</div>
     </div>
+    <p class="hint">顶上那条是追兵距离，红了就是贴到身后了 · 回身一剑能把捕快逼退七八步，但打不死</p>
     <p class="hint">空中掠过吊索会自动挂上滑行 · 跑上竹跳板会被高高弹起 · 水缸推得动，也推得下去</p>
     <p class="hint">手机横屏会出现虚拟手柄，右半屏拖动转视角。</p>
     <div class="go">点击画面 · 起　纵</div>
@@ -1565,10 +1566,17 @@ function buildFigure(C) {
   }
 
   f = begin();
-  m.bc(0, 0.0, 0, 0.032, 0.085, 0.032, C.hilt);
-  m.bc(0, 0.10, 0, 0.10, 0.022, 0.05, C.guard);
-  m.bc(0, 0.60, 0, 0.023, 0.48, 0.052, C.blade);
-  m.bc(0, -0.10, 0, 0.042, 0.03, 0.042, C.guard);
+  if (C.staff) {                       // 水火棍：同一个挂点，换个形状
+    m.bc(0, 0.52, 0, 0.046, 0.72, 0.046, C.hilt);
+    m.bc(0, -0.22, 0, 0.046, 0.28, 0.046, C.hilt);
+    m.bc(0, 1.20, 0, 0.058, 0.10, 0.058, C.guard);
+    m.bc(0, -0.46, 0, 0.058, 0.10, 0.058, C.guard);
+  } else {
+    m.bc(0, 0.0, 0, 0.032, 0.085, 0.032, C.hilt);
+    m.bc(0, 0.10, 0, 0.10, 0.022, 0.05, C.guard);
+    m.bc(0, 0.60, 0, 0.023, 0.48, 0.052, C.blade);
+    m.bc(0, -0.10, 0, 0.042, 0.03, 0.042, C.guard);
+  }
   part('sword', f);
 
   f = begin();                                                        // 弓
@@ -1608,6 +1616,12 @@ function buildAllFigures() {
     skin: RGB(0xc79b78), hair: RGB(0x14131a), eye: RGB(0xd8a03c), pants: RGB(0x222831),
     boot: RGB(0x0f1115), hilt: RGB(0x4a3728), guard: RGB(0x8a8f98), blade: RGB(0xb9c3cf),
     hat: RGB(0x6b5a34)
+  });
+  FIG.cop = buildFigure({                 // 捕快：皂衣、红带、黑帽、水火棍
+    robe: RGB(0x1d2836), robeD: RGB(0x121a25), sash: RGB(0xb03a2e), sashD: RGB(0x76251d),
+    skin: RGB(0xc79b78), hair: RGB(0x14131a), eye: RGB(0xf2e2c2), pants: RGB(0x212a35),
+    boot: RGB(0x0e1014), hilt: RGB(0x4a3323), guard: RGB(0x2b2f36), blade: RGB(0x8a8f98),
+    hat: RGB(0x181d26), staff: true
   });
   FIG.boss = buildFigure({
     robe: RGB(0x4a2350), robeD: RGB(0x321636), sash: RGB(0xd9ab4e), sashD: RGB(0x9c7529),
@@ -2305,6 +2319,7 @@ function heroDie(kind) {
     if (H.hp <= 0) { H.dead = true; H.deadT = 0; H.deathKind = 'fall'; Game.over('落　地', '街上的灯笼围了上来。'); return; }
     heroReset(H.node);
     H.invuln = 1.6;
+    Chase.rewind();           // 摔一跤要丢掉这段路，不能反而赚
   }
 }
 function heroHurt(dmg, fx, fz) {
@@ -2612,6 +2627,21 @@ function doSwordHit(k) {
     H.hitList.push(f);
     hitFoe(f, dx / (d||1), dz / (d||1), H.combo === 2 ? 2 : 1);
   }
+  // 捕快打不死，但一棍子能把人逼退七八米，够你喘一口
+  for (const c of Chase.cops) {
+    if (c.stun > 0 || H.hitList.indexOf(c) >= 0) continue;
+    const dx = c.x - H.x, dz = c.z - H.z, dy = c.y - H.y;
+    const d = Math.hypot(dx, dz);
+    if (d > reach || Math.abs(dy) > 2.2) continue;
+    if ((dx * fx + dz * fz) / (d || 1) < 0.15) continue;
+    H.hitList.push(c);
+    c.stun = 0.85; c.hurtT = 0.3;
+    c.prog = Math.max(0, c.prog - (H.combo === 2 ? 11 : 7));
+    Cam.shake = Math.max(Cam.shake, 0.28);
+    spawnBurst(c.x, c.y + 1.05, c.z, 9, PAL.cloth);
+    SFX.hit(); Game.hitStop = Math.max(Game.hitStop, 0.04);
+    Game.score += 15;
+  }
 }
 function hitFoe(f, nx, nz, dmg) {
   f.hp -= dmg; f.hurtT = 0.3; f.alerted = true;
@@ -2631,6 +2661,142 @@ function hitFoe(f, nx, nz, dmg) {
     for (let i = 0; i < 3; i++)
       Items.push({ type: 'coin', x: f.x + (Math.random()-0.5), y: f.y + 1 + Math.random(), z: f.z + (Math.random()-0.5), t: 0 });
   }
+}
+
+/* ==========================================================================
+   追捕：几个捕快在后面撵，追上就把你绑了。
+
+   屋顶上做真正的寻路不现实（满城的跳跃、吊索、木桩、会塌的台子），所以
+   捕快跟的是主角自己留下的轨迹：主角每跑半米落一个点，捕快按弧长沿这条
+   折线推进。你怎么跳过去的，他们就怎么跳过去，永远卡不住；而且「还差
+   多少米」是一个精确数字，HUD 和判定都用它。
+   ========================================================================== */
+const Chase = {
+  on: false, pts: [], s: 0, cops: [], speed: 9.2, hold: 0,
+  warnT: 0, minGap: 999, headS: 0,
+  reset(chapter) {
+    this.on = true;
+    this.pts.length = 0; this.s = 0; this.warnT = 0; this.minGap = 999;
+    // 比对的不是疾奔峰值 10.9，而是主角沿轨迹的实际配速（实测约 9.4 m/s）。
+    // 留出余量：跑干净就能拉开，一出错就被咬住。
+    this.speed = 7.4 + (chapter - 1) * 0.26;
+    this.hold = 2.6;                               // 开局先让你跑几步
+    const n = 3 + Math.min(2, Math.floor((chapter - 1) / 2));
+    this.cops = [];
+    for (let i = 0; i < n; i++) {
+      this.cops.push({
+        prog: 0, stun: 0, side: (i - (n - 1) / 2) * 1.15,
+        x: Hero.x, y: Hero.y, z: Hero.z, yaw: Hero.yaw, vy: 0,
+        phase: Math.random() * 6, anim: 'run', animSpeed: 9,
+        atk: 0, atkDur: 0.3, atkVariant: 0, hurtT: 0, deadT: 0,
+        sword: true, bow: false, pose: newPose()
+      });
+    }
+    this.record(true);
+  },
+  // 记录主角轨迹。间隔太密没意义，太疏会切掉转弯。
+  record(force) {
+    const p = this.pts;
+    if (!p.length) { p.push({ x: Hero.x, y: Hero.y, z: Hero.z, s: 0 }); return; }
+    const q = p[p.length - 1];
+    const d = Math.hypot(Hero.x - q.x, Hero.y - q.y, Hero.z - q.z);
+    if (d < 0.5 && !force) return;
+    this.s += d;
+    p.push({ x: Hero.x, y: Hero.y, z: Hero.z, s: this.s });
+    // 最后一个捕快都走过的点可以扔了
+    let minP = this.s;
+    for (let i = 0; i < this.cops.length; i++) minP = Math.min(minP, this.cops[i].prog);
+    let cut = 0;
+    while (cut + 2 < p.length && p[cut + 1].s < minP - 6) cut++;
+    if (cut > 64) p.splice(0, cut);
+  },
+  posAt(prog, out) {
+    const p = this.pts;
+    if (!p.length) { out[0] = Hero.x; out[1] = Hero.y; out[2] = Hero.z; return; }
+    if (prog <= p[0].s) { out[0] = p[0].x; out[1] = p[0].y; out[2] = p[0].z; return; }
+    const last = p.length - 1;
+    if (prog >= p[last].s) { out[0] = p[last].x; out[1] = p[last].y; out[2] = p[last].z; return; }
+    let lo = 0, hi = last;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (p[m].s <= prog) lo = m; else hi = m; }
+    const a = p[lo], b = p[hi], t = (prog - a.s) / Math.max(1e-4, b.s - a.s);
+    out[0] = lerp(a.x, b.x, t); out[1] = lerp(a.y, b.y, t); out[2] = lerp(a.z, b.z, t);
+  },
+  update(dt) {
+    if (!this.on || !this.cops.length) return;
+    this.record(false);
+    const p = this.pts, last = p[p.length - 1];
+    this.headS = this.s + Math.hypot(Hero.x - last.x, Hero.y - last.y, Hero.z - last.z);
+    if (this.hold > 0) this.hold -= dt;
+    // 上了钟楼就安全了：捕快堵在塔下，不然第六回一边打头目一边被抓没法玩
+    const g = World.goal;
+    this.atGoal = !!g && Math.hypot(Hero.x - g.x, Hero.z - g.z) < 17 && Hero.y > g.y - 7;
+    this.minGap = 999;
+    for (let i = 0; i < this.cops.length; i++) {
+      const c = this.cops[i];
+      c.stun -= dt; c.hurtT -= dt;
+      /* 速度差如果是恒定的，差距只会单调拉大，跑过头一分钟捕快就再也不是
+         威胁了。所以落后太多时给一点追赶补偿——只在四十步开外生效，那个
+         距离上你根本看不见他们，不会觉得被作弊。 */
+      if (this.hold <= 0 && c.stun <= 0 && !Hero.dead && !this.atGoal) {
+        const behind = this.headS - c.prog;
+        c.prog += (this.speed + clamp((behind - 40) * 0.30, 0, 4.0)) * dt;
+      }
+      c.prog = Math.min(c.prog, this.headS);
+      const px = c.x, py = c.y, pz = c.z;
+      this.posAt(c.prog, _cp);
+      // 前后各取一点定朝向，顺便把队形横向铺开一点
+      this.posAt(c.prog + 1.2, _cp2);
+      let dx = _cp2[0] - _cp[0], dz = _cp2[2] - _cp[2];
+      const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+      const gap = this.headS - c.prog;
+      const spread = clamp(gap / 8, 0, 1) * c.side;
+      c.x = _cp[0] - dz * spread; c.y = _cp[1]; c.z = _cp[2] + dx * spread;
+      c.yaw = towards(c.yaw, Math.atan2(dx, dz), 10 * dt);
+      c.vy = dt > 0 ? (c.y - py) / dt : 0;
+      c.anim = Math.abs(c.vy) > 4.5 ? 'air' : 'run';
+      c.animSpeed = c.stun > 0 ? 0 : this.speed;
+      c.phase += (c.stun > 0 ? 1 : this.speed * 1.15) * dt;
+      if (gap < this.minGap) this.minGap = gap;
+      if (gap < 1.9 && Math.abs(c.y - Hero.y) < 3.2 && this.hold <= 0 && !this.atGoal) heroCaught();
+    }
+    // 越近哨子吹得越勤
+    this.warnT -= dt;
+    if (this.minGap < 30 && this.warnT <= 0 && !Hero.dead && !this.atGoal) {
+      SFX.whistle(clamp(1 - this.minGap / 30, 0.25, 1));
+      this.warnT = 0.9 + (this.minGap / 30) * 2.2;
+    }
+  },
+  /* 主角摔下去被拉回检查点。复活是瞬移，如果照直记进轨迹，弧长会凭空
+     增加几十米——摔一次反而白赚一段距离。正确做法是把轨迹截断回复活点，
+     弧长跟着退回去：你丢掉的正是从检查点跑到失足处的那段路。 */
+  rewind() {
+    const p = this.pts;
+    let best = -1, bd = 1e9;
+    for (let i = p.length - 1; i >= 0; i--) {
+      const d = Math.hypot(p[i].x - Hero.x, p[i].y - Hero.y, p[i].z - Hero.z);
+      if (d < bd) { bd = d; best = i; }
+      if (this.s - p[i].s > 320) break;
+    }
+    if (best >= 1 && bd < 12) { p.length = best + 1; this.s = p[best].s; }
+    this.headS = this.s;
+    for (let i = 0; i < this.cops.length; i++) {
+      const c = this.cops[i];
+      c.prog = Math.min(c.prog, this.s - 14 - i * 2);   // 但也别让复活即被抓
+      c.stun = 0;
+    }
+    this.hold = Math.max(this.hold, 0.7);
+  }
+};
+const _cp = [0, 0, 0], _cp2 = [0, 0, 0];
+
+function heroCaught() {
+  const H = Hero;
+  if (H.dead) return;
+  H.dead = true; H.deadT = 0; H.deathKind = 'caught';
+  H.vx = 0; H.vz = 0;
+  Cam.shake = 0.85; Game.flash(0.8);
+  SFX.whistle(1); SFX.hurt();
+  Game.over('被　擒', '铁链上身。这一趟，到此为止。');
 }
 
 /* ---------------------------------------------------------------- 大内高手 */
@@ -2812,6 +2978,12 @@ const SFX = {
   heal()   { const t = this.now(); [0, 3, 7, 10].forEach((s, i) => this.pluck(294 * Math.pow(2, s / 12), t + i * 0.07, 0.10)); },
   bow()    { this.noise(0.16, 0.13, 1600, 400); this.tone(520, 180, 0.12, 0.05, 'triangle'); },
   wall()   { this.noise(0.4, 0.09, 1800, 700, 'bandpass'); },
+  whistle(v) {                                  // 差役的铜哨，两短一长
+    const t = this.now(), f = 2050 + Math.random() * 320;
+    this.tone(f, f * 1.14, 0.10, 0.085 * v, 'square', null, t);
+    this.tone(f * 1.05, f * 0.90, 0.14, 0.070 * v, 'square', null, t + 0.13);
+    this.noise(0.16, 0.045 * v, 3200, 1700);
+  },
   slide()  { this.noise(0.55, 0.13, 2600, 500, 'bandpass'); },
   dash()   { this.noise(0.3, 0.16, 500, 2600, 'bandpass'); },
   fall()   { this.tone(700, 90, 0.7, 0.14, 'sine'); },
@@ -2970,11 +3142,11 @@ SCENES.forEach(sc => sc.ndir = norm3(sc.dir));
 const RAIN_COL = [0.62, 0.70, 0.82], SNOWF_COL = [0.95, 0.97, 1.0], MOTE_COL = [1.0, 0.82, 0.55];
 const Weather = {
   kind: 'none', n: 0, px: null, py: null, pz: null, ph: null,
-  flash: 0, boltT: 8, thunderT: -1, splash: [],
+  flash: 0, boltT: 8, thunderT: -1, reflash: 0, splash: [],
   box: 46, top: 30,
   set(kind) {
     this.kind = kind;
-    this.splash.length = 0; this.flash = 0; this.thunderT = -1;
+    this.splash.length = 0; this.flash = 0; this.thunderT = -1; this.reflash = 0;
     this.boltT = 5 + Math.random() * 10;
     const n = kind === 'rain' ? 560 : kind === 'snow' ? 460 : kind === 'dawn' ? 150 : 0;
     this.n = n;
@@ -2993,10 +3165,13 @@ const Weather = {
   update(dt, t) {
     // 闪电：亮两下，雷声按距离延后
     if (this.kind === 'rain') {
-      this.flash = Math.max(0, this.flash - dt * 7);
+      this.flash = Math.max(0, this.flash - dt * 5);
       this.boltT -= dt;
+      // 真闪电常是连闪两下，只亮一下太干脆了
+      if (this.reflash > 0) { this.reflash -= dt; if (this.reflash <= 0) this.flash = 0.55 + Math.random() * 0.4; }
       if (this.boltT <= 0) {
         this.flash = 0.85 + Math.random() * 0.5;
+        this.reflash = Math.random() < 0.55 ? 0.10 + Math.random() * 0.09 : 0;
         this.boltT = 7 + Math.random() * 16;
         this.thunderT = 0.5 + Math.random() * 2.4;   // 先见光，隔一会儿才闻雷
       }
@@ -3214,6 +3389,11 @@ function renderScene(aspect) {
     if (dx*dx + dz*dz > 150*150) continue;
     drawCharacter(f.fig, f, null);
   }
+  for (const c of Chase.cops) {
+    const dx = c.x - Cam.x, dz = c.z - Cam.z;
+    if (dx*dx + dz*dz > 200*200) continue;
+    drawCharacter('cop', c, null);
+  }
   // ---- 箭 / 掌风 / 拾取
   for (const s of Shots) {
     const sp = Math.hypot(s.vx, s.vy, s.vz) || 1;
@@ -3230,6 +3410,13 @@ function renderScene(aspect) {
   alphaB.reset(); addB.reset();
   shadowFor(Hero.x, Hero.y, Hero.z, 0.44);
   for (const f of Foes) if (!f.dead) shadowFor(f.x, f.y, f.z, 0.44);
+  for (const c of Chase.cops) {
+    shadowFor(c.x, c.y, c.z, 0.44);
+    // 手里的灯笼：夜里回头，是一串晃动的光
+    const by = c.y + 1.05 + Math.sin(c.phase * 0.5) * 0.06;
+    addB.bill(c.x, by, c.z, 0.30, PAL.lantern, 0.85);
+    addB.bill(c.x, by, c.z, 1.15, PAL.lanternG, 0.30);
+  }
   drawRibbon(Hero.ribbon, 0.085, 0.02, RGB(0x2e6f8e), 0.85);
   for (const p of Parts) {
     const k = 1 - p.t / p.life;
@@ -3307,6 +3494,26 @@ const UI = {
   UI.hud.appendChild(w);
   UI.bossBar = w; UI.bossFill = w.querySelector('#bossFill');
 })();
+// 追捕：顶部一条，越近越红；配一层红边提示
+(function () {
+  const d = document.createElement('div');
+  d.id = 'danger';
+  d.style.cssText = 'position:absolute;inset:0;pointer-events:none;opacity:0;' +
+    'background:radial-gradient(120% 100% at 50% 50%,rgba(0,0,0,0) 38%,rgba(216,68,60,.55) 100%);';
+  UI.hud.appendChild(d); UI.danger = d;
+
+  const w = document.createElement('div');
+  w.id = 'chaseBar';
+  w.style.cssText = 'position:absolute;left:50%;top:12px;transform:translateX(-50%);' +
+    'text-align:center;opacity:0;transition:opacity .3s;';
+  w.innerHTML = '<div id="chaseTxt" style="font-family:var(--han);font-size:13px;' +
+    'letter-spacing:.26em;color:#e8e4d2;text-shadow:0 0 12px rgba(0,0,0,.9)">捕快在后</div>' +
+    '<div style="margin:5px auto 0;width:210px;height:5px;background:rgba(232,228,210,.14);' +
+    'border:1px solid rgba(232,228,210,.16)"><div id="chaseFill" style="height:100%;width:0%;' +
+    'background:linear-gradient(90deg,#6e2620,#d8443c);box-shadow:0 0 10px rgba(216,68,60,.7)"></div></div>';
+  UI.hud.appendChild(w);
+  UI.chaseBar = w; UI.chaseFill = w.querySelector('#chaseFill'); UI.chaseTxt = w.querySelector('#chaseTxt');
+})();
 function fmtTime(t) {
   const m = Math.floor(t / 60), s = t - m * 60;
   return m + "'" + (s < 10 ? '0' : '') + s.toFixed(1);
@@ -3329,6 +3536,24 @@ function updateHUD() {
     UI.combo.textContent = Game.combo + ' 连';
     UI.combo.classList.add('on');
   } else UI.combo.classList.remove('on');
+
+  // 追捕读数
+  if (Chase.on && Chase.cops.length) {
+    UI.chaseBar.style.opacity = '1';
+    const gap = Chase.minGap;
+    if (Chase.atGoal) {
+      UI.chaseTxt.textContent = '捕快被挡在塔下';
+      UI.chaseFill.style.width = '0%';
+      UI.danger.style.opacity = '0';
+    } else {
+      const near = 1 - clamp(gap / 45, 0, 1);
+      UI.chaseTxt.textContent = gap > 900 ? '捕快在后' : '捕快 · 距 ' + Math.round(gap) + ' 步';
+      UI.chaseFill.style.width = (near * 100).toFixed(0) + '%';
+      UI.danger.style.opacity = gap < 16
+        ? (0.30 + 0.55 * (1 - gap / 16) * (0.65 + 0.35 * Math.sin(Game.time * 11))).toFixed(2)
+        : '0';
+    }
+  } else { UI.chaseBar.style.opacity = '0'; UI.danger.style.opacity = '0'; }
 
   const boss = Foes.find(f => f.type === 'boss' && !f.dead);
   if (boss && Math.hypot(boss.x - H.x, boss.z - H.z) < 40) {
@@ -3376,6 +3601,7 @@ const Game = {
     Cam.yaw = PI / 2; Cam.pitch = -0.14; Cam.dist = 6.2; Cam.distNow = 6.2;
     Cam.tx = Hero.x; Cam.ty = Hero.y + 1.35; Cam.tz = Hero.z;
     applyScene(SCENES[n - 1]);
+    Chase.reset(n);
     this.state = 'play';
     UI.sTitle.classList.add('hide'); UI.sOver.classList.add('hide');
     UI.sClear.classList.add('hide'); UI.sPause.classList.add('hide');
@@ -3543,6 +3769,7 @@ function step(dt) {
   updateItems(dt);
   updateParts(dt);
   updateWorldDyn(dt);
+  Chase.update(dt);
   Weather.update(dt, Game.time);
   if (!Hero.dead) checkGoal();
   // 飘落的花瓣

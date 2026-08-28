@@ -46,7 +46,7 @@ function fakeEl(id) {
 // 游戏里所有需要被测试碰到的顶层名字。index.html 里改了名，这里会直接报错。
 const EXPORTS = ['World', 'Hero', 'Game', 'Keys', 'Input', 'Cam', 'Foes', 'Items', 'Shots',
                  'Parts', 'Rings', 'LANTERNS', 'groundAt', 'surfaceY', 'primaryClick', 'QI_MAX',
-                 'SCENES', 'Env', 'Weather', 'SFX', 'applyScene'];
+                 'SCENES', 'Env', 'Weather', 'SFX', 'applyScene', 'Chase'];
 
 /** 装载游戏，返回它的顶层对象。frames 是一个手动推进帧的函数。 */
 function loadGame() {
