@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>四个小游戏</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="四个纯前端小游戏，单文件、零依赖、零外部请求。">
+</head>
+<body>
+<style>
+  :root{
+    --ground:#07090f; --panel:#121622; --line:rgba(123,131,159,.20);
+    --text:#e6e8f0; --muted:#8d94ae; --dim:#535a72;
+    --arcade:"Courier New",Menlo,Consolas,monospace;
+    --ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;min-height:100%;}
+  body{background:var(--ground);color:var(--text);font-family:var(--ui);
+    padding:clamp(24px,6vw,72px) clamp(18px,5vw,48px);
+    display:flex;flex-direction:column;align-items:center;}
+
+  header{width:min(880px,100%);margin-bottom:clamp(24px,5vw,44px);}
+  h1{margin:0;font-size:clamp(24px,5vw,38px);letter-spacing:5px;font-weight:800;}
+  header p{margin:12px 0 0;color:var(--muted);font-size:14px;line-height:1.8;}
+  header code{font-family:var(--arcade);color:#9fb0d8;}
+
+  ul{width:min(880px,100%);margin:0;padding:0;list-style:none;
+     display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));}
+  a.card{display:block;height:100%;padding:20px 22px 18px;text-decoration:none;color:inherit;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    transition:border-color .16s,transform .16s,background .16s;}
+  a.card:hover,a.card:focus-visible{border-color:var(--accent);background:#161b29;transform:translateY(-2px);}
+  a.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .card h2{margin:0;font-size:19px;letter-spacing:2px;font-weight:800;}
+  .card .en{margin:5px 0 0;font-family:var(--arcade);font-size:10px;letter-spacing:1.4px;color:var(--accent);}
+  .card p{margin:12px 0 0;font-size:13px;line-height:1.75;color:var(--muted);}
+  .card .tags{margin:14px 0 0;font-family:var(--arcade);font-size:10px;letter-spacing:.6px;color:var(--dim);}
+
+  footer{width:min(880px,100%);margin-top:clamp(28px,6vw,48px);padding-top:18px;
+    border-top:1px solid var(--line);font-family:var(--arcade);font-size:11px;
+    line-height:2;color:var(--dim);}
+  footer a{color:var(--muted);}
+</style>
+
+<header>
+  <h1>四 个 小 游 戏</h1>
+  <p>都是单文件、零依赖、零外部请求：一个 <code>index.html</code> 打开就能玩，画面是 Canvas（或自己写的 WebGL）现场画的，音乐音效由 Web Audio 实时合成，仓库里没有任何图片、模型或音频素材。<br>手机可以直接玩，横屏更好。</p>
+</header>
+
+<ul>
+  <li><a class="card" href="zombie/" style="--accent:#8fdc4a">
+    <h2>尸潮之夜</h2>
+    <p class="en">NIGHT OF THE HORDE</p>
+    <p>俯视角波次生存射击。全场漆黑，只有手电光锥和路灯照得见路，黑暗里的僵尸只剩一对红眼睛。撑过一波去商店买枪。</p>
+    <p class="tags">俯视角射击 · 无尽波次 · 双摇杆</p>
+  </a></li>
+
+  <li><a class="card" href="wuxia/" style="--accent:#d9b26a">
+    <h2>飛簷 · 屋顶轻功</h2>
+    <p class="en">ROOFTOPS AT THIRD WATCH</p>
+    <p>三更天的武侠屋顶跑酷，3D。踏空、壁走、滑铲，杀了人才会招来捕快，跑到钟楼撞钟才算赢。渲染器是文件里自己写的一套 WebGL，没有 three.js。</p>
+    <p class="tags">3D 跑酷 · 手写 WebGL · 潜行可选</p>
+  </a></li>
+
+  <li><a class="card" href="contra/" style="--accent:#4fd6ff">
+    <h2>合金小队</h2>
+    <p class="en">METAL SQUAD</p>
+    <p>魂斗罗风格的横版跑射。八方向瞄准、一碰就死，三关三个头目，打爆补给舱换枪。</p>
+    <p class="tags">横版跑射 · 三关 · 虚拟手柄</p>
+  </a></li>
+
+  <li><a class="card" href="mario/" style="--accent:#ff9f4a">
+    <h2>超级酷跑兄弟</h2>
+    <p class="en">SUPER RUNNER BROS</p>
+    <p>横版跳跃，踩怪、顶砖、吃蘑菇，一路跑到旗杆。</p>
+    <p class="tags">横版跳跃 · 像素手绘</p>
+  </a></li>
+</ul>
+
+<footer>
+  源码：<a href="https://github.com/leslie06/leslie06.github.io">github.com/leslie06/leslie06.github.io</a><br>
+  每个游戏的目录里都有一份 README，写了玩法、内容和改动方式。
+</footer>
+</body>
+</html>
