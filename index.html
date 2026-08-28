@@ -1682,18 +1682,22 @@ function panel(y, h){
 
 function drawScreens(){
   if (mode === 'title'){
-    ctx.fillStyle = 'rgba(4,6,12,.62)'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(4,6,12,.66)'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(4,6,12,.55)'; ctx.fillRect(46, 44, W - 92, 214);
+    px(46, 44, W - 92, 1, 'rgba(79,214,255,.22)');
+    px(46, 257, W - 92, 1, 'rgba(79,214,255,.22)');
     const bob = Math.sin(modeT * 0.05) * 2;
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.font = '800 44px "PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillStyle = '#ff5a3c'; ctx.fillText('合金小队', W/2 + 3, 82 + bob);
-    ctx.fillStyle = '#ffcf4d'; ctx.fillText('合金小队', W/2, 79 + bob);
-    txt('M E T A L   S Q U A D', W/2, 106 + bob, '#4fd6ff', 12, 'center');
-    han('三关 · 五种武器 · 三个头目', W/2, 126, '#8f97b6', 11, 'center');
+    ctx.fillStyle = '#ff5a3c'; ctx.fillText('合金小队', W/2 + 3, 63 + bob);
+    ctx.fillStyle = '#ffcf4d'; ctx.fillText('合金小队', W/2, 60 + bob);
+    txt('M E T A L   S Q U A D', W/2, 114 + bob, '#4fd6ff', 12, 'center');
+    han('三关 · 五种武器 · 三个头目', W/2, 136, '#8f97b6', 11, 'center');
     if (modeT % 60 < 38)
-      txt('PRESS  J / SPACE  OR  TAP  TO  START', W/2, 168, '#e9ecf6', 12, 'center', 800);
-    txt('MOVE ←→   AIM ↑↓   FIRE J/Z   JUMP K/SPACE', W/2, 202, '#7a819f', 9, 'center');
-    txt('↓ + JUMP  DROP THROUGH PLATFORM', W/2, 216, '#565c78', 9, 'center');
+      txt('PRESS  J / SPACE  OR  TAP  TO  START', W/2, 172, '#e9ecf6', 12, 'center', 800);
+    // 箭头字形 Courier New 里没有，这两行走中文字体
+    han('移动 ←→    瞄准 ↑↓    射击 J/Z    跳跃 K/SPACE', W/2, 204, '#8f97b6', 11, 'center');
+    han('↓ + 跳跃 可从单向平台落下', W/2, 221, '#6b7290', 10, 'center');
     txt('HI-SCORE  ' + String(state.hi).padStart(6, '0'), W/2, 240, '#ffcf4d', 10, 'center');
     ctx.textAlign = 'left';
   }
