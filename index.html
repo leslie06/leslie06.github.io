@@ -110,13 +110,31 @@
   }
 
   /* 横屏：画面居中，手柄放进两侧空当，不压画面 */
+  /* 横屏：画面铺满，手柄半透明浮在画面上。
+     游戏底部 56/288 像素是纯土层（地面线 y=232），没有玩法内容，
+     按钮尽量压在这条土带上，实际遮挡最小。 */
   @media (pointer:coarse) and (orientation:landscape){
+    :root{--dk:clamp(28px,8.8vh,42px);--bk:clamp(46px,14.5vh,60px);}
     #bar{display:none;}
-    #stage{flex-wrap:nowrap;}
-    #wrap{padding:6px;flex:0 1 auto;}
-    #scan{inset:6px;}
-    canvas{width:min(calc(100vw - 2*var(--gut) - 24px),calc((100svh - 24px) * 1.7778));}
-    :root{--dk:clamp(26px,8.6vh,40px);--bk:clamp(44px,15vh,58px);--gut:130px;}
+    #cab{padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left);gap:0;}
+    #stage{position:relative;width:auto;flex-wrap:nowrap;}
+    #wrap{padding:0;border-radius:0;box-shadow:none;flex:0 0 auto;}
+    #scan{inset:0;border-radius:0;}
+    canvas{width:min(100vw,calc(100svh * 1.7778));border-radius:0;}
+
+    /* fixed 而非 absolute：屏幕比 16:9 更宽时，手柄先占两侧黑边，少压画面 */
+    .pad{position:fixed;bottom:calc(6px + env(safe-area-inset-bottom));
+         z-index:2;pointer-events:none;}
+    #padL{left:calc(6px + env(safe-area-inset-left));}
+    #padR{right:calc(8px + env(safe-area-inset-right));}
+    .pad .k{pointer-events:auto;                     /* 键与键之间的缝隙不吃事件 */
+      background:rgba(10,13,24,.38);border-color:rgba(190,206,240,.30);
+      color:rgba(233,236,246,.76);box-shadow:none;backdrop-filter:blur(2px);}
+    .pad .k.dg{opacity:.42;}
+    .pad .k.on{background:rgba(79,214,255,.46);border-color:rgba(150,236,255,.9);
+      color:#fff;opacity:1;transform:none;}
+    #bA{transform:translateY(-14px);}
+    #bA.on{transform:translateY(-14px);}
   }
 </style>
 
