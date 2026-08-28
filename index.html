@@ -58,25 +58,66 @@
     border:1px solid var(--line);border-radius:4px;color:var(--text);
     background:var(--panel);font-family:var(--arcade);font-size:10px;}
 
-  /* 触屏手柄：仅在粗指针设备显示 */
-  #pad{position:absolute;inset:12px;pointer-events:none;display:none;}
-  #pad .k{position:absolute;pointer-events:auto;display:flex;
-    align-items:center;justify-content:center;
-    font-family:var(--arcade);font-size:13px;font-weight:700;color:#dfe4f5;
-    background:rgba(19,23,38,.62);border:1px solid rgba(122,129,159,.34);
-    border-radius:10px;user-select:none;backdrop-filter:blur(2px);}
-  #pad .k.on{background:rgba(79,214,255,.30);border-color:rgba(79,214,255,.6);}
-  #pad .k.rd{border-radius:50%;font-size:17px;}
-  /* 方向键：九宫格左下 */
-  #pad #dU{left:66px;bottom:118px;width:52px;height:46px;}
-  #pad #dD{left:66px;bottom:14px;width:52px;height:46px;}
-  #pad #dL{left:8px;bottom:66px;width:52px;height:46px;}
-  #pad #dR{left:124px;bottom:66px;width:52px;height:46px;}
-  #pad #dUL{left:8px;bottom:118px;width:52px;height:46px;opacity:.5;}
-  #pad #dUR{left:124px;bottom:118px;width:52px;height:46px;opacity:.5;}
-  #pad #bB{right:118px;bottom:22px;width:62px;height:62px;}
-  #pad #bA{right:36px;bottom:64px;width:62px;height:62px;}
-  @media (pointer:coarse){ #pad{display:block;} #legend{display:none;} }
+  /* 三列舞台：横屏时 左手柄 | 画面 | 右按钮，竖屏时画面在上、手柄在下 */
+  #stage{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;}
+
+  /* 触屏手柄：桌面隐藏，粗指针设备才出现，且永远画在画面之外 */
+  .pad{display:none;}
+  #rotate{display:none;margin:0;font-family:var(--arcade);font-size:12px;
+    letter-spacing:1px;color:var(--dim);text-align:center;}
+  .k{display:flex;align-items:center;justify-content:center;
+    font-family:var(--arcade);font-size:15px;font-weight:700;color:#dfe4f5;
+    background:var(--panel);border:1px solid rgba(122,129,159,.36);
+    border-radius:10px;user-select:none;touch-action:none;
+    box-shadow:0 2px 0 rgba(0,0,0,.45);}
+  .k.on{background:rgba(79,214,255,.28);border-color:rgba(79,214,255,.65);
+    color:#fff;box-shadow:none;transform:translateY(1px);}
+  .k.rd{border-radius:50%;font-size:19px;}
+  .k.dg{opacity:.62;font-size:13px;}         /* 斜向键：次要，弱化 */
+
+  @media (pointer:coarse){
+    #legend{display:none;}
+    /* 窄屏标题栏会被挤成两行，压缩成一行并去掉副标题 */
+    #bar{justify-content:center;}
+    #bar .eyebrow{display:none;}
+    #bar .mark{font-size:20px;letter-spacing:3px;}
+    #cab{padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom))
+              calc(8px + env(safe-area-inset-left));gap:10px;}
+    .pad{display:grid;flex:0 0 auto;}
+    #padL{grid-template-columns:repeat(3,var(--dk));
+          grid-template-rows:repeat(3,var(--dk));gap:5px;}
+    #padL .sp{visibility:hidden;}
+    #padR{display:flex;align-items:center;gap:14px;}
+    #padR .k{width:var(--bk);height:var(--bk);}
+    #bA{transform:translateY(-12px);}
+    #bA.on{transform:translateY(-11px);}
+  }
+
+  /* 竖屏：画面占满宽度，手柄整体排在下面一行 */
+  @media (pointer:coarse) and (orientation:portrait){
+    /* 画面贴顶、手柄贴底，中间的空隙留给两者之间 */
+    #cab{justify-content:flex-start;}
+    #stage{flex:1 1 auto;flex-wrap:wrap;align-content:space-between;
+           row-gap:18px;justify-content:space-between;padding-bottom:4px;}
+    /* 三行：画面在顶、提示居中、手柄贴底 */
+    #rotate{display:block;flex:0 0 100%;order:0;}
+    .pad{order:1;}
+    #wrap{order:-1;flex:0 0 100%;padding:8px;}
+    #scan{inset:8px;}
+    canvas{width:100%;}
+    :root{--dk:clamp(34px,14.5vw,56px);--bk:clamp(52px,18vw,72px);}
+    #padR{padding-right:4px;}
+  }
+
+  /* 横屏：画面居中，手柄放进两侧空当，不压画面 */
+  @media (pointer:coarse) and (orientation:landscape){
+    #bar{display:none;}
+    #stage{flex-wrap:nowrap;}
+    #wrap{padding:6px;flex:0 1 auto;}
+    #scan{inset:6px;}
+    canvas{width:min(calc(100vw - 2*var(--gut) - 24px),calc((100svh - 24px) * 1.7778));}
+    :root{--dk:clamp(26px,8.6vh,40px);--bk:clamp(44px,15vh,58px);--gut:130px;}
+  }
 </style>
 
 <div id="cab">
@@ -85,13 +126,21 @@
     <p class="eyebrow">RUN &amp; GUN · <i>3 STAGES</i> · CANVAS ONLY</p>
   </div>
 
-  <div id="wrap">
-    <canvas id="cv" width="512" height="288"></canvas>
-    <div id="scan"></div>
-    <div id="pad">
-      <div class="k" id="dUL">↖</div><div class="k" id="dU">↑</div><div class="k" id="dUR">↗</div>
-      <div class="k" id="dL">←</div><div class="k" id="dR">→</div>
-      <div class="k" id="dD">↓</div>
+  <div id="stage">
+    <div class="pad" id="padL">
+      <div class="k dg" id="dUL">↖</div><div class="k" id="dU">↑</div><div class="k dg" id="dUR">↗</div>
+      <div class="k" id="dL">←</div><div class="k sp"></div><div class="k" id="dR">→</div>
+      <div class="k dg" id="dDL">↙</div><div class="k" id="dD">↓</div><div class="k dg" id="dDR">↘</div>
+    </div>
+
+    <div id="wrap">
+      <canvas id="cv" width="512" height="288"></canvas>
+      <div id="scan"></div>
+    </div>
+
+    <p id="rotate">横屏可以获得更大的画面</p>
+
+    <div class="pad" id="padR">
       <div class="k rd" id="bB">B</div><div class="k rd" id="bA">A</div>
     </div>
   </div>
@@ -172,9 +221,11 @@ function bindPad(id, keys){
   el.addEventListener('pointercancel', up);
   el.addEventListener('pointerleave', up);
 }
-bindPad('dL',['l']); bindPad('dR',['r']); bindPad('dU',['u']); bindPad('dD',['d']);
-bindPad('dUL',['u','l']); bindPad('dUR',['u','r']);
-bindPad('bB',['fire']); bindPad('bA',['jump']);
+bindPad('dL',['l']);        bindPad('dR',['r']);
+bindPad('dU',['u']);        bindPad('dD',['d']);
+bindPad('dUL',['u','l']);   bindPad('dUR',['u','r']);
+bindPad('dDL',['d','l']);   bindPad('dDR',['d','r']);
+bindPad('bB',['fire']);     bindPad('bA',['jump']);
 
 /* 秘技：↑↑↓↓←→←→BA —— 30 条命 */
 const KONAMI = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','KeyB','KeyA'];
