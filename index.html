@@ -90,10 +90,15 @@
 
   /* 目标指引箭头 */
   #guide{position:absolute;left:50%;top:50%;width:0;height:0;opacity:.9;}
-  #guide b{position:absolute;display:block;width:0;height:0;
-    border-left:9px solid transparent;border-right:9px solid transparent;
-    border-bottom:16px solid var(--gold);filter:drop-shadow(0 0 8px rgba(230,182,76,.8));
-    transform-origin:50% 70%;}
+  #guide b{position:absolute;display:block;width:22px;height:38px;
+    background:linear-gradient(180deg,#ffdf8a,var(--gold));
+    /* 带尾杆的箭头。原来是近等边三角形，转了也看不出朝向 */
+    clip-path:polygon(50% 0,100% 44%,68% 44%,68% 100%,32% 100%,32% 44%,0 44%);
+    filter:drop-shadow(0 0 7px rgba(230,182,76,.9)) drop-shadow(0 2px 3px rgba(0,0,0,.85));
+    transform-origin:50% 50%;}
+  #guide s{position:absolute;display:block;font-family:var(--han);font-size:11px;
+    letter-spacing:.18em;color:var(--gold);white-space:nowrap;text-decoration:none;
+    text-shadow:0 0 8px rgba(0,0,0,.95);}
 
   /* 受击红闪 / 落地白闪 */
   #flash{position:absolute;inset:0;background:var(--cinnabar);opacity:0;mix-blend-mode:screen;}
@@ -139,7 +144,7 @@
   </div>
   <div id="combo"></div>
   <div id="toast"></div>
-  <div id="guide"><b></b></div>
+  <div id="guide"><b></b><s></s></div>
 </div>
 
 <div class="layer" id="touch">
@@ -3502,6 +3507,7 @@ const UI = {
   dist: document.getElementById('dist'), coins: document.getElementById('coins'),
   combo: document.getElementById('combo'), toast: document.getElementById('toast'),
   guide: document.getElementById('guide'), arrow: document.querySelector('#guide b'),
+  guideTxt: document.querySelector('#guide s'),
   flash: document.getElementById('flash'),
   sTitle: document.getElementById('sTitle'), sPause: document.getElementById('sPause'),
   sOver: document.getElementById('sOver'), sClear: document.getElementById('sClear'),
@@ -3590,18 +3596,25 @@ function updateHUD() {
     UI.bossFill.style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
   } else UI.bossBar.style.opacity = '0';
 
-  // 指向钟楼的箭头
-  const g = World.goal;
-  const p = project(g.x, g.y + 3, g.z, _proj);
-  const onScreen = p[2] > 0 && Math.abs(p[0]) < 0.75 && Math.abs(p[1]) < 0.75;
+  /* 引导箭头指的是「路线」，不是钟楼的直线方向——屋顶路弯弯绕绕，
+     直线方向常常穿过一整栋楼。取前方两个路点作为目标。 */
+  const nd = World.path[Math.min(H.node + 2, World.path.length - 1)] || World.goal;
+  const p = project(nd.cx !== undefined ? nd.cx : nd.x, nd.y + 2.2, nd.cz !== undefined ? nd.cz : nd.z, _proj);
+  const onScreen = p[2] > 0 && Math.abs(p[0]) < 0.62 && Math.abs(p[1]) < 0.62;
   if (onScreen) UI.guide.style.opacity = '0';
   else {
-    UI.guide.style.opacity = '0.9';
-    let ang = p[2] > 0 ? Math.atan2(p[1], p[0]) : Math.atan2(-p[1], -p[0]);
-    const R = Math.min(innerWidth, innerHeight) * 0.30;
-    UI.arrow.style.left = (Math.cos(ang) * R) + 'px';
-    UI.arrow.style.top = (-Math.sin(ang) * R) + 'px';
+    UI.guide.style.opacity = '0.92';
+    const ang = p[2] > 0 ? Math.atan2(p[1], p[0]) : Math.atan2(-p[1], -p[0]);
+    const R = Math.min(innerWidth, innerHeight) * 0.28;
+    const ax = Math.cos(ang) * R, ay = -Math.sin(ang) * R;
+    UI.arrow.style.left = ax + 'px';
+    UI.arrow.style.top = ay + 'px';
     UI.arrow.style.transform = 'translate(-50%,-50%) rotate(' + (90 - ang * 180 / PI) + 'deg)';
+    // 箭头再往外一点写上「路」，免得跟别的图标混
+    UI.guideTxt.style.left = (ax * 1.28) + 'px';
+    UI.guideTxt.style.top = (ay * 1.28) + 'px';
+    UI.guideTxt.style.transform = 'translate(-50%,-50%)';
+    UI.guideTxt.textContent = '路';
   }
 }
 const _proj = [0, 0, 0];
