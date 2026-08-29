@@ -29,6 +29,14 @@
 - **手机能玩**：触屏走虚拟摇杆或手柄，横竖屏都不能塌
 - **无头测试**（可选）：放在游戏目录的 `tools/` 里，用假的 DOM 把游戏逻辑在 Node 里跑起来，查异常、NaN 和数值曲线。`roadRash/`、`wuxia/`、`zombie/` 有，跑 `node tools/test.js`
 
+## 附带的小工具
+
+不是游戏，不走 Pages（Pages 只能发静态文件，这个要跑 Node）：
+
+| 目录 | 作用 |
+| --- | --- |
+| [counter/](counter/) | 访问计数。按 IP 去重存进本地 SQLite，零依赖（`node:sqlite` + `node:http`），自带看板。配 `cloudflared tunnel` 拿公网地址，把一行 `fetch` 加进游戏页面就开始记 |
+
 ## 本地预览
 
 双击任意游戏的 `index.html` 即可。想连目录页一起看，或者让同一 Wi-Fi 下的手机访问：
