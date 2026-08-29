@@ -1,0 +1,12 @@
+name = "counter"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# database_id 填 `wrangler d1 create counter` 打印出来的那一串
+[[d1_databases]]
+binding = "DB"
+database_name = "counter"
+database_id = "在这里填 wrangler d1 create counter 给的 id"
+
+# HASH_SALT 和 ADMIN_TOKEN 是密钥，不写在这个文件里（会进 git）。
+# 用 wrangler secret put 设，见 README。

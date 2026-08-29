@@ -101,6 +101,52 @@ function games() {
   return out;
 }
 
+/* node server.js --pull <worker地址> <token>
+   把 Worker 上的库同步一份到本地，然后照常开看板看。云上 24 小时收，
+   本地留副本 —— 数据不丢，看的时候也不用把明细挂在公网上。
+   合并是「照抄云上」而不是「加上去」：hits 直接取 Worker 的值。因为收数的是
+   Worker，它那行的 hits 已经是这个 key 的累计总数，本地再累加就会翻倍 ——
+   同一份数据拉两次，5 次点击会变成 10 次。照抄就天然幂等，重复拉、按 since
+   增量拉，结果都一样。 */
+async function pull(base, token) {
+  base = base.replace(/\/$/, '');
+  const r = await fetch(base + '/export?k=' + encodeURIComponent(token));
+  if (!r.ok) { console.error('拉取失败 HTTP ' + r.status + '（token 对吗？）'); process.exit(1); }
+  const { visitors, plays } = await r.json();
+
+  const mv = db.prepare(`
+    INSERT INTO visitors (ip, first_seen, last_seen, hits, ua, ref)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ip) DO UPDATE SET
+      hits       = excluded.hits,
+      first_seen = MIN(first_seen, excluded.first_seen),
+      last_seen  = MAX(last_seen,  excluded.last_seen)
+  `);
+  const mp = db.prepare(`
+    INSERT INTO plays (game, ip, first_seen, last_seen, hits)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(game, ip) DO UPDATE SET
+      hits       = excluded.hits,
+      first_seen = MIN(first_seen, excluded.first_seen),
+      last_seen  = MAX(last_seen,  excluded.last_seen)
+  `);
+  db.exec('BEGIN');
+  try {
+    for (const v of visitors) mv.run(v.ip, v.first_seen, v.last_seen, v.hits, v.ua, v.ref);
+    for (const q of plays)    mp.run(q.game, q.ip, q.first_seen, q.last_seen, q.hits);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  console.log('同步完成：访客 ' + visitors.length + ' 条，游戏记录 ' + plays.length + ' 条');
+  console.log('看板      node server.js  然后开 http://localhost:' + PORT + '/');
+}
+
+if (process.argv[2] === '--pull') {
+  const [, , , base, token] = process.argv;
+  if (!base || !token) { console.error('用法：node server.js --pull <worker地址> <token>'); process.exit(1); }
+  pull(base, token).catch(e => { console.error(e.message); process.exit(1); });
+  return;
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
