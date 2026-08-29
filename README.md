@@ -35,7 +35,7 @@
 
 | 目录 | 作用 |
 | --- | --- |
-| [counter/](counter/) | 访问计数。按 IP 去重存进本地 SQLite，零依赖（`node:sqlite` + `node:http`），自带看板。配 `cloudflared tunnel` 拿公网地址，把一行 `fetch` 加进游戏页面就开始记 |
+| [counter/](counter/) | 访问计数。按 IP 去重存进本地 SQLite，零依赖（`node:sqlite` + `node:http`），自带看板。整站访客和**每个游戏各被多少人点开过**分开记；把地址填进根 `index.html` 的 `COUNTER` 常量，目录页的卡片上就会显示「N 人玩过」 |
 
 ## 本地预览
 

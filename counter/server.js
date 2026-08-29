@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /* ---------------------------------------------------------------------------
    访问计数：拿到访客 IP，按 IP 去重，存进本地 SQLite。
+   分两个粒度：整站的访客，和每个游戏各自被多少人点开过。
 
    零依赖——数据库用 Node 22 自带的 node:sqlite，HTTP 用 node:http，
    不装任何 npm 包。
 
-   去重不靠代码，靠 ip 这一列的 PRIMARY KEY：同一个 IP 再来只会把 hits 加一，
-   不会新增一行。所以 COUNT(*) 天然就是去重后的人数。
+   去重不靠代码，靠主键：visitors 的主键是 ip，plays 的主键是 (game, ip)。
+   同一个 IP 再来只会把 hits 加一，不新增行，所以 COUNT(*) 天然就是去重后的
+   人数——整站问 visitors，某个游戏问 plays WHERE game=?。
 
    跑法：
      node server.js                      # 只监听本机
@@ -36,6 +38,16 @@ db.exec(`
     ref        TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_last ON visitors(last_seen DESC);
+
+  CREATE TABLE IF NOT EXISTS plays (
+    game       TEXT NOT NULL,
+    ip         TEXT NOT NULL,
+    first_seen INTEGER NOT NULL,
+    last_seen  INTEGER NOT NULL,
+    hits       INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (game, ip)
+  );
+  CREATE INDEX IF NOT EXISTS idx_play_last ON plays(last_seen DESC);
 `);
 
 const upsert = db.prepare(`
@@ -46,6 +58,17 @@ const upsert = db.prepare(`
 const qTotals = db.prepare('SELECT COUNT(*) AS uniques, COALESCE(SUM(hits),0) AS total FROM visitors');
 const qSince  = db.prepare('SELECT COUNT(*) AS n FROM visitors WHERE first_seen >= ?');
 const qRecent = db.prepare('SELECT * FROM visitors ORDER BY last_seen DESC LIMIT 200');
+
+const upPlay  = db.prepare(`
+  INSERT INTO plays (game, ip, first_seen, last_seen, hits)
+  VALUES (?, ?, ?, ?, 1)
+  ON CONFLICT(game, ip) DO UPDATE SET hits = hits + 1, last_seen = excluded.last_seen
+`);
+const qGames  = db.prepare('SELECT game, COUNT(*) AS uniques, SUM(hits) AS total FROM plays GROUP BY game');
+
+/* 游戏名白名单。开放给任意字符串就等于把库送给别人随便写——/hit 是无鉴权的
+   公开接口，谁都能拿 curl 灌进来。目录页只会发这五个之一。 */
+const GAMES = ['roadRash', 'zombie', 'wuxia', 'contra', 'mario'];
 
 /* 真实 IP：经隧道/CDN 进来时在请求头里，直连才看 socket */
 function clientIP(req) {
@@ -70,16 +93,28 @@ const json = (res, obj, code) => {
   res.end(b);
 };
 
+// { roadRash: {uniques, total}, ... }，没人玩过的游戏也给 0，前端不用判空
+function games() {
+  const out = {};
+  for (const g of GAMES) out[g] = { uniques: 0, total: 0 };
+  for (const r of qGames.all()) if (out[r.game]) out[r.game] = { uniques: r.uniques, total: r.total };
+  return out;
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
 
+  /* /hit           整站访客
+     /hit?g=roadRash 整站访客 + 这个游戏被点开一次 */
   if (url.pathname === '/hit') {
-    const ip = clientIP(req), now = Date.now();
+    const ip = clientIP(req), now = Date.now(), k = key(ip);
+    const g = url.searchParams.get('g');
     try {
-      upsert.run(key(ip), now, now,
+      upsert.run(k, now, now,
                  (req.headers['user-agent'] || '').slice(0, 300),
                  (req.headers['referer'] || url.searchParams.get('ref') || '').slice(0, 300));
+      if (GAMES.includes(g)) upPlay.run(g, k, now, now);
     } catch (e) { console.error('写库失败', e.message); }
     res.writeHead(204, CORS); return res.end();
   }
@@ -91,9 +126,13 @@ const server = http.createServer((req, res) => {
       uniques: t.uniques, total: t.total,
       today: qSince.get(now - day).n,
       week: qSince.get(now - day * 7).n,
-      hashed: !!SALT
+      hashed: !!SALT,
+      games: games()
     });
   }
+
+  // 目录页只要这一份，单独开一条省得把访客明细也发出去
+  if (url.pathname === '/games') return json(res, games());
 
   if (url.pathname === '/list') return json(res, qRecent.all());
 
@@ -110,6 +149,15 @@ const DASH = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <div style="max-width:900px;margin:0 auto;padding:34px 20px">
   <h1 style="font-size:20px;letter-spacing:.2em;font-weight:600;margin:0 0 22px;color:#e6b64c">访问统计</h1>
   <div id="k" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:26px"></div>
+  <h2 style="font-size:12px;letter-spacing:.16em;color:#7a819f;font-weight:600;margin:0 0 10px">各游戏（按 IP 去重）</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:28px">
+    <thead><tr style="color:#7a819f;text-align:left">
+      <th style="padding:7px 8px;border-bottom:1px solid #232a3a">游戏</th>
+      <th style="padding:7px 8px;border-bottom:1px solid #232a3a">去重人数</th>
+      <th style="padding:7px 8px;border-bottom:1px solid #232a3a">总点开</th>
+    </tr></thead><tbody id="g"></tbody>
+  </table>
+  <h2 style="font-size:12px;letter-spacing:.16em;color:#7a819f;font-weight:600;margin:0 0 10px">最近访客</h2>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead><tr style="color:#7a819f;text-align:left">
       <th style="padding:7px 8px;border-bottom:1px solid #232a3a">访客</th>
@@ -131,6 +179,13 @@ async function load() {
   document.getElementById('k').innerHTML =
     card('去重人数', s.uniques, 1) + card('总点击', s.total) +
     card('今日新访客', s.today) + card('七日新访客', s.week);
+  const NAMES = {roadRash:'暴力摩托', zombie:'尸潮之夜', wuxia:'飛簷 · 屋顶轻功', contra:'合金小队', mario:'超级酷跑兄弟'};
+  const td = 'padding:6px 8px;border-bottom:1px solid #171d29';
+  document.getElementById('g').innerHTML = Object.entries(s.games)
+    .sort((a, b) => b[1].uniques - a[1].uniques)
+    .map(([g, v]) => '<tr><td style="' + td + '">' + (NAMES[g] || g) +
+      '</td><td style="' + td + ';color:#e6b64c;font-weight:600">' + v.uniques +
+      '</td><td style="' + td + ';color:#a89f8c">' + v.total + '</td></tr>').join('');
   const rows = await (await fetch('/list')).json();
   document.getElementById('t').innerHTML = rows.map(r =>
     '<tr><td style="padding:6px 8px;border-bottom:1px solid #171d29;font-family:ui-monospace,monospace">' +

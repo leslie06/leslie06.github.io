@@ -51,6 +51,10 @@
   .tool .note{margin:8px 0 0;font-family:var(--arcade);font-size:10px;letter-spacing:.6px;color:var(--dim);}
   .tool code{font-family:var(--arcade);color:#9fb0d8;}
 
+  /* 玩过的人数：拿不到就是空的，:empty 不占位，页面跟没这功能一样 */
+  .plays{color:var(--accent);}
+  .plays:not(:empty)::before{content:" · ";color:var(--dim);}
+
   footer{width:min(880px,100%);margin-top:clamp(28px,6vw,48px);padding-top:18px;
     border-top:1px solid var(--line);font-family:var(--arcade);font-size:11px;
     line-height:2;color:var(--dim);}
@@ -63,39 +67,39 @@
 </header>
 
 <ul>
-  <li><a class="card" href="roadRash/" style="--accent:#ff5a3c">
+  <li><a class="card" data-g="roadRash" href="roadRash/" style="--accent:#ff5a3c">
     <h2>暴力摩托</h2>
     <p class="en">ROAD RASH</p>
     <p>伪 3D 街头摩托竞速，五条街。贴上去踹翻对手、抢他手里的棍子和铁链，把他挤进对向车道。血打光了人会被甩出车外，得徒步跑回去重新骑上；后两条街还有警察从背后撵上来拷人。</p>
-    <p class="tags">伪 3D 竞速 · 贴身肉搏 · 五关 · 赏金买车</p>
+    <p class="tags">伪 3D 竞速 · 贴身肉搏 · 五关 · 赏金买车<span class="plays"></span></p>
   </a></li>
 
-  <li><a class="card" href="zombie/" style="--accent:#8fdc4a">
+  <li><a class="card" data-g="zombie" href="zombie/" style="--accent:#8fdc4a">
     <h2>尸潮之夜</h2>
     <p class="en">NIGHT OF THE HORDE</p>
     <p>俯视角波次生存射击。全场漆黑，只有手电光锥和路灯照得见路，黑暗里的僵尸只剩一对红眼睛。撑过一波去商店买枪。</p>
-    <p class="tags">俯视角射击 · 无尽波次 · 双摇杆</p>
+    <p class="tags">俯视角射击 · 无尽波次 · 双摇杆<span class="plays"></span></p>
   </a></li>
 
-  <li><a class="card" href="wuxia/" style="--accent:#d9b26a">
+  <li><a class="card" data-g="wuxia" href="wuxia/" style="--accent:#d9b26a">
     <h2>飛簷 · 屋顶轻功</h2>
     <p class="en">ROOFTOPS AT THIRD WATCH</p>
     <p>三更天的武侠屋顶跑酷，3D。踏空、壁走、滑铲，杀了人才会招来捕快，跑到钟楼撞钟才算赢。渲染器是文件里自己写的一套 WebGL，没有 three.js。</p>
-    <p class="tags">3D 跑酷 · 手写 WebGL · 潜行可选</p>
+    <p class="tags">3D 跑酷 · 手写 WebGL · 潜行可选<span class="plays"></span></p>
   </a></li>
 
-  <li><a class="card" href="contra/" style="--accent:#4fd6ff">
+  <li><a class="card" data-g="contra" href="contra/" style="--accent:#4fd6ff">
     <h2>合金小队</h2>
     <p class="en">METAL SQUAD</p>
     <p>魂斗罗风格的横版跑射。八方向瞄准、一碰就死，三关三个头目，打爆补给舱换枪。</p>
-    <p class="tags">横版跑射 · 三关 · 虚拟手柄</p>
+    <p class="tags">横版跑射 · 三关 · 虚拟手柄<span class="plays"></span></p>
   </a></li>
 
-  <li><a class="card" href="mario/" style="--accent:#ff9f4a">
+  <li><a class="card" data-g="mario" href="mario/" style="--accent:#ff9f4a">
     <h2>超级酷跑兄弟</h2>
     <p class="en">SUPER RUNNER BROS</p>
     <p>横版跳跃，踩怪、顶砖、吃蘑菇，一路跑到旗杆。</p>
-    <p class="tags">横版跳跃 · 像素手绘</p>
+    <p class="tags">横版跳跃 · 像素手绘<span class="plays"></span></p>
   </a></li>
 </ul>
 
@@ -110,5 +114,45 @@
   源码：<a href="https://github.com/leslie06/leslie06.github.io">github.com/leslie06/leslie06.github.io</a><br>
   每个游戏的目录里都有一份 README，写了玩法、内容和改动方式。
 </footer>
+<script>
+/* ---------------------------------------------------------------------------
+   「多少人玩过」。Pages 是纯静态的，看不到访客 IP，所以去重只能由 counter/
+   那个服务来做，这里只负责显示和打点。
+
+   COUNTER 填 counter/ 服务的公网地址（cloudflared 那个 https://xxx.trycloudflare.com，
+   不要带结尾斜杠）。留空 = 整个功能静默关掉：不发任何请求，卡片上也不显示 ——
+   目录页不该因为家里的机器关着就报错或者卡住。
+
+   打点打在「点开卡片」这一下，不在游戏里：仓库的约定是游戏零外部请求，
+   为了统计往五个 index.html 里各塞一行 fetch 不划算。代价是直接输网址
+   进 /roadRash/ 的人统计不到。
+   --------------------------------------------------------------------------- */
+const COUNTER = '';
+
+if (COUNTER) {
+  // 读数：失败就什么都不显示
+  fetch(COUNTER + '/games')
+    .then(r => r.json())
+    .then(g => {
+      for (const a of document.querySelectorAll('a.card[data-g]')) {
+        const n = g[a.dataset.g] && g[a.dataset.g].uniques;
+        if (n) a.querySelector('.plays').textContent = n + ' 人玩过';
+      }
+    })
+    .catch(() => {});
+
+  // 记一次整站访问
+  fetch(COUNTER + '/hit', { mode:'no-cors', keepalive:true }).catch(() => {});
+
+  // 记一次点开。sendBeacon 而不是 fetch：点了就要跳走，普通请求会被导航掐断
+  for (const a of document.querySelectorAll('a.card[data-g]')) {
+    a.addEventListener('click', () => {
+      const u = COUNTER + '/hit?g=' + encodeURIComponent(a.dataset.g);
+      if (navigator.sendBeacon) navigator.sendBeacon(u);
+      else fetch(u, { mode:'no-cors', keepalive:true }).catch(() => {});
+    });
+  }
+}
+</script>
 </body>
 </html>
