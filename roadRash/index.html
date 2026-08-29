@@ -1,0 +1,2704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>暴力摩托 · ROAD RASH</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+</head>
+<body>
+<style>
+  /* 世嘉复古：颜色全部显式声明，不跟随宿主主题 */
+  :root{
+    --black:#07070c; --dark:#12121e; --panel:#1b1b2c;
+    --line:#3a3a58;
+    --white:#f4f0e4; --dim:#8a8aa8;
+    --red:#e03c28; --orange:#f08820; --yellow:#f8d038;
+    --green:#38c058; --cyan:#38c8e0; --blue:#3858d8;
+    --mono:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    --ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{background:#000;color:var(--white);font-family:var(--ui);
+    overflow:hidden;touch-action:none;overscroll-behavior:none;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;}
+
+  /* ---------- 舞台：像素画布 + 贴在它上面的 HUD ---------- */
+  #stage{position:relative;flex:0 0 auto;background:#000;overflow:hidden;}
+  #px{display:block;width:100%;height:100%;}
+
+  .layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+
+  /* ---------- HUD ---------- */
+  #hud{z-index:6;font-family:var(--mono);}
+  #hud.off{display:none;}
+  #hud .box{position:absolute;}
+
+  /* 名次 */
+  #posBox{left:2.2%;top:3%;}
+  #posNum{font-size:clamp(20px,4.6vmin,44px);font-weight:800;line-height:1;color:var(--yellow);
+    text-shadow:2px 2px 0 #000,0 0 12px rgba(248,208,56,.5);}
+  #posNum small{font-size:.44em;color:var(--dim);text-shadow:1px 1px 0 #000;}
+  #posLbl{margin-top:2px;font-size:clamp(7px,1.5vmin,12px);letter-spacing:.24em;color:var(--dim);}
+
+  /* 剩余距离 */
+  #distBox{left:50%;top:3%;transform:translateX(-50%);text-align:center;}
+  #distNum{font-size:clamp(13px,3vmin,28px);font-weight:800;color:var(--white);
+    text-shadow:2px 2px 0 #000;letter-spacing:.04em;}
+  #distBar{margin:3px auto 0;width:clamp(70px,22vmin,190px);height:clamp(3px,.8vmin,6px);
+    background:rgba(0,0,0,.55);border:1px solid var(--line);}
+  #distFill{height:100%;width:0%;background:var(--cyan);box-shadow:0 0 8px rgba(56,200,224,.7);}
+  #lapLbl{margin-top:3px;font-size:clamp(7px,1.5vmin,12px);letter-spacing:.22em;color:var(--dim);}
+
+  /* 时间 / 赛道名 */
+  #trackBox{right:2.2%;top:3%;text-align:right;}
+  #trackName{font-family:var(--ui);font-size:clamp(9px,2vmin,17px);font-weight:800;
+    letter-spacing:.16em;color:var(--orange);text-shadow:2px 2px 0 #000;}
+  #clock{margin-top:2px;font-size:clamp(11px,2.4vmin,22px);font-weight:800;color:var(--white);
+    text-shadow:2px 2px 0 #000;}
+
+  /* 伤害条 */
+  #dmgBox{left:2.2%;bottom:4%;}
+  #dmgLbl{font-size:clamp(7px,1.5vmin,12px);letter-spacing:.22em;color:var(--dim);margin-bottom:3px;}
+  #dmgBar{width:clamp(74px,24vmin,210px);height:clamp(7px,1.9vmin,15px);
+    background:rgba(0,0,0,.6);border:2px solid var(--line);position:relative;}
+  #dmgFill{position:absolute;inset:0;width:100%;
+    background:linear-gradient(90deg,var(--green),#8ee08a);transition:width .12s linear;}
+  #dmgFill.mid{background:linear-gradient(90deg,var(--yellow),#ffe98a);}
+  #dmgFill.low{background:linear-gradient(90deg,var(--red),#ff8a70);animation:pulse .5s steps(2,start) infinite;}
+  @keyframes pulse{50%{opacity:.35}}
+  #wep{margin-top:5px;font-size:clamp(8px,1.7vmin,13px);letter-spacing:.14em;color:var(--orange);}
+  #wep.none{color:var(--dim);}
+
+  /* 速度表 */
+  #spdBox{right:2.2%;bottom:4%;text-align:right;}
+  #spdNum{font-size:clamp(26px,6.4vmin,60px);font-weight:800;line-height:.9;color:var(--white);
+    text-shadow:3px 3px 0 #000;font-variant-numeric:tabular-nums;}
+  #spdNum.fast{color:var(--yellow);text-shadow:3px 3px 0 #000,0 0 16px rgba(248,208,56,.55);}
+  #spdNum.red{color:var(--red);text-shadow:3px 3px 0 #000,0 0 18px rgba(224,60,40,.6);}
+  #spdUnit{font-size:clamp(7px,1.5vmin,12px);letter-spacing:.3em;color:var(--dim);margin-top:1px;}
+  #gear{margin-top:3px;font-size:clamp(8px,1.8vmin,14px);letter-spacing:.2em;color:var(--orange);}
+
+  /* 屏幕中央提示 */
+  #toast{position:absolute;left:50%;top:26%;transform:translate(-50%,-50%);
+    font-family:var(--ui);font-weight:900;letter-spacing:.14em;text-align:center;
+    font-size:clamp(15px,4vmin,38px);color:var(--yellow);
+    text-shadow:3px 3px 0 #000,0 0 20px rgba(248,208,56,.55);opacity:0;}
+  #toast.show{animation:toastIn 1.5s ease-out forwards;}
+  #toast.warn{color:var(--red);text-shadow:3px 3px 0 #000,0 0 22px rgba(224,60,40,.7);}
+  @keyframes toastIn{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(1.5)}
+    12%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    70%{opacity:1}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(1)}
+  }
+
+  /* 警察警示条 */
+  #copBar{position:absolute;left:0;right:0;top:0;height:clamp(3px,.9vmin,7px);
+    background:var(--red);opacity:0;box-shadow:0 0 14px rgba(224,60,40,.9);}
+  #copBar.on{animation:copFlash .42s steps(2,start) infinite;}
+  @keyframes copFlash{0%{opacity:.9;background:var(--red)}50%{opacity:.9;background:var(--blue)}}
+
+  /* ---------- 全屏面板 ---------- */
+  .sheet{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:rgba(7,7,12,.9);padding:3%;}
+  .sheet.off{display:none;}
+  .card{width:min(560px,94%);max-height:94%;overflow:auto;text-align:center;
+    background:var(--dark);border:3px solid var(--line);
+    box-shadow:0 0 0 3px #000,0 18px 50px rgba(0,0,0,.8);padding:clamp(12px,3.2vmin,28px);}
+  .card h1{margin:0 0 2px;font-size:clamp(24px,7vmin,54px);font-weight:900;letter-spacing:.1em;
+    color:var(--red);text-shadow:3px 3px 0 #000,6px 6px 0 rgba(240,136,32,.35);}
+  .card h2{margin:0 0 10px;font-size:clamp(14px,3.4vmin,26px);font-weight:900;letter-spacing:.12em;color:var(--yellow);}
+  .card .sub{font-family:var(--mono);font-size:clamp(8px,1.7vmin,12px);letter-spacing:.34em;color:var(--dim);margin-bottom:14px;}
+  .card p{margin:6px 0;font-size:clamp(11px,2.1vmin,14px);line-height:1.75;color:#c8c8dc;}
+  .card .go{margin-top:16px;font-size:clamp(11px,2.3vmin,16px);font-weight:800;letter-spacing:.24em;
+    color:var(--green);animation:pulse 1.1s steps(2,start) infinite;}
+  .keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:4px 16px;
+    margin:12px 0 4px;text-align:left;}
+  .keys div{font-size:clamp(10px,1.9vmin,13px);color:#c8c8dc;white-space:nowrap;}
+  kbd{display:inline-block;min-width:18px;padding:1px 5px;margin-right:6px;
+    border:1px solid var(--line);border-bottom-width:2px;background:#000;color:var(--white);
+    font-family:var(--mono);font-size:.85em;text-align:center;}
+
+  /* 成绩表 */
+  table.res{width:100%;border-collapse:collapse;margin:8px 0;font-family:var(--mono);
+    font-size:clamp(10px,1.9vmin,14px);}
+  table.res td{padding:3px 5px;border-bottom:1px solid rgba(58,58,88,.5);text-align:left;color:#c8c8dc;}
+  table.res td.n{text-align:right;color:var(--white);}
+  table.res tr.me td{color:var(--yellow);font-weight:800;background:rgba(248,208,56,.08);}
+
+  /* 车行 */
+  .shop{display:grid;gap:7px;margin:10px 0;}
+  .bike{display:flex;align-items:center;gap:10px;padding:7px 9px;text-align:left;
+    background:var(--panel);border:2px solid var(--line);cursor:pointer;pointer-events:auto;}
+  .bike.own{border-color:var(--green);}
+  .bike.cant{opacity:.42;}
+  .bike.sel{border-color:var(--yellow);box-shadow:0 0 0 2px rgba(248,208,56,.3);}
+  .bike canvas{width:clamp(52px,12vmin,84px);height:auto;flex:0 0 auto;}
+  .bike .nm{font-weight:800;font-size:clamp(11px,2.1vmin,15px);color:var(--white);letter-spacing:.06em;}
+  .bike .st{font-family:var(--mono);font-size:clamp(8px,1.6vmin,11px);color:var(--dim);margin-top:2px;letter-spacing:.06em;}
+  .bike .pr{margin-left:auto;font-family:var(--mono);font-weight:800;font-size:clamp(10px,2vmin,14px);color:var(--yellow);}
+  .bike .pr.own{color:var(--green);}
+  .money{font-family:var(--mono);font-size:clamp(12px,2.4vmin,18px);font-weight:800;color:var(--green);letter-spacing:.1em;}
+
+  .btn{display:inline-block;margin:8px 5px 0;padding:8px 20px;pointer-events:auto;cursor:pointer;
+    font-weight:800;letter-spacing:.16em;font-size:clamp(11px,2.2vmin,15px);
+    background:var(--red);color:#fff;border:2px solid #000;
+    box-shadow:0 4px 0 #7a1a10;user-select:none;}
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #7a1a10;}
+  .btn.alt{background:var(--panel);color:var(--white);box-shadow:0 4px 0 #000;border-color:var(--line);}
+
+  /* ---------- 触屏手柄 ---------- */
+  #pad{position:fixed;inset:0;z-index:12;pointer-events:none;display:none;}
+  #pad.on{display:block;}
+  .k{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;
+    font-family:var(--ui);font-weight:900;letter-spacing:.06em;color:var(--white);
+    background:rgba(27,27,44,.5);border:2px solid rgba(244,240,228,.3);
+    border-radius:50%;user-select:none;text-shadow:1px 1px 0 #000;}
+  .k.sq{border-radius:10px;}
+  .k.hit{background:rgba(224,60,40,.62);border-color:rgba(255,180,160,.7);}
+  .k:active,.k.dn{background:rgba(240,136,32,.75);border-color:#fff;}
+  #kL{left:3%;bottom:8%;width:16vmin;height:16vmin;font-size:6vmin;}
+  #kR{left:21%;bottom:8%;width:16vmin;height:16vmin;font-size:6vmin;}
+  #kGas{right:3%;bottom:7%;width:20vmin;height:20vmin;font-size:4.6vmin;}
+  #kBrk{right:25%;bottom:6%;width:13vmin;height:13vmin;font-size:3.6vmin;}
+  #kAtkL{left:3%;bottom:30%;width:14vmin;height:14vmin;font-size:3.8vmin;}
+  #kAtkR{right:3%;bottom:31%;width:14vmin;height:14vmin;font-size:3.8vmin;}
+
+  /* 竖屏：手柄放画布下方，横屏：压在画布上 */
+  body.portrait #pad .k{background:rgba(27,27,44,.85);}
+</style>
+
+<div id="stage">
+  <canvas id="px"></canvas>
+
+  <div id="hud" class="layer off">
+    <div id="copBar"></div>
+    <div class="box" id="posBox"><div id="posNum">1<small>/8</small></div><div id="posLbl">POS</div></div>
+    <div class="box" id="distBox"><div id="distNum">0.0 KM</div><div id="distBar"><div id="distFill"></div></div><div id="lapLbl">TO FINISH</div></div>
+    <div class="box" id="trackBox"><div id="trackName">市中心</div><div id="clock">0:00</div></div>
+    <div class="box" id="dmgBox"><div id="dmgLbl">DAMAGE</div><div id="dmgBar"><div id="dmgFill"></div></div><div id="wep" class="none">徒手</div></div>
+    <div class="box" id="spdBox"><div id="spdNum">0</div><div id="spdUnit">KM/H</div><div id="gear">GEAR 1</div></div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="sheet" class="sheet"><div class="card" id="cardBody"></div></div>
+</div>
+
+<div id="pad">
+  <div class="k" id="kL">◀</div>
+  <div class="k" id="kR">▶</div>
+  <div class="k sq" id="kGas">油门</div>
+  <div class="k sq" id="kBrk">刹车</div>
+  <div class="k hit" id="kAtkL">左踹</div>
+  <div class="k hit" id="kAtkR">右踹</div>
+</div>
+
+<script>
+'use strict';
+/* ==========================================================================
+   0. 工具
+   ========================================================================== */
+const PI = Math.PI, TAU = PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp  = (a, b, t) => a + (b - a) * t;
+const sign  = v => v < 0 ? -1 : v > 0 ? 1 : 0;
+const easeIn  = (a, b, p) => a + (b - a) * p * p;
+const easeOut = (a, b, p) => a + (b - a) * (1 - (1 - p) * (1 - p));
+const easeInOut = (a, b, p) => a + (b - a) * (-Math.cos(p * PI) / 2 + .5);
+// 指数趋近：跟帧率无关的平滑
+const approach = (a, b, rate, dt) => lerp(a, b, 1 - Math.exp(-rate * dt));
+
+function makeRng(seed) {
+  let s = (seed >>> 0) || 1;
+  return function () {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >> 17;
+    s ^= s << 5;  s >>>= 0;
+    return s / 4294967296;
+  };
+}
+const pick = (rng, arr) => arr[(rng() * arr.length) | 0];
+const rint = (rng, a, b) => a + ((rng() * (b - a + 1)) | 0);
+
+/* ==========================================================================
+   1. 调色板 —— 世嘉 9bit 味道，每档都手挑过
+   ========================================================================== */
+const C = {
+  // 天空 / 大气
+  skyHi:'#2a3f7a', skyLo:'#7d6ab0', skyDusk:'#f08850', skyNight:'#0a0d22',
+  sun:'#ffd870', smog:'#8a7fa8',
+  // 路面
+  road1:'#4a4a52', road2:'#42424a',
+  rumble1:'#e8e4d8', rumble2:'#d03828',
+  lane:'#e8e4d8',
+  grass1:'#2e5030', grass2:'#28462a',
+  dirt1:'#6a5840', dirt2:'#5e4e38',
+  sand1:'#b09868', sand2:'#a08c60',
+  water1:'#204878', water2:'#1c4068',
+  cement1:'#565660', cement2:'#4e4e58',
+  // 通用
+  black:'#07070c', shadow:'rgba(0,0,0,.42)',
+  white:'#f4f0e4', dimw:'#b8b4a8',
+  red:'#e03c28', dred:'#8a1c14', orange:'#f08820', yellow:'#f8d038',
+  green:'#38c058', cyan:'#38c8e0', blue:'#3858d8', dblue:'#1c2c78',
+  purple:'#8038c0', pink:'#e068a8',
+  steel:'#9098a8', dsteel:'#586070', chrome:'#d8dce4',
+  skin:'#e0a878', skin2:'#c08858', dskin:'#a06840',
+  tire:'#181820',
+};
+
+/* 车手配色：外套 / 内衬 / 头盔 / 车壳 —— 八个对手一人一套 */
+const RIDER_PAL = [
+  { j:'#e03c28', j2:'#8a1c14', h:'#f8d038', b:'#e03c28', nm:'红隼' },
+  { j:'#38c8e0', j2:'#1c6888', h:'#f4f0e4', b:'#2878b8', nm:'冷刃' },
+  { j:'#38c058', j2:'#1c7038', h:'#204020', b:'#38a048', nm:'毒藤' },
+  { j:'#f08820', j2:'#a05010', h:'#181820', b:'#f08820', nm:'火头' },
+  { j:'#8038c0', j2:'#4a1c78', h:'#e068a8', b:'#7028b0', nm:'夜枭' },
+  { j:'#e8e4d8', j2:'#9c9890', h:'#e03c28', b:'#c0bcb0', nm:'白骨' },
+  { j:'#f8d038', j2:'#a08018', h:'#181820', b:'#d0a820', nm:'黄蜂' },
+  { j:'#586070', j2:'#2c3038', h:'#38c8e0', b:'#48505c', nm:'铁砧' },
+];
+// 玩家的夹克要亮一档：深色车架配深蓝夹克会糊成一坨，自己都找不到自己
+const PLAYER_PAL = { j:'#2c4cd0', j2:'#18265e', h:'#e03c28', b:'#3a68f0', nm:'你' };
+const COP_PAL    = { j:'#101828', j2:'#080c14', h:'#f4f0e4', b:'#f4f0e4', nm:'警察' };
+
+/* ==========================================================================
+   2. 像素画布
+   ========================================================================== */
+const stage = document.getElementById('stage');
+const cvs   = document.getElementById('px');
+const ctx   = cvs.getContext('2d', { alpha: false });
+ctx.imageSmoothingEnabled = true;
+
+/* 画布按设备像素跑满，不再有低分辨率缓冲。
+   PX 是「设计单位」：这份代码里所有以像素为单位的常数都是按 H=360 调的，
+   乘上 PX 就跟着分辨率走 —— 描边粗细、火花大小、震屏幅度都靠它。 */
+let W = 1280, H = 720, PX = 2;
+let portrait = false;
+const MAX_H = 1080;                    // 4K 屏上别真去铺 2160 行
+
+function layout() {
+  const vw = Math.max(1, window.innerWidth), vh = Math.max(1, window.innerHeight);
+  const aspect = vw / vh;
+  portrait = aspect < 1.15;
+  document.body.classList.toggle('portrait', portrait);
+
+  let sw, sh;
+  if (portrait) {
+    // 竖屏：16:9 的一条，顶在上方 —— 下面留给手柄
+    sw = vw; sh = Math.round(vw * 9 / 16);
+    stage.style.marginBottom = Math.round(vh * .30) + 'px';
+  } else {
+    sw = vw; sh = vh;
+    stage.style.marginBottom = '0px';
+  }
+  stage.style.width = sw + 'px';
+  stage.style.height = sh + 'px';
+
+  let dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (sh * dpr > MAX_H) dpr = MAX_H / sh;
+  const nw = Math.max(320, Math.round(sw * dpr)), nh = Math.max(180, Math.round(sh * dpr));
+  if (cvs.width !== nw || cvs.height !== nh) { cvs.width = nw; cvs.height = nh; }
+  W = cvs.width; H = cvs.height;
+  PX = H / 360;
+  ctx.imageSmoothingEnabled = true;
+  if (typeof onResized === 'function') onResized();
+}
+window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', () => setTimeout(layout, 120));
+
+/* 触屏检测 */
+const TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+/* ==========================================================================
+   3. 输入
+   ========================================================================== */
+const Input = {
+  left:0, right:0, gas:0, brake:0,       // 模拟量 0..1
+  atkL:false, atkR:false,                // 边沿触发
+  atkLHeld:false, atkRHeld:false,
+  _keys:Object.create(null),
+};
+function keyDown(e) {
+  const k = e.key.toLowerCase();
+  if (Input._keys[k]) return;            // 忽略自动重复
+  Input._keys[k] = true;
+  if (k === 'a' || k === 'j' || k === 'z') Input.atkL = true;
+  if (k === 'd' || k === 'k' || k === 'x') Input.atkR = true;
+  if (k === 'p') togglePause();
+  if (k === 'r' && (Game.state === 'race' || Game.state === 'down')) restartRace();
+  if (k === 'm') toggleMute();
+  if (k === 'enter' || k === ' ') sheetConfirm();
+  // 别让方向键滚页面
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  audioUnlock();
+}
+function keyUp(e) { Input._keys[e.key.toLowerCase()] = false; }
+window.addEventListener('keydown', keyDown);
+window.addEventListener('keyup', keyUp);
+window.addEventListener('blur', () => { Input._keys = Object.create(null); });
+
+const K = k => !!Input._keys[k];
+
+/* 触屏按钮：按住式 */
+const padEl = document.getElementById('pad');
+const touchState = { l:false, r:false, gas:false, brk:false };
+function bindPad(id, on, off) {
+  const el = document.getElementById(id);
+  const down = e => { e.preventDefault(); el.classList.add('dn'); on(); audioUnlock(); };
+  const up   = e => { e.preventDefault(); el.classList.remove('dn'); if (off) off(); };
+  el.addEventListener('touchstart', down, { passive:false });
+  el.addEventListener('touchend', up, { passive:false });
+  el.addEventListener('touchcancel', up, { passive:false });
+  el.addEventListener('mousedown', down);
+  window.addEventListener('mouseup', up);
+}
+bindPad('kL',   () => touchState.l = true,   () => touchState.l = false);
+bindPad('kR',   () => touchState.r = true,   () => touchState.r = false);
+bindPad('kGas', () => touchState.gas = true, () => touchState.gas = false);
+bindPad('kBrk', () => touchState.brk = true, () => touchState.brk = false);
+bindPad('kAtkL',() => Input.atkL = true);
+bindPad('kAtkR',() => Input.atkR = true);
+
+function readInput() {
+  Input.left  = (K('arrowleft')  || touchState.l)   ? 1 : 0;
+  Input.right = (K('arrowright') || touchState.r)   ? 1 : 0;
+  Input.gas   = (K('arrowup')    || K('w') || touchState.gas) ? 1 : 0;
+  Input.brake = (K('arrowdown')  || K('s') || touchState.brk) ? 1 : 0;
+  Input.atkLHeld = K('a') || K('j') || K('z');
+  Input.atkRHeld = K('d') || K('k') || K('x');
+}
+function clearEdges() { Input.atkL = false; Input.atkR = false; }
+/* ==========================================================================
+   4. 像素绘制原语
+   所有形状都按「整行填充」画出来，天然没有抗锯齿 —— 硬边缘就是这么来的
+   ========================================================================== */
+/* 逐级面积平均，开局烤好几档缩图。
+   为什么要这个：最近邻缩到 3px 时，是从源图 52 列里挑 3 列画出来 —— 挑中哪几列
+   全看四舍五入，一辆橙色巴士可能整个采成挡风玻璃的深蓝色，而且距离每帧在变，
+   远处的车会一路闪烁变色。有了 mip，颜色是平均出来的，稳。 */
+function mipify(sp) {
+  sp.mips = [{ c: sp.c, w: sp.w, h: sp.h }];
+  let cur = sp.mips[0];
+  while (cur.w > 8 && cur.h > 8) {
+    const w = Math.max(1, cur.w >> 1), h = Math.max(1, cur.h >> 1);
+    const src = cur.c.getContext('2d').getImageData(0, 0, cur.w, cur.h).data;
+    const nx = cur.w / w, ny = cur.h / h;
+    const out = mkCanvas(w, h);
+    const img = out.g.createImageData(w, h), d = img.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let r = 0, g2 = 0, b = 0, a = 0, n = 0;
+      const x0 = Math.floor(x * nx), x1 = Math.min(cur.w, Math.max(x0 + 1, Math.floor((x + 1) * nx)));
+      const y0 = Math.floor(y * ny), y1 = Math.min(cur.h, Math.max(y0 + 1, Math.floor((y + 1) * ny)));
+      for (let v = y0; v < y1; v++) for (let u = x0; u < x1; u++) {
+        const i = (v * cur.w + u) * 4, al = src[i + 3] / 255;
+        r += src[i] * al; g2 += src[i + 1] * al; b += src[i + 2] * al; a += al; n++;
+      }
+      const o = (y * w + x) * 4;
+      if (n && a > 0) { d[o] = r / a; d[o + 1] = g2 / a; d[o + 2] = b / a; d[o + 3] = (a / n) * 255; }
+    }
+    out.g.putImageData(img, 0, 0);
+    cur = { c: out.c, w, h };
+    sp.mips.push(cur);
+  }
+  return sp;
+}
+
+function mkCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  return { c, g, w: c.width, h: c.height };
+}
+function box(g, x, y, w, h, col) {
+  if (w <= 0 || h <= 0) return;
+  g.fillStyle = col; g.fillRect(x | 0, y | 0, Math.max(1, w | 0), Math.max(1, h | 0));
+}
+/* 上下两条边宽度不同的梯形，逐行填 */
+function trap(g, y0, y1, l0, r0, l1, r1, col) {
+  y0 = Math.round(y0); y1 = Math.round(y1);
+  if (y1 <= y0) return;
+  g.fillStyle = col;
+  for (let y = y0; y < y1; y++) {
+    const t = (y - y0) / (y1 - y0);
+    const a = Math.round(lerp(l0, l1, t)), b = Math.round(lerp(r0, r1, t));
+    if (b > a) g.fillRect(a, y, b - a, 1);
+  }
+}
+function ellipse(g, cx, cy, rx, ry, col) {
+  g.fillStyle = col;
+  for (let y = Math.round(cy - ry); y <= Math.round(cy + ry); y++) {
+    const dy = (y - cy) / ry;
+    const k = 1 - dy * dy; if (k <= 0) continue;
+    const hw = Math.round(rx * Math.sqrt(k));
+    if (hw > 0) g.fillRect(Math.round(cx - hw), y, hw * 2, 1);
+  }
+}
+/* 同一个颜色调亮/调暗一档：受光面、转折面、阴影都从底色推出来 */
+function shade(hex, amt) {
+  const [r, g, b] = hex2rgb(hex);
+  const f = amt < 0 ? 1 + amt : 1, t = amt > 0 ? amt : 0;
+  const m = v => Math.round(v * f + (255 - v * f) * t);
+  return 'rgb(' + m(r) + ',' + m(g) + ',' + m(b) + ')';
+}
+
+/* 粗线段（用于电线、链条、栏杆斜撑） */
+function line(g, x0, y0, x1, y1, t, col) {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) | 0;
+  g.fillStyle = col;
+  for (let i = 0; i <= n; i++) {
+    const p = n ? i / n : 0;
+    g.fillRect(Math.round(lerp(x0, x1, p)), Math.round(lerp(y0, y1, p)), t, t);
+  }
+}
+
+/* ==========================================================================
+   5. 车手 · 摩托 · 车辆：矢量现画
+   不再烤贴图。所有形状在一个「宽 100、脚踩 y=0、头朝 -y」的单位空间里描出来，
+   贴到画面上时只是一次 scale —— 所以任意距离都是现算的：
+   没有 mipmap、没有采样丢失、不需要最小尺寸下限那种作弊，
+   一辆车缩到 6px 也还是一辆车的轮廓，而不是 6 列被挑剩的像素。
+   ========================================================================== */
+const INK = '#141420';                         // 统一的深色描边
+const RIDER_WW = 350;                          // 车加人在世界里有多宽（路面全宽 4000）
+
+/* 圆角矩形 */
+function rr(g, x, y, w, h, r) {
+  r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.lineTo(x + w - r, y);       g.quadraticCurveTo(x + w, y, x + w, y + r);
+  g.lineTo(x + w, y + h - r);   g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  g.lineTo(x + r, y + h);       g.quadraticCurveTo(x, y + h, x, y + h - r);
+  g.lineTo(x, y + r);           g.quadraticCurveTo(x, y, x + r, y);
+  g.closePath();
+}
+/* 一条闭合折线 */
+function poly(g, pts) {
+  g.beginPath();
+  for (let i = 0; i < pts.length; i += 2) i ? g.lineTo(pts[i], pts[i+1]) : g.moveTo(pts[i], pts[i+1]);
+  g.closePath();
+}
+/* 填一次，再按需描一圈。ink<=0 表示这东西已经小到不该有描边了 */
+function paint(g, col, ink, noStroke) {
+  g.fillStyle = col; g.fill();
+  if (ink > 0 && !noStroke) { g.lineWidth = ink; g.strokeStyle = INK; g.stroke(); }
+}
+function oval(g, cx, cy, rx, ry) { g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, TAU); }
+
+/* ---------- 车手 + 摩托（后视） ----------
+   单位空间：宽 100、脚踩 y=0、头朝 -y，整体高约 105。
+   排布的要点是躯干只占上半截（-80..-43），底下留给车：整流罩、尾灯、
+   排气、后轮都得露出来，否则后视图就成了「一个人站在一堵墙后面」。
+   o: { tilt -1..1, atk -1|0|1, wep 0拳脚/1棍/2链, brake, hit, cop, flash } */
+function drawRider(g, pal, o, ink) {
+  o = o || {};
+  const tilt = o.tilt || 0, atk = o.atk || 0, wep = o.wep || 0, hit = !!o.hit;
+  const jk = pal.j, jd = pal.j2, hl = pal.h;
+  const jkL = shade(jk, .24);
+  /* 车架一律深色炭灰，车主的颜色只做一块面板 —— 车壳跟夹克同色的话，
+     人和车会糊成一整块，后视图就分不出哪是人哪是车了 */
+  const bd = '#262632', bdD = '#191922', bdL = '#3a3a4a', accent = pal.b;
+
+  g.save();
+  g.rotate(tilt * .16);                        // 压车：绕轮胎触地点转
+
+  /* 排气：从整流罩底下往两边斜出去 */
+  for (const s of [-1, 1]) {
+    g.save(); g.scale(s, 1);
+    poly(g, [12, -26, 26, -21, 26, -9, 13, -12]);  paint(g, '#9aa2ac', ink);
+    poly(g, [12, -26, 18, -24, 18, -11, 13, -12]); paint(g, '#6c747e', 0);
+    rr(g, 22, -20, 5, 10, 2.5);                    paint(g, '#33333e', ink * .6);
+    g.restore();
+  }
+  /* 后轮 */
+  rr(g, -11, -30, 22, 30, 9);   paint(g, '#1b1b25', ink);
+  rr(g, -6.5, -26, 13, 21, 6);  paint(g, '#30303c', 0);
+  for (let i = 0; i < 3; i++) { rr(g, -6.5, -24 + i * 7, 13, 2.4, 1); paint(g, '#131319', 0); }
+  /* 车尾整流罩：深色车架 + 一块车主配色的面板 */
+  poly(g, [-13, -47, 13, -47, 9, -13, -9, -13]);   paint(g, bd, ink);
+  poly(g, [-13, -47, -5, -47, -3.5, -13, -9, -13]); paint(g, bdD, 0);
+  poly(g, [-10, -45, 10, -45, 7.5, -26, -7.5, -26]); paint(g, accent, ink * .6);
+  poly(g, [4, -44, 9, -44, 7, -28, 3.5, -28]);      paint(g, shade(accent, .3), 0);
+  /* 尾灯：坐垫下面那一道，躯干够不着，所以永远看得见 */
+  rr(g, -8, -36, 16, 9, 3.5);
+  paint(g, o.brake ? '#ff6a55' : '#d8281c', ink * .8);
+  rr(g, -5, -34, 10, 5, 2.2);  paint(g, o.brake ? '#ffe4d8' : '#ff9484', 0);
+  rr(g, -11, -50, 22, 8, 3.5); paint(g, '#17171f', ink * .7);      // 座垫
+  if (o.cop) {                                   // 警灯：红蓝轮闪
+    rr(g, -16, -58, 14, 8, 3); paint(g, o.flash ? '#4a68ff' : '#242038', ink * .6);
+    rr(g, 2, -58, 14, 8, 3);   paint(g, o.flash ? '#3a1620' : '#ff3020', ink * .6);
+  }
+
+  /* 腿：跨在油箱两侧，膝盖朝外 */
+  const kick = (atk && wep === 0) ? atk : 0;
+  for (const s of [-1, 1]) {
+    g.save(); g.scale(s, 1);
+    if (kick === s) {                            // 踹出去的那条
+      poly(g, [7, -48, 34, -36, 37, -25, 9, -31]);   paint(g, jd, ink);
+      poly(g, [11, -44, 31, -34, 32, -29, 12, -35]); paint(g, shade(jd, .2), 0);
+      rr(g, 31, -37, 14, 12, 4.5);                   paint(g, '#191922', ink);
+    } else {
+      poly(g, [7, -50, 22, -45, 20, -18, 9, -16]);   paint(g, jd, ink);
+      poly(g, [12, -43, 21, -40, 19.5, -22, 13, -21]); paint(g, shade(jd, .22), 0);
+      rr(g, 7, -18, 15, 16, 5);                      paint(g, '#191922', ink);
+    }
+    g.restore();
+  }
+
+  /* 躯干：只到 -43，底下让给车 */
+  const slump = hit ? 5 : 0;
+  poly(g, [-14.5, -80 + slump, 14.5, -80 + slump, 8.5, -44, -8.5, -44]);  paint(g, jk, ink);
+  poly(g, [-14.5, -80 + slump, -5.5, -80 + slump, -3.5, -44, -8.5, -44]); paint(g, jd, 0);
+  poly(g, [6.5, -77 + slump, 13.5, -77 + slump, 8.5, -53, 4.5, -53]);     paint(g, jkL, 0);
+  rr(g, -12.5, -76 + slump, 25, 3.5, 1.6); paint(g, shade(jk, -.32), 0);   // 肩缝
+  rr(g, -9, -60, 18, 5.5, 2.5);          paint(g, hl, 0);                // 背后那道横条
+
+  /* 手臂 */
+  const sh = -74 + slump;
+  if (atk && wep > 0) {
+    const s = atk;
+    g.save(); g.scale(s, 1);
+    poly(g, [11, sh, 35, sh + 3, 37, sh + 13, 12, sh + 12]);  paint(g, jk, ink);
+    if (wep === 1) { rr(g, 34, sh, 24, 9, 3.5);  paint(g, '#a8763c', ink);
+                     rr(g, 52, sh - 2, 9, 13, 3.5); paint(g, '#6a4620', ink); }
+    else { for (let i = 0; i < 6; i++) { oval(g, 36 + i * 7, sh + 6 + (i & 1) * 5, 3.6, 3.6);
+                                        paint(g, i === 5 ? '#d8dce4' : '#98a0aa', 0); } }
+    g.restore();
+    g.save(); g.scale(-s, 1);
+    poly(g, [11, sh, 25, sh + 8, 28, sh + 18, 13, sh + 13]);  paint(g, jk, ink);
+    rr(g, 21, sh + 14, 13, 9, 3.5);  paint(g, '#191922', ink);
+    g.restore();
+  } else if (hit) {
+    for (const s of [-1, 1]) { g.save(); g.scale(s, 1);
+      poly(g, [11, sh - 2, 33, sh - 10, 35, sh, 12, sh + 9]);  paint(g, jk, ink);
+      g.restore(); }
+  } else {
+    for (const s of [-1, 1]) {
+      g.save(); g.scale(s, 1);
+      poly(g, [11, sh, 26, sh + 8, 29, sh + 18, 13, sh + 13]);   paint(g, jk, ink);
+      poly(g, [14, sh + 3, 24, sh + 9, 25, sh + 14, 16, sh + 11]); paint(g, jkL, 0);
+      rr(g, 27, sh + 10, 8, 4, 2);   paint(g, '#6a7280', ink * .6);   // 把手末端
+      rr(g, 21, sh + 15, 14, 9, 3.5); paint(g, '#191922', ink);       // 手套
+      g.restore();
+    }
+  }
+
+  /* 头盔 */
+  const hx = hit ? (tilt > 0 ? -8 : 8) : 0, hy = -92 + slump;
+  oval(g, hx, hy, 12.5, 13);     paint(g, hl, ink);
+  g.beginPath(); g.ellipse(hx, hy, 12.5, 13, 0, PI * .04, PI * .96); g.closePath();
+  paint(g, shade(hl, -.36), 0);
+  oval(g, hx - 3.5, hy - 4.5, 6, 4.6);  paint(g, shade(hl, .36), 0);
+  rr(g, hx - 10.5, hy + 1, 21, 8, 3);   paint(g, o.cop ? '#c02020' : '#15151f', 0);  // 镜片带
+  rr(g, hx - 5, hy + 11.5, 10, 6, 2.5); paint(g, '#c89870', 0);                      // 露出的脖子
+  g.restore();
+}
+
+/* ---------- 摔出去的人 ---------- */
+function drawTumble(g, pal, t, ink) {
+  const jk = pal.j, jd = pal.j2, hl = pal.h;
+  g.save();
+  g.translate(0, -30);
+  g.rotate(t * TAU);
+  const curl = .55 + .45 * Math.abs(Math.cos(t * TAU));
+  for (const s of [-1, 1]) { g.save(); g.scale(s, 1);
+    poly(g, [4, 6 * curl, 24, 14 * curl, 26, 24 * curl, 6, 20 * curl]); paint(g, jd, ink);  // 腿
+    rr(g, 21, 18 * curl, 12, 9, 4); paint(g, '#1a1a24', ink);
+    poly(g, [5, -12, 26, -20 * curl, 28, -10 * curl, 7, -3]); paint(g, jk, ink);            // 臂
+    g.restore(); }
+  oval(g, 0, 0, 16, 21);       paint(g, jk, ink);
+  oval(g, -5, -5, 8, 10);      paint(g, shade(jk, .2), 0);
+  rr(g, -14, 6, 28, 6, 3);     paint(g, jd, 0);
+  oval(g, -1, -26, 12.5, 12.5); paint(g, hl, ink);
+  oval(g, -4, -30, 6, 4.5);    paint(g, shade(hl, .32), 0);
+  g.restore();
+}
+
+/* ---------- 侧滑停下的车 ---------- */
+function drawWreck(g, pal, ink) {
+  const bd = pal.b;
+  poly(g, [-46, -30, 30, -34, 46, -14, -44, -8]);  paint(g, bd, ink);
+  poly(g, [-46, -30, -6, -32, -4, -10, -44, -8]);  paint(g, shade(bd, -.3), 0);
+  rr(g, -44, -26, 12, 8, 3);   paint(g, '#d8281c', ink * .7);
+  for (const x of [-24, 22]) { oval(g, x, -14, 15, 15); paint(g, '#1c1c26', ink);
+                               oval(g, x, -14, 6, 6);   paint(g, '#9aa2ac', 0); }
+  rr(g, 30, -36, 16, 5, 2.5);  paint(g, '#9aa2ac', ink * .7);
+}
+
+/* ---------- 徒步跑回车边的自己 ---------- */
+function drawRunner(g, pal, f, ink) {
+  const jk = pal.j, jd = pal.j2, hl = pal.h;
+  const sw = f === 1 ? 1 : (f === 2 ? -1 : 0);
+  for (const s of [-1, 1]) {
+    const st = sw * s;
+    g.save(); g.scale(s, 1);
+    poly(g, [3, -30, 15, -30, 13 + st * 8, -6, 3 + st * 8, -6]);  paint(g, jd, ink);   // 腿：左右错开
+    rr(g, 1 + st * 8, -9, 15, 8, 3.5);  paint(g, '#191922', ink);
+    poly(g, [3, -54 + st * 5, 16, -52 + st * 8, 15, -34 + st * 8, 5, -34]); paint(g, jk, ink);  // 臂
+    g.restore();
+  }
+  poly(g, [-16, -58, 16, -58, 12, -28, -12, -28]);  paint(g, jk, ink);
+  poly(g, [-16, -58, -6, -58, -5, -28, -12, -28]);  paint(g, jd, 0);
+  oval(g, 0, -68, 11.5, 12);   paint(g, hl, ink);
+  oval(g, -3, -72, 5.5, 4);    paint(g, shade(hl, .34), 0);
+  rr(g, -9, -65, 18, 7, 3);    paint(g, '#15151f', 0);
+}
+
+/* ---------- 掉在地上的武器 ---------- */
+function drawPickup(g, wep, ink) {
+  if (wep === 1) { rr(g, -34, -16, 54, 12, 5); paint(g, '#a8763c', ink);
+                   rr(g, 12, -19, 18, 18, 6);  paint(g, '#6a4620', ink); }
+  else { for (let i = 0; i < 7; i++) { oval(g, -30 + i * 10, -10 + (i & 1) * 6, 6.5, 6.5);
+                                       paint(g, i === 6 ? '#d8dce4' : '#98a0aa', ink * .6); } }
+}
+
+/* ---------- 车辆 ----------
+   在宽 100、脚踩 y=0 的空间里画；spec.hh 是车高（同一单位） */
+function drawCar(g, spec, front, ink, night) {
+  const H2 = spec.hh, bodyY = -H2 * spec.body, roofY = -H2;
+  const col = spec.col, dk = shade(col, -.34), lt = shade(col, .2);
+  const glass = '#1b2436', glassL = '#40608a';
+  const rw = spec.type === 'car' ? 40 : 47;
+
+  for (const x of [-38, 24]) { rr(g, x, -15, 14, 15, 5); paint(g, '#1a1a24', ink); }   // 轮子
+  // 车厢
+  poly(g, [-rw + 4, roofY, rw - 4, roofY, rw, bodyY, -rw, bodyY]);  paint(g, col, ink);
+  poly(g, [-rw + 4, roofY, -rw + 14, roofY, -rw + 10, bodyY, -rw, bodyY]); paint(g, dk, 0);
+  // 玻璃
+  const gw = rw - 9;
+  poly(g, [-gw + 3, roofY + H2 * .09, gw - 3, roofY + H2 * .09, gw - 1, bodyY - H2 * .07, -gw + 1, bodyY - H2 * .07]);
+  paint(g, glass, ink * .7);
+  poly(g, [-gw + 5, roofY + H2 * .11, gw - 8, roofY + H2 * .11, gw - 7, roofY + H2 * .2, -gw + 4, roofY + H2 * .2]);
+  paint(g, glassL, 0);
+  if (spec.type === 'bus') for (let i = 0; i < 4; i++) {
+    rr(g, -rw + 5 + i * (rw * 2 - 10) / 4, roofY + H2 * .1, (rw * 2 - 10) / 4 - 3, H2 * .3, 2);
+    paint(g, glass, 0);
+  }
+  // 车身
+  rr(g, -50, bodyY, 100, -bodyY - 2, 7);  paint(g, col, ink);
+  rr(g, -50, bodyY, 16, -bodyY - 2, 7);   paint(g, dk, 0);
+  rr(g, -46, bodyY + 3, 92, 4, 2);        paint(g, lt, 0);
+  // 灯
+  const ly = bodyY + Math.abs(bodyY) * .28;
+  for (const s of [-1, 1]) {
+    g.save(); g.scale(s, 1);
+    rr(g, 22, ly - 7, 22, 14, 5);
+    paint(g, front ? '#fff6cc' : '#d8281c', ink * .8);
+    rr(g, 26, ly - 4, 14, 8, 3);
+    paint(g, front ? '#ffffff' : '#ff9484', 0);
+    g.restore();
+  }
+  if (front) { rr(g, -16, ly - 6, 32, 12, 3); paint(g, '#1a1a24', ink * .7); }
+  else { rr(g, -15, ly - 5, 30, 10, 2); paint(g, '#c8c4b8', ink * .7); }
+  rr(g, -44, -10, 88, 5, 2);  paint(g, '#5a616c', 0);                 // 保险杠
+  if (spec.taxi) { rr(g, -14, roofY - 11, 28, 11, 4); paint(g, '#f0b820', ink);
+                   rr(g, -10, roofY - 8, 20, 5, 2);   paint(g, '#f4ecc0', 0); }
+  if (night) {                                                        // 夜里灯有一圈晕
+    g.globalAlpha = .3;
+    for (const s of [-1, 1]) { oval(g, s * 33, ly, 26, 18);
+      paint(g, front ? '#ffe8a0' : '#ff3020', 0); }
+    g.globalAlpha = 1;
+  }
+}
+
+/* hh = 车高（跟宽度同一单位，宽恒为 100）；body = 车身顶面在车高里的比例 */
+const CAR_SPECS = [
+  { hh:78, body:.45, type:'car',   col:'#c03828', ww:660 },
+  { hh:78, body:.45, type:'car',   col:'#2858a8', ww:660 },
+  { hh:78, body:.45, type:'car',   col:'#d8d4c8', ww:660 },
+  { hh:78, body:.45, type:'car',   col:'#f0b820', ww:660, taxi:true },
+  { hh:84, body:.42, type:'van',   col:'#e8e4d8', ww:730 },
+  { hh:84, body:.42, type:'van',   col:'#38806a', ww:730 },
+  { hh:94, body:.33, type:'truck', col:'#4858a0', ww:900 },
+  { hh:94, body:.33, type:'truck', col:'#a04028', ww:900 },
+  { hh:96, body:.30, type:'bus',   col:'#d05828', ww:980 },
+];
+
+/* ==========================================================================
+   7. 街景 —— 每条赛道开赛时按主题现烤一批
+   每个精灵自带 ww（在世界里有多宽），跟源图尺寸解耦：
+   源图重画得再细，物件在路边还是那么大
+   ========================================================================== */
+function winGrid(g, x0, y0, x1, y1, cw, ch, gap, rng, night, lit, dk) {
+  for (let y = y0; y + ch <= y1; y += ch + gap)
+    for (let x = x0; x + cw <= x1; x += cw + gap) {
+      const on = night ? rng() < .45 : rng() < .12;
+      box(g, x, y, cw, ch, on ? lit : dk);
+      if (on) box(g, x, y, cw, 1, night ? '#ffffff99' : '#ffffff44');
+      if (!on) box(g, x, y + ch - 1, cw, 1, 'rgba(255,255,255,.10)');
+    }
+}
+function bakeTower(rng, night) {
+  const w = rint(rng, 66, 108), h = rint(rng, 165, 300);
+  const { c, g } = mkCanvas(w, h);
+  const base = pick(rng, night
+    ? ['#1a1e34','#221c30','#181c28','#241e2c']
+    : ['#6a6a7a','#7a7284','#5e6472','#82786e','#6e7a82']);
+  trap(g, 0, h, 0, w, 0, w, base);
+  box(g, 0, 0, Math.round(w * .22), h, shade(base, -.3));      // 侧面阴影
+  box(g, Math.round(w * .22), 0, 2, h, shade(base, -.5));      // 转折棱
+  box(g, 0, 0, w, 5, shade(base, night ? -.4 : .2));           // 楼顶压边
+  const lit = night ? pick(rng, ['#ffd870','#ffe8a8','#a8d8ff','#ffc060']) : '#8ea8c0';
+  const dk  = night ? '#0a0c16' : shade(base, -.34);
+  winGrid(g, 7, 12, w - 6, h - 6, rint(rng, 5, 8), rint(rng, 6, 9), 4, rng, night, lit, dk);
+  if (rng() < .5) box(g, (w >> 1) - 3, 0, 6, 6, shade(base, -.2));
+  if (night && rng() < .4) box(g, (w >> 1) - 2, 0, 4, 3, '#ff3020');   // 航空障碍灯
+  return { c, w, h, ww: w * 37 };
+}
+function bakeShop(rng, night) {
+  const w = rint(rng, 64, 94), h = rint(rng, 82, 132);
+  const { c, g } = mkCanvas(w, h);
+  const base = pick(rng, night ? ['#241c22','#1e2028','#2a2018'] : ['#a89078','#98806a','#b09880','#8a7a6c']);
+  trap(g, 0, h, 0, w, 0, w, base);
+  box(g, 0, 0, w, 6, shade(base, night ? -.4 : -.25));
+  box(g, 0, 0, Math.round(w * .16), h, 'rgba(0,0,0,.25)');
+  const lit = night ? '#ffc860' : '#7e94ac', dk = night ? '#100c14' : shade(base, -.4);
+  winGrid(g, 8, 14, w - 6, h - 40, 9, 11, 6, rng, night, lit, dk);
+  // 雨棚 + 卷帘门
+  const ay = h - 36;
+  const awn = pick(rng, ['#c03828','#286a9a','#2a7a4a','#b07818']);
+  for (let i = 0; i * 9 < w; i++) box(g, i * 9, ay, 8, 9, i & 1 ? awn : '#e8e4d8');
+  box(g, 0, ay + 9, w, 2, shade(awn, -.4));
+  box(g, 3, ay + 11, w - 6, 25, night ? '#0c0c14' : '#3a3a44');
+  for (let i = 0; i < 8; i++) box(g, 4, ay + 13 + i * 3, w - 8, 1, night ? '#181820' : '#4a4a56');
+  if (night && rng() < .7) {
+    const nc = pick(rng, ['#ff8030','#40d0e0','#ffd038','#ff3860']);
+    box(g, 6, ay + 13, w - 12, 13, nc); box(g, 8, ay + 15, w - 16, 4, '#ffffffaa');
+  }
+  return { c, w, h, ww: w * 32 };
+}
+function bakeNeon(rng) {
+  const w = rint(rng, 18, 27), h = rint(rng, 60, 114);
+  const { c, g } = mkCanvas(w, h);
+  const col = pick(rng, ['#ff3860','#38e0ff','#ffd038','#7a38ff','#38ff90','#ff8030']);
+  box(g, w / 2 - 2, 0, 4, h, '#2a2a34');                        // 支架
+  box(g, 2, 3, w - 4, h - 6, '#0e0e18');
+  box(g, 2, 3, w - 4, 2, '#2a2a34');
+  for (let i = 4; i < h - 10; i += 12) {
+    box(g, 5, i, w - 10, 8, col);
+    box(g, 6, i + 1, w - 12, 3, '#ffffffcc');
+    box(g, 5, i + 7, w - 10, 1, shade(col, -.4));
+  }
+  return { c, w, h, ww: w * 21, glow: col };
+}
+function bakeLamp(side, night) {
+  const w = 54, h = 140, { c, g } = mkCanvas(w, h);
+  const px0 = side < 0 ? w - 8 : 2;                             // 杆在外侧，灯臂伸向路面
+  box(g, px0, 9, 6, h - 9, C.dsteel);
+  box(g, px0 + (side < 0 ? -1 : 4), 6, 2, h - 6, '#6a7280');
+  box(g, px0 - 2, h - 6, 10, 6, '#4a5058');                     // 底座
+  const ax = side < 0 ? 3 : w - 4;
+  line(g, px0 + 3, 12, ax, 21, 4, C.dsteel);
+  box(g, ax - 6, 19, 13, 6, night ? '#ffe8a8' : '#b8bcc4');
+  box(g, ax - 5, 24, 11, 2, night ? '#fff4d0' : '#98a0a8');
+  if (night) { ellipse(g, ax, 28, 14, 11, 'rgba(255,220,140,.20)'); ellipse(g, ax, 25, 8, 6, 'rgba(255,232,176,.38)'); }
+  return { c, w, h, ww: w * 20 };
+}
+function bakeTraffic(night) {
+  const { c, g } = mkCanvas(24, 110);
+  box(g, 9, 16, 6, 94, C.dsteel);
+  box(g, 6, 106, 12, 4, '#4a5058');
+  box(g, 4, 4, 16, 34, '#282830');
+  box(g, 4, 4, 16, 2, '#4a4a56');
+  box(g, 7, 7, 10, 8, '#ff3020');  box(g, 8, 8, 8, 3, '#ff8878');
+  box(g, 7, 17, 10, 8, '#403018');
+  box(g, 7, 27, 10, 8, '#183018');
+  if (night) ellipse(g, 12, 11, 12, 9, 'rgba(255,60,40,.18)');
+  return { c, w: 24, h: 110, ww: 24 * 17 };
+}
+function bakePole(rng, night) {
+  const w = 40, h = rint(rng, 114, 150), { c, g } = mkCanvas(w, h);
+  box(g, w / 2 - 3, 6, 6, h - 6, '#6a5840');
+  box(g, w / 2 - 3, 6, 2, h - 6, '#4a3c28');
+  for (const y of [12, 22, 32]) {
+    box(g, 4, y, w - 8, 3, '#5a4a34');
+    box(g, 3, y - 2, 3, 6, '#4a3c28'); box(g, w - 6, y - 2, 3, 6, '#4a3c28');
+  }
+  if (rng() < .5) box(g, w / 2 - 8, 44, 16, 10, '#4a4a56');     // 变压器
+  return { c, w, h, ww: w * 23 };
+}
+function bakeTree(rng) {
+  const w = rint(rng, 40, 64), h = rint(rng, 60, 110), { c, g } = mkCanvas(w, h);
+  box(g, w / 2 - 3, h * .55, 6, h * .45, '#4a3820');
+  box(g, w / 2 - 3, h * .55, 2, h * .45, '#332510');
+  const gr = pick(rng, ['#2e6030','#28522c','#356a34','#22482a']);
+  ellipse(g, w / 2, h * .34, w * .48, h * .34, shade(gr, -.25));
+  ellipse(g, w * .46, h * .32, w * .42, h * .3, gr);
+  ellipse(g, w * .36, h * .24, w * .28, h * .19, shade(gr, .3));
+  return { c, w, h, ww: w * 25 };
+}
+function bakePalm(rng) {
+  const w = 60, h = rint(rng, 92, 138), { c, g } = mkCanvas(w, h);
+  const bend = rng() < .5 ? -1 : 1;
+  for (let i = 0; i < h - 24; i++) {
+    const x = w / 2 + bend * (i * i) / (h * 6);
+    box(g, x - 3, h - 1 - i, 6, 1, '#7a6038');
+    if (i % 7 < 2) box(g, x - 3, h - 1 - i, 6, 1, '#5e4828');   // 树干环
+  }
+  const tx = w / 2 + bend * ((h - 24) * (h - 24)) / (h * 6);
+  for (let a = 0; a < 9; a++) {
+    const ang = -PI * .08 - a * PI * .1, L = rint(rng, 18, 28);
+    line(g, tx, 24, tx + Math.cos(ang) * L, 24 - Math.sin(ang) * L * .7, 4, a & 1 ? '#2e7a44' : '#256838');
+  }
+  ellipse(g, tx, 23, 6, 5, '#5a4a28');
+  return { c, w, h, ww: w * 27 };
+}
+function bakeBillboard(rng, night) {
+  const w = rint(rng, 78, 114), h = rint(rng, 60, 80), { c, g } = mkCanvas(w, h);
+  box(g, 12, h - 28, 6, 28, C.dsteel); box(g, w - 18, h - 28, 6, 28, C.dsteel);
+  box(g, 0, 0, w, h - 26, '#2a2a34');
+  const bg = pick(rng, ['#d03828','#2858a8','#f0b820','#38806a','#8038c0','#e8e4d8']);
+  box(g, 3, 3, w - 6, h - 32, bg);
+  const fg = pick(rng, ['#f4f0e4','#101018','#ffd038']);
+  for (let i = 0; i < 3; i++) box(g, 9, 9 + i * 9, rint(rng, 18, w - 22), 5, fg);
+  box(g, w - 28, h - 44, 18, 13, fg);
+  if (night) { box(g, 3, 0, w - 6, 3, '#fff0c0'); box(g, 3, 3, w - 6, 2, 'rgba(255,240,192,.4)'); }
+  return { c, w, h, ww: w * 31 };
+}
+function bakeChimney(rng) {
+  const w = 40, h = rint(rng, 150, 255), { c, g } = mkCanvas(w, h);
+  trap(g, 0, h, 12, 27, 6, 34, '#8a6a58');
+  trap(g, 0, h, 12, 17, 6, 14, '#6a4e40');                      // 侧影
+  for (let y = 9; y < h; y += 24) box(g, 4, y, w - 8, 5, '#e8e4d8');
+  box(g, 10, 0, 20, 4, '#5a4a40');
+  return { c, w, h, ww: w * 40 };
+}
+function bakeTank(rng) {
+  const w = rint(rng, 70, 100), h = rint(rng, 52, 76), { c, g } = mkCanvas(w, h);
+  ellipse(g, w / 2, h * .5, w * .48, h * .46, '#98a0a8');
+  box(g, 2, h * .5, w - 4, h * .5, '#98a0a8');
+  box(g, 2, h * .5, w - 4, 3, '#6a7078');
+  box(g, 2, h * .5, w * .2, h * .5, '#7e868e');                 // 侧影
+  ellipse(g, w * .34, h * .36, w * .2, h * .2, '#c0c8d0');
+  box(g, 6, h - 9, w - 12, 9, '#5a6068');
+  for (let i = 0; i < 4; i++) box(g, 8 + i * (w - 16) / 4, 6, 3, h - 15, '#7a828a');
+  box(g, w * .5 - 4, 2, 8, 5, '#6a7078');                       // 顶上的检修口
+  return { c, w, h, ww: w * 35 };
+}
+function bakeCrane(rng) {
+  const w = 105, h = rint(rng, 135, 195), { c, g } = mkCanvas(w, h);
+  box(g, 45, 15, 9, h - 15, '#d07820');
+  for (let y = 18; y < h; y += 14) line(g, 45, y, 54, y + 14, 3, '#a05a10');
+  box(g, 6, 12, w - 12, 7, '#d07820');
+  for (let x = 9; x < w - 12; x += 13) line(g, x, 12, x + 13, 19, 3, '#a05a10');
+  line(g, 78, 19, 78, 52, 3, '#3a3a44');
+  box(g, 72, 52, 13, 9, '#5a5a66');
+  box(g, 40, h - 8, 20, 8, '#4a4a56');
+  return { c, w, h, ww: w * 36 };
+}
+function bakeBarrier(rng) {
+  const { c, g } = mkCanvas(62, 42);
+  ellipse(g, 31, 39, 25, 3.5, 'rgba(0,0,0,.32)');
+  box(g, 3, 7, 56, 18, '#f4f0e4');
+  for (let i = 0; i < 4; i++) box(g, 6 + i * 14, 7, 7, 18, C.red);
+  box(g, 3, 7, 56, 3, '#ffffff');
+  box(g, 3, 22, 56, 3, shade('#f4f0e4', -.35));
+  box(g, 10, 25, 7, 16, C.dsteel); box(g, 45, 25, 7, 16, C.dsteel);
+  box(g, 26, 0, 9, 7, C.orange); box(g, 28, 1, 5, 4, '#fff0b0');   // 顶上那盏黄灯
+  return { c, w: 62, h: 42, ww: 760 };
+}
+function bakeCone() {
+  const { c, g } = mkCanvas(36, 48);
+  ellipse(g, 18, 45, 17, 3.5, 'rgba(0,0,0,.3)');
+  trap(g, 4, 41, 14, 22, 3, 33, C.orange);
+  trap(g, 4, 41, 14, 17, 3, 12, '#ff9c40');                     // 受光面
+  box(g, 7, 20, 22, 9, '#f4f0e4');
+  box(g, 8, 29, 20, 3, shade(C.orange, -.3));
+  box(g, 0, 39, 36, 7, '#d06810');
+  box(g, 0, 39, 36, 3, '#ff8830');
+  return { c, w: 36, h: 48, ww: 340 };
+}
+function bakeCrowd(rng) {
+  const w = 60, h = 40, { c, g } = mkCanvas(w, h);
+  for (let i = 0; i < 5; i++) {
+    const x = 4 + i * 11 + rint(rng, -2, 2), y = h - rint(rng, 25, 32);
+    const j = pick(rng, ['#e03c28','#38c8e0','#f8d038','#38c058','#e8e4d8','#8038c0']);
+    ellipse(g, x + 3, y, 3.6, 4, C.skin);
+    ellipse(g, x + 3, y - 1, 3.6, 2.4, pick(rng, ['#2a2a34','#6a5840','#8a2020']));
+    trap(g, y + 4, h - 7, x, x + 8, x - 1, x + 9, j);
+    box(g, x + 1, h - 7, 3, 7, '#2a2a34'); box(g, x + 5, h - 7, 3, 7, '#2a2a34');
+  }
+  return { c, w, h, ww: w * 15 };
+}
+function bakeGuard(rng) {
+  const { c, g } = mkCanvas(64, 30);
+  box(g, 0, 4, 64, 10, '#b8bcc4');
+  box(g, 0, 4, 64, 3, '#e4e8ee');
+  box(g, 0, 11, 64, 3, '#8a9098');
+  box(g, 8, 14, 6, 16, C.dsteel); box(g, 50, 14, 6, 16, C.dsteel);
+  return { c, w: 64, h: 30, ww: 782 };
+}
+
+/* ==========================================================================
+   8. 赛道主题
+   ========================================================================== */
+const THEMES = {
+  city: {
+    name:'市中心', sub:'DOWNTOWN', night:false,
+    sky:['#3a6ab0','#9ab8d8'], sun:null, fog:'#9ab8d8', fogN:5,
+    off:[ '#5a5e66','#52565e' ], rumble:['#e8e4d8','#d03828'],
+    road:['#4a4a52','#44444c'], lane:'#e8e4d8',
+    mix:{ tower:.5, shop:.16, neon:.06, lamp:.12, traffic:.06, billboard:.05, crowd:.05 },
+    bg:'city', cars:1.0, onc:1.0, hazard:.10, cops:false,
+  },
+  old: {
+    name:'旧城区', sub:'OLD QUARTER', night:false,
+    sky:['#c88a58','#f0c088'], sun:'#ffd870', fog:'#e8bc90', fogN:4.2,
+    off:[ '#7a6a52','#70604a' ], rumble:['#e8e4d8','#a8a090'],
+    road:['#525258','#4c4c52'], lane:'#d8d4c4',
+    mix:{ shop:.46, pole:.18, tree:.08, neon:.08, lamp:.08, crowd:.09, billboard:.03 },
+    bg:'old', cars:1.15, onc:1.25, hazard:.16, cops:false,
+  },
+  river: {
+    name:'滨江大道', sub:'RIVERSIDE', night:false,
+    sky:['#2a78c0','#a8d8f0'], sun:'#fff0b0', fog:'#a8d8f0', fogN:3.2,
+    off:[ '#b09868','#a48c60' ], rumble:['#e8e4d8','#3868b8'],
+    road:['#4e4e56','#484850'], lane:'#e8e4d8',
+    mix:{ palm:.36, guard:.2, billboard:.1, lamp:.12, tower:.08, crowd:.08, tree:.06 },
+    bg:'river', cars:.8, onc:1.0, hazard:.08, cops:false,
+  },
+  indu: {
+    name:'工业区', sub:'IRONWORKS', night:false,
+    sky:['#6a5a5a','#b0a090'], sun:null, fog:'#a89888', fogN:5.6,
+    off:[ '#6a6258','#605a50' ], rumble:['#f0b820','#282830'],
+    road:['#46464e','#404048'], lane:'#c8c4b0',
+    mix:{ tank:.2, chimney:.16, crane:.12, tower:.1, barrier:.12, cone:.12, pole:.1, guard:.08 },
+    bg:'indu', cars:1.1, onc:1.2, hazard:.30, cops:true,
+  },
+  night: {
+    name:'夜战', sub:'NIGHT RUN', night:true,
+    sky:['#070a1a','#141230'], sun:null, fog:'#0c0a1c', fogN:5.4,
+    off:[ '#1a1a22','#16161e' ], rumble:['#d8d4c8','#c03020'],
+    road:['#2a2a33','#26262e'], lane:'#e0dcd0',
+    mix:{ tower:.36, neon:.24, shop:.14, lamp:.16, traffic:.04, billboard:.06 },
+    bg:'night', cars:1.25, onc:1.4, hazard:.14, cops:true,
+  },
+};
+
+/* 远景天际线：一张宽图，按视角横向滚动 */
+function bakeSkyline(theme, seed) {
+  const rng = makeRng(seed);
+  const w = 768, h = 144, { c, g } = mkCanvas(w, h);
+  const night = theme.night;
+  if (theme.bg === 'river') {
+    for (let i = 0; i < 7; i++) {                              // 远山
+      const cx = rng() * w, hh = rint(rng, 40, 88), ww = rint(rng, 90, 195);
+      const col = i & 1 ? '#6a86a8' : '#5c7898';
+      for (let x = -ww; x <= ww; x++) {
+        const y = h - hh * (1 - Math.abs(x) / ww);
+        const xx = ((cx + x) % w + w) % w;
+        g.fillStyle = col; g.fillRect(xx | 0, y | 0, 1, h - y);
+      }
+    }
+  } else if (theme.bg === 'indu') {
+    for (let i = 0; i < 34; i++) {
+      const x = rng() * w, ww = rint(rng, 21, 60), hh = rint(rng, 30, 93);
+      box(g, x, h - hh, ww, hh, rng() < .5 ? '#4a4450' : '#544c56');
+      if (rng() < .4) box(g, x + ww * .4, h - hh - 21, 7, 21, '#5a5058');
+    }
+  } else {
+    for (let i = 0; i < 46; i++) {                             // 城市剪影
+      const x = rng() * w, ww = rint(rng, 24, 69), hh = rint(rng, 36, 132);
+      const col = night ? (rng() < .5 ? '#161a30' : '#1c1c34') : (rng() < .5 ? '#7a86a0' : '#8a94ac');
+      box(g, x, h - hh, ww, hh, col);
+      if (night) for (let k = 0; k < 18; k++)
+        if (rng() < .5) box(g, x + 3 + rint(rng, 0, ww - 7), h - hh + 4 + rint(rng, 0, hh - 12), 3, 3,
+                            pick(rng, ['#ffd870','#a8d8ff','#ffb040']));
+      if (rng() < .18) box(g, x + ww / 2 - 2, h - hh - 18, 3, 18, col);
+    }
+  }
+  return { c, w, h };
+}
+
+/* 按主题现烤一批街景，返回带权重的候选池 */
+function buildScenery(theme, seed) {
+  const rng = makeRng(seed), night = theme.night, pool = [];
+  const add = (sp, wgt, tag) => { sp.tag = tag; for (let i = 0; i < wgt; i++) pool.push(sp); };
+  const m = theme.mix, N = 100;
+  const mk = {
+    tower:   () => bakeTower(rng, night),
+    shop:    () => bakeShop(rng, night),
+    neon:    () => bakeNeon(rng),
+    lamp:    () => null,                                    // 路灯按侧生成，单独处理
+    traffic: () => bakeTraffic(night),
+    pole:    () => bakePole(rng, night),
+    tree:    () => bakeTree(rng),
+    palm:    () => bakePalm(rng),
+    billboard:() => bakeBillboard(rng, night),
+    chimney: () => bakeChimney(rng),
+    tank:    () => bakeTank(rng),
+    crane:   () => bakeCrane(rng),
+    crowd:   () => bakeCrowd(rng),
+    guard:   () => bakeGuard(rng),
+    barrier: () => bakeBarrier(rng),
+    cone:    () => bakeCone(),
+  };
+  for (const k in m) {
+    if (k === 'lamp') continue;
+    const n = Math.max(1, Math.round(m[k] * N / 8));         // 每类烤几个变体
+    for (let i = 0; i < n; i++) { const sp = mk[k](); if (sp) add(sp, Math.round(m[k] * N), k); }
+  }
+  for (const sp of pool) if (!sp.mips) mipify(sp);
+  const lampL = mipify(bakeLamp(-1, night)), lampR = mipify(bakeLamp(1, night));
+  return {
+    pool,
+    lampL, lampR,
+    lampRate: m.lamp || 0,
+    skyline: bakeSkyline(theme, seed ^ 0x9e37),
+    hazards: [['barrier', bakeBarrier(rng)], ['cone', bakeCone()], ['cone', bakeCone()], ['barrier', bakeBarrier(rng)]]
+               .map(([tag, h]) => { h.tag = tag; return mipify(h); }),
+  };
+}
+
+/* ==========================================================================
+   9. 赛道几何
+   ========================================================================== */
+const SEG_LEN = 200, RUMBLE_LEN = 3, ROAD_W = 2000, DRAW_DIST = 560;
+/* 视距是两件事的乘积：几何上画多少段，以及雾在多远处把它糊掉。
+   原来 340 段 = 4.7 秒，但雾在 2.5 秒处就已经不透了 —— 后面那 2 秒白画。
+   段数拉到 560（7.7 秒），同时把雾整体调稀，让"看得清"的那一段真正变长。
+   代价由远处的合并色带补回来（见 drawRun），段数涨了但填充量没涨。 */
+const FOG_SCALE = .72;
+const MERGE_PX = 2.4;                  // 明暗带窄到这个像素数以下就不再交替（见 drawRun）
+const UNITS_PER_KM = 216000;                                  // 12000 u/s = 200 km/h
+
+const Road = {
+  segs: [], length: 0, theme: null, scenery: null, name: '', idx: 0,
+};
+const CURVE = { none:0, easy:2, med:4, hard:6, evil:8 };
+const HILL  = { none:0, low:20, med:42, high:70, huge:100 };
+
+function lastY() { const s = Road.segs; return s.length ? s[s.length - 1].p2.y : 0; }
+function addSegment(curve, y) {
+  const n = Road.segs.length;
+  Road.segs.push({
+    i: n, curve,
+    p1: { y: lastY(), z: n * SEG_LEN, cx:0, cy:0, cz:0, sx:0, sy:0, sw:0, scale:0 },
+    p2: { y,          z: (n + 1) * SEG_LEN, cx:0, cy:0, cz:0, sx:0, sy:0, sw:0, scale:0 },
+    dark: Math.floor(n / RUMBLE_LEN) % 2 === 0,
+    sprites: [], actors: [], tunnel: false, clip: 0,
+  });
+}
+function addRoad(enter, hold, leave, curve, y) {
+  const startY = lastY(), endY = startY + (y || 0) * SEG_LEN;
+  const total = enter + hold + leave;
+  for (let n = 0; n < enter; n++) addSegment(easeIn(0, curve, n / enter),     easeInOut(startY, endY, n / total));
+  for (let n = 0; n < hold;  n++) addSegment(curve,                          easeInOut(startY, endY, (enter + n) / total));
+  for (let n = 0; n < leave; n++) addSegment(easeInOut(curve, 0, n / leave),  easeInOut(startY, endY, (enter + hold + n) / total));
+}
+const ROAD_S = 25, ROAD_M = 50, ROAD_L = 100;
+const straight = n => addRoad(n, n, n, 0, 0);
+const curve    = (n, c, h) => addRoad(n, n, n, c, h || 0);
+const hill     = (n, h) => addRoad(n, n, n, 0, h);
+const sCurve   = n => { addRoad(n, n, n, -CURVE.easy, HILL.none); addRoad(n, n, n, CURVE.med, HILL.med);
+                        addRoad(n, n, n, CURVE.easy, -HILL.low); addRoad(n, n, n, -CURVE.med, HILL.med); };
+const bumps    = () => { for (const h of [3,-1,-3,5,3,-4,3,-1]) addRoad(10, 10, 10, 0, h); };
+/* 跳台：26 段之内拉起来又立刻放平，路面掉得比重力快，人就飞出去了 */
+const ramp     = (h) => { addRoad(12, 6, 8, 0, h == null ? 6 : h); addRoad(8, 8, 14, 0, -(h == null ? 6 : h) * .5); };
+
+/* 五条赛道的路形，各有性格 */
+function buildTrackGeometry(idx, rng) {
+  Road.segs.length = 0;
+  addRoad(30, 30, 30, 0, 0);                                   // 起跑直道
+  const L = ROAD_L, M = ROAD_M, S = ROAD_S;
+  if (idx === 0) {                                             // 市中心：宽缓，认路用
+    straight(L); curve(M, CURVE.med); straight(S); curve(M, -CURVE.med, HILL.low);
+    hill(M, HILL.med); straight(M); ramp(5); curve(L, CURVE.easy, -HILL.low);
+    sCurve(S); straight(M); curve(M, -CURVE.hard); hill(M, -HILL.med);
+    straight(L); curve(M, CURVE.med, HILL.med); sCurve(M); ramp(6); straight(M);
+    curve(L, -CURVE.easy); hill(L, HILL.low); straight(L);
+  } else if (idx === 1) {                                      // 旧城：窄弯连着来
+    curve(S, CURVE.hard); curve(S, -CURVE.hard); straight(S);
+    sCurve(S); curve(M, CURVE.evil, HILL.low); straight(S); ramp(5);
+    curve(S, -CURVE.evil); hill(S, HILL.high); curve(M, CURVE.hard, -HILL.med);
+    sCurve(S); straight(M); curve(S, -CURVE.hard, HILL.med); bumps();
+    curve(M, CURVE.med); sCurve(S); curve(S, -CURVE.evil); straight(M); ramp(7);
+    curve(M, CURVE.hard, -HILL.low); sCurve(S); straight(M);
+    curve(M, -CURVE.med, HILL.low); sCurve(S); bumps(); curve(S, CURVE.evil);
+    straight(M); curve(M, -CURVE.hard); sCurve(S); straight(L);
+  } else if (idx === 2) {                                      // 滨江：长弯大坡，飙速
+    straight(L); curve(L, CURVE.easy, HILL.med); straight(L);
+    curve(L, -CURVE.med, -HILL.med); hill(L, HILL.high); ramp(7); straight(M);
+    curve(L, CURVE.med, HILL.low); straight(L); curve(M, -CURVE.hard);
+    hill(L, -HILL.high); straight(L); curve(L, CURVE.easy, HILL.med);
+    sCurve(M); straight(L); curve(L, -CURVE.easy, -HILL.low); straight(L);
+  } else if (idx === 3) {                                      // 工业：颠、急、脏
+    bumps(); curve(S, CURVE.evil); straight(S); curve(S, -CURVE.evil, HILL.med);
+    bumps(); sCurve(S); curve(M, CURVE.hard, -HILL.med); straight(S); ramp(8);
+    curve(S, -CURVE.hard, HILL.high); bumps(); curve(M, CURVE.evil);
+    straight(M); sCurve(S); curve(S, -CURVE.evil, -HILL.med); bumps();
+    curve(M, CURVE.med, HILL.low); straight(M); curve(S, -CURVE.hard); ramp(6);
+    straight(M); curve(M, CURVE.hard, HILL.med); sCurve(S);
+    curve(S, -CURVE.evil); straight(M); bumps(); curve(M, CURVE.med); straight(L);
+  } else {                                                     // 夜战：全都来一遍
+    straight(M); curve(M, CURVE.hard, HILL.med); sCurve(S);
+    curve(L, -CURVE.med, -HILL.med); straight(L); curve(S, CURVE.evil);
+    hill(M, HILL.high); curve(M, -CURVE.hard, -HILL.low); bumps();
+    straight(L); sCurve(S); curve(L, CURVE.med, HILL.med); straight(M);
+    curve(S, -CURVE.evil); hill(M, -HILL.high); ramp(7); curve(M, CURVE.hard); straight(M);
+    sCurve(M); curve(L, -CURVE.easy, HILL.low); straight(L);
+  }
+  addRoad(40, 40, 40, 0, 0);                                   // 冲线直道
+  Road.length = Road.segs.length * SEG_LEN;
+}
+
+/* 隧道：夜战和市中心各挖一段 */
+function addTunnels(idx, rng) {
+  const n = Road.segs.length;
+  const spans = idx === 4 ? [[.30, .38], [.66, .74]] : idx === 0 ? [[.52, .58]] : idx === 3 ? [[.44, .49]] : [];
+  for (const [a, b] of spans)
+    for (let i = Math.floor(n * a); i < Math.floor(n * b); i++) Road.segs[i].tunnel = true;
+}
+
+/* 各类街景离路中心多远：体量越大站得越远，不然一栋楼能糊掉半个屏幕 */
+const BIG = { tower:1, shop:1, chimney:1, tank:1, crane:1 };
+function OFF_BAND(tag, rng) {
+  // 视野收窄之后近处的东西被放大一倍，楼必须往外挪，否则两堵墙把整条街夹死、天也看不见
+  if (BIG[tag])                                   return 2.55 + rng() * 1.55;   // 楼：退到人行道之外
+  if (tag === 'tree' || tag === 'palm')           return 1.70 + rng() * .70;
+  if (tag === 'billboard' || tag === 'neon')      return 1.75 + rng() * .85;
+  if (tag === 'pole' || tag === 'traffic')        return 1.32 + rng() * .26;
+  return 1.12 + rng() * .20;                                                    // 人群、护栏、锥筒
+}
+
+/* 沿路撒街景与路障 */
+function decorate(idx, theme, sc, rng) {
+  const segs = Road.segs, n = segs.length;
+  for (let i = 40; i < n - 60; i++) {
+    const s = segs[i];
+    if (s.tunnel) continue;
+    // 路灯：等间距，交替两侧
+    if (sc.lampRate > 0 && i % 34 === 0) {
+      const side = (i / 34) % 2 === 0 ? -1 : 1;
+      s.sprites.push({ sp: side < 0 ? sc.lampL : sc.lampR, off: side * 1.32, tall: true });
+    }
+    // 近景：按体量分档站位 —— 楼退到人行道外面去，贴路肩的只能是小东西
+    if (rng() < .34) {
+      const sp = pick(rng, sc.pool);
+      const side = rng() < .5 ? -1 : 1;
+      s.sprites.push({ sp, off: side * OFF_BAND(sp.tag, rng) });
+    }
+    // 远景：楼群往纵深里铺，撑起街道两侧的墙
+    if (rng() < .20) {
+      const sp = pick(rng, sc.pool);
+      if (BIG[sp.tag]) s.sprites.push({ sp, off: (rng() < .5 ? -1 : 1) * (4.2 + rng() * 5.4) });
+    }
+    // 路面障碍：在车道内，撞上就摔
+    if (i > 120 && rng() < theme.hazard * .06) {
+      const sp = pick(rng, sc.hazards);
+      s.sprites.push({ sp, off: (rng() * 1.5 - .75), hazard: true });
+    }
+  }
+}
+
+function buildTrack(idx) {
+  const theme = THEMES[['city','old','river','indu','night'][idx]];
+  const seed = 0x5eed + idx * 7717;
+  const rng = makeRng(seed);
+  Road.idx = idx; Road.theme = theme; Road.name = theme.name;
+  buildTrackGeometry(idx, rng);
+  addTunnels(idx, rng);
+  Road.scenery = buildScenery(theme, seed);
+  decorate(idx, theme, Road.scenery, rng);
+}
+
+/* 查段 / 求路面高度 */
+function segAt(z) {
+  const s = Road.segs;
+  return s[Math.floor(((z % Road.length) + Road.length) % Road.length / SEG_LEN) % s.length];
+}
+function roadY(seg, z) {
+  const p = (z - seg.p1.z) / SEG_LEN;
+  return lerp(seg.p1.y, seg.p2.y, clamp(p, 0, 1));
+}
+/* ==========================================================================
+   10. 雾色查表：远处的路面直接查预混好的颜色，不做逐帧字符串解析
+   ========================================================================== */
+const FOG_STEPS = 32;
+function hex2rgb(h) {
+  h = h.replace('#', '');
+  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  const v = parseInt(h.slice(0, 6), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+function mixHex(a, b, t) {
+  const A = hex2rgb(a), B = hex2rgb(b);
+  const r = Math.round(lerp(A[0], B[0], t)), g = Math.round(lerp(A[1], B[1], t)), bl = Math.round(lerp(A[2], B[2], t));
+  // 回吐十六进制而不是 rgb()：混出来的颜色还要再喂给 hex2rgb 混第二轮（中间色带 → 雾）
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
+}
+function fogRamp(col, fogCol) {
+  const out = new Array(FOG_STEPS);
+  for (let i = 0; i < FOG_STEPS; i++) out[i] = mixHex(col, fogCol, i / (FOG_STEPS - 1));
+  return out;
+}
+const SKY_BANDS = 16;
+function prepFog() {
+  const t = Road.theme, f = t.fog;
+  Road.sky = [];
+  for (let i = 0; i < SKY_BANDS; i++) Road.sky[i] = mixHex(t.sky[0], t.sky[1], i / (SKY_BANDS - 1));
+  // 第 3 档 = 明暗带的中间色。远处一条色带不到两个像素时，明暗交替就不再是花纹
+  // 而是噪声：高速下每秒二十几条带子扫过去，整条路看着在抖。那里换成中间色。
+  const mid = p => mixHex(p[0], p[1], .5);
+  Road.LUT = {
+    off:  [fogRamp(t.off[0], f),   fogRamp(t.off[1], f),   fogRamp(mid(t.off), f)],
+    rum:  [fogRamp(t.rumble[0], f),fogRamp(t.rumble[1], f),fogRamp(mid(t.rumble), f)],
+    road: [fogRamp(t.road[0], f),  fogRamp(t.road[1], f),  fogRamp(mid(t.road), f)],
+    lane: fogRamp(t.lane, f),
+    tun:  fogRamp(t.night ? '#0a0a12' : '#1a1a22', f),
+    tunW: fogRamp(t.night ? '#22222c' : '#3a3a46', f),
+  };
+  Road.skyGrad = null;
+}
+
+/* ==========================================================================
+   11. 相机与投影
+   ========================================================================== */
+/* 视野收窄 = 远处一切放大，而且玩家自己的大小和路面宽度完全不变 ——
+   因为 PLAYER_Z 正比于 camDepth，两处的 camDepth 约掉了。
+   100° → 76° 白得 1.53 倍，零填充开销。代价是路面收敛变慢，前进的速度感略降。 */
+const FOV = 76;
+const camDepth = 1 / Math.tan((FOV / 2) * PI / 180);
+const CAM_H = 1250;
+const PLAYER_Z = CAM_H * camDepth * 1.20;   // 比标准值再退一点，车整个露出来
+
+const Cam = { x: 0, z: 0, y: 0, shake: 0, shakeT: 0, shakeP: 0, roll: 0, dip: 0, look: 0 };
+
+function project(p, camX, camY, camZ) {
+  p.cx = -camX;                 // 路面中心线恒在世界 x=0，弯道由 camX 累加体现
+  p.cy = p.y - camY;
+  p.cz = (p.z - camZ) || .0001;
+  p.scale = camDepth / p.cz;
+  // Cam.look 是「往弯里转头」：跟深度无关的整体平移，所以远近一起挪，弯道不会被掰直
+  p.sx = (W / 2) + (p.scale * p.cx * W / 2) - Cam.look * W;
+  p.sy = (H / 2) - (p.scale * p.cy * H / 2) + Cam.dip;
+  p.sw = (p.scale * ROAD_W * W / 2);
+}
+
+/* ==========================================================================
+   12. 渲染
+   ========================================================================== */
+let horizonY = H * .5;
+
+function renderSky(theme, baseSeg, playerY) {
+  // 天空：分档色带，不用连续渐变，保住复古味
+  const hy = clamp(horizonY, 0, H);
+  // 相机转头了，天上的东西也得跟着转 —— 它们在无穷远，平移量就是整幅画面的平移量
+  const pan = Cam.look * W;
+  for (let i = 0; i < SKY_BANDS; i++) {
+    const y0 = Math.round(i * hy / SKY_BANDS), y1 = Math.round((i + 1) * hy / SKY_BANDS);
+    ctx.fillStyle = Road.sky[i];
+    ctx.fillRect(0, y0, W, Math.max(1, y1 - y0));
+  }
+  if (theme.sun) {
+    const sx = W * .5 - Road.bgX * .35 - pan, sy = hy - 26;
+    const px2 = ((sx % (W * 2)) + W * 2) % (W * 2) - W * .5;
+    ellipse(ctx, px2, sy, 15 * PX, 15 * PX, theme.sun);
+    ellipse(ctx, px2, sy, 22 * PX, 22 * PX, 'rgba(255,224,150,.16)');
+  }
+  if (theme.night) {                               // 星星
+    const r = Road.starRng;
+    for (let i = 0; i < 46; i++) {
+      const x = (r[i * 2] * W * 1.4 - Road.bgX * .12 - pan) % W;
+      ctx.fillStyle = i % 5 ? '#c8c8e0' : '#f4f0e4';
+      ctx.fillRect(((x % W) + W) % W | 0, r[i * 2 + 1] * hy * .8 | 0, PX, PX);
+    }
+  }
+  // 天际线
+  const sk = Road.scenery.skyline;
+  const skH = Math.round(sk.h * (H / 360) * .9);
+  const skY = Math.round(hy - skH + 2);
+  let ox = ((-Road.bgX * .5 - pan) % sk.w + sk.w) % sk.w;
+  for (let x = -ox; x < W; x += sk.w) ctx.drawImage(sk.c, 0, 0, sk.w, sk.h, x | 0, skY, sk.w, skH);
+  // 地平线雾带
+  const g = ctx.createLinearGradient(0, skY, 0, hy + 10);
+  g.addColorStop(0, theme.fog + '00'); g.addColorStop(.65, theme.fog + 'cc'); g.addColorStop(1, theme.fog);
+  ctx.fillStyle = g; ctx.fillRect(0, skY, W, hy + 10 - skY);
+}
+
+/* 路面：把连续可见、同一色带的若干段并成一段「路带」，一次路径填出来。
+   逐行 fillRect 的老做法在 1080p 上要一千多次调用，而且边缘只能是硬台阶；
+   路径填充带抗锯齿，弯道边沿是光的，调用数还少一个数量级。 */
+function edgeAt(seg, y) {
+  const t = clamp((y - seg.p2.sy) / ((seg.p1.sy - seg.p2.sy) || 1), 0, 1);
+  return { y, cx: lerp(seg.p2.sx, seg.p1.sx, t), w: lerp(seg.p2.sw, seg.p1.sw, t) };
+}
+/* 沿路带的两条边描一圈：off 是相对半宽的偏移，a→b 之间那条带子 */
+function ribbon(pts, oa, ob) {
+  ctx.beginPath();
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], x = p.cx + p.w * oa;
+    if (i === 0) ctx.moveTo(x, p.y); else ctx.lineTo(x, p.y);
+  }
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    ctx.lineTo(p.cx + p.w * ob, p.y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+function drawRun(r) {
+  const L = Road.LUT, d = r.band, f = r.fogI, pts = r.pts;
+  if (pts.length < 2) return;
+  const yBot = pts[0].y, yTop = pts[pts.length - 1].y;
+  // 路肩（或隧道地面）：整条横带。相邻两段共用同一个边界值，两端都取整就能严丝合缝 ——
+  // 之前往下多画 1px 想补缝，结果把远处那段的颜色刷进了近处那段，反而出来一条横线
+  const y0 = Math.round(yTop), y1 = Math.round(yBot);
+  ctx.fillStyle = r.tun ? L.tun[f] : L.off[d][f];
+  if (y1 > y0) ctx.fillRect(0, y0, W, y1 - y0);
+  if (r.tun) { ctx.fillStyle = L.tunW[f]; ribbon(pts, -1.5, -1.16); ribbon(pts, 1.16, 1.5); }
+  ctx.fillStyle = L.rum[d][f];
+  ribbon(pts, -1.16, -1); ribbon(pts, 1, 1.16);      // 路缘石
+  ctx.fillStyle = L.road[d][f];
+  ribbon(pts, -1, 1);
+  // 虚线车道只画在浅色带上；到了合并区，虚线本来就分辨不出来了，改成连续两条细线 ——
+  // 远处那两条收敛线是弯道方向最直接的提示，比闪烁的虚线管用
+  if (d === 1 || d === 2) {
+    ctx.fillStyle = L.lane[f];
+    ribbon(pts, -.355, -.311); ribbon(pts, .311, .355);
+  }
+}
+
+/* 贴地的一枚扁椭圆，让车不像飘着 */
+function groundShadow(cx, y, w) {
+  if (w < 1.2) return;
+  ctx.fillStyle = 'rgba(0,0,0,.34)';
+  ctx.beginPath();
+  ctx.ellipse(cx, y, w * .5, Math.max(.6, w * .15), 0, 0, TAU);
+  ctx.fill();
+}
+
+function drawSpriteAt(sp, cx, bottomY, destW, clipY, alpha) {
+  const destH = destW * (sp.h / sp.w);
+  if (destW < .7 || destH < .7) return;
+  // 挑一档「还不小于目标尺寸」里最小的缩图：近处用原图保持锐利，远处用平均过的
+  let lv = sp.mips ? sp.mips[0] : sp;
+  if (sp.mips) for (let i = 1; i < sp.mips.length; i++) {
+    if (sp.mips[i].w >= destW) lv = sp.mips[i]; else break;
+  }
+  const dx = Math.round(cx - destW / 2), dy = Math.round(bottomY - destH);
+  let sh = lv.h, dh = destH;
+  if (clipY != null) {
+    const over = (dy + destH) - clipY;
+    if (over > 0) { if (over >= destH) return; sh = lv.h * (1 - over / destH); dh = destH - over; }
+  }
+  if (alpha != null && alpha < 1) { ctx.globalAlpha = alpha; }
+  ctx.drawImage(lv.c, 0, 0, lv.w, Math.max(1, sh), dx, dy, Math.max(1, Math.round(destW)), Math.max(1, Math.round(dh)));
+  if (alpha != null && alpha < 1) ctx.globalAlpha = 1;
+}
+
+/* 平滑下限：destW 远大于 m 时几乎不动，趋近 0 时停在 m。
+   透视因此略有偏差，但换来的是「远处的车不会小成一个点」 */
+function softFloor(d, m) { return m * Math.pow(1 + Math.pow(d / m, 4), .25); }
+const MIN_CAR_W = 7;
+
+/* 快贴到镜头上的东西淡出去：不淡的话，一个锥筒擦身而过时会瞬间涨满整屏 */
+const NEAR_FADE = PLAYER_Z * .85, NEAR_GONE = PLAYER_Z * .30;
+function nearAlpha(cz) {
+  if (cz >= NEAR_FADE) return 1;
+  if (cz <= NEAR_GONE) return 0;
+  return (cz - NEAR_GONE) / (NEAR_FADE - NEAR_GONE);
+}
+/* 远处的东西按雾量降透明度。背景本来就是雾色，压透明度等价于混雾，还不用改颜色。
+   指数 1.7 让它比路面晚一步糊掉 —— 车是要看的，路只是背景。 */
+function fogAlpha(seg) {
+  const f = seg.fogI / (FOG_STEPS - 1);
+  return 1 - Math.pow(f, 1.7) * .82;
+}
+function renderScenery(seg, item) {
+  const p = seg.p1;
+  if (p.scale <= 0) return;
+  const a = nearAlpha(p.cz) * fogAlpha(seg);
+  if (a <= .02) return;
+  let destW = p.scale * (item.sp.ww || 1200) * W / 2;
+  if (item.hazard) destW = softFloor(destW, MIN_CAR_W * PX);
+  const cx = p.sx + p.scale * item.off * ROAD_W * W / 2;
+  if (cx < -destW || cx > W + destW) return;
+  drawSpriteAt(item.sp, cx, p.sy + 1, destW, seg.clip, a);
+}
+
+/* 影子：贴地的一枚扁椭圆，让车不像飘着 */
+function groundShadow(cx, y, w) {
+  if (w < 2) return;
+  ctx.fillStyle = 'rgba(0,0,0,.34)';
+  const h = Math.max(1, w * .13);
+  for (let i = 0; i < h; i++) {
+    const t = (i + .5) / h, k = Math.sqrt(Math.max(0, 1 - (t * 2 - 1) * (t * 2 - 1)));
+    ctx.fillRect(Math.round(cx - w * .5 * k), Math.round(y - h / 2 + i), Math.max(1, Math.round(w * k)), 1);
+  }
+}
+
+/* 演员全部矢量现画：把坐标系挪到它的落地点、按目标宽度缩放，剩下的交给绘制函数。
+   描边粗细要反向除掉缩放，否则近处的车一圈黑边、远处的车没有边 */
+function renderActor(seg, a) {
+  const p1 = seg.p1, p2 = seg.p2;
+  const t = clamp((a.z - p1.z) / SEG_LEN, 0, 1);
+  const scale = lerp(p1.scale, p2.scale, t);
+  if (scale <= 0) return;
+  const fade = nearAlpha(lerp(p1.cz, p2.cz, t)) * fogAlpha(seg);
+  if (fade <= .02) return;
+  const sx = lerp(p1.sx, p2.sx, t), sy = lerp(p1.sy, p2.sy, t);
+  const ww = a.worldW ? a.worldW() : (a.ww || RIDER_WW);
+  let destW = scale * ww * W / 2;
+  if (a.kind === 'car') destW = softFloor(destW, MIN_CAR_W * PX);
+  if (destW < .8) return;
+  const cx = sx + scale * a.x * ROAD_W * W / 2;
+  if (cx < -destW * 1.4 || cx > W + destW * 1.4) return;
+  const air = (a.air || 0) * scale * H * .5;
+  const bottomY = sy + air * 0 - air + (a.bob || 0) * PX + 1;
+  groundShadow(cx, sy + 1, destW * .74);
+
+  const k = destW / 100;
+  const ink = destW < 16 * PX ? 0 : 1.35 * PX / k;    // 小到一定程度就不描边了
+  ctx.save();
+  if (seg.clip < H - .5) { ctx.beginPath(); ctx.rect(0, 0, W, seg.clip); ctx.clip(); }
+  const al = Math.min(fade, a.alpha == null ? 1 : a.alpha);
+  if (al < 1) ctx.globalAlpha = al;
+  ctx.translate(cx, bottomY);
+  ctx.scale(k, k);
+  a.drawVec(ctx, ink);
+  ctx.restore();
+  a._sx = cx; a._sy = sy - air; a._sw = destW;         // 供打击特效定位
+}
+
+let frameCount = 0;
+
+function render() {
+  const theme = Road.theme, segs = Road.segs, N = segs.length;
+  const P = Player;
+
+  // 相机
+  const camZ = P.z - PLAYER_Z;
+  const baseSeg = segAt(camZ);
+  const basePct = ((camZ % SEG_LEN) + SEG_LEN) % SEG_LEN / SEG_LEN;
+  const pSeg = segAt(P.z);
+  const camY = roadY(pSeg, P.z) + CAM_H;
+
+  horizonY = H * .52;
+
+  ctx.save();
+  if (Cam.shakeT > 0) {
+    const s = Cam.shake * Cam.shakeT * Cam.shakeT * PX, p = Cam.shakeP;
+    ctx.translate(Math.sin(p * 37) * s, Math.sin(p * 23.5 + 1.1) * s);
+  }
+
+  renderSky(theme, baseSeg, camY);
+
+  // ---- 路面：由近及远，带遮挡裁剪；连续同色带并成一条路带一次画完 ----
+  let maxy = H, x = 0, dx = -(baseSeg.curve * basePct);
+  const camXw = Cam.x * ROAD_W;
+  let run = null;
+  const flushRun = () => { if (run) { if (run.pend) run.pts.push(run.pend); drawRun(run); run = null; } };
+  for (let n = 0; n < DRAW_DIST; n++) {
+    const seg = segs[(baseSeg.i + n) % N];
+    // 绕回赛道起点时，把相机 z 往前挪一整圈，几何本身不动
+    const cz = camZ - (seg.i < baseSeg.i ? Road.length : 0);
+    project(seg.p1, camXw - x,      camY, cz);
+    project(seg.p2, camXw - x - dx, camY, cz);
+    x += dx; dx += seg.curve;
+    const q = n / DRAW_DIST;
+    seg.fogI = Math.min(FOG_STEPS - 1, Math.round((1 - Math.exp(-theme.fogN * FOG_SCALE * q * q)) * (FOG_STEPS - 1)));
+    seg.clip = maxy;
+    if (seg.p1.cz <= camDepth || seg.p2.sy >= seg.p1.sy || seg.p2.sy >= maxy) { flushRun(); continue; }
+
+    // 一条明暗带占 RUMBLE_LEN 段。它在屏幕上不到 MERGE_PX 高时，交替就只剩闪烁，
+    // 这段之后一律走中间色（band=2）；顺带把远处几百段并进同一条路径里。
+    const band = (seg.p1.sy - seg.p2.sy) * RUMBLE_LEN < MERGE_PX * PX ? 2 : (seg.dark ? 0 : 1);
+    if (!run || run.band !== band || run.tun !== seg.tunnel || run.fogI !== seg.fogI) {
+      flushRun();
+      run = { band, tun: seg.tunnel, fogI: seg.fogI, pend: null,
+              pts: [edgeAt(seg, Math.min(seg.p1.sy, maxy))] };
+    }
+    // 远端一段只推进零点几个像素，逐段落点纯属浪费。攒着，等够半个像素（或者横向
+    // 跑开了，弯道上不能拿直线糊弄）再落一个点；剩下的尾巴在 flush 时补上。
+    const pt = { y: seg.p2.sy, cx: seg.p2.sx, w: seg.p2.sw }, tail = run.pts[run.pts.length - 1];
+    if (tail.y - pt.y > .5 || Math.abs(pt.cx - tail.cx) > 2) { run.pts.push(pt); run.pend = null; }
+    else run.pend = pt;
+
+    maxy = seg.p2.sy;
+    if (maxy < 0) { flushRun(); for (let k = n + 1; k < DRAW_DIST; k++) segs[(baseSeg.i + k) % N].clip = 0; break; }
+  }
+  flushRun();
+
+  // ---- 精灵：由远及近 ----
+  for (let n = DRAW_DIST - 1; n >= 0; n--) {
+    const seg = segs[(baseSeg.i + n) % N];
+    const sl = seg.sprites;
+    for (let i = 0; i < sl.length; i++) renderScenery(seg, sl[i]);
+    const al = seg.actors;
+    for (let i = 0; i < al.length; i++) renderActor(seg, al[i]);
+  }
+
+  renderFx();
+  ctx.restore();
+  renderOverlay();
+  frameCount++;
+}
+
+/* ---------- 打击 / 速度 / 伤害 等画面特效 ---------- */
+const Fx = { hits: [], sparks: [] };
+function addHit(x, y, big) { Fx.hits.push({ x, y, t: 0, big }); }
+function addSpark(x, y, n, col) { for (let i = 0; i < n; i++)
+  Fx.sparks.push({ x, y, vx: (Math.random() - .5) * 90 * PX, vy: (-Math.random() * 70 - 10) * PX, t: 0, col }); }
+
+function renderFx() {
+  for (const h of Fx.hits) {
+    const r = (h.big ? 13 : 8) * PX * (.4 + h.t * 5);
+    const a = clamp(1 - h.t * 5, 0, 1);
+    for (let i = 0; i < (h.big ? 8 : 6); i++) {
+      const ang = i * TAU / (h.big ? 8 : 6) + h.t * 4;
+      ctx.fillStyle = 'rgba(255,' + (200 + i * 6) + ',80,' + a + ')';
+      ctx.fillRect(h.x + Math.cos(ang) * r, h.y + Math.sin(ang) * r * .6, 2 * PX, 2 * PX);
+    }
+    if (h.t < .05) { ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(h.x - 3 * PX, h.y - 2 * PX, 6 * PX, 4 * PX); }
+  }
+  for (const s of Fx.sparks) {
+    ctx.fillStyle = s.col; ctx.fillRect(s.x, s.y, 1.4 * PX, 1.4 * PX);
+  }
+}
+
+function updateFx(dt) {
+  for (let i = Fx.hits.length - 1; i >= 0; i--) { Fx.hits[i].t += dt; if (Fx.hits[i].t > .22) Fx.hits.splice(i, 1); }
+  for (let i = Fx.sparks.length - 1; i >= 0; i--) {
+    const s = Fx.sparks[i]; s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 260 * PX * dt;
+    if (s.t > .5) Fx.sparks.splice(i, 1);
+  }
+  if (Cam.shakeT > 0) { Cam.shakeT = Math.max(0, Cam.shakeT - dt * 4.6); Cam.shakeP += dt; }
+  // 俯冲量渐变过去。硬切会让每一次轻微离地都甩一下画面
+  const dipT = Player.airTime > .10 ? -6 * PX : 0;
+  Cam.dip = approach(Cam.dip, dipT, 7, dt);
+}
+/* 新的抖动只在比现有残量更强时才接管，否则连续小碰撞会不断把相位重置成满幅 */
+function shake(amt) {
+  const cur = Cam.shake * Cam.shakeT;
+  if (amt <= cur) return;
+  Cam.shake = amt; Cam.shakeT = 1; Cam.shakeP = Math.random() * 10;
+}
+
+/* 速度线 + 伤害暗角 + 闪白 */
+let flash = 0;
+function renderOverlay() {
+  const P = Player, sp = P.speed / P.maxSpeed;
+  if (sp > .55 && Game.state === 'race') {
+    const n = Math.round((sp - .55) * 26);
+    ctx.fillStyle = 'rgba(255,255,255,' + (.08 + (sp - .55) * .3) + ')';
+    for (let i = 0; i < n; i++) {
+      const a = (i * 2.39996 + frameCount * .35) % TAU;
+      const r = H * (.30 + ((i * 7 + frameCount * 3) % 60) / 60 * .7);
+      const x = W / 2 + Math.cos(a) * r * 1.5, y = horizonY + Math.sin(a) * r;
+      const len = (3 + (sp - .55) * 22) * PX;
+      ctx.fillRect(x, y, Math.cos(a) * len, 1.2 * PX);
+    }
+  }
+  const hp = P.hp / P.maxHp;
+  if (hp < .45 && Game.state !== 'pre') {
+    const a = (1 - hp / .45) * (.22 + .12 * Math.sin(frameCount * .18));
+    const g = ctx.createRadialGradient(W / 2, H / 2, H * .28, W / 2, H / 2, H * .78);
+    g.addColorStop(0, 'rgba(180,20,10,0)'); g.addColorStop(1, 'rgba(180,20,10,' + a.toFixed(3) + ')');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  if (Road.theme && Road.theme.night) {
+    const g = ctx.createRadialGradient(W / 2, H * .62, H * .3, W / 2, H * .62, H * .95);
+    g.addColorStop(0, 'rgba(0,0,10,0)'); g.addColorStop(1, 'rgba(0,0,12,.5)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  if (flash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + flash.toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
+}
+/* ==========================================================================
+   13. 车与车手
+   ========================================================================== */
+const BIKES = [
+  { nm:'街车 250',   sub:'STREET 250',  price:0,     top:9600,  acc:.82, hand:1.06, arm:1.0 },
+  { nm:'仿赛 600',   sub:'RACER 600',   price:1400,  top:11200, acc:1.00, hand:.96, arm:1.0 },
+  { nm:'公升 1000',  sub:'LITRE 1000',  price:4200,  top:12900, acc:1.18, hand:.87, arm:1.08 },
+  { nm:'改装怪物',   sub:'THE BEAST',   price:9000,  top:14600, acc:1.42, hand:.79, arm:1.18 },
+];
+const WEPS = [
+  { nm:'徒手',  reach:.30, dmg:14, cd:.32, snd:'kick' },
+  { nm:'木棍',  reach:.44, dmg:24, cd:.42, snd:'club' },
+  { nm:'铁链',  reach:.56, dmg:32, cd:.50, snd:'chain' },
+];
+
+function makeRider(pal) {
+  return {
+    kind:'rider', pal,
+    z:0, x:0, speed:0, maxSpeed:11000, acc:1, hand:1, arm:1,
+    hp:100, maxHp:100, wep:0, wepUses:0,
+    lean:0, steer:0, atkT:0, atkSide:0, atkCd:0, stun:0, hitFlash:0,
+    y:0, vy:0, airTime:0, lastGroundY:0, air:0, bob:0,
+    state:'ride', downT:0, runT:0, runFrame:0, alpha:1,
+    rank:1, done:false, doneT:0, brake:false,
+    worldW() { return this.state === 'down' ? 470
+             : (this.state === 'run' || this.state === 'remount') ? 190 : RIDER_WW; },
+    drawVec(g, ink) {
+      if (this.state === 'down') { drawTumble(g, this.pal, (this.downT * 1.6) % 1, ink); return; }
+      if (this.state === 'run')  { drawRunner(g, this.pal, 1 + (Math.floor(this.runFrame) % 2), ink); return; }
+      if (this.state === 'remount') { drawRunner(g, this.pal, 0, ink); return; }
+      drawRider(g, this.pal, {
+        tilt: this.lean, wep: this.wep, brake: this.brake,
+        atk: this.atkT > 0 ? this.atkSide : 0,
+        hit: this.hitFlash > 0 && ((frameCount >> 1) & 1) === 0,
+        cop: this.isCop, flash: (frameCount % 16) < 8,
+      }, ink);
+    },
+  };
+}
+
+const Player = makeRider(PLAYER_PAL);
+Player.isPlayer = true;
+const Rivals = [];
+let Cop = null;
+const Traffic = [];
+const Pickups = [];
+let PlayerWreck = null;
+
+/* ==========================================================================
+   14. 玩家物理
+   ========================================================================== */
+const GRAV = 13000;            // 调到「缓坡贴地、急坡起飞」的临界之下
+const OFFROAD_MAX = .58;       // 冲出路面后的最高速度比例
+
+function riderGravity(r, dt) {
+  const seg = segAt(r.z), gy = roadY(seg, r.z);
+  r.vy -= GRAV * (r.airTime > .32 ? 3.4 : 1) * dt;   // 起跳干脆，滞空不拖沓
+  r.y += r.vy * dt;
+  if (r.y <= gy) {
+    if (r.airTime > .14) onLand(r);
+    r.y = gy; r.vy = (gy - r.lastGroundY) / Math.max(dt, .001); r.airTime = 0;
+  } else r.airTime += dt;
+  r.lastGroundY = gy;
+  r.air = (r.y - gy) / 900;                      // 给渲染用的抬升量
+  return seg;
+}
+function onLand(r) {
+  // 起伏路上一秒能弹好几次，小跳给小反馈，否则画面一路在震
+  if (r !== Player) return;
+  const hard = clamp((r.airTime - .14) / .45, 0, 1);
+  shake(1.1 + hard * 3.2);
+  if (hard > .12) sfx('land');
+  r.speed *= 1 - .05 * hard;
+}
+
+/* 相机往弯里转一点。
+   直视正前方时，急弯的路面横着滑出屏幕的位置只有 44 段（满速 0.6 秒）—— 对向车
+   等于是从画面外冒出来的，而横穿整条路要 0.9~1.2 秒，怎么打都来不及。
+   取前方一段路的平均曲率，把整幅画面朝弯里平移。平移量跟深度无关，所以是"转头
+   看"而不是"把弯掰直"：路还是那么弯，只是弯心留在了画面里。
+   代价是车会往弯外滑一点，LOOK_MAX 就是这个滑动的上限（屏宽的百分比）。 */
+const LOOK_AHEAD = 60, LOOK_GAIN = .045, LOOK_MAX = .22;
+// 相机横跟的速率，和它允许的横滑上限（路宽的比例）。
+// CAM_SLIDE 一头是画面上车能左右滑多远，一头是反打要几帧才见效（相机得先滑过
+// 这段距离才反向）：.05 两帧但偏钉，.08 三帧、滑感在，再大就重新有延迟感了。
+const CAM_RATE = 11, CAM_SLIDE = .08;
+function updateLook(dt) {
+  const segs = Road.segs, base = segAt(Player.z).i;
+  let c = 0;
+  for (let k = 0; k < LOOK_AHEAD; k++) c += segs[(base + k) % segs.length].curve;
+  const want = clamp(c / LOOK_AHEAD * LOOK_GAIN, -LOOK_MAX, LOOK_MAX);
+  // 慢一点跟，免得连续 S 弯里画面左右甩
+  Cam.look = approach(Cam.look, want, 3.2, dt);
+}
+
+function updatePlayer(dt) {
+  const P = Player;
+  const seg = riderGravity(P, dt);
+  const sp = P.speed / P.maxSpeed;
+  P.vx = 0;
+
+  if (P.state === 'ride') {
+    // 油门 / 刹车
+    if (Input.gas) P.speed += P.acc * 5200 * dt * (1 - sp * .55);
+    else P.speed -= 2600 * dt;
+    if (Input.brake) { P.speed -= 9000 * dt; P.brake = true; } else P.brake = false;
+    if (P.stun > 0) { P.speed -= 3000 * dt; P.stun -= dt; }
+
+    /* 转向：速度越高越迟钝，空中不能转。
+       高速端原来太钝：满速横穿整条路要 1.18 秒，而急弯里对向车最快 0.5 秒就到
+       跟前 —— 看见了也躲不掉。放缓了一次仍嫌肉，这轮再动两处：
+       一是高速端几乎不再衰减（1.85 - sp*.12），二是把手感的死区——按下到
+       打满舵的那段斜坡——从 14 提到 26，反打（推反方向）时 60，基本是瞬间回中。
+       满速一次变道 0.42s → 0.28s，横穿整条路 0.88s → 0.61s。 */
+    const grip = P.airTime > 0 ? .12 : 1;
+    const steerPow = P.hand * (1.85 - sp * .12) * grip;
+    const dir = (Input.right ? 1 : 0) - (Input.left ? 1 : 0);
+    // 反打远快于同向起舵：躲车基本都是"正往左走，突然要往右"，慢在这一下最难受
+    P.steer = approach(P.steer, dir, dir * P.steer < 0 ? 60 : 26, dt);
+    // vx 单独存一份给相机做前馈（见 update() 末尾）。只算"我想往哪打"的那部分，
+    // 离心力不算 —— 弯里镜头该往弯里转（Cam.look 的事），不该被甩出去的分量带跑。
+    P.vx = P.steer * steerPow * (.40 + sp * .88);
+    P.x += P.vx * dt;
+
+    // 离心力：过弯被甩向外侧
+    P.x -= seg.curve * .00060 * sp * sp * dt * 60;
+
+    // 出界：草地/泥地拖速度
+    if (Math.abs(P.x) > 1) {
+      const over = Math.abs(P.x) - 1;
+      P.speed = Math.min(P.speed, P.maxSpeed * OFFROAD_MAX);
+      P.speed -= over * 9000 * dt;
+      if (P.speed > 2000 && frameCount % 10 === 0) { shake(1.6); }
+      if (Math.abs(P.x) > 1.9) { P.x = sign(P.x) * 1.9; wipeout(P, '撞出赛道'); }
+    }
+    P.lean = approach(P.lean, clamp(P.steer * .8 + seg.curve * .09 * sp, -1, 1), 13, dt);
+
+  } else if (P.state === 'down') {
+    P.downT += dt;
+    P.speed = approach(P.speed, 0, 3.4, dt);
+    if (P.downT > 1.15) { P.state = 'run'; P.runFrame = 0; P.runT = 0; }
+
+  } else if (P.state === 'run') {
+    // 徒步追车：车在前面停着，跑过去骑上。
+    // 人会自己朝车跑（谁会朝反方向找自己的车），按键只是微调左右躲来车。
+    P.speed = 1500; P.runT += dt;
+    const dir = (Input.right ? 1 : 0) - (Input.left ? 1 : 0);
+    if (PlayerWreck) P.x = approach(P.x, PlayerWreck.x, 2.2, dt);
+    P.x = clamp(P.x + dir * .7 * dt, -1.4, 1.4);
+    P.runFrame += dt * 9;
+    if (PlayerWreck) {
+      const dz = PlayerWreck.z - P.z, dx = PlayerWreck.x - P.x;
+      // 窗口放宽，再加一道保险：跑过头或跑太久都直接算够着了，
+      // 不然一旦越过车就再也回不去，这一场就废在路上了
+      if ((dz < 800 && dz > -1600 && Math.abs(dx) < .4) || P.runT > 6) {
+        P.state = 'remount'; P.remT = 0; sfx('start');
+      }
+    } else { P.state = 'remount'; P.remT = 0; }
+  } else if (P.state === 'remount') {
+    P.remT += dt; P.speed = 1500;
+    if (P.remT > .55) {
+      P.state = 'ride'; P.hp = Math.max(P.hp, P.maxHp * .45);
+      if (PlayerWreck) { P.x = PlayerWreck.x; P.z = PlayerWreck.z; PlayerWreck = null; }
+      P.speed = 2600; P.stun = 0;
+    }
+  }
+
+  P.speed = clamp(P.speed, 0, P.maxSpeed);
+  P.z += P.speed * dt;
+  P.bob = P.state === 'ride' ? Math.sin(frameCount * .9) * (sp > .3 ? 1 : 0) : 0;
+  if (P.atkT > 0) P.atkT -= dt;
+  if (P.atkCd > 0) P.atkCd -= dt;
+  if (P.hitFlash > 0) P.hitFlash -= dt;
+}
+
+/* ==========================================================================
+   15. 摔车 / 被捕
+   ========================================================================== */
+function wipeout(r, why) {
+  if (r.state !== 'ride') return;
+  r.state = 'down'; r.downT = 0; r.hp = 0; r.atkT = 0;
+  if (r === Player) {
+    sfx('crash'); shake(9); flash = .55;
+    // 车往前滑一段停下
+    PlayerWreck = { kind:'wreck', z: r.z + 2400 + r.speed * .22, x: clamp(r.x * .7, -.9, .9),
+                    ww: 640, air:0, bob:0, drawVec: (g, ink) => drawWreck(g, PLAYER_PAL, ink) };
+    Game.crashes++;
+    toast(why || '摔了！', true);
+  }
+  if (r.wep > 0) { dropWeapon(r); r.wep = 0; if (r === Player) updateWepHud(); }
+}
+function dropWeapon(r) {
+  Pickups.push({ kind:'pick', z: r.z - 300, x: clamp(r.x, -.9, .9), wep: r.wep, t:0, ww: 300,
+                 air:0, bob:0, drawVec(g, ink) { drawPickup(g, this.wep, ink); } });
+}
+
+/* ==========================================================================
+   16. 踹人
+   ========================================================================== */
+function allRiders() {
+  const a = [Player];
+  for (const r of Rivals) a.push(r);
+  if (Cop) a.push(Cop);
+  return a;
+}
+function doAttack(att, side) {
+  if (att.state !== 'ride' || att.atkCd > 0 || att.stun > 0) return;
+  const w = WEPS[att.wep];
+  att.atkT = .26; att.atkSide = side; att.atkCd = w.cd;
+  if (att === Player) sfx(w.snd);
+  let landed = false;
+  for (const o of allRiders()) {
+    if (o === att || o.state !== 'ride') continue;
+    const dz = o.z - att.z;
+    if (dz > 900 || dz < -700) continue;
+    const dx = o.x - att.x;
+    if (sign(dx) !== side || Math.abs(dx) > w.reach * att.arm) continue;
+    hitRider(o, w.dmg * (att === Player ? 1 : .82), side, att);
+    landed = true;
+  }
+  if (!landed && att === Player) sfx('whiff');
+}
+function hitRider(o, dmg, side, att) {
+  o.hp -= dmg; o.stun = .34; o.hitFlash = .28;
+  o.x += side * .17; o.speed *= .93;
+  const px = o._sx != null ? o._sx : W / 2, py = o._sy != null ? o._sy - 12 : H * .6;
+  addHit(px, py, dmg > 14);
+  addSpark(px, py, 5, '#ffe090');
+  if (att === Player) {
+    shake(dmg > 14 ? 6 : 4); freeze(dmg > 14 ? .085 : .055); sfx('hit');
+    Game.hits++;
+    if (o.hp <= 0) { toast('干掉 ' + o.pal.nm + '！'); Game.takedowns++; }
+  }
+  if (o === Player) {
+    shake(6); freeze(.07); sfx('hurt'); flash = .22;
+    if (att && att.isCop) toast('警棍！', true);
+  }
+  if (o.hp <= 0) wipeout(o, '被打下车');
+  if (o === Player) updateHpHud();
+}
+let freezeT = 0;
+function freeze(t) { freezeT = Math.max(freezeT, t); }
+
+/* ==========================================================================
+   17. 对手 AI
+   ========================================================================== */
+function spawnRivals(trackIdx) {
+  Rivals.length = 0;
+  const rng = makeRng(9001 + trackIdx * 31);
+  const diff = trackIdx / 4;
+  for (let i = 0; i < 7; i++) {
+    const r = makeRider(RIDER_PAL[i]);
+    r.maxSpeed = (9100 + diff * 3700) * (.95 + rng() * .11);   // 对齐当场该有的车
+    r.acc = .9 + rng() * .3; r.hand = 1; r.arm = 1;
+    r.maxHp = r.hp = 72 + diff * 46;
+    r.wep = rng() < (.12 + diff * .40) ? (rng() < .5 ? 1 : 2) : 0;
+    r.aggr = .22 + diff * .55 + rng() * .25;       // 主动出手的意愿
+    r.skill = .45 + diff * .4 + rng() * .2;        // 走线与避险能力
+    r.laneT = 0; r.wantX = (rng() * 1.5 - .75);
+    r.z = 800 + i * 420 + rng() * 200;
+    r.x = (i % 2 ? 1 : -1) * (.18 + (i >> 1) * .22);
+    r.speed = 3000;
+    Rivals.push(r);
+  }
+}
+function updateRival(r, dt, i) {
+  const seg = riderGravity(r, dt);
+  if (r.state === 'down') {
+    r.downT += dt; r.speed = approach(r.speed, 0, 3, dt);
+    r.z += r.speed * dt;
+    if (r.downT > 2.6) {                             // 爬起来接着跑
+      r.state = 'ride'; r.hp = r.maxHp * .6; r.speed = 2400; r.x = clamp(r.x, -.8, .8); r.stun = 0;
+    }
+    return;
+  }
+  if (r.stun > 0) r.stun -= dt;
+  if (r.atkT > 0) r.atkT -= dt;
+  if (r.atkCd > 0) r.atkCd -= dt;
+  if (r.hitFlash > 0) r.hitFlash -= dt;
+
+  // 目标速度：橡皮筋 —— 落后的追、领先的收一点，别让比赛变成一条线
+  const dzP = r.z - Player.z;
+  let want = r.maxSpeed;
+  if (dzP < -6000) want *= 1.14;
+  else if (dzP > 9000) want *= .90;
+  if (Math.abs(r.x) > 1) want *= OFFROAD_MAX;
+  r.speed = approach(r.speed, want, 1.1 * r.acc, dt);
+  if (r.stun > 0) r.speed -= 2600 * dt;
+
+  // 走线：定期挑一条车道，顺带躲开车流和路障
+  r.laneT -= dt;
+  if (r.laneT <= 0) { r.laneT = .8 + Math.random() * 1.2; r.wantX = (Math.random() * 1.5 - .75) * r.skill; }
+  let avoid = 0;
+  for (const c of Traffic) {
+    const dz = c.z - r.z, look = 3000 + 6000 * r.skill;
+    if (dz > -900 && dz < look) {
+      const dx = c.x - r.x;
+      if (Math.abs(dx) < .38) avoid -= sign(dx || 1) * (dz < 400 ? 3.2 : (1 - dz / look) * 2.6);
+    }
+  }
+  // 想打玩家：贴过去
+  const near = Math.abs(dzP) < 1400;
+  if (near && r.aggr > .3 && Math.abs(Player.x - r.x) > .12) {
+    r.wantX = lerp(r.wantX, Player.x + sign(r.x - Player.x || 1) * .22, .5);
+  }
+  const tx = clamp(r.wantX + avoid, -.95, .95);
+  const d = clamp((tx - r.x) * 2.4, -1, 1);
+  r.steer = approach(r.steer, d, 9, dt);
+  r.x += r.steer * 1.25 * dt * (.4 + r.speed / r.maxSpeed * .8);
+  r.x -= seg.curve * .00055 * (r.speed / r.maxSpeed) * (r.speed / r.maxSpeed) * dt * 60 * (1 - r.skill * .55);
+  if (Math.abs(r.x) > 1.85) { r.x = sign(r.x) * 1.85; wipeout(r); }
+  // 撞车：躲不掉就跟你一样翻。技术好的容错高一点，但没人免疫
+  for (const c of Traffic) {
+    if (Math.abs(c.z - r.z) < 850 && Math.abs(c.x - r.x) < c.half + BIKE_HALF) {
+      if (c.oncoming) { wipeout(r); }
+      else { r.speed = Math.min(r.speed, c.speed + 1200); r.x += sign(r.x - c.x || 1) * 3.2 * dt; }
+      break;
+    }
+  }
+  r.lean = approach(r.lean, clamp(r.steer * .8 + seg.curve * .09, -1, 1), 9, dt);
+
+  // 出手（只在正式比赛里，标题页的背景演示不打人）
+  if (near && r.atkCd <= 0 && r.stun <= 0 && Game.state === 'race') {
+    const dx = Player.x - r.x;
+    if (Math.abs(dx) < WEPS[r.wep].reach && Math.abs(dzP) < 700 && Math.random() < r.aggr * dt * 4.2)
+      doAttack(r, sign(dx) || 1);
+  }
+  r.z += r.speed * dt;
+}
+
+/* ==========================================================================
+   18. 车流
+   ========================================================================== */
+function spawnTraffic(idx) {
+  Traffic.length = 0;
+  const t = Road.theme, rng = makeRng(4242 + idx * 97);
+  const n = Math.round(17 * t.cars);
+  // 铺在 22 万单位的纵深上：满速时大约一秒半遇上一台
+  for (let i = 0; i < n; i++) addCar(rng, Player.z + 6000 + rng() * 220000, rng() < .42 * t.onc / t.cars);
+}
+function addCar(rng, z, oncoming) {
+  const spec = CAR_SPECS[rint(rng, 0, CAR_SPECS.length - 1)];
+  const c = {
+    kind:'car', z, oncoming, spec,
+    x: oncoming ? pick(rng, [-.72, -.30]) : pick(rng, [.28, .70]),
+    speed: oncoming ? -(3600 + rng() * 2400) : (2800 + rng() * 3200),
+    ww: spec.ww, half: spec.ww / (ROAD_W * 2) * .8, air:0, bob:0, honk:0,
+    drawVec(g, ink) { drawCar(g, this.spec, this.oncoming, ink, Road.theme.night); },
+  };
+  Traffic.push(c); return c;
+}
+function updateTraffic(dt) {
+  const t = Road.theme;
+  for (const c of Traffic) {
+    c.z += c.speed * dt;
+    const rel = c.z - Player.z;
+    if (rel < -8000 || rel > 240000) {                       // 回收再投
+      const ahead = Player.z + 60000 + Math.random() * 170000;
+      c.oncoming = Math.random() < .42 * t.onc / Math.max(.2, t.cars);
+      c.spec = CAR_SPECS[(Math.random() * CAR_SPECS.length) | 0];
+      c.ww = c.spec.ww; c.half = c.ww / (ROAD_W * 2) * .8;
+      c.speed = c.oncoming ? -(3600 + Math.random() * 2400) : (2800 + Math.random() * 3200);
+      c.x = c.oncoming ? (Math.random() < .5 ? -.72 : -.30) : (Math.random() < .5 ? .28 : .70);
+      c.z = ahead;
+    }
+    if (c.oncoming && rel > 3000 && rel < 26000 && c.honk <= 0 && Math.abs(c.x - Player.x) < .35) {
+      c.honk = 2.5; sfx('horn', clamp(1 - rel / 26000, .1, 1));
+    }
+    if (c.honk > 0) c.honk -= dt;
+  }
+}
+
+/* ==========================================================================
+   19. 警察
+   ========================================================================== */
+function maybeSpawnCop(dt) {
+  if (!Road.theme.cops || Cop || Game.copDone) return;
+  const prog = Player.z / Road.length;
+  if (prog > .42 || Game.crashes >= 3) {
+    Cop = makeRider(COP_PAL);
+    Cop.isCop = true;
+    Cop.maxSpeed = Player.maxSpeed * 1.02;
+    Cop.maxHp = Cop.hp = 150; Cop.wep = 1; Cop.arm = 1.15;
+    Cop.z = Player.z - 9000; Cop.x = 0; Cop.speed = Player.speed;
+    Cop.grip = 0;
+    toast('警察！', true); sfx('siren');
+    Game.copDone = true;
+  }
+}
+const COP_GRIP = 4;              // 被贴住这么多秒才算被拷上
+function updateCop(dt) {
+  const c = Cop; if (!c) return;
+  riderGravity(c, dt);
+  if (c.stun > 0) c.stun -= dt;
+  if (c.atkT > 0) c.atkT -= dt;
+  if (c.atkCd > 0) c.atkCd -= dt;
+  if (c.hitFlash > 0) c.hitFlash -= dt;
+  if (c.state === 'down') {
+    c.downT += dt; c.speed = approach(c.speed, 0, 3, dt); c.z += c.speed * dt;
+    if (c.downT > 4.5) { c.state = 'ride'; c.hp = c.maxHp * .7; c.speed = 3000; c.z = Player.z - 12000; }
+    c.grip = Math.max(0, c.grip - dt * 2);
+    return;
+  }
+  const dz = Player.z - c.z;
+  let want = c.maxSpeed * (dz > 3000 ? 1.10 : dz < -2000 ? .86 : 1);
+  if (c.stun > 0) want *= .6;
+  c.speed = approach(c.speed, want, 1.4, dt);
+  // 横向跟得比你慢一点点 —— 连续变线甩得开，但只够甩开一下
+  let dodge = 0;
+  for (const car of Traffic) {                       // 警察是老手，会提前让开
+    const dz2 = car.z - c.z;
+    if (dz2 > -900 && dz2 < 9000 && Math.abs(car.x - c.x) < .38)
+      dodge -= sign(car.x - c.x || 1) * (dz2 < 400 ? 3.2 : (1 - dz2 / 9000) * 2.4);
+  }
+  const d = clamp((Player.x - c.x) * 2.2 + dodge, -1, 1);
+  c.steer = approach(c.steer, d, 5.5, dt);
+  c.x += c.steer * .82 * dt * (c.stun > 0 ? .3 : 1);
+  c.x = clamp(c.x, -1.1, 1.1);
+  c.lean = approach(c.lean, clamp(c.steer * .8, -1, 1), 9, dt);
+  c.z += c.speed * dt;
+
+  // 贴住玩家就开始拷人
+  const close = Math.abs(dz) < 1600 && Math.abs(Player.x - c.x) < .34
+                && Player.state === 'ride' && c.stun <= 0;
+  c.grip = clamp(c.grip + (close ? dt : -dt * 2.2), 0, COP_GRIP);
+  copHud(c.grip / COP_GRIP, close);
+  if (close && c.atkCd <= 0 && Math.random() < .9 * dt * 3) doAttack(c, sign(Player.x - c.x) || 1);
+  if (c.grip >= COP_GRIP) busted();
+
+  // 警察也要看路：撞上车流一样翻
+  for (const car of Traffic) {
+    if (car.oncoming && Math.abs(car.z - c.z) < 900 && Math.abs(car.x - c.x) < car.half + BIKE_HALF) {
+      wipeout(c); c.grip = 0; break;
+    }
+  }
+}
+
+/* ==========================================================================
+   20. 碰撞
+   ========================================================================== */
+const BIKE_HALF = .075;
+function checkCollisions(dt) {
+  const P = Player;
+  if (P.state !== 'ride') return;
+  const zPrev = P.zPrev != null ? Math.min(P.zPrev, P.z) : P.z;
+
+  // 车流
+  for (const c of Traffic) {
+    const gap = c.half + BIKE_HALF;
+    if (Math.abs(c.x - P.x) > gap) continue;
+    const rel = c.z - P.z;
+    const overlap = Math.abs(rel) < 900;
+    if (!overlap) continue;
+    if (c.oncoming) { wipeout(P, '迎头撞上！'); return; }
+    const closing = P.speed - c.speed;
+    if (closing > 4200) { wipeout(P, '追尾'); return; }
+    // 低速蹭车：掉血掉速，同时被狠狠顶开 —— 不能让人黏在车尾出不来
+    P.speed = Math.min(P.speed, c.speed + 1200);
+    P.x += sign(P.x - c.x || 1) * 3.6 * dt;
+    P.hp -= 9 * dt; shake(2.4);
+    if (frameCount % 8 === 0) { addSpark(W / 2, H * .72, 3, '#ffd070'); sfx('scrape'); }
+    if (P.hp <= 0) wipeout(P, '被撞爆');
+    updateHpHud();
+  }
+  // 路障：把这一帧走过的每一段都扫一遍。只查当前段的话，掉帧时会直接穿过去
+  const i0 = Math.floor(zPrev / SEG_LEN), i1 = Math.floor(P.z / SEG_LEN);
+  for (let i = i0; i <= i1; i++) {
+    const seg = Road.segs[i % Road.segs.length];
+    if (!seg) continue;
+    for (const it of seg.sprites) {
+      if (!it.hazard || Math.abs(it.off - P.x) >= .13) continue;
+      if (it.sp.tag === 'barrier') { wipeout(P, '撞上路障'); return; }
+      P.speed *= .74; P.hp -= 6; shake(4); sfx('cone'); it.hazard = false;
+      addSpark(W / 2, H * .78, 8, '#f0a030'); updateHpHud();
+    }
+  }
+  // 捡武器
+  for (let i = Pickups.length - 1; i >= 0; i--) {
+    const p = Pickups[i];
+    if (Math.abs(p.z - P.z) < 1100 && Math.abs(p.x - P.x) < .16) {
+      P.wep = p.wep; Pickups.splice(i, 1);
+      toast('捡到' + WEPS[P.wep].nm + '！'); sfx('pickup'); updateWepHud();
+    }
+  }
+  // 骑手互撞：贴太近会互相顶开
+  for (const r of Rivals) {
+    if (r.state !== 'ride') continue;
+    if (Math.abs(r.z - P.z) < 700 && Math.abs(r.x - P.x) < BIKE_HALF * 2.1) {
+      const d = sign(P.x - r.x || 1);
+      P.x += d * 1.1 * dt; r.x -= d * 1.1 * dt;
+      P.speed *= (1 - .5 * dt); r.speed *= (1 - .5 * dt);
+    }
+  }
+}
+/* ==========================================================================
+   21. 比赛流程
+   ========================================================================== */
+const Game = {
+  state:'title',            // title | shop | pre | race | down | over | results | busted
+  track:0, money:0, bike:0, owned:[true, false, false, false],
+  time:0, pre:0, crashes:0, hits:0, takedowns:0, copDone:false,
+  order:[], paused:false, muted:false, best:[null,null,null,null,null],
+};
+/* 名次奖：只有冲在前面才拿得到大头。 */
+const PRIZE = [ [1500,850,450,180,120,80,40,0], [2200,1250,650,260,170,110,60,0],
+                [3000,1700,900,360,240,160,80,0], [3800,2150,1150,460,300,200,100,0],
+                [5000,2800,1500,600,400,260,130,0] ];
+/* 完赛费：只要过线就有，跟名次无关。
+   没有这一档的时候，第一场跑砸就等于出局 —— 前四之外一分钱没有，换不了车，
+   换不了车就永远跑不进前四，后面每一场都是 $0。那不是难，是死角。
+   现在垫底也能拿一场的完赛费，跑三场就够换第二台车：输了只是慢，不是断。 */
+const FINISH_FEE = [380, 480, 600, 750, 900];
+
+const $ = id => document.getElementById(id);
+const hudEl = $('hud'), sheetEl = $('sheet'), cardEl = $('cardBody'), toastEl = $('toast');
+
+function toast(txt, warn) {
+  toastEl.textContent = txt;
+  toastEl.className = warn ? 'warn' : '';
+  void toastEl.offsetWidth;                       // 重启动画
+  toastEl.classList.add('show');
+  if (warn) toastEl.classList.add('warn');
+}
+function updateHpHud() {
+  const f = $('dmgFill'), p = clamp(Player.hp / Player.maxHp, 0, 1);
+  f.style.width = (p * 100).toFixed(1) + '%';
+  f.className = p < .3 ? 'low' : p < .6 ? 'mid' : '';
+}
+function updateWepHud() {
+  const e = $('wep');
+  e.textContent = WEPS[Player.wep].nm;
+  e.className = Player.wep ? '' : 'none';
+}
+function copHud(t, on) {
+  const b = $('copBar');
+  b.style.opacity = t > .02 ? String(clamp(t + .2, 0, 1)) : '0';
+  b.classList.toggle('on', !!on);
+}
+
+function computeRank() {
+  const all = [Player, ...Rivals];
+  all.sort((a, b) => (b.done ? 1e12 - b.doneT : b.z) - (a.done ? 1e12 - a.doneT : a.z));
+  for (let i = 0; i < all.length; i++) all[i].rank = i + 1;
+  return all;
+}
+
+function resetPlayerForRace() {
+  const B = BIKES[Game.bike], P = Player;
+  P.maxSpeed = B.top; P.acc = B.acc; P.hand = B.hand; P.arm = B.arm;
+  P.maxHp = 100; P.hp = 100; P.wep = 0;
+  P.z = 0; P.x = 0; P.speed = 0; P.y = 0; P.vy = 0; P.lastGroundY = 0; P.airTime = 0; P.air = 0;
+  P.state = 'ride'; P.lean = 0; P.steer = 0; P.atkT = 0; P.atkCd = 0; P.stun = 0; P.hitFlash = 0;
+  P.done = false; P.doneT = 0; P.rank = 8; P.brake = false; P.downT = 0;
+  PlayerWreck = null; Pickups.length = 0;
+  Cam.x = 0; Cam.shakeT = 0; Cam.look = 0;
+}
+
+function startRace(idx) {
+  Game.track = idx; Game.time = 0; Game.crashes = 0; Game.hits = 0;
+  Game.takedowns = 0; Game.copDone = false; Cop = null;
+  buildTrack(idx); prepFog();
+  Road.bgX = 0;
+  Road.starRng = new Float32Array(92);
+  { const r = makeRng(77 + idx); for (let i = 0; i < 92; i++) Road.starRng[i] = r(); }
+  Road.finishZ = (Road.segs.length - 60) * SEG_LEN;
+  resetPlayerForRace();
+  spawnRivals(idx);
+  spawnTraffic(idx);
+  Fx.hits.length = 0; Fx.sparks.length = 0;
+  $('trackName').textContent = Road.name;
+  updateHpHud(); updateWepHud(); copHud(0, false);
+  hudEl.classList.remove('off');
+  hideSheet();
+  Game.state = 'pre'; Game.pre = 4.2;
+  musicSet('race');
+}
+function restartRace() { if (Game.state === 'race' || Game.state === 'down') startRace(Game.track); }
+
+function finishRace() {
+  Player.done = true; Player.doneT = Game.time;
+  const all = computeRank();
+  const place = Player.rank;
+  const prize = FINISH_FEE[Game.track] + PRIZE[Game.track][place - 1] + Game.takedowns * 70;
+  Game.money += prize;
+  Game.state = 'results';
+  copHud(0, false);
+  musicSet('menu');
+  sfx(place <= 3 ? 'win' : 'lose');
+  showResults(place, prize, all);
+}
+function busted() {
+  if (Game.state !== 'race') return;
+  Game.state = 'busted';
+  Player.state = 'down'; Player.downT = 0;
+  sfx('bust'); musicSet('menu'); shake(8);
+  hudEl.classList.add('off');
+  showSheet(
+    '<h1>被 逮 了</h1><div class="sub">BUSTED</div>' +
+    '<p>警察把你按在护栏上，这一场作废。</p>' +
+    '<p>下次看见警灯就变道甩开 —— 或者一棍把他抡下去。</p>' +
+    '<div class="btn" data-act="retry">再 来 一 次</div>' +
+    '<div class="btn alt" data-act="shop">回 车 行</div>', null);
+}
+
+/* ==========================================================================
+   22. 面板
+   ========================================================================== */
+let sheetAction = null;
+function showSheet(html, onConfirm) {
+  cardEl.innerHTML = html;
+  sheetEl.classList.remove('off');
+  sheetAction = onConfirm || null;
+  cardEl.querySelectorAll('[data-act]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); audioUnlock(); doAct(el.dataset.act, el.dataset.arg); });
+  });
+}
+function hideSheet() { sheetEl.classList.add('off'); sheetAction = null; }
+function sheetConfirm() {
+  if (sheetEl.classList.contains('off')) return;
+  const b = cardEl.querySelector('[data-act]');
+  if (b) doAct(b.dataset.act, b.dataset.arg);
+}
+function doAct(act, arg) {
+  if (act === 'resume') { if (Game.paused) togglePause(); }
+  else if (act === 'start') { showShop(); }
+  else if (act === 'race') { startRace(Game.track); }
+  else if (act === 'retry') { Game.paused = false; musicDuck(false); startRace(Game.track); }
+  else if (act === 'shop') { showShop(); }
+  else if (act === 'next') { Game.track = Math.min(4, Game.track + 1); showShop(); }
+  else if (act === 'buy') { buyBike(+arg); }
+  else if (act === 'sel') { if (Game.owned[+arg]) { Game.bike = +arg; sfx('pickup'); showShop(); } }
+  else if (act === 'title') { showTitle(); }
+  else if (act === 'reset') { Game.money = 0; Game.bike = 0; Game.owned = [true,false,false,false]; Game.track = 0; showShop(); }
+}
+
+function showTitle() {
+  Game.state = 'title';
+  hudEl.classList.add('off');
+  musicSet('menu');
+  const kb = TOUCH
+    ? '<div>◀ ▶ 变向</div><div>油门 / 刹车</div><div>左踹 / 右踹</div>'
+    : '<div><kbd>↑</kbd>油门　<kbd>↓</kbd>刹车</div><div><kbd>←</kbd><kbd>→</kbd>变向</div>' +
+      '<div><kbd>A</kbd>打左边　<kbd>D</kbd>打右边</div><div><kbd>P</kbd>暂停　<kbd>R</kbd>重来　<kbd>M</kbd>静音</div>';
+  showSheet(
+    '<h1>暴力摩托</h1><div class="sub">ROAD&nbsp;&nbsp;RASH</div>' +
+    '<p>五条街，七个对手，一条不讲理的规矩：<b style="color:#f8d038">谁先到谁拿钱</b>。</p>' +
+    '<p>贴上去踹他，抢他的棍子，把他挤到对向车道去。<br>' +
+    '被打光血你会被甩出车外 —— 那就<b style="color:#e03c28">跑回去，重新骑上</b>。</p>' +
+    '<div class="keys">' + kb + '</div>' +
+    '<div class="btn" data-act="start">进 入 车 行</div>' +
+    '<div class="go">按 ENTER 开始</div>');
+}
+
+function bikePreview(i) {
+  const pal = { j:PLAYER_PAL.j, j2:PLAYER_PAL.j2, h:PLAYER_PAL.h,
+                b:['#2038a0','#c02828','#20a070','#f0a020'][i] };
+  const S = 3, { c, g } = mkCanvas(112 * S / 2, 100 * S / 2);
+  g.save();
+  g.translate(c.width / 2, c.height - 3);
+  g.scale(S / 2, S / 2);
+  drawRider(g, pal, { tilt: 0 }, 1.4 / (S / 2));
+  g.restore();
+  return c;
+}
+function showShop() {
+  Game.state = 'shop';
+  hudEl.classList.add('off');
+  musicSet('menu');
+  const t = Object.values(THEMES)[Game.track];
+  let rows = '';
+  for (let i = 0; i < BIKES.length; i++) {
+    const B = BIKES[i], own = Game.owned[i], sel = Game.bike === i;
+    const can = Game.money >= B.price;
+    const cls = 'bike' + (own ? ' own' : can ? '' : ' cant') + (sel ? ' sel' : '');
+    const act = own ? 'sel' : (can ? 'buy' : 'none');
+    rows += '<div class="' + cls + '" data-act="' + act + '" data-arg="' + i + '">' +
+      '<canvas data-bike="' + i + '"></canvas><div><div class="nm">' + B.nm + (sel ? ' ◀' : '') + '</div>' +
+      '<div class="st">极速 ' + Math.round(B.top / 60) + ' · 加速 ' + B.acc.toFixed(2) +
+      ' · 操控 ' + B.hand.toFixed(2) + '</div></div>' +
+      '<div class="pr' + (own ? ' own' : '') + '">' + (own ? (sel ? '使用中' : '已拥有') : '$' + B.price) + '</div></div>';
+  }
+  showSheet(
+    '<h2>车 行</h2><div class="sub">GARAGE</div>' +
+    '<div class="money">$ ' + Game.money + '</div>' +
+    '<div class="shop">' + rows + '</div>' +
+    '<p style="margin-top:10px">下一场 &nbsp;<b style="color:#f08820;font-size:1.25em">第 ' + (Game.track + 1) + ' 场 · ' + t.name + '</b>' +
+    '<br><span style="color:#8a8aa8">' + t.sub + (t.cops ? ' · 有警察' : '') + '</span></p>' +
+    '<div class="btn" data-act="race">上 路</div>' +
+    (Game.track > 0 ? '<div class="btn alt" data-act="title">标 题</div>' : ''));
+  // 车行里那几张预览图
+  cardEl.querySelectorAll('canvas[data-bike]').forEach(cv => {
+    const src = bikePreview(+cv.dataset.bike);
+    cv.width = src.width; cv.height = src.height;
+    cv.getContext('2d').drawImage(src, 0, 0);
+  });
+}
+
+function buyBike(i) {
+  const B = BIKES[i];
+  if (Game.owned[i] || Game.money < B.price) { sfx('whiff'); return; }
+  Game.money -= B.price; Game.owned[i] = true; Game.bike = i;
+  sfx('buy'); showShop();
+}
+
+function fmtTime(t) {
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return m + ':' + (s < 10 ? '0' : '') + s.toFixed(1);
+}
+function showResults(place, prize, all) {
+  hudEl.classList.add('off');
+  let rows = '';
+  all.forEach((r, i) => {
+    const me = r === Player;
+    rows += '<tr class="' + (me ? 'me' : '') + '"><td class="n">' + (i + 1) + '</td>' +
+      '<td>' + (me ? '你' : r.pal.nm) + '</td>' +
+      '<td class="n">' + (r.done ? fmtTime(r.doneT) : (r.state === 'down' ? '摔了' : '未完赛')) + '</td></tr>';
+  });
+  const pass = place <= 3;
+  const last = Game.track === 4;
+  let btn, head, note;
+  if (pass && last) {
+    head = '<h1>全 场 通 吃</h1><div class="sub">CHAMPION</div>';
+    note = '<p>五条街全跑下来了。这城里没人再敢跟你并排。</p>';
+    btn = '<div class="btn" data-act="reset">从 头 再 来</div>';
+  } else if (pass) {
+    head = '<h2>第 ' + place + ' 名 · 过 关</h2><div class="sub">QUALIFIED</div>';
+    note = '<p>拿到奖金 <b style="color:#38c058">$' + prize + '</b>' +
+           '（含完赛费 $' + FINISH_FEE[Game.track] +
+           (Game.takedowns ? ' · 撂倒 ' + Game.takedowns + ' 人 $' + Game.takedowns * 70 : '') + '）</p>';
+    btn = '<div class="btn" data-act="next">下 一 场</div>';
+  } else {
+    head = '<h2 style="color:#e03c28">第 ' + place + ' 名 · 没 进 前 三</h2><div class="sub">FAILED</div>';
+    note = '<p>前三名才有资格上下一条街。这场拿到 <b style="color:#38c058">$' + prize + '</b>' +
+           '（完赛费 $' + FINISH_FEE[Game.track] +
+           (Game.takedowns ? ' · 撂倒 ' + Game.takedowns + ' 人 $' + Game.takedowns * 70 : '') +
+           '），够的话去车行换台车再来。</p>';
+    btn = '<div class="btn" data-act="retry">再 跑 一 次</div><div class="btn alt" data-act="shop">车 行</div>';
+  }
+  showSheet(head + note +
+    '<table class="res">' + rows + '</table>' +
+    '<p style="color:#8a8aa8;font-size:.92em">用时 ' + fmtTime(Game.time) +
+    '　命中 ' + Game.hits + '　摔车 ' + Game.crashes + '　总资产 $' + Game.money + '</p>' + btn);
+}
+
+function togglePause() {
+  if (Game.state !== 'race' && Game.state !== 'down') return;
+  Game.paused = !Game.paused;
+  if (Game.paused) {
+    musicDuck(true);
+    showSheet('<h2>暂 停</h2><div class="sub">PAUSED</div>' +
+      '<p>按 <kbd>P</kbd> 继续　<kbd>R</kbd> 重跑本场　<kbd>M</kbd> 静音</p>' +
+      '<div class="btn" data-act="resume">继 续</div>' +
+      '<div class="btn alt" data-act="retry">重 跑 本 场</div>');
+  } else { hideSheet(); musicDuck(false); }
+}
+function onResized() { /* 画布尺寸变了没有额外要做的，渲染每帧读 W/H */ }
+/* ==========================================================================
+   23. 声音 —— 全部 Web Audio 现场合成，仓库里没有一个音频文件
+   ========================================================================== */
+let AC = null, master = null, noiseBuf = null;
+let engA = [], engFilt = null, engGain = null, windSrc = null, windGain = null, windFilt = null;
+let musicGain = null, sfxGain = null;
+
+function makeNoise(sec) {
+  const n = Math.floor(AC.sampleRate * sec), b = AC.createBuffer(1, n, AC.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
+function audioUnlock() {
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  AC = new Ctx();
+  master = AC.createGain(); master.gain.value = Game.muted ? 0 : .85; master.connect(AC.destination);
+  musicGain = AC.createGain(); musicGain.gain.value = .30; musicGain.connect(master);
+  sfxGain   = AC.createGain(); sfxGain.gain.value = .85;  sfxGain.connect(master);
+  noiseBuf = makeNoise(2);
+
+  // 引擎：三只失谐锯齿波 + 一枚低通，转速直接映到频率
+  engGain = AC.createGain(); engGain.gain.value = 0; engGain.connect(master);
+  engFilt = AC.createBiquadFilter(); engFilt.type = 'lowpass';
+  engFilt.frequency.value = 700; engFilt.Q.value = 4; engFilt.connect(engGain);
+  for (const d of [0, 7, -5, 12]) {
+    const o = AC.createOscillator(); o.type = d === 12 ? 'square' : 'sawtooth';
+    o.frequency.value = 60; o.detune.value = d * 6;
+    const g = AC.createGain(); g.gain.value = d === 12 ? .18 : .34;
+    o.connect(g); g.connect(engFilt); o.start();
+    engA.push(o);
+  }
+  // 风噪
+  windSrc = AC.createBufferSource(); windSrc.buffer = noiseBuf; windSrc.loop = true;
+  windFilt = AC.createBiquadFilter(); windFilt.type = 'bandpass';
+  windFilt.frequency.value = 700; windFilt.Q.value = .7;
+  windGain = AC.createGain(); windGain.gain.value = 0;
+  windSrc.connect(windFilt); windFilt.connect(windGain); windGain.connect(master);
+  windSrc.start();
+  musicNext = AC.currentTime + .05;
+}
+function toggleMute() {
+  Game.muted = !Game.muted;
+  if (master) master.gain.setTargetAtTime(Game.muted ? 0 : .85, AC.currentTime, .02);
+  toast(Game.muted ? '静音' : '开声');
+}
+function musicDuck(on) { if (musicGain) musicGain.gain.setTargetAtTime(on ? .06 : .30, AC.currentTime, .05); }
+
+/* 引擎随速度换挡：转速到顶就掉一截，跟真车一样一格一格往上爬 */
+const GEARS = 6;
+function updateEngine(dt) {
+  if (!AC) return;
+  const P = Player, on = (Game.state === 'race' || Game.state === 'pre' || Game.state === 'down');
+  if (!on) { engGain.gain.setTargetAtTime(0, AC.currentTime, .08); windGain.gain.setTargetAtTime(0, AC.currentTime, .1); return; }
+  const sp = clamp(P.speed / P.maxSpeed, 0, 1);
+  const g = Game.gear - 1;
+  const rpm = clamp(sp * GEARS - g, 0, 1);
+  const idle = (Game.state === 'pre' && Input.gas) ? .55 : 0;
+  const base = 52 + (rpm * .82 + idle) * 118 + g * 5;
+  const t = AC.currentTime;
+  for (let i = 0; i < engA.length; i++)
+    engA[i].frequency.setTargetAtTime(base * (i === 3 ? 2 : 1), t, .035);
+  engFilt.frequency.setTargetAtTime(420 + sp * 2400 + (Input.gas ? 500 : 0), t, .05);
+  engGain.gain.setTargetAtTime(.13 + sp * .12, t, .06);
+  windGain.gain.setTargetAtTime(sp * sp * .17, t, .12);
+  windFilt.frequency.setTargetAtTime(500 + sp * 1500, t, .12);
+}
+
+/* ---------- 一次性音效 ---------- */
+function env(node, t0, a, d, peak) {
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(peak, t0 + a);
+  g.gain.exponentialRampToValueAtTime(.0001, t0 + a + d);
+  node.connect(g); return g;
+}
+function noiseBurst(t0, dur, type, freq, Q, peak, out) {
+  const s = AC.createBufferSource(); s.buffer = noiseBuf;
+  s.playbackRate.value = .8 + Math.random() * .5;
+  const f = AC.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = Q;
+  s.connect(f);
+  const g = env(f, t0, .004, dur, peak);
+  g.connect(out || sfxGain);
+  s.start(t0); s.stop(t0 + dur + .05);
+  return f;
+}
+function tone(t0, f0, f1, dur, type, peak, out) {
+  const o = AC.createOscillator(); o.type = type || 'square';
+  o.frequency.setValueAtTime(f0, t0);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+  const g = env(o, t0, .006, dur, peak);
+  g.connect(out || sfxGain);
+  o.start(t0); o.stop(t0 + dur + .05);
+  return o;
+}
+function sfx(name, vol) {
+  if (!AC || Game.muted) return;
+  const t = AC.currentTime, v = vol == null ? 1 : vol;
+  switch (name) {
+    case 'kick':  noiseBurst(t, .09, 'bandpass', 900, 1.4, .30 * v); tone(t, 150, 70, .09, 'sine', .22 * v); break;
+    case 'club':  noiseBurst(t, .07, 'bandpass', 480, 2.2, .34 * v); tone(t, 180, 60, .13, 'triangle', .30 * v); break;
+    case 'chain': for (let i = 0; i < 4; i++) tone(t + i * .018, 1400 + i * 340, 900, .06, 'square', .10 * v); break;
+    case 'hit':   noiseBurst(t, .13, 'lowpass', 1600, 1, .42 * v); tone(t, 260, 55, .16, 'sine', .34 * v); break;
+    case 'hurt':  noiseBurst(t, .2, 'lowpass', 900, 1, .40 * v); tone(t, 180, 48, .24, 'sawtooth', .22 * v); break;
+    case 'whiff': noiseBurst(t, .13, 'bandpass', 2600, .8, .10 * v); break;
+    case 'crash': noiseBurst(t, .55, 'lowpass', 2600, .6, .55 * v);
+                  tone(t, 120, 32, .5, 'sawtooth', .34 * v);
+                  for (let i = 0; i < 7; i++) noiseBurst(t + .02 + i * .045, .1, 'bandpass', 1800 + Math.random() * 2400, 3, .16 * v);
+                  break;
+    case 'scrape':noiseBurst(t, .1, 'bandpass', 3400, 6, .13 * v); break;
+    case 'cone':  tone(t, 620, 240, .1, 'square', .2 * v); noiseBurst(t, .08, 'highpass', 2200, 1, .16 * v); break;
+    case 'land':  noiseBurst(t, .11, 'lowpass', 700, 1, .3 * v); tone(t, 90, 40, .12, 'sine', .26 * v); break;
+    case 'horn':  tone(t, 420, 400, .42, 'square', .09 * v); tone(t + .005, 528, 500, .42, 'square', .07 * v); break;
+    case 'siren': for (let i = 0; i < 6; i++) tone(t + i * .28, i & 1 ? 760 : 520, i & 1 ? 760 : 520, .26, 'square', .11 * v); break;
+    case 'bust':  for (let i = 0; i < 4; i++) tone(t + i * .3, i & 1 ? 800 : 540, i & 1 ? 800 : 540, .28, 'square', .16);
+                  noiseBurst(t, .4, 'lowpass', 1200, 1, .34); break;
+    case 'pickup':tone(t, 520, 1040, .12, 'square', .18 * v); tone(t + .06, 780, 1560, .1, 'square', .14 * v); break;
+    case 'buy':   [523, 659, 784, 1046].forEach((f, i) => tone(t + i * .07, f, f, .12, 'square', .15)); break;
+    case 'win':   [392, 523, 659, 784, 1046].forEach((f, i) => tone(t + i * .11, f, f, .3, 'square', .17)); break;
+    case 'lose':  [392, 349, 294, 233].forEach((f, i) => tone(t + i * .15, f, f, .3, 'sawtooth', .15)); break;
+    case 'beep':  tone(t, 660, 660, .14, 'square', .22); break;
+    case 'go':    tone(t, 990, 990, .34, 'square', .26); tone(t, 1320, 1320, .34, 'square', .14); break;
+    case 'start': tone(t, 70, 190, .5, 'sawtooth', .2); break;
+  }
+}
+
+/* ---------- 背景乐：前瞻调度的 16 分音符序列 ---------- */
+let musicNext = 0, musicStep = 0, musicMode = 'menu';
+const BPM = 152;
+const nt = n => 110 * Math.pow(2, n / 12);
+// Am - F - G - Em，每小节一个和弦
+const PROG = [0, -4, -2, 7];
+const BASS = [0,0,12,0, 0,7,0,3, 0,0,12,7, 0,3,7,10];
+const LEAD = [12,15,19,15, 22,19,15,12, 12,15,19,22, 24,22,19,15];
+function musicSet(m) { musicMode = m; }
+function musicTick() {
+  if (!AC || Game.muted) return;
+  const spb = 60 / BPM / 4;
+  while (musicNext < AC.currentTime + .14) {
+    playStep(musicStep, musicNext);
+    musicStep = (musicStep + 1) % 64;
+    musicNext += spb;
+  }
+}
+function playStep(s, t) {
+  const race = musicMode === 'race' && (Game.state === 'race' || Game.state === 'pre' || Game.state === 'down');
+  const bar = (s >> 4) & 3, k = s & 15;
+  const root = PROG[bar];
+  if (race) {
+    // 鼓
+    if (k === 0 || k === 6 || k === 8 || k === 14) { tone(t, 150, 45, .12, 'sine', .5, musicGain); }
+    if (k === 4 || k === 12) { noiseBurst(t, .11, 'highpass', 1400, .8, .30, musicGain); tone(t, 220, 160, .06, 'triangle', .16, musicGain); }
+    if (k % 2 === 0) noiseBurst(t, .028, 'highpass', 7000, 1, .075, musicGain);
+    // 贝斯
+    const b = BASS[k];
+    tone(t, nt(root + b - 12), nt(root + b - 12), .12, 'sawtooth', .30, musicGain);
+    // 主旋律：每两小节冒一次头
+    if (bar % 2 === 1 && k % 2 === 0) {
+      const l = LEAD[k];
+      tone(t, nt(root + l), nt(root + l), .1, 'square', .09, musicGain);
+    }
+  } else {
+    if (k === 0) tone(t, nt(root - 12), nt(root - 12), .5, 'triangle', .16, musicGain);
+    if (k === 8) tone(t, nt(root - 5), nt(root - 5), .4, 'triangle', .12, musicGain);
+    if (k === 0 || k === 8) noiseBurst(t, .04, 'highpass', 6000, 1, .05, musicGain);
+  }
+}
+/* ==========================================================================
+   24. 每帧把动态物件挂到所在路段上，渲染才知道谁在谁前面
+   ========================================================================== */
+const bucketed = [];
+function bucketActors() {
+  for (let i = 0; i < bucketed.length; i++) bucketed[i].actors.length = 0;
+  bucketed.length = 0;
+  const camZ = Player.z - PLAYER_Z, far = camZ + DRAW_DIST * SEG_LEN;
+  const put = a => {
+    if (!a || a.z < camZ - SEG_LEN * 2 || a.z > far) return;
+    const s = segAt(a.z);
+    if (!s.actors.length) bucketed.push(s);
+    s.actors.push(a);
+  };
+  for (const c of Traffic) put(c);
+  for (const p of Pickups) put(p);
+  for (const r of Rivals) put(r);
+  if (Cop) put(Cop);
+  put(PlayerWreck);
+  put(Player);                                     // 最后放，保证压在同段其他人上面
+}
+
+/* ==========================================================================
+   25. 每帧更新
+   ========================================================================== */
+let hudCache = {};
+function setTxt(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).textContent = v; } }
+
+function updateHud() {
+  const P = Player;
+  const pn = $('posNum');
+  const s = String(P.rank) + '<small>/8</small>';
+  if (hudCache.pos !== s) { hudCache.pos = s; pn.innerHTML = s; }
+  const rem = Math.max(0, Road.finishZ - P.z) / UNITS_PER_KM;
+  setTxt('distNum', rem.toFixed(2) + ' KM');
+  $('distFill').style.width = clamp(P.z / Road.finishZ, 0, 1) * 100 + '%';
+  setTxt('clock', fmtTime(Game.time));
+  const kmh = Math.round(P.speed / 60);
+  setTxt('spdNum', String(kmh));
+  const sn = $('spdNum'), r = P.speed / P.maxSpeed;
+  const cls = r > .93 ? 'red' : r > .72 ? 'fast' : '';
+  if (sn.className !== cls) sn.className = cls;
+  setTxt('gear', 'GEAR ' + (Game.gear || 1));
+}
+
+function update(dt) {
+  readInput();
+
+  if (Game.state === 'pre') {
+    const before = Math.ceil(Game.pre - .4);
+    Game.pre -= dt;
+    const after = Math.ceil(Game.pre - .4);
+    if (after !== before) {
+      if (after >= 1 && after <= 3) { toast(String(after)); sfx('beep'); }
+      else if (after <= 0) { toast('冲！'); sfx('go'); }
+    }
+    if (Game.pre <= 0) { Game.state = 'race'; }
+    Player.speed = 0;
+    // 起跑前对手在原地热身
+    for (const r of Rivals) { r.lean = Math.sin(frameCount * .1 + r.z) * .2; }
+  } else if (Game.state === 'race') {
+    Game.time += dt;
+    Player.zPrev = Player.z;
+
+    if (Input.atkL) doAttack(Player, -1);
+    if (Input.atkR) doAttack(Player, 1);
+
+    updatePlayer(dt);
+    for (let i = 0; i < Rivals.length; i++) updateRival(Rivals[i], dt, i);
+    updateTraffic(dt);
+    maybeSpawnCop(dt);
+    updateCop(dt);
+    checkCollisions(dt);
+
+    // 冲线
+    for (const r of Rivals) if (!r.done && r.z >= Road.finishZ) { r.done = true; r.doneT = Game.time; }
+    computeRank();
+    if (!Player.done && Player.z >= Road.finishZ) { finishRace(); }
+    updateHud();
+  } else if (Game.state === 'busted') {
+    Player.downT += dt; Player.speed = approach(Player.speed, 0, 3, dt);
+  }
+
+  /* 相机横向跟随。
+     直接 approach(Cam.x, Player.x) 有个不明显的毛病：一阶滞后的稳态误差正比于
+     横向速度（满速约 0.16 条路宽）。换向时这段误差得先被"走完"相机才肯反向 ——
+     实测按下反方向键后，车 0.03 秒就往回走了，画面要 0.22 秒才跟着反，
+     手感上就是"打了方向没反应"。调快跟随只是把它按比例缩小，还是有。
+     加一项速度前馈把稳态误差抵掉，再故意留一个封顶的横滑当手感：
+     稳态下相机落后玩家 CAM_SLIDE（跟速度无关），换向时前馈项瞬间翻号，画面立刻反。 */
+  const vxLag = (Player.vx || 0) / CAM_RATE;
+  const slide = clamp(vxLag, -CAM_SLIDE, CAM_SLIDE);
+  Cam.x = approach(Cam.x, clamp(Player.x, -1.4, 1.4) + vxLag - slide, CAM_RATE, dt);
+  updateLook(dt);
+  // 远景视差
+  const seg = segAt(Player.z);
+  Road.bgX += seg.curve * (Player.speed * dt / SEG_LEN) * 2.4;
+
+  // 挡位跟音频无关，单独算 —— 静音了也得显示
+  Game.gear = Math.min(GEARS, Math.floor(clamp(Player.speed / Player.maxSpeed, 0, 1) * GEARS) + 1);
+  for (let i = Pickups.length - 1; i >= 0; i--)      // 甩在身后老远的就别留着了
+    if (Pickups[i].z < Player.z - 20000) Pickups.splice(i, 1);
+  updateFx(dt);
+  updateEngine(dt);
+  if (flash > 0) flash = Math.max(0, flash - dt * 3.2);
+  bucketActors();
+}
+
+/* ==========================================================================
+   26. 主循环
+   ========================================================================== */
+let last = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  const now = ts / 1000;
+  if (!last) { last = now; return; }
+  let dt = Math.min(.05, now - last);
+  last = now;
+  musicTick();
+  if (Game.paused) { render(); clearEdges(); return; }
+  if (freezeT > 0) { freezeT -= dt; dt = 0; }      // 命中顿帧：画面还在，逻辑停一下
+  update(dt);
+  render();
+  clearEdges();
+}
+
+/* ==========================================================================
+   27. 启动
+   ========================================================================== */
+function boot() {
+  layout();
+  // 标题页背后也要有画面：先摆一条市中心的路
+  buildTrack(0); prepFog();
+  Road.bgX = 0; Road.starRng = new Float32Array(92);
+  { const r = makeRng(77); for (let i = 0; i < 92; i++) Road.starRng[i] = r(); }
+  Road.finishZ = (Road.segs.length - 60) * SEG_LEN;
+  resetPlayerForRace();
+  spawnRivals(0); spawnTraffic(0);
+  Player.speed = 6200;
+  if (TOUCH) padEl.classList.add('on');
+  showTitle();
+  requestAnimationFrame(frame);
+}
+
+// 标题页让画面自己往前滑，别是一张死图
+const _origUpdate = update;
+update = function (dt) {
+  if (Game.state === 'title' || Game.state === 'shop' || Game.state === 'results') {
+    Player.z += 6200 * dt;
+    Player.x = Math.sin(Player.z * .000018) * .45;
+    Player.speed = 6200;
+    Player.hp = Player.maxHp; Player.state = 'ride'; Player.stun = 0;
+    riderGravity(Player, dt);
+    for (const r of Rivals) updateRival(r, dt, 0);
+    updateTraffic(dt);
+    Cam.x = approach(Cam.x, Player.x, 8, dt);
+    const seg = segAt(Player.z);
+    Road.bgX += seg.curve * (Player.speed * dt / SEG_LEN) * 2.4;
+    if (Player.z > Road.finishZ) Player.z = 3000;
+    Game.gear = 4;
+    updateFx(dt); updateEngine(dt);
+    bucketActors();
+    return;
+  }
+  _origUpdate(dt);
+};
+
+boot();
+</script>
+</body>
+</html>
