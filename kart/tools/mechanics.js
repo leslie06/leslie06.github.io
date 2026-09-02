@@ -33,7 +33,7 @@ function place(k, s, lat, speed) {
   k.finished = false; k.lap = 1;
   const loc = G.locate(k.x, k.z);
   k.node = loc.i; k.s = loc.s; k.prevS = loc.s; k.lat = loc.lat;
-  k.in = { th: 1, br: 0, st: 0, dr: false, it: false };
+  k.in = { th: 1, br: 0, st: 0, stRaw: 0, dr: false, it: false };
   k.prog = k.lap * G.Track.L + k.s;
   return k;
 }
@@ -83,6 +83,7 @@ console.log('  用的弯：s=' + CORNER.s.toFixed(0) + 'm，长 ' + CORNER.len.t
 for (let tier = 0; tier < G.MT.length; tier++) {
   place(P, CORNER.s + 4, -CORNER.sign * 2.5, 22);      // 从弯的外侧切进去
   P.in.dr = true; P.in.st = CORNER.sign;               // 往弯的方向打
+  P.in.stRaw = CORNER.sign;                            // 起漂看的是按键意图
 
   const need = G.MT[tier].t + 0.05;
   let held = 0;
@@ -112,7 +113,7 @@ for (let tier = 0; tier < G.MT.length; tier++) {
 {
   /* 攒不够门槛就松手，什么都不给 */
   place(P, CORNER.s + 4, -CORNER.sign * 2.5, 22);
-  P.in.dr = true; P.in.st = CORNER.sign;
+  P.in.dr = true; P.in.st = CORNER.sign; P.in.stRaw = CORNER.sign;
   for (let i = 0; i < 30; i++) G.updateKart(P, DT);     // 0.3s，不到蓝火的 0.55s
   P.in.dr = false; G.updateKart(P, DT);
   ok(P.boostT <= 0, '攒不够门槛不给涡轮', 'boostT=' + P.boostT.toFixed(2));
@@ -120,7 +121,7 @@ for (let tier = 0; tier < G.MT.length; tier++) {
 {
   /* 反着弯漂必然出界：这条正是"漂移中拐不回反方向"的直接后果 */
   place(P, CORNER.s + 4, 0, 22);
-  P.in.dr = true; P.in.st = -CORNER.sign;
+  P.in.dr = true; P.in.st = -CORNER.sign; P.in.stRaw = -CORNER.sign;
   let wentOff = false;
   for (let i = 0; i < 300 && !wentOff; i++) {
     G.updateKart(P, DT);
@@ -136,6 +137,67 @@ for (let tier = 0; tier < G.MT.length; tier++) {
   for (let i = 0; i < 120; i++) G.updateKart(P, DT);
   ok(P.speed > plain * 1.15, '紫火明显更快',
      (plain * 3.6).toFixed(0) + ' → ' + (P.speed * 3.6).toFixed(0) + ' km/h');
+}
+
+/* =============================================== 转向方向
+   这个世界 forward=+Z、up=+Y、右手系，所以屏幕右边是 **−X**，而 head 增大
+   是往 +X（屏幕左）转。也就是说"按右键该给 I.st 什么符号"完全不直观，
+   写反了游戏照样跑、测试照样过、AI 照样赢 —— 只有人开起来是反的。
+   所以这里不看符号，直接用真的视图投影矩阵问一句：车跑到屏幕哪边去了。 */
+head('转向方向');
+{
+  isolate();
+  const proj = G.M4.persp(G.M4.ident(), 1.30, 16 / 9, 0.22, 1400);
+
+  function steerTo(setInput) {
+    place(P, S0, 0, 20);
+    G.updateCamera(0.016, true);
+    const c = { x: G.Cam.x, y: G.Cam.y, z: G.Cam.z, lx: G.Cam.lx, ly: G.Cam.ly, lz: G.Cam.lz };
+    for (const k in G.Keys) G.Keys[k] = false;
+    for (const k in G.Touch) G.Touch[k] = false;
+    setInput();
+    for (let i = 0; i < 60; i++) { G.readInput(DT); G.updateKart(P, DT); }
+    const view = G.M4.look(G.M4.ident(), c.x, c.y, c.z, c.lx, c.ly, c.lz, 0, 1, 0);
+    const vp = G.M4.mul(G.M4.ident(), proj, view);
+    const cx = vp[0] * P.x + vp[4] * P.y + vp[8] * P.z + vp[12];
+    const cw = vp[3] * P.x + vp[7] * P.y + vp[11] * P.z + vp[15];
+    return cx / cw;                       // 归一化设备坐标 X：>0 就在屏幕右half
+  }
+  const kr = steerTo(() => { G.Keys.ArrowRight = true; G.Keys.ArrowUp = true; });
+  const kl = steerTo(() => { G.Keys.ArrowLeft  = true; G.Keys.ArrowUp = true; });
+  const tr = steerTo(() => { G.Touch.r = true; G.Touch.a = true; });
+  const tl = steerTo(() => { G.Touch.l = true; G.Touch.a = true; });
+  ok(kr > 0.05, '键盘 → 车往屏幕右边走', 'NDC X = ' + kr.toFixed(3));
+  ok(kl < -0.05, '键盘 ← 车往屏幕左边走', 'NDC X = ' + kl.toFixed(3));
+  ok(tr > 0.05, '触屏 ▶ 车往屏幕右边走', 'NDC X = ' + tr.toFixed(3));
+  ok(tl < -0.05, '触屏 ◀ 车往屏幕左边走', 'NDC X = ' + tl.toFixed(3));
+  ok(Math.sign(kr) === Math.sign(tr) && Math.sign(kl) === Math.sign(tl),
+     '触屏和键盘方向一致');
+
+  /* 按右键起漂，得往右漂 */
+  place(P, S0, 0, 22);
+  for (const k in G.Keys) G.Keys[k] = false;
+  for (const k in G.Touch) G.Touch[k] = false;
+  G.Keys.ArrowRight = true; G.Keys.ArrowUp = true; G.Keys.Space = true;
+  for (let i = 0; i < 40 && !P.drift; i++) { G.readInput(DT); G.updateKart(P, DT); }
+  const h0 = P.head;
+  for (let i = 0; i < 40; i++) { G.readInput(DT); G.updateKart(P, DT); }
+  let dh = P.head - h0;
+  while (dh > Math.PI) dh -= Math.PI * 2;
+  while (dh < -Math.PI) dh += Math.PI * 2;
+  ok(P.drift === 1, '按住右 + 空格能起漂');
+  ok(dh < 0, '按右起漂就往右漂（head 减小＝屏幕右）', 'dhead = ' + dh.toFixed(3));
+  for (const k in G.Keys) G.Keys[k] = false;
+
+  /* 小地图：世界方向到画布方向不能翻手性。
+     +X 在小地图上朝右、在 3D 里朝左，但 +Z 也同时反向（小地图朝下、3D 朝上），
+     两个一起翻＝旋转 180°，手性是保住的 —— 这里把它钉死，免得以后只改一边。 */
+  const pr = G.Track.mapProj;
+  const mapU = x => (x - pr.cx) / pr.span;
+  const mapV = z => (z - pr.cz) / pr.span;
+  const dUdX = mapU(1) - mapU(0), dVdZ = mapV(1) - mapV(0);
+  ok(Math.sign(dUdX) === Math.sign(dVdZ), '小地图相对 3D 画面没有镜像（只是转了 180°）',
+     'dU/dX=' + dUdX.toFixed(4) + '  dV/dZ=' + dVdZ.toFixed(4));
 }
 
 /* =============================================== 油门与刹车 */
@@ -288,7 +350,7 @@ head('起跳');
 {
   isolate();
   place(P, S0, 0, 20);
-  P.in.dr = true; P.in.st = 0;      // 不打方向就只跳不漂
+  P.in.dr = true; P.in.st = 0; P.in.stRaw = 0;      // 不打方向就只跳不漂
   G.updateKart(P, DT);
   ok(P.air, '按漂移键会起跳');
   ok(P.drift === 0, '不打方向不进入漂移');

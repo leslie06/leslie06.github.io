@@ -1583,7 +1583,7 @@ function makeKart(idx, ai) {
     spin: 0, small: 0, starT: 0, invT: 0,
     item: null, itemQty: 0, itemRoll: 0, itemRollT: 0,
     finished: false, finishT: 0, finishRank: 0, lapTimes: [], lapStart: 0,
-    in: { th: 0, br: 0, st: 0, dr: false, it: false },
+    in: { th: 0, br: 0, st: 0, stRaw: 0, dr: false, it: false },
     wheelSpin: 0, steerVis: 0, bodyRoll: 0, bodyPitch: 0,
     ai_line: 0, ai_skill: 1, ai_react: 0, ai_itemT: 2, ai_driftT: 0, ai_panic: 0,
     engine: null, band: 1,
@@ -1682,8 +1682,12 @@ function updateKart(k, dt) {
       k.driftChg += dt * (0.72 + 0.28 * clamp(k.speed / SPD_MAX, 0, 1));
       if (k.surf === SURF.VERGE) k.driftChg -= dt * 0.6;
     }
-  } else if (ctrl && I.dr && k.air && k.speed > 8 && Math.abs(I.st) > 0.22) {
-    k.drift = 1; k.driftDir = sign(I.st); k.driftChg = 0;
+  } else if (ctrl && I.dr && (k.air || k.hopT > 0) && k.speed > 8 && Math.abs(I.stRaw) > 0.22) {
+    /* 起漂看的是**按键意图**（stRaw），不是平滑之后的 st。
+       方向平滑要 0.28 秒才升到 0.22，而一次起跳滞空只有 0.24 秒 ——
+       用平滑值的话，从直线状态按「方向 + 跳」是漂不起来的。
+       窗口也从"还在空中"放宽到"这一跳还没结束"，落地那一帧不至于差之毫厘。 */
+    k.drift = 1; k.driftDir = sign(I.stRaw); k.driftChg = 0;
   }
 
   /* ---- 转向 */
@@ -2072,6 +2076,7 @@ function updateAI(k, dt) {
   const want = Math.atan2(tp[0] - k.x, tp[2] - k.z);
   const err = angDiff(want, k.head) + (k.ai_noise || 0);
   I.st = clamp(err * 3.6, -1, 1);
+  I.stRaw = Math.abs(I.st) > 0.22 ? sign(I.st) : 0;    // 人机的 st 没有平滑，直接取符号
 
   /* ---- 油门与刹车：算刹车点
 
@@ -2108,7 +2113,10 @@ function updateAI(k, dt) {
 
   if (cornerR < driftR * S.driftMul && k.speed > 13.5 && Math.abs(err) < 0.7 && k.surf !== SURF.VERGE) {
     k.ai_driftT = Math.max(k.ai_driftT, 0.5);
-    if (!k.drift) I.st = clamp(I.st + ahead.sign * 0.55, -1, 1);   // 先把方向打出去才起得来
+    if (!k.drift) {                                    // 先把方向打出去才起得来
+      I.st = clamp(I.st + ahead.sign * 0.55, -1, 1);
+      I.stRaw = sign(I.st);
+    }
   }
   if (k.drift) {
     if (curvAt(k.s + 6) * k.driftDir < 0) k.ai_driftT = 0;               // 进反向弯了，松
@@ -2907,10 +2915,16 @@ function readInput(dt) {
   const dr = Keys.Space || Keys.ShiftLeft || Keys.ShiftRight || Touch.d;
   const it = Keys.KeyE || Keys.KeyF || Keys.ControlLeft || Keys.ControlRight || Touch.i;
 
-  /* 转向做一点上升沿平滑，键盘也能有模拟量的手感 */
-  const want = (rt ? 1 : 0) - (lf ? 1 : 0);
+  /* 转向做一点上升沿平滑，键盘也能有模拟量的手感。
+
+     符号注意：I.st 为正表示"让 head 增大"。这个世界里 forward=+Z、up=+Y、
+     右手系，所以屏幕右边其实是 **−X**；而 head 增大是把朝向从 +Z 转向 +X，
+     也就是往**屏幕左边**转。所以按右键要给负值。
+     （AI 那边是拿 angDiff 直接算 I.st 的，本来就自洽，不用动。） */
+  const want = (lf ? 1 : 0) - (rt ? 1 : 0);
   steerSmooth = approach(steerSmooth, want, want === 0 ? 16 : 9, dt);
   I.st = clamp(steerSmooth, -1, 1);
+  I.stRaw = want;                          // 起漂用的是这个：按下就有，不等平滑
 
   const racing = Race.state === 'race';
   I.th = racing && th ? 1 : 0;

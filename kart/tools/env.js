@@ -90,6 +90,7 @@ const EXPORTS = [
   'makeKart','updateKart','updateAI','kartCollisions','updateItems','updateParts',
   'useItem','rollItem','giveItem','spinOut','squash','nextAhead',
   'startRace','step','frame','endRace','finishKart','updateRanks','updateCamera',
+  'Touch','readInput','IS_TOUCH',
   'showTitle','SFX','Audio_','render','Shadow','outH','groundOut','sideOut',
 ];
 
