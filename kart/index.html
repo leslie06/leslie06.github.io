@@ -155,21 +155,39 @@
     padding:.1em .5em;border:1px solid var(--line);color:var(--ink);font-size:.92em;}
 
   /* --------------------------------------------------------- 触屏手柄 */
-  #pad{position:fixed;inset:0;z-index:8;pointer-events:none;display:none;}
+  /* 触屏手柄。
+
+     尺寸不能只写 vmin：横屏下 vmin = 屏幕高度/100，手机上约 3.9px，
+     17vmin 才 66px，拇指够不着也按不准。所以用 clamp() 给一个 px 下限。
+     位置贴着底角走，并让开刘海屏的安全区（横屏时刘海在左右，底部还有 home 条）。 */
+  #pad{position:fixed;inset:0;z-index:8;pointer-events:none;display:none;
+    --bs:clamp(78px,23vmin,142px);        /* 方向键、漂移 */
+    --ba:clamp(88px,27vmin,160px);        /* 油门，最大 */
+    --bi:clamp(64px,18vmin,108px);        /* 道具 */
+    --gap:2.2vmin;
+    --edgeL:calc(env(safe-area-inset-left,0px) + 2.2vmin);
+    --edgeR:calc(env(safe-area-inset-right,0px) + 2.2vmin);
+    --edgeB:calc(env(safe-area-inset-bottom,0px) + 2.4vmin);}
   #pad.on{display:block;}
-  .k{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;
-    border-radius:50%;background:rgba(255,255,255,.09);border:2px solid rgba(255,255,255,.22);
+  .k{position:absolute;display:flex;align-items:center;justify-content:center;
+    border-radius:50%;background:rgba(255,255,255,.10);border:2px solid rgba(255,255,255,.26);
     backdrop-filter:blur(5px);font-weight:900;color:var(--ink);
-    font-size:clamp(11px,2.6vmin,20px);letter-spacing:.06em;transition:background .1s,transform .1s;}
-  .k.hit{background:rgba(72,209,255,.4);transform:scale(.93);}
-  #kL{left:3vmin;bottom:16vmin;width:17vmin;height:17vmin;max-width:104px;max-height:104px;}
-  #kR{left:22.5vmin;bottom:16vmin;width:17vmin;height:17vmin;max-width:104px;max-height:104px;}
-  #kA{right:3vmin;bottom:20vmin;width:21vmin;height:21vmin;max-width:126px;max-height:126px;
-    background:rgba(91,255,160,.2);border-color:rgba(91,255,160,.4);}
-  #kD{right:25vmin;bottom:12vmin;width:16vmin;height:16vmin;max-width:100px;max-height:100px;
-    background:rgba(255,210,74,.2);border-color:rgba(255,210,74,.42);}
-  #kI{right:5vmin;bottom:44vmin;width:14vmin;height:14vmin;max-width:88px;max-height:88px;
-    background:rgba(169,139,255,.22);border-color:rgba(169,139,255,.45);}
+    font-size:clamp(13px,3vmin,24px);letter-spacing:.06em;
+    transition:background .08s,transform .08s;}
+  .k.hit{background:rgba(72,209,255,.45);transform:scale(.94);}
+  #kL{left:var(--edgeL);                             bottom:var(--edgeB);
+      width:var(--bs);height:var(--bs);}
+  #kR{left:calc(var(--edgeL) + var(--bs) + var(--gap)); bottom:var(--edgeB);
+      width:var(--bs);height:var(--bs);}
+  #kA{right:var(--edgeR);                            bottom:var(--edgeB);
+      width:var(--ba);height:var(--ba);
+      background:rgba(91,255,160,.22);border-color:rgba(91,255,160,.44);}
+  #kD{right:calc(var(--edgeR) + var(--ba) + var(--gap)); bottom:var(--edgeB);
+      width:var(--bs);height:var(--bs);
+      background:rgba(255,210,74,.22);border-color:rgba(255,210,74,.44);}
+  #kI{right:var(--edgeR); bottom:calc(var(--edgeB) + var(--ba) + var(--gap));
+      width:var(--bi);height:var(--bi);
+      background:rgba(169,139,255,.24);border-color:rgba(169,139,255,.48);}
 
   #rotate{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;
     background:#05070d;color:var(--dim);text-align:center;padding:8vmin;
@@ -787,6 +805,7 @@ function resize() {
   if (w === View.w && h === View.h) return;
   canvas.width = w; canvas.height = h;
   View.w = w; View.h = h; View.asp = w / h; View.dpr = dpr;
+  if (typeof padLayout === 'function') padLayout();     // 转屏之后按钮位置变了
 }
 window.addEventListener('resize', resize);
 
@@ -2464,7 +2483,7 @@ const Race = {
   state: 'title',            // title | countdown | race | finished | paused
   karts: [], player: null, items: [],
   time: 0, countdown: 0, diff: 1, trackIdx: 0, charIdx: 0,
-  order: [], laps: 3, qual: 0,
+  order: [], laps: 3, qual: 0, forcePad: false,
   flash: 0, hype: 0, best: [null, null, null],
 };
 
@@ -2716,6 +2735,7 @@ function render(dt) {
 const $ = id => document.getElementById(id);
 const hudEl = $('hud'), sheetEl = $('sheet'), cardEl = $('card'), toastEl = $('toast');
 const mapCv = $('map'), mapCtx = mapCv.getContext('2d'), flashEl = $('flash');
+const padEl = $('pad');
 
 const ORD = ['st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th'];
 function fmtTime(t) {
@@ -2887,23 +2907,85 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyR' && (Race.state === 'race' || Race.state === 'paused')) startRace();
   if (e.code === 'KeyM') { Audio_.muted = !Audio_.muted; toast(Audio_.muted ? '静音' : '有声'); }
   if (e.code === 'F3') $('fps').classList.toggle('on');
+  if (e.code === 'F2') {                                // 桌面上强制显示手柄，方便调布局
+    Race.forcePad = !Race.forcePad;
+    padEl.classList.toggle('on', Race.forcePad && Race.state === 'race');
+    if (Race.forcePad) padLayout(); else padApply([]);
+    toast(Race.forcePad ? '显示触屏手柄' : '隐藏触屏手柄');
+  }
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','ShiftRight'].indexOf(e.code) >= 0)
     e.preventDefault();
 });
 window.addEventListener('keyup', e => { Keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in Keys) Keys[k] = false; });
 
-function bindPad(id, prop) {
-  const el = $(id);
-  const on  = e => { Touch[prop] = true;  el.classList.add('hit');    audioInit(); e.preventDefault(); };
-  const off = e => { Touch[prop] = false; el.classList.remove('hit'); e.preventDefault(); };
-  el.addEventListener('touchstart', on, { passive: false });
-  el.addEventListener('touchend', off, { passive: false });
-  el.addEventListener('touchcancel', off, { passive: false });
-  el.addEventListener('mousedown', on);
-  window.addEventListener('mouseup', off);
+/* 触屏按钮：不绑在各自的元素上，而是全局收所有触点、自己做命中判定。
+
+   两个原因：
+   1. 触摸事件永远归属于**按下时**那个元素，绑在元素上的话，手指从 ◀ 滑到 ▶
+      不会切换，必须抬手重按 —— 开车的时候这非常难受。
+   2. 每个触点只判给**最近的**那个按钮，所以判定范围可以放得比圆圈大一圈
+      （按不准也算数），又不会出现两个方向键同时按下互相抵消。 */
+const PADS = [
+  { id: 'kL', prop: 'l' }, { id: 'kR', prop: 'r' },
+  { id: 'kA', prop: 'a' }, { id: 'kD', prop: 'd' }, { id: 'kI', prop: 'i' },
+];
+for (const p of PADS) { p.el = $(p.id); p.cx = p.cy = p.r = 0; }
+
+/* 缓存各按钮的圆心和半径。display:none 时量出来是 0，所以显示之后要再量一次。 */
+function padLayout() {
+  for (const p of PADS) {
+    const b = p.el.getBoundingClientRect();
+    if (!b.width) continue;
+    p.cx = b.left + b.width / 2;
+    p.cy = b.top + b.height / 2;
+    p.r  = b.width / 2;
+  }
 }
-bindPad('kL', 'l'); bindPad('kR', 'r'); bindPad('kA', 'a'); bindPad('kD', 'd'); bindPad('kI', 'i');
+/* 一个触点判给谁：最近的那个，且不能超出它半径的 1.35 倍 */
+function padPick(x, y) {
+  let best = null, bd = Infinity;
+  for (const p of PADS) {
+    if (!p.r) continue;
+    const dx = x - p.cx, dy = y - p.cy;
+    const d = Math.hypot(dx, dy);
+    if (d > p.r * 1.35) continue;
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+function padApply(points) {
+  for (const p of PADS) p.on = false;
+  for (const pt of points) { const hit = padPick(pt.x, pt.y); if (hit) hit.on = true; }
+  for (const p of PADS) {
+    if (Touch[p.prop] !== p.on) {
+      Touch[p.prop] = p.on;
+      p.el.classList.toggle('hit', p.on);
+    }
+  }
+}
+function onTouch(e) {
+  if (!padEl.classList.contains('on')) return;
+  audioInit();
+  const pts = [];
+  for (let i = 0; i < e.touches.length; i++)
+    pts.push({ x: e.touches[i].clientX, y: e.touches[i].clientY });
+  padApply(pts);
+  if (pts.length) e.preventDefault();
+}
+for (const ev of ['touchstart', 'touchmove', 'touchend', 'touchcancel'])
+  window.addEventListener(ev, onTouch, { passive: false });
+
+/* 桌面上用鼠标也能试触屏布局（F2 开关） */
+let mouseDown = false;
+window.addEventListener('mousedown', e => {
+  if (!padEl.classList.contains('on')) return;
+  mouseDown = true; audioInit(); padApply([{ x: e.clientX, y: e.clientY }]);
+});
+window.addEventListener('mousemove', e => {
+  if (mouseDown && padEl.classList.contains('on')) padApply([{ x: e.clientX, y: e.clientY }]);
+});
+window.addEventListener('mouseup', () => { mouseDown = false; padApply([]); });
 
 let itemHeld = false;
 function readInput(dt) {
@@ -2949,7 +3031,8 @@ function hideSheet() { sheetEl.classList.remove('on'); }
 function showTitle() {
   Race.state = 'title';
   hudEl.classList.remove('on');
-  $('pad').classList.remove('on');
+  padEl.classList.remove('on');
+  padApply([]);
   Music.on = false;
   const tracks = TRACKS.map((t, i) =>
     '<div class="opt' + (i === Race.trackIdx ? ' sel' : '') + '" data-a="track" data-i="' + i + '">' +
@@ -2992,7 +3075,8 @@ const cssHex = h => '#' + h.toString(16).padStart(6, '0');
 function showResults() {
   Race.state = 'finished';
   hudEl.classList.remove('on');
-  $('pad').classList.remove('on');
+  padEl.classList.remove('on');
+  padApply([]);
   Music.on = false;
   const rows = Race.order.map(k => {
     const me = k === Race.player;
@@ -3101,7 +3185,7 @@ function startRace() {
   $('itemIco').innerHTML = ''; $('itemQty').classList.remove('on');
   $('splits').innerHTML = '';
   hudEl.classList.add('on');
-  if (IS_TOUCH) $('pad').classList.add('on');
+  if (IS_TOUCH || Race.forcePad) { padEl.classList.add('on'); padLayout(); }
   Cam.shake = 0;
   updateCamera(0.016, true);
   countStep = 4;

@@ -394,6 +394,90 @@ head('起步加速');
   ok(!inWindow(-1), '没踩不算');
 }
 
+/* =============================================== 触屏手柄
+   这一节把"按钮够不够大、够不够靠下"变成断言。原来的布局用纯 vmin 写尺寸，
+   横屏下 vmin = 屏幕高度/100，手机上 17vmin 只有 66px 且离底边 62px ——
+   按钮又小又悬在半空。这种问题在桌面上永远看不出来。 */
+head('触屏手柄');
+{
+  /* 复现 CSS 里的 clamp()，算出各机型横屏下按钮的实际像素尺寸 */
+  const clampPx = (lo, v, hi) => Math.min(Math.max(v, lo), hi);
+  const PHONES = [
+    { nm: 'iPhone SE 横屏',      w: 667,  h: 375 },
+    { nm: 'iPhone 14 横屏',      w: 844,  h: 390 },
+    { nm: 'iPhone 14 Pro Max',   w: 932,  h: 430 },
+    { nm: '小屏安卓 横屏',        w: 640,  h: 360 },
+    { nm: 'iPad 横屏',           w: 1024, h: 768 },
+  ];
+  const MIN_TOUCH = 76;          // 拇指按得准的最小直径
+  const MAX_BOTTOM = 46;         // 按钮下缘离屏幕底边最多这么远
+
+  let allBig = true, allLow = true, allFit = true, worst = '';
+  for (const ph of PHONES) {
+    const vmin = Math.min(ph.w, ph.h) / 100;
+    const bs = clampPx(78, 23 * vmin, 142);      // 方向键 / 漂移
+    const ba = clampPx(88, 27 * vmin, 160);      // 油门
+    const bi = clampPx(64, 18 * vmin, 108);      // 道具
+    const gap = 2.2 * vmin, edge = 2.2 * vmin, edgeB = 2.4 * vmin;
+
+    if (bs < MIN_TOUCH || ba < MIN_TOUCH) { allBig = false; worst = ph.nm + ' 方向键 ' + bs.toFixed(0) + 'px'; }
+    if (edgeB > MAX_BOTTOM) { allLow = false; worst = ph.nm + ' 离底边 ' + edgeB.toFixed(0) + 'px'; }
+    // 左右两组不能撞上
+    const leftEnd = edge + bs + gap + bs;
+    const rightStart = ph.w - (edge + ba + gap + bs);
+    if (leftEnd > rightStart - 40) { allFit = false; worst = ph.nm + ' 左右两组挤在一起'; }
+    // 道具键不能顶出屏幕
+    if (edgeB + ba + gap + bi > ph.h) { allFit = false; worst = ph.nm + ' 道具键超出屏幕'; }
+  }
+  ok(allBig, '所有机型上按钮直径 ≥ ' + MIN_TOUCH + 'px', worst);
+  ok(allLow, '按钮贴着屏幕底边（≤ ' + MAX_BOTTOM + 'px）', worst);
+  ok(allFit, '左右两组不打架、不出屏', worst);
+
+  /* 命中判定：按 iPhone 14 横屏的实际几何摆好 */
+  const W = 844, H = 390, vmin = 3.9;
+  const bs = clampPx(78, 23 * vmin, 142), ba = clampPx(88, 27 * vmin, 160), bi = clampPx(64, 18 * vmin, 108);
+  const gap = 2.2 * vmin, edge = 2.2 * vmin, edgeB = 2.4 * vmin;
+  const set = (id, cx, cy, r) => { const p = G.PADS.find(q => q.id === id); p.cx = cx; p.cy = cy; p.r = r; };
+  set('kL', edge + bs / 2,                    H - edgeB - bs / 2, bs / 2);
+  set('kR', edge + bs + gap + bs / 2,         H - edgeB - bs / 2, bs / 2);
+  set('kA', W - edge - ba / 2,                H - edgeB - ba / 2, ba / 2);
+  set('kD', W - edge - ba - gap - bs / 2,     H - edgeB - bs / 2, bs / 2);
+  set('kI', W - edge - bi / 2,                H - edgeB - ba - gap - bi / 2, bi / 2);
+
+  const pick = (x, y) => { const p = G.padPick(x, y); return p ? p.prop : null; };
+  const kL = G.PADS.find(p => p.id === 'kL'), kR = G.PADS.find(p => p.id === 'kR');
+  ok(pick(kL.cx, kL.cy) === 'l', '按 ◀ 中心命中左');
+  ok(pick(kR.cx, kR.cy) === 'r', '按 ▶ 中心命中右');
+  ok(pick(W - edge - ba / 2, H - edgeB - ba / 2) === 'a', '按油门命中油门');
+
+  /* 判定范围要比圆圈大一圈：按偏了也得算 */
+  ok(pick(kL.cx - kL.r * 1.2, kL.cy) === 'l', '按到 ◀ 外面一点也算');
+  ok(pick(kL.cx, kL.cy + kL.r * 1.2) === 'l', '按到 ◀ 下面一点也算（拇指容易偏下）');
+  ok(pick(kL.cx, kL.cy - kL.r * 3) === null, '离太远不算');
+
+  /* 两个方向键不能同时按下 —— 同时按下会互相抵消，车直接不转 */
+  let bothEver = false;
+  for (let x = kL.cx - kL.r; x <= kR.cx + kR.r; x += 2) {
+    G.padApply([{ x, y: kL.cy }]);
+    if (G.Touch.l && G.Touch.r) bothEver = true;
+  }
+  ok(!bothEver, '横扫一遍，左右键从不同时按下');
+
+  /* 手指从 ◀ 滑到 ▶ 要能切换（这是绑在元素上做不到的） */
+  G.padApply([{ x: kL.cx, y: kL.cy }]);
+  const wasL = G.Touch.l;
+  G.padApply([{ x: kR.cx, y: kR.cy }]);
+  ok(wasL && !G.Touch.l && G.Touch.r, '手指从 ◀ 滑到 ▶ 能切换，不用抬手');
+
+  /* 两根手指：一边方向一边油门 */
+  G.padApply([{ x: kL.cx, y: kL.cy }, { x: W - edge - ba / 2, y: H - edgeB - ba / 2 }]);
+  ok(G.Touch.l && G.Touch.a && !G.Touch.r, '左手方向 + 右手油门能同时按');
+
+  /* 松手要全部弹起来 */
+  G.padApply([]);
+  ok(!G.Touch.l && !G.Touch.r && !G.Touch.a && !G.Touch.d && !G.Touch.i, '松手全部弹起');
+}
+
 /* =============================================== 名次 */
 head('名次');
 {
