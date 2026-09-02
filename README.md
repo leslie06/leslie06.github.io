@@ -6,6 +6,7 @@
 
 | 游戏 | 类型 | 地址 |
 | --- | --- | --- |
+| [雪原杯](kart/) | 3D 卡丁车竞速，漂移攒涡轮，打人机 | https://leslie06.github.io/kart/ |
 | [暴力摩托](roadRash/) | 伪 3D 街头摩托竞速，能踹人 | https://leslie06.github.io/roadRash/ |
 | [尸潮之夜](zombie/) | 俯视角波次生存射击，夜战 | https://leslie06.github.io/zombie/ |
 | [飛簷 · 屋顶轻功](wuxia/) | 3D 武侠屋顶跑酷，手写 WebGL | https://leslie06.github.io/wuxia/ |
@@ -27,7 +28,7 @@
 - **单文件**：游戏的全部逻辑写在 `index.html` 的 `<script>` 里，没有构建步骤，改完刷新即可
 - **零外部请求**：不引 CDN、不引字体、不放素材文件；画面和声音都在运行时生成
 - **手机能玩**：触屏走虚拟摇杆或手柄，横竖屏都不能塌
-- **无头测试**（可选）：放在游戏目录的 `tools/` 里，用假的 DOM 把游戏逻辑在 Node 里跑起来，查异常、NaN 和数值曲线。`roadRash/`、`wuxia/`、`zombie/` 有，跑 `node tools/test.js`
+- **无头测试**（可选）：放在游戏目录的 `tools/` 里，用假的 DOM 把游戏逻辑在 Node 里跑起来，查异常、NaN 和数值曲线。`kart/`、`roadRash/`、`wuxia/`、`zombie/` 有，跑 `node tools/test.js`
 
 ## 附带的小工具
 
