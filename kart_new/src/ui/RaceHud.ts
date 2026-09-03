@@ -9,6 +9,19 @@
 import { formatTime, formatTimeOrDash } from '../race/formatTime';
 import type { RacePhase, Standing } from '../race/RaceState';
 
+/**
+ * 赛道进度条上的一个点。每辆车一个。
+ * t 直接用赛道进度（0..1），不是 totalProgress —— 进度条画的是"在这一圈的什么位置"。
+ */
+export interface TrackDot {
+  id: string;
+  /** 0..1 */
+  t: number;
+  /** 和车身同色，一眼对得上 */
+  color: string;
+  isPlayer: boolean;
+}
+
 /** 每帧喂给 HUD 的快照。 */
 export interface RaceHudView {
   phase: RacePhase;
@@ -29,6 +42,8 @@ export interface RaceHudView {
   place: number;
   racerCount: number;
   standings: readonly Standing[];
+  /** 赛道进度条上的小圆点，每辆车一个。空数组 = 不画进度条 */
+  dots: readonly TrackDot[];
   /** 完赛结算数据，没完赛是 null */
   results: RaceResults | null;
 }
@@ -40,6 +55,21 @@ export interface RaceResults {
   bestLap: number | null;
   /** 这一局有没有破历史纪录 */
   newRecord: boolean;
+  /** 完整排名表（含 AI）。单人局是空数组 */
+  standings: readonly ResultRow[];
+}
+
+/** 结算排名表的一行。 */
+export interface ResultRow {
+  place: number;
+  name: string;
+  isPlayer: boolean;
+  color: string;
+  /** 完赛总时间；没跑完是 null */
+  finishTime: number | null;
+  /** 已完成圈数，给没跑完的车显示"第 n 圈" */
+  lap: number;
+  finished: boolean;
 }
 
 /** 中央弹出提示的默认时长（秒） */
@@ -62,6 +92,9 @@ export class RaceHud {
   private readonly center: HTMLElement;
   private readonly warn: HTMLElement;
   private readonly results: HTMLElement;
+  private readonly trackBar: HTMLElement;
+  /** 进度条上的小圆点，按 id 复用 DOM，不每帧重建 */
+  private readonly dotEls = new Map<string, HTMLElement>();
 
   /** 中央提示的剩余显示时间 */
   private popupTime = 0;
@@ -69,7 +102,8 @@ export class RaceHud {
   /** 结算面板已经按这个签名渲染过了，内容没变就不重建 DOM */
   private resultsSignature = '';
 
-  constructor(parent: HTMLElement) {
+  /** @param onRestart 结算面板上"再来一局"按下时调。触屏上没有 R 键，这个按钮是唯一的入口 */
+  constructor(parent: HTMLElement, private readonly onRestart?: () => void) {
     injectRaceStyles();
 
     this.root = document.createElement('div');
@@ -89,6 +123,7 @@ export class RaceHud {
         <div class="race-row race-row-best"><span class="race-k">最佳</span><span class="race-v">--.---</span></div>
         <div class="race-row race-row-record"><span class="race-k">纪录</span><span class="race-v">--.---</span></div>
       </div>
+      <div class="race-track" hidden><div class="race-track-line"></div></div>
       <div class="race-center" hidden></div>
       <div class="race-warn" hidden>⚠ 漏了 checkpoint · 本圈不计</div>
       <div class="race-results" hidden></div>
@@ -105,6 +140,7 @@ export class RaceHud {
     this.bestValue = q('.race-row-best .race-v');
     this.recordRow = q('.race-row-record');
     this.recordValue = q('.race-row-record .race-v');
+    this.trackBar = q('.race-track');
     this.center = q('.race-center');
     this.warn = q('.race-warn');
     this.results = q('.race-results');
@@ -151,6 +187,9 @@ export class RaceHud {
       view.bestLap !== null && (view.recordLap === null || view.bestLap <= view.recordLap);
     this.bestValue.classList.toggle('race-v-record', beatingRecord);
 
+    // --- 赛道进度条 ---
+    this.renderDots(view.dots);
+
     // --- 漏 checkpoint 警告 ---
     this.warn.hidden = view.lapValid || view.phase !== 'racing';
 
@@ -166,6 +205,38 @@ export class RaceHud {
 
     // --- 结算面板 ---
     this.renderResults(view);
+  }
+
+  /**
+   * 赛道进度条：一条横线 + 每辆车一个小圆点。
+   * 圆点按 id 复用 DOM，只改 left / background，不每帧重建元素。
+   */
+  private renderDots(dots: readonly TrackDot[]): void {
+    this.trackBar.hidden = dots.length < 2;
+    if (this.trackBar.hidden) return;
+
+    const seen = new Set<string>();
+    for (const dot of dots) {
+      seen.add(dot.id);
+      let el = this.dotEls.get(dot.id);
+      if (!el) {
+        el = document.createElement('i');
+        el.className = dot.isPlayer ? 'race-dot race-dot-me' : 'race-dot';
+        this.trackBar.appendChild(el);
+        this.dotEls.set(dot.id, el);
+      }
+      // t 折回 [0,1)：车过线的那一帧 t 会从 0.999 跳回 0，圆点跟着绕回起点
+      const t = ((dot.t % 1) + 1) % 1;
+      // 横线左右各让开 10px 内边距，所以 0%~100% 要映射到 [10px, 宽度-10px]
+      el.style.left = `calc(10px + ${(t * 100).toFixed(2)}% - ${(t * 20).toFixed(2)}px)`;
+      if (el.style.background !== dot.color) el.style.background = dot.color;
+    }
+    // 车退出（理论上不会，但重开局换阵容时会）就把多余的点删掉
+    for (const [id, el] of this.dotEls) {
+      if (seen.has(id)) continue;
+      el.remove();
+      this.dotEls.delete(id);
+    }
   }
 
   private renderCountdown(remaining: number): void {
@@ -213,7 +284,9 @@ export class RaceHud {
       }
       return;
     }
-    const signature = `${r.place}|${r.totalTime}|${r.lapTimes.join(',')}|${r.newRecord}`;
+    // 排名表也进签名：AI 还在跑，名次会一直变，内容变了就得重画
+    const standings = r.standings.map((s) => `${s.place}${s.name}${s.finishTime ?? s.lap}`).join(';');
+    const signature = `${r.place}|${r.totalTime}|${r.lapTimes.join(',')}|${r.newRecord}|${standings}`;
     if (signature === this.resultsSignature) return;
     this.resultsSignature = signature;
 
@@ -232,10 +305,40 @@ export class RaceHud {
       <ol class="race-res-laps">${rows}</ol>
       <div class="race-res-best">最佳圈 ${formatTimeOrDash(r.bestLap)}</div>
       ${r.newRecord ? '<div class="race-res-record">★ 打破本地纪录</div>' : ''}
-      <div class="race-res-hint">按 R 重开</div>
+      ${renderStandings(r.standings)}
+      <button class="race-res-btn" type="button">再来一局</button>
+      <div class="race-res-hint">或按 R</div>
     `;
+    this.results.querySelector('.race-res-btn')!.addEventListener('click', () => this.onRestart?.());
     this.results.hidden = false;
   }
+}
+
+/** 结算面板下半截的完整排名表。单人局（空数组）不画。 */
+function renderStandings(rows: readonly ResultRow[]): string {
+  if (rows.length < 2) return '';
+  const items = rows
+    .map((row) => {
+      // 还没跑完的车没有总时间，显示它跑到第几圈了
+      const right = row.finished ? formatTime(row.finishTime ?? 0) : `第 ${row.lap + 1} 圈`;
+      return `<li class="race-rank-row${row.isPlayer ? ' race-rank-me' : ''}">
+        <span class="race-rank-place">${row.place}</span>
+        <i class="race-rank-chip" style="background:${escapeAttr(row.color)}"></i>
+        <span class="race-rank-name">${escapeHtml(row.name)}</span>
+        <span class="race-rank-time${row.finished ? '' : ' race-rank-dnf'}">${right}</span>
+      </li>`;
+    })
+    .join('');
+  return `<div class="race-rank-title">排名</div><ol class="race-rank">${items}</ol>`;
+}
+
+/** 名字来自配置表，不是用户输入，但拼进 innerHTML 之前还是转义一下。 */
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
+}
+
+function escapeAttr(text: string): string {
+  return text.replace(/["'<>&]/g, '');
 }
 
 function setText(el: HTMLElement, value: string): void {
@@ -293,6 +396,11 @@ function injectRaceStyles(): void {
     .race-row-best .race-v.race-v-record { color: var(--race-record); }
     .race-row-record .race-v { opacity: 0.75; font-size: 14px; }
     body.debug-gui-open .race-times { right: 264px; }
+    /* 触屏时右上角被道具键占着，计时面板往左让，同时避开刘海 */
+    body.touch-input .race-times {
+      top: calc(14px + env(safe-area-inset-top));
+      right: calc(30px + clamp(58px, 12vmin, 92px) + env(safe-area-inset-right));
+    }
 
     /* 中央：倒计时 / 圈速弹窗 */
     .race-center {
@@ -321,6 +429,7 @@ function injectRaceStyles(): void {
 
     /* 结算面板 */
     .race-results {
+      z-index: 40;
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
       min-width: 300px; padding: 22px 30px 18px;
       background: rgba(10,12,18,0.82); border: 1px solid rgba(255,255,255,0.14);
@@ -339,7 +448,79 @@ function injectRaceStyles(): void {
     .race-res-lap-best { color: var(--race-best); font-weight: 700; }
     .race-res-best { font-size: 14px; color: var(--race-best); }
     .race-res-record { font-size: 14px; color: var(--race-record); font-weight: 700; }
-    .race-res-hint { font-size: 12px; opacity: 0.55; margin-top: 8px; }
+    .race-res-hint { font-size: 12px; opacity: 0.55; margin-top: 6px; }
+    /* HUD 整层是 pointer-events: none，按钮要自己把事件收回来；
+       z-index 要压过触屏摇杆区（那一块也是 pointer-events: auto，会盖住半个面板） */
+    .race-res-btn {
+      pointer-events: auto; margin-top: 14px; padding: 10px 26px;
+      border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
+      background: #4d9bff; color: #06101f; font-weight: 700;
+      font-family: inherit; font-size: 15px; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 结算面板下半截：完整排名表 */
+    .race-rank-title {
+      font-size: 12px; letter-spacing: 4px; opacity: 0.6; margin-top: 12px;
+    }
+    .race-rank {
+      list-style: none; margin: 4px 0 0; padding: 0; width: 100%;
+      max-height: 40vh; overflow-y: auto;
+    }
+    .race-rank-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; padding: 3px 0; font-variant-numeric: tabular-nums;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .race-rank-me { color: var(--race-best); font-weight: 700; }
+    .race-rank-place { width: 2ch; text-align: right; opacity: 0.75; }
+    .race-rank-chip {
+      width: 10px; height: 10px; border-radius: 3px; flex: none;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+    }
+    .race-rank-name { flex: 1; min-width: 5ch; }
+    .race-rank-time { opacity: 0.9; }
+    .race-rank-dnf { opacity: 0.5; }
+
+    /* 底部中央：赛道进度条。一条横线，每辆车一个小圆点。
+       路面是浅色的，所以垫一层深色底，不然白点和白线在直道上会糊掉。
+       bottom 要给 .hud-help 那行按键提示（bottom: 6px）让开位置 */
+    .race-track {
+      position: absolute; left: 50%; bottom: 32px; transform: translateX(-50%);
+      width: min(46vw, 520px); height: 18px;
+      padding: 0 10px; box-sizing: content-box;
+      background: rgba(0,0,0,0.34); border-radius: 10px;
+      backdrop-filter: blur(3px);
+    }
+    .race-track-line {
+      position: absolute; left: 10px; right: 10px; top: 50%; height: 4px;
+      margin-top: -2px; border-radius: 2px;
+      background: rgba(255,255,255,0.3);
+    }
+    /* 起点/终点线：进度条的两端 */
+    .race-track-line::before, .race-track-line::after {
+      content: ''; position: absolute; top: -3px; width: 2px; height: 10px;
+      background: rgba(255,255,255,0.75);
+    }
+    .race-track-line::before { left: 0; }
+    .race-track-line::after { right: 0; }
+    /* 圆点用 calc 把 0%~100% 映射到横线的两端（横线两边各让开 10px 内边距） */
+    .race-dot {
+      position: absolute; top: 50%; width: 9px; height: 9px;
+      margin: -4.5px 0 0 -4.5px; border-radius: 50%;
+      background: #fff; box-shadow: 0 0 0 1.5px rgba(0,0,0,0.55);
+      transition: left 90ms linear;
+    }
+    /* 玩家的点大一圈、带白环，一眼找得到自己 */
+    .race-dot-me {
+      width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; z-index: 1;
+      box-shadow: 0 0 0 2px #fff, 0 0 8px rgba(0,0,0,0.6);
+    }
+
+    /* 触屏：左上角那一列也要让开刘海 */
+    body.touch-input .race-lap { left: calc(20px + env(safe-area-inset-left)); }
+    body.touch-input .race-pos { left: calc(20px + env(safe-area-inset-left)); }
+    body.touch-input .race-progress { bottom: calc(20px + env(safe-area-inset-bottom)); }
 
     @media (max-width: 640px) {
       .race-lap-value { font-size: 28px; }

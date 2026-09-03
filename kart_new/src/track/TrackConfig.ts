@@ -74,6 +74,31 @@ export const DEFAULT_TRACK_CONFIG: TrackConfig = {
   skirtBottomY: -4,
 };
 
+/**
+ * 道具箱的摆放。
+ *
+ * 一"排"是同一个赛道进度 t 上横着摆的几个箱子，lanes 是各自相对中心线的横向偏移
+ * （米，正 = 车手视角右侧）。路面半宽 8.5m，所以 lanes 控制在 ±6 以内，
+ * 让箱子留在柏油上而不是路肩上。
+ *
+ * t 的选点原则：放在直道和出弯处，别放在弯心 —— 弯心上抢箱子会逼着人切内线撞墙。
+ */
+export interface ItemBoxRow {
+  /** 沿样条的进度 0..1 */
+  t: number;
+  /** 这一排每个箱子的横向偏移（米） */
+  lanes: readonly number[];
+}
+
+export const ITEM_BOX_ROWS: readonly ItemBoxRow[] = [
+  { t: 0.08, lanes: [-5, -2.5, 0, 2.5, 5] },
+  { t: 0.24, lanes: [-4, 0, 4] },
+  { t: 0.38, lanes: [-5, -2.5, 0, 2.5, 5] },
+  { t: 0.52, lanes: [-4, 0, 4] },
+  { t: 0.66, lanes: [-5, -2.5, 0, 2.5, 5] },
+  { t: 0.81, lanes: [-4, 0, 4] },
+];
+
 /** 可行驶半宽 = 路面一半 + 路肩。超出它就撞护栏。 */
 export function drivableHalfWidth(cfg: Readonly<TrackConfig>): number {
   return cfg.trackWidth / 2 + cfg.shoulderWidth;

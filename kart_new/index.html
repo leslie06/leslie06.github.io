@@ -2,12 +2,37 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <!--
+      viewport-fit=cover：让页面铺到刘海和小白条下面，再靠 env(safe-area-inset-*) 把 UI 让回来。
+      不写 cover 的话 iOS 会自己留白边，横屏时左右各黑一条。
+      user-scalable=no 在 iOS 10 之后被 Safari 无视了，真正拦住缩放的是
+      DeviceOverlays.installGestureGuards()，这里留着是给别的浏览器看的。
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0d1017" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Kart Prototype</title>
     <style>
       :root { color-scheme: dark; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { width: 100%; height: 100%; overflow: hidden; background: #0d1017; }
+      html, body {
+        width: 100%; height: 100%; overflow: hidden; background: #0d1017;
+        /* 触屏上把浏览器的默认手势全关掉：
+           touch-action  = 不滚动不缩放（摇杆要靠它才能拿到连续的 pointermove）
+           overscroll    = 不要下拉刷新和边缘橡皮筋
+           user-select / touch-callout = 长按不选中、不弹"拷贝"菜单 */
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
       body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       #app { position: fixed; inset: 0; }
       canvas { display: block; width: 100%; height: 100%; touch-action: none; }

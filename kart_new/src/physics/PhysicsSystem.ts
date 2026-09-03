@@ -34,7 +34,7 @@ export class PhysicsSystem {
     centerZ: 0,
     heading: 0,
   };
-  /** 复用的结果对象，避免每帧新建 */
+  /** 复用的结果对象，避免每帧新建。多车时调用方自己传 out（每辆车一个），见 sample() */
   private readonly sampleOut: GroundSample = {
     onTrack: true,
     height: 0,
@@ -84,10 +84,17 @@ export class PhysicsSystem {
    * @param respawnT 指定重生点在样条上的位置（RaceProgress.getLastCheckpoint().t）。
    *   不传就退回"最近的样条点"。之所以要能指定：从赛道外面横着摔出去时，
    *   最近样条点可能落在赛道**另一段**上，那等于摔一跤白送一大截近道。
+   * @param out 写结果的对象。不传就用内部那个共享的 ——
+   *   **多车时必须传**：加了 AI 之后要先给所有车各采一次样（比赛状态机得先拿到全部进度），
+   *   再逐辆 stepKart，共享一个 out 的话前面几辆的采样会被后面覆盖掉。
    */
-  sample(x: number, y: number, z: number, respawnT?: number): GroundSample {
-    const out = this.sampleOut;
-
+  sample(
+    x: number,
+    y: number,
+    z: number,
+    respawnT?: number,
+    out: GroundSample = this.sampleOut,
+  ): GroundSample {
     this.ray.origin.x = x;
     this.ray.origin.y = y + RAY_UP;
     this.ray.origin.z = z;

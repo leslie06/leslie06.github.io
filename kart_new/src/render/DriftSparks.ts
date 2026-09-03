@@ -18,10 +18,14 @@ export class DriftSparks {
     new THREE.Color('#ff4fd8'),
   ] as const;
 
-  private static readonly CAPACITY = 400;
+  /** 默认粒子池容量。实际用多少由画质档位给（QualitySettings.sparkCapacity） */
+  static readonly DEFAULT_CAPACITY = 400;
   private static readonly LIFE = 0.38;
   /** 每个后轮每秒喷多少粒子 */
   private static readonly RATE = 110;
+
+  /** 这一份火花的池子容量。低画质档位会开小一点 */
+  readonly capacity: number;
 
   private readonly positions: Float32Array;
   private readonly colors: Float32Array;
@@ -31,8 +35,8 @@ export class DriftSparks {
   private cursor = 0;
   private emitAccumulator = 0;
 
-  constructor() {
-    const n = DriftSparks.CAPACITY;
+  constructor(capacity: number = DriftSparks.DEFAULT_CAPACITY) {
+    const n = (this.capacity = Math.max(1, Math.floor(capacity)));
     this.positions = new Float32Array(n * 3);
     this.colors = new Float32Array(n * 3);
     this.velocities = new Float32Array(n * 3);
@@ -87,7 +91,7 @@ export class DriftSparks {
     }
 
     // --- 推进 ---
-    const n = DriftSparks.CAPACITY;
+    const n = this.capacity;
     for (let i = 0; i < n; i++) {
       if (this.life[i]! <= 0) continue;
       const remaining = (this.life[i] = this.life[i]! - dt);
@@ -118,7 +122,7 @@ export class DriftSparks {
 
   private spawn(origin: THREE.Vector3, color: THREE.Color, groundY: number): void {
     const i = this.cursor;
-    this.cursor = (this.cursor + 1) % DriftSparks.CAPACITY;
+    this.cursor = (this.cursor + 1) % this.capacity;
     const o = i * 3;
 
     this.positions[o] = origin.x + (Math.random() - 0.5) * 0.18;
@@ -145,7 +149,7 @@ export class DriftSparks {
   /** 活着的粒子数，给测试和调试用 */
   get activeCount(): number {
     let n = 0;
-    for (let i = 0; i < DriftSparks.CAPACITY; i++) if (this.life[i]! > 0) n++;
+    for (let i = 0; i < this.capacity; i++) if (this.life[i]! > 0) n++;
     return n;
   }
 }

@@ -6,8 +6,8 @@
  *   - 圈数达标判定
  *   - 按 totalProgress 排名次
  *
- * 现在只有玩家一辆车，但接口是按多车写的：加 AI 只要在构造时多传几个 racer，
- * 每帧把它们的 t 一起喂进 update 就行。
+ * 玩家和 AI 在这里没有区别，都是一个 racer：主循环每帧把所有车的 t 一起喂进 update。
+ * isPlayer 只影响一件事 —— 比赛什么时候算结束（玩家全部冲线即结束，AI 还在跑也照样出结算面板）。
  */
 import { NEUTRAL_INPUT, type InputState } from '../input/InputState';
 import { DEFAULT_CHECKPOINT_COUNT, RaceProgress, type LapCompleted } from './RaceProgress';

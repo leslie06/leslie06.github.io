@@ -3,6 +3,7 @@
 马里奥赛车那种街机手感的卡丁车原型。Three.js + Vite + TypeScript。
 现在有：一条程序化生成的闭合赛道（带起伏、路肩、护栏）、一辆贴地形跑的车、一个跟随相机，
 以及一套完整的比赛流程 —— 倒计时发车、checkpoint 防抄近道、圈速计时、名次、结算面板。
+手机上也能开：虚拟摇杆 + 三档画质自适应，见[移动端适配](#移动端适配)。
 
 ## 跑起来
 
@@ -25,6 +26,9 @@ npm test         # vitest
 | `R` | 重开比赛（回起跑线 + 倒计时重来） |
 | `H` | 收起 / 展开调参面板 |
 
+触屏（手机/平板自动切过去，也可以在左上角 ⚙ 设置里手动选）：左下浮动摇杆转向，
+右下三个按钮是油门 / 刹车倒车 / 漂移，右上角是道具键。
+
 ## 架构
 
 ```
@@ -35,10 +39,15 @@ src/
     KartConfig.ts      所有手感参数 + GUI 用的范围表
     kartStep.test.ts   含一条测试直接读源码断言没有 three / rapier / DOM 引用
   input/
-    InputState.ts      中立输入意图 { steer, throttle, brake, drift } + InputAdapter 接口
-    KeyboardAdapter.ts 键盘 -> InputState。以后加触屏摇杆只要再实现一个 Adapter
+    InputState.ts      中立输入意图 { steer, throttle, brake, drift, useItem } + InputAdapter 接口
+    KeyboardAdapter.ts 键盘 -> InputState
+    TouchAdapter.ts    虚拟摇杆 + 按钮（CSS 定位的 DOM）-> InputState，和键盘平级
+    touchMath.ts       摇杆的死区/曲线，纯函数
+    InputMode.ts       键盘还是触屏：探测 + 手动覆盖
   core/
     FixedStepLoop.ts   固定步长累加器，物理 60Hz，渲染拿 alpha 插值
+    DeviceCaps.ts      UA / WebGL 参数 / 屏幕探测，探完变成裸数字结构
+    Prefs.ts           画质档位和操作方式的本机设置（localStorage + URL 参数覆盖）
   track/
     TrackConfig.ts     赛道控制点（带 y）+ 宽度/路肩/护栏尺寸
     TrackSpline.ts     闭合 CatmullRom 中心线；getProgress 用 500 点预采样表查最近点
@@ -46,9 +55,20 @@ src/
   physics/
     PhysicsSystem.ts   只用 rapier 做 raycast：赛道 trimesh + 每帧一条向下的射线
   render/
-    World.ts           地面网格 + 光照 + 参照物
-    KartView.ts        Box 拼的占位车 + 纯视觉的侧倾/后仰/前轮转角
+    World.ts           地面网格 + 光照 + 参照物（InstancedMesh，密度按档位）
+    KartView.ts        Box 拼的占位车，按材质合并成 6 个 drawcall + 纯视觉的侧倾/后仰
     FollowCamera.ts    弹簧阻尼跟随，速度越快拉得越远、FOV 越大
+    QualityTiers.ts    high/medium/low 三档参数表 + 分档逻辑（纯函数）
+    PostFx.ts          后处理链，按档位建 bloom / SMAA，low 档不建 composer
+    BlobShadows.ts     贴片假影子，low 档没有实时阴影时顶上
+    FrameMonitor.ts    最近 60 帧的账本，持续掉帧就建议降档（纯逻辑）
+    PerfBudget.ts      拿 renderer.info 核 low 档预算
+  assets/
+    AssetManifest.ts   资源清单 + 校验（PNG/JPG 直接报错，首屏 10MB 预算）
+    AssetLoader.ts     KTX2 / draco / meshopt，按 phase 分批加载
+    LoadProgress.ts    加权任务的进度账本（下载之外还有 wasm 编译、网格生成）
+  audio/
+    AudioUnlock.ts     第一次手势里解锁 AudioContext（iOS 不这么做就永远静音）
   race/
     RaceProgress.ts    单车的圈数 / checkpoint / 圈速。纯逻辑，只吃 t 和 dt
     RaceState.ts       倒计时 -> 比赛中 -> 结束的状态机 + 输入锁 + 名次。接口按多车写
@@ -58,6 +78,10 @@ src/
     Hud.ts             DOM 显示速度和 FPS
     RaceHud.ts         DOM 显示圈数 / 圈速 / 倒计时 / 结算面板
     DebugGui.ts        lil-gui，三组参数全部实时可调
+    LoadingScreen.ts   首屏进度条
+    SettingsMenu.ts    画质档位 / 操作方式（给玩家看的那两行）
+    DeviceOverlays.ts  竖屏遮罩、WebGL 上下文丢失、双击缩放拦截
+    Toast.ts           "已自动降画质"这类一句话提示
 ```
 
 ### 几条硬规矩
@@ -292,9 +316,114 @@ GUI 的「赛道」一栏：显示样条中心线（品红色 `Line`）、当前
 > **坑二**：计时面板和 lil-gui 都钉在右上角，会被压住。`DebugGui` 现在往 `body` 上打
 > 一个 `debug-gui-open` class，HUD 据此左移，按 `H` 收起面板时自动回位。
 
+## 移动端适配
+
+目标：手机浏览器稳定 30fps、首屏 10MB 以内。分四块：触屏输入、画质分档、资源管线、
+iOS Safari 的几个专项坑。
+
+### 触屏输入
+
+`TouchAdapter` 和 `KeyboardAdapter` 平级，都只产出 `InputState`，上层完全不知道
+这一帧的输入是手指还是键盘来的。启动时按设备探测选一个（`detectInputMode`），
+设置菜单里可以手动切。
+
+- 左下一大块是**浮动摇杆**：手指按在哪儿圆心就落在哪儿。固定圆心的摇杆在看不见手的
+  情况下很难摸准，横屏握持时尤其明显。
+- 右下三个按钮：油门（大、最靠角）、刹车/倒车、漂移；道具键单独放右上角。
+- 控件全是 CSS 定位的 DOM，**不画在 canvas 里** —— 画进去意味着每帧重画、自己做命中
+  判定、还要跟着分辨率缩放，而 DOM 这些全是白送的，且 0 drawcall。
+- 用 Pointer Events + `setPointerCapture`，不用 `touchstart/touchmove`：捕获之后
+  手指滑出按钮范围也还算按住，松开一定收得到 up。这是"过弯时手指晃了一下车就熄火"
+  的根治办法。
+- 摇杆的死区/曲线在 `touchMath.ts` 里，是纯函数、有测试。按下去那一点几乎不可能正好是
+  圆心，没死区车会一直微微歪。
+
+### 画质分档
+
+`QualityTiers.ts` 是一张三档表（high / medium / low），**所有**渲染参数从这里读：
+像素比上限、阴影分辨率、后处理级别、AI 数量、粒子池容量、装饰物密度、雾距离、各向异性。
+探测（UA + WebGL 参数 + 屏幕）在 `core/DeviceCaps.ts`，分档 `pickTier` 是纯函数。
+
+| | high | medium | low |
+|---|---|---|---|
+| 像素比上限 | 2 | 1.5 | 1 |
+| 阴影 | 2048 | 1024 | 关，改用贴片假影子 |
+| 后处理 | bloom + SMAA | 半分辨率 bloom | 只有 tonemapping |
+| AI 数量 | 7 | 5 | 3 |
+| 雾 | 180–620m | 130–420m | 80–240m |
+
+low 档不建 `EffectComposer` 而不是"建一个只有 RenderPass 的"：composer 意味着先画进
+一张 RT 再全屏拷回屏幕，这一次拷贝在移动 GPU 上是实打实的带宽开销。
+
+改档位只有一个入口 —— `main.ts` 的 `applyQuality()`，手动改和自动降档都走它，
+所以不会出现"改了像素比但忘了改阴影"的半套状态。三样东西只能在启动时定：
+AI 数量、火花池容量（typed array 建好不能改大小）、抗锯齿（renderer 的构造参数）。
+
+### 性能预算
+
+**low 档：drawcall ≤ 150、三角面 ≤ 20 万、贴图 ≤ 1024。** 实测（含阴影和后处理的 pass）：
+
+| | drawcall | 三角面 |
+|---|---|---|
+| low | 37 | 1.5 万 |
+| medium | 104 | 3.3 万 |
+| high | 133 | 4.4 万 |
+
+怎么压下来的：
+
+- 495 个装饰物 → 2 个 `InstancedMesh`（锥桶一个，矮方块和高柱子共用一个，
+  它们都是单位立方体，差别只在每实例的缩放）。降档靠改 `count`：摆位是同一串确定性
+  随机，少画就是取前缀，已经在那儿的不会跳位置。
+- 24 个道具箱 + 同样多的描边 → 1 个 `InstancedMesh`。
+- 一辆车原来是 23 个 Mesh（15 个方块 + 4 个轮子各带轮毂），现在按材质合并成
+  2 个几何体 + 4 个轮子 = 6 个 drawcall，颜色烘进顶点色。8 辆车 184 → 48。
+  颜色走顶点色而不是多材质：three 是按 (几何体, 材质) 对发 drawcall 的，
+  多材质合并出来还是几个 drawcall，等于没合。
+- low 档关阴影后车会像浮在路上，用一个 `InstancedMesh` 的圆片假影子补回来 ——
+  影子留在**路面高度**上不跟着车飞，腾空多高一眼看得出来。
+
+跑起来之后 `PerfBudget.ts` 拿 `renderer.info` 跟预算对一遍，超了在控制台喊。
+注意 `renderer.info.autoReset = false` + 每帧手动 `reset()`：开了后处理之后一帧有
+好几个 pass，自动清零的话 `info.render` 里只剩最后那个全屏 pass 的 1 个 drawcall。
+
+### 资源管线
+
+- 贴图只收 KTX2（Basis），模型必须声明 `draco` 或 `meshopt`。PNG/JPG 进不了
+  `AssetManifest` —— `validateManifest` 直接报错，有测试钉着。转换：
+  `npm run assets:convert`（外部工具 `ktx` + `gltf-transform`）。
+- 分批：`phase: 'core'`（赛道 + 玩家的车）先下，`'deferred'`（AI 车、装饰物）进比赛
+  之后再补。core 总量有 10MB 预算，超了 `validateManifest` 会报。
+- 清单现在是**空的**：赛道、车、地面纹理全是程序化生成的，一个字节都不用下载。
+  这套管线是给以后换真模型准备的，加一条就自动进分批加载和进度条。
+- rapier（2.8MB）和三个解码器都是动态 `import`，首屏 JS 只有 ~580KB。静态引的话
+  这几兆要下完才轮到第一行 JS 跑，加载界面根本来不及出现。
+- 进度条按**加权任务**记账（`LoadProgress`），不只算下载量：wasm 编译和赛道网格挤出
+  也是实打实的几百毫秒，只算下载会出现"100% 之后再黑屏两秒"。
+
+### iOS Safari 专项
+
+- **音频**：`AudioContext` 必须在用户手势的事件处理函数里创建/恢复，还得真的播一个
+  1 帧的空 buffer 才算解锁。不这么做的话之后播什么都是静音，而且不报任何错。
+- **上下文丢失**：监听 `webglcontextlost` 并且**必须 `preventDefault()`** ——
+  不拦下来浏览器根本不会尝试恢复。恢复前主循环要停掉。
+- **竖屏**：触屏模式下竖屏盖一层"请横屏游玩"，同时把主循环停掉。
+- **安全区**：`viewport-fit=cover` + 所有 UI 用 `env(safe-area-inset-*)` 让开刘海和
+  小白条。不写 cover 的话 iOS 自己留白边，横屏时左右各黑一条。
+- **手势**：`user-scalable=no` 在 iOS 10 之后被 Safari 无视了，真正拦住缩放的是
+  `installGestureGuards()`（`gesturestart` + 300ms 内的第二次 `touchend` + `touchmove`）。
+
+### 帧率自适应
+
+`FrameMonitor` 盯最近 60 帧的平均帧时，持续低于目标就建议降一档，主循环照办并弹一句
+提示。三个防误判的设计缺一不可：开头几秒 warmup 不算（着色器还在编）、
+单帧毛刺丢掉（切标签页回来会有个几秒的巨帧）、降完有 cooldown（降档本身会引起一波
+卡顿，不冷静一下会连降到底）。判据留了 5% 容差 —— 刚好压在 30fps 上的机器是达标的。
+
+调试用 URL 参数：`?quality=low|medium|high|auto`、`?input=touch|keyboard`，不写回存储，
+手机上扫个二维码就能直接进低画质。
+
 ## 下一步
 
-- 触屏摇杆（实现 `InputAdapter` 即可）
 - 换 glTF 车模型（保证车头朝 `+Z`、轮子贴地 `y=0`，外面代码不用动）
 - 道具、人机对手（`RaceState` 的接口已经是按多车写的，加车只要多传几个 racer）
 - 真正的护栏碰撞体（现在是按横向偏移拉回来的）

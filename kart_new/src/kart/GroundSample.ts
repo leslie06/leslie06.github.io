@@ -61,3 +61,12 @@ export const FLAT_GROUND: GroundSample = Object.freeze({
   respawnZ: 0,
   respawnHeading: 0,
 });
+
+/**
+ * 一个可写的空白 GroundSample。
+ * 多车时每辆车要有自己的一份（PhysicsSystem.sample 的 out 参数），
+ * 共享一个的话前面几辆的采样结果会被后面覆盖掉。
+ */
+export function createGroundSample(): GroundSample {
+  return { ...FLAT_GROUND, halfWidth: 0 };
+}

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "npm run build && rm -rf ../kart-new/assets && mkdir -p ../kart-new && cp -R dist/. ../kart-new/"
+    "deploy": "npm run build && rm -rf ../kart-new/assets && mkdir -p ../kart-new && cp -R dist/. ../kart-new/",
+    "assets:convert": "node scripts/convert-assets.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",

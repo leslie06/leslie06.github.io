@@ -21,7 +21,7 @@ export class Hud {
         <span class="hud-speed-value">0</span><span class="hud-speed-unit">km/h</span>
       </div>
       <div class="hud-stats">FPS <span class="hud-fps">0</span> · <span class="hud-drift">—</span></div>
-      <div class="hud-help">W/↑ 油门 · S/↓ 刹车倒车 · A D/← → 转向 · Space 刹车 · Shift 漂移 · R 重开 · H 收调参面板</div>
+      <div class="hud-help">W/↑ 油门 · S/↓ 刹车倒车 · A D/← → 转向 · Space 刹车 · Shift 漂移 · Q/右键 道具 · R 重开 · H 收调参面板</div>
     `;
     parent.appendChild(this.root);
 
@@ -93,6 +93,15 @@ function injectStyles(): void {
       .hud-speed-value { font-size: 44px; }
       .hud-help { display: none; }
     }
+    /* 触屏时按键提示是错的（按钮就在屏幕上），直接不显示 */
+    body.touch-input .hud-help { display: none; }
+    /* 触屏时速度表留在左下角，但要缩小并让开刘海/小白条。
+       摇杆区盖在它上面没关系：HUD 整层是 pointer-events: none，挡不住手指 */
+    body.touch-input .hud-speed {
+      left: calc(20px + env(safe-area-inset-left));
+      bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+    body.touch-input .hud-speed-value { font-size: 40px; }
   `;
   document.head.appendChild(style);
 }

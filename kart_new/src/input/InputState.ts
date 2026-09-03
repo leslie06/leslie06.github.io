@@ -11,6 +11,14 @@ export interface InputState {
   brake: number;
   /** 漂移键是否按住 */
   drift: boolean;
+  /**
+   * 这一帧要不要使用手里的道具。
+   *
+   * 是"这一帧按下了"而不是"按住"：道具是一次性的，按住不该连发。
+   * 边沿检测放在各个 InputAdapter 里（键盘看 keydown，AI 看自己的计时器），
+   * 上层拿到的永远是"就是现在用"这个意图。
+   */
+  useItem: boolean;
 }
 
 export const NEUTRAL_INPUT: Readonly<InputState> = Object.freeze({
@@ -18,6 +26,7 @@ export const NEUTRAL_INPUT: Readonly<InputState> = Object.freeze({
   throttle: 0,
   brake: 0,
   drift: false,
+  useItem: false,
 });
 
 export function createInputState(): InputState {

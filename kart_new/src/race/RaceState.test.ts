@@ -5,7 +5,7 @@ import { DEFAULT_RACE_CONFIG, RaceState, type RaceEvent } from './RaceState';
 const DT = 1 / 60;
 const STEPS_PER_LAP = 480;
 
-const FULL_INPUT: InputState = { steer: 1, throttle: 1, brake: 0, drift: true };
+const FULL_INPUT: InputState = { steer: 1, throttle: 1, brake: 0, drift: true, useItem: true };
 
 /** 把倒计时跑完，期间所有车停在 t 上不动。返回倒计时期间的事件 */
 function runCountdown(race: RaceState, positions: Record<string, number>): RaceEvent[] {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { KartState } from '../kart/kartStep';
 import type { KartConfig } from '../kart/KartConfig';
 
@@ -43,6 +44,29 @@ export const KART_VIEW_RANGES: Record<keyof KartViewConfig, [number, number, num
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
+/**
+ * 车的配色。玩家和每辆 AI 各一套，纯视觉，不进任何逻辑。
+ * 只换这四个颜色就够区分了 —— 轮胎、座舱地板这些深色件所有车共用，
+ * 换掉反而会让车看起来不是同一个系列。
+ */
+export interface KartPalette {
+  /** 底盘主色 */
+  body: string;
+  /** 车头 / 尾翼 */
+  accent: string;
+  /** 防撞条 */
+  trim: string;
+  /** 驾驶员衣服 */
+  suit: string;
+}
+
+export const DEFAULT_KART_PALETTE: KartPalette = {
+  body: '#ff3b30',
+  accent: '#ffcc00',
+  trim: '#f7f7fa',
+  suit: '#2f6fed',
+};
+
 const UP = new THREE.Vector3(0, 1, 0);
 const _normal = new THREE.Vector3();
 const _tilt = new THREE.Quaternion();
@@ -55,6 +79,7 @@ const _yaw = new THREE.Quaternion();
 export class KartView {
   readonly root = new THREE.Group();
   readonly config: KartViewConfig = { ...DEFAULT_KART_VIEW_CONFIG };
+  readonly palette: KartPalette;
 
   /** 车身（会侧倾/俯仰），轮子挂在 root 上保持贴地 */
   private readonly chassis = new THREE.Group();
@@ -77,79 +102,70 @@ export class KartView {
     return this.frontPivots[0]?.rotation.y ?? 0;
   }
 
-  constructor() {
+  constructor(palette: Partial<KartPalette> = {}) {
+    this.palette = { ...DEFAULT_KART_PALETTE, ...palette };
     this.root.add(this.chassis);
     this.buildChassis();
     this.buildWheels();
   }
 
+  /**
+   * 车身。
+   *
+   * 十几个 Box 不是十几个 Mesh：全部**按材质合并**成两个几何体，颜色烘进顶点色。
+   * 一辆车从 23 个 drawcall 降到 6 个（车身 2 + 轮子 4）——
+   * 满编 8 辆车就是 184 vs 48，low 档 150 个 drawcall 的预算全花在车上都不够。
+   * 代价是同一堆里的粗糙度只能取一个值，所以按"亮面/哑面"分了两堆，
+   * 保住车壳和轮胎、皮肤之间的质感差别。
+   */
   private buildChassis(): void {
-    const mat = (color: string, opts: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
-      new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.15, ...opts });
+    const P = this.palette;
+    // [几何体, 颜色]。位置在这里就烘进几何体，之后不再有 mesh.position 这回事
+    const glossy: ColoredPart[] = [
+      // 底盘
+      [box(1.24, 0.22, 2.1, 0, 0.34, 0), P.body],
+      // 两侧防撞条
+      [box(0.22, 0.3, 1.4, -0.76, 0.36, 0.05), P.trim],
+      [box(0.22, 0.3, 1.4, 0.76, 0.36, 0.05), P.trim],
+      // 车头（前端收窄）
+      [box(0.95, 0.2, 0.7, 0, 0.36, 1.32), P.accent],
+      // 靠背
+      [box(0.86, 0.62, 0.16, 0, 0.72, -0.58), P.suit],
+      // 尾翼板
+      [box(1.3, 0.08, 0.34, 0, 1.14, -1.16), P.accent],
+      // 驾驶员身子 + 头盔顶
+      [box(0.5, 0.5, 0.34, 0, 0.78, -0.28), P.suit],
+      [box(0.4, 0.22, 0.4, 0, 1.3, -0.3), P.body],
+    ];
+    const matte: ColoredPart[] = [
+      // 座舱地板
+      [box(0.9, 0.12, 0.9, 0, 0.45, -0.05), DARK],
+      // 引擎块
+      [box(0.7, 0.44, 0.5, 0, 0.6, -1.0), DARK],
+      // 尾翼立柱
+      [box(0.12, 0.34, 0.1, -0.5, 0.95, -1.16), DARK],
+      [box(0.12, 0.34, 0.1, 0.5, 0.95, -1.16), DARK],
+      // 方向盘柱
+      [box(0.42, 0.07, 0.1, 0, 0.76, 0.5), DARK],
+      // 驾驶员的头
+      [box(0.34, 0.3, 0.32, 0, 1.16, -0.28), SKIN],
+    ];
 
-    const red = mat('#ff3b30');
-    const white = mat('#f7f7fa');
-    const dark = mat('#22262e', { roughness: 0.7 });
-    const yellow = mat('#ffcc00');
-    const blue = mat('#2f6fed');
-    const skin = mat('#f0b48b', { roughness: 0.8, metalness: 0 });
-
-    const add = (
-      geo: THREE.BoxGeometry,
-      material: THREE.Material,
-      x: number,
-      y: number,
-      z: number,
-    ) => {
-      const mesh = new THREE.Mesh(geo, material);
-      mesh.position.set(x, y, z);
+    for (const [parts, material] of [
+      [glossy, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.15 })],
+      [matte, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 })],
+    ] as const) {
+      const mesh = new THREE.Mesh(mergeColored(parts), material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.chassis.add(mesh);
-      return mesh;
-    };
-
-    // 底盘
-    add(new THREE.BoxGeometry(1.24, 0.22, 2.1), red, 0, 0.34, 0);
-    // 两侧防撞条
-    add(new THREE.BoxGeometry(0.22, 0.3, 1.4), white, -0.76, 0.36, 0.05);
-    add(new THREE.BoxGeometry(0.22, 0.3, 1.4), white, 0.76, 0.36, 0.05);
-    // 车头（前端收窄）
-    add(new THREE.BoxGeometry(0.95, 0.2, 0.7), yellow, 0, 0.36, 1.32);
-    // 座舱地板 + 靠背
-    add(new THREE.BoxGeometry(0.9, 0.12, 0.9), dark, 0, 0.45, -0.05);
-    add(new THREE.BoxGeometry(0.86, 0.62, 0.16), blue, 0, 0.72, -0.58);
-    // 引擎块
-    add(new THREE.BoxGeometry(0.7, 0.44, 0.5), dark, 0, 0.6, -1.0);
-    // 尾翼
-    add(new THREE.BoxGeometry(0.12, 0.34, 0.1), dark, -0.5, 0.95, -1.16);
-    add(new THREE.BoxGeometry(0.12, 0.34, 0.1), dark, 0.5, 0.95, -1.16);
-    add(new THREE.BoxGeometry(1.3, 0.08, 0.34), yellow, 0, 1.14, -1.16);
-    // 方向盘柱
-    add(new THREE.BoxGeometry(0.42, 0.07, 0.1), dark, 0, 0.76, 0.5);
-    // 驾驶员：身子 + 头 + 头盔顶
-    add(new THREE.BoxGeometry(0.5, 0.5, 0.34), blue, 0, 0.78, -0.28);
-    add(new THREE.BoxGeometry(0.34, 0.3, 0.32), skin, 0, 1.16, -0.28);
-    add(new THREE.BoxGeometry(0.4, 0.22, 0.4), red, 0, 1.3, -0.3);
+    }
   }
 
   private buildWheels(): void {
-    const tire = new THREE.MeshStandardMaterial({ color: '#1b1d22', roughness: 0.85 });
-    const hub = new THREE.MeshStandardMaterial({ color: '#e8e8ee', roughness: 0.4, metalness: 0.3 });
-
-    const make = (radius: number, width: number) => {
-      const geo = new THREE.CylinderGeometry(radius, radius, width, 20);
-      geo.rotateZ(Math.PI / 2); // 圆柱默认沿 y，转成沿 x 当轮轴
-      const wheel = new THREE.Mesh(geo, tire);
-      wheel.castShadow = true;
-      // 轮毂条，转起来看得出来在滚
-      const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(width + 0.02, radius * 0.5, radius * 0.5),
-        hub,
-      );
-      wheel.add(cap);
-      return wheel;
-    };
+    // 轮胎和轮毂也合并：一个轮子一个 drawcall。
+    // 轮毂条要看得出转动，所以颜色差别留着，只是共用一份粗糙度
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 });
 
     const layout: Array<[x: number, z: number, r: number, w: number, front: boolean]> = [
       [-0.82, 0.95, 0.32, 0.26, true],
@@ -159,10 +175,18 @@ export class KartView {
     ];
 
     for (const [x, z, r, w, front] of layout) {
+      const tire = new THREE.CylinderGeometry(r, r, w, WHEEL_SEGMENTS);
+      tire.rotateZ(Math.PI / 2); // 圆柱默认沿 y，转成沿 x 当轮轴
+      const geometry = mergeColored([
+        [tire, TIRE],
+        [box(w + 0.02, r * 0.5, r * 0.5, 0, 0, 0), HUB],
+      ]);
+      const wheel = new THREE.Mesh(geometry, material);
+      wheel.castShadow = true;
+
       // 前轮要能转向，套一层 pivot
       const pivot = new THREE.Group();
       pivot.position.set(x, r, z);
-      const wheel = make(r, w);
       pivot.add(wheel);
       this.root.add(pivot);
       this.allWheels.push(wheel);
@@ -239,4 +263,49 @@ export class KartView {
     out.length = this.rearPivots.length;
     return out;
   }
+}
+
+/** 车轮圆柱的分段数。20 段在 1080p 下已经看不出棱，再多是白给 */
+const WHEEL_SEGMENTS = 20;
+
+const DARK = '#22262e';
+const SKIN = '#f0b48b';
+const TIRE = '#1b1d22';
+const HUB = '#e8e8ee';
+
+type ColoredPart = readonly [geometry: THREE.BufferGeometry, color: string];
+
+/** 一个摆好位置的方块 */
+function box(w: number, h: number, d: number, x: number, y: number, z: number): THREE.BoxGeometry {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  geo.translate(x, y, z);
+  return geo;
+}
+
+const _tint = new THREE.Color();
+
+/**
+ * 把每块几何体刷上顶点色再合并成一个。
+ *
+ * 颜色走顶点色而不是多材质：three 是按 (几何体, 材质) 对发 drawcall 的，
+ * 多材质合并出来还是几个 drawcall，等于没合。
+ * Color 的构造已经把 sRGB 转成线性了（ColorManagement 默认开），
+ * 顶点色要的正是线性值，所以这里直接取 r/g/b。
+ */
+function mergeColored(parts: readonly ColoredPart[]): THREE.BufferGeometry {
+  for (const [geo, color] of parts) {
+    _tint.set(color);
+    const count = geo.getAttribute('position').count;
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      colors[i * 3] = _tint.r;
+      colors[i * 3 + 1] = _tint.g;
+      colors[i * 3 + 2] = _tint.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  }
+  const merged = mergeGeometries(parts.map(([geo]) => geo));
+  for (const [geo] of parts) geo.dispose();
+  if (!merged) throw new Error('KartView: 几何体合并失败（属性对不上？）');
+  return merged;
 }
