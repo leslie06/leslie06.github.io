@@ -15,19 +15,19 @@ import {
 /**
  * 资源加载。清单在 AssetManifest.ts，这里只负责把它拉下来。
  *
- * 三个解码器：
- *   - KTX2Loader：Basis 压缩贴图。必须 detectSupport(renderer) —— 不同 GPU 支持的
- *     压缩格式不一样（ASTC / ETC2 / BC7），转码器要照着挑，不告诉它就只能退回未压缩。
- *   - DRACOLoader / MeshoptDecoder：两种几何压缩。清单里每个模型自己声明用了哪种。
- *
- * 三个 loader 都是**动态 import** 的：它们连着 basis / draco 的 wasm 一共一兆多，
- * 而首屏那一版赛道现在完全是程序化生成的，一个字节的外部资源都不用下。
- * 静态 import 的话这一兆多会躺在主 bundle 里，白白拖慢首屏。
- * 解码器自己的 wasm 路径不用管：three 里是 new URL(..., import.meta.url) 写的，
- * 打包器会把它们连同哈希文件名一起产出来。
+ * 解码器（KTX2 / draco / meshopt）的接线在 decoders.ts，而且**现在是断开的** ——
+ * 那三个 loader 连着 basis 和 draco 的 wasm 一共 1.8MB，只要这里出现一句
+ * import()，打包器就会把它们产出来部署上去，不管运行时会不会真的执行到。
+ * 清单现在是空的（赛道和车全是程序化生成的），这 1.8MB 就是纯死重，所以断开。
+ * 加第一条资源的时候按 decoders.ts 顶上的说明接回来，AssetLoader.test.ts 盯着这件事。
  *
  * 分批：先 'core'（赛道 + 玩家的车），进比赛之后再补 'deferred'（AI 车、装饰物）。
  */
+/** 清单里有资源、解码器却没接的时候的报错。写清楚怎么接，别让人去翻 git log */
+const DECODERS_OFF =
+  '[assets] 解码器没接线：清单里有资源，但 KTX2/draco/meshopt 的 import 还断着。' +
+  '按 src/assets/decoders.ts 顶上的说明改 AssetLoader 的两个 getter。';
+
 export interface AssetLoaderOptions {
   manifest?: readonly AssetEntry[];
   /** 按画质档位挑贴图变体 */
@@ -61,6 +61,14 @@ export class AssetLoader {
     if (errors.length > 0) {
       console.error('[assets] 资源清单有问题：\n' + errors.map((e) => '  - ' + e).join('\n'));
     }
+  }
+
+  /**
+   * 渲染器。接线之后 decoders.makeTextureLoader 要拿它做 detectSupport ——
+   * 那是 KTX2 挑压缩格式的依据，所以这个引用现在虽然没人用，也得留着。
+   */
+  get webglRenderer(): THREE.WebGLRenderer {
+    return this.renderer;
   }
 
   /** 某一批资源的总字节数，进度条按它加权 */
@@ -130,34 +138,29 @@ export class AssetLoader {
     return this.models.get(id) ?? null;
   }
 
+  /**
+   * 贴图解码器。现在是断开的 —— 见文件顶上的说明和 decoders.ts。
+   * 接回来就是把下面这个 throw 换成：
+   *   this.ktx2 ??= import('./decoders').then((d) => d.makeTextureLoader(this.renderer));
+   *   return this.ktx2;
+   */
   private ktx2Loader(): Promise<KTX2Loader> {
-    this.ktx2 ??= import('three/examples/jsm/loaders/KTX2Loader.js').then(
-      // detectSupport 是必须的：它按 GPU 支持的压缩格式挑转码目标，不告诉它就只能退回未压缩
-      ({ KTX2Loader }) => new KTX2Loader().detectSupport(this.renderer),
-    );
-    return this.ktx2;
+    return this.ktx2 ?? Promise.reject(new Error(DECODERS_OFF));
   }
 
+  /**
+   * 模型解码器。同上：
+   *   this.gltf ??= import('./decoders').then((d) => d.makeModelLoader(await this.ktx2Loader()));
+   */
   private gltfLoader(): Promise<GLTFLoader> {
-    this.gltf ??= (async () => {
-      const [{ GLTFLoader }, { DRACOLoader }, { MeshoptDecoder }] = await Promise.all([
-        import('three/examples/jsm/loaders/GLTFLoader.js'),
-        import('three/examples/jsm/loaders/DRACOLoader.js'),
-        import('three/examples/jsm/libs/meshopt_decoder.module.js'),
-      ]);
-      return new GLTFLoader()
-        .setDRACOLoader(new DRACOLoader())
-        .setMeshoptDecoder(MeshoptDecoder)
-        .setKTX2Loader(await this.ktx2Loader()); // glb 里内嵌的 KTX2 贴图也要能解
-    })();
-    return this.gltf;
+    return this.gltf ?? Promise.reject(new Error(DECODERS_OFF));
   }
 
   dispose(): void {
     for (const texture of this.textures.values()) texture.dispose();
     this.textures.clear();
     this.models.clear();
-    void this.ktx2?.then((loader) => loader.dispose());
+    void this.ktx2?.then((loader) => loader.dispose()).catch(() => {});
     this.ktx2 = null;
     this.gltf = null;
   }

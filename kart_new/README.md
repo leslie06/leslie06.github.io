@@ -65,7 +65,8 @@ src/
     PerfBudget.ts      拿 renderer.info 核 low 档预算
   assets/
     AssetManifest.ts   资源清单 + 校验（PNG/JPG 直接报错，首屏 10MB 预算）
-    AssetLoader.ts     KTX2 / draco / meshopt，按 phase 分批加载
+    AssetLoader.ts     按 phase 分批加载 + 进度回调
+    decoders.ts        KTX2 / draco / meshopt 的接线，故意不被 import（见下）
     LoadProgress.ts    加权任务的进度账本（下载之外还有 wasm 编译、网格生成）
   audio/
     AudioUnlock.ts     第一次手势里解锁 AudioContext（iOS 不这么做就永远静音）
@@ -395,8 +396,14 @@ AI 数量、火花池容量（typed array 建好不能改大小）、抗锯齿�
   之后再补。core 总量有 10MB 预算，超了 `validateManifest` 会报。
 - 清单现在是**空的**：赛道、车、地面纹理全是程序化生成的，一个字节都不用下载。
   这套管线是给以后换真模型准备的，加一条就自动进分批加载和进度条。
-- rapier（2.8MB）和三个解码器都是动态 `import`，首屏 JS 只有 ~580KB。静态引的话
-  这几兆要下完才轮到第一行 JS 跑，加载界面根本来不及出现。
+- rapier（2.8MB）是动态 `import`，首屏 JS 只有 ~580KB。静态引的话这几兆要下完才轮到
+  第一行 JS 跑，加载界面根本来不及出现。
+- 三个解码器的接线（`decoders.ts`）**现在是断开的**。`KTX2Loader` / `DRACOLoader` 里的
+  转码器路径是 `new URL(..., import.meta.url)` 写的，打包器只要**看见**那句 `import()`
+  就会把 basis / draco 的 wasm 产出来（1.8MB），不管运行时会不会执行到 —— 动态 import
+  也救不了。清单空着的时候这 1.8MB 就是纯死重，所以断开；加第一条资源时按
+  `decoders.ts` 顶上的说明接回来。`AssetLoader.test.ts` 读源码钉着这个双向约束：
+  清单空却接了线、或者清单非空却没接线，测试都红。
 - 进度条按**加权任务**记账（`LoadProgress`），不只算下载量：wasm 编译和赛道网格挤出
   也是实打实的几百毫秒，只算下载会出现"100% 之后再黑屏两秒"。
 

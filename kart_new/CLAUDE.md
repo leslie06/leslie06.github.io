@@ -28,8 +28,12 @@
   renderer.info 跟预算对一遍，超了在控制台喊
 - 贴图只收 KTX2（Basis），模型必须声明 draco 或 meshopt 压缩；PNG/JPG 直接进不了
   AssetManifest（validateManifest 会报错，有测试钉着）。转换走 npm run assets:convert
-- 首屏（AssetManifest 里 phase='core' 的那批）总量 ≤ 10MB。rapier 和三个解码器都是
-  动态 import 的：先出加载界面，再下这些大块头
+- 首屏（AssetManifest 里 phase='core' 的那批）总量 ≤ 10MB。rapier 是动态 import 的：
+  先出加载界面，再下这个大块头
+- 三个解码器（KTX2/draco/meshopt）的接线在 src/assets/decoders.ts，**现在是断开的**：
+  打包器只要看见那句 import() 就会连着 1.8MB 的 wasm 一起产出来，不管跑不跑得到。
+  清单是空的就不许接，加第一条资源时按 decoders.ts 顶上的说明接回来 ——
+  AssetLoader.test.ts 钉着这个双向约束（清单空 <-> 没接线）
 - 触屏输入和键盘平级，都只产出 InputState；虚拟摇杆的数学在 touchMath.ts（纯函数、
   有测试），DOM 那一坨在 TouchAdapter.ts。控件必须是 CSS 定位的 DOM，不许画进 canvas
 - 移动端 UI 一律用 env(safe-area-inset-*) 让开刘海和小白条；触屏时的布局差异
