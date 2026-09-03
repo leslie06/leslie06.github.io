@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy": "npm run build && rm -rf ../kart-new/assets && mkdir -p ../kart-new && cp -R dist/. ../kart-new/"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",
