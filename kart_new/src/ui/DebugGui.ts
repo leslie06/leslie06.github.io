@@ -37,12 +37,37 @@ export function createTrackDebugState(): TrackDebugState {
   return { showCenterLine: false, progress: 0, lateral: 0, airborne: false };
 }
 
+/**
+ * 比赛相关的只读读数。每帧由主循环写进来，GUI 只显示。
+ * 字段全是已经格式化好的字符串/数字 —— GUI 不该反过来去读 RaceState。
+ */
+export interface RaceDebugState {
+  phase: string;
+  /** 当前第几圈 / 共几圈 */
+  lap: string;
+  /** 当前所在 sector（= 最近通过的 checkpoint） */
+  sector: number;
+  /** 本圈 checkpoint 有没有漏 */
+  lapValid: boolean;
+  /** 本局最佳圈速 */
+  bestLap: string;
+  /** localStorage 里的历史纪录 */
+  record: string;
+}
+
+export function createRaceDebugState(): RaceDebugState {
+  return { phase: 'countdown', lap: '1/3', sector: 0, lapValid: true, bestLap: '--', record: '--' };
+}
+
 export interface DebugGuiTargets {
   kart: KartConfig;
   camera: FollowCameraConfig;
   view: KartViewConfig;
   track: TrackDebugState;
+  race: RaceDebugState;
   onResetKart: () => void;
+  /** 抹掉 localStorage 里的最佳圈速 */
+  onClearRecord: () => void;
 }
 
 /** 把所有手感参数挂到 lil-gui 上实时调。按 H 收起。 */
@@ -89,9 +114,21 @@ export class DebugGui {
     track.add(targets.track, 'lateral').name('横向偏移 (m)').listen().disable();
     track.add(targets.track, 'airborne').name('掉出赛道').listen().disable();
 
-    this.gui.add({ reset: targets.onResetKart }, 'reset').name('重置车辆位置 (R)');
+    // 比赛：全是只读读数 + 两个按钮
+    const race = this.gui.addFolder('比赛');
+    race.add(targets.race, 'phase').name('阶段').listen().disable();
+    race.add(targets.race, 'lap').name('圈数').listen().disable();
+    race.add(targets.race, 'sector').name('最近 checkpoint').listen().disable();
+    race.add(targets.race, 'lapValid').name('本圈有效').listen().disable();
+    race.add(targets.race, 'bestLap').name('本局最佳').listen().disable();
+    race.add(targets.race, 'record').name('本地纪录').listen().disable();
+    race.add({ clear: targets.onClearRecord }, 'clear').name('清除本地纪录');
+
+    this.gui.add({ reset: targets.onResetKart }, 'reset').name('重开比赛 (R)');
     this.gui.add({ resetAll: () => this.resetAll() }, 'resetAll').name('全部参数恢复默认');
 
+    // 让 HUD 知道右上角被 GUI 占了（比赛计时面板要往左让）
+    document.body.classList.add('debug-gui-open');
     window.addEventListener('keydown', this.onKeyDown);
   }
 
@@ -147,10 +184,12 @@ export class DebugGui {
     if (e.code !== 'KeyH') return;
     this.visible = !this.visible;
     this.gui.show(this.visible);
+    document.body.classList.toggle('debug-gui-open', this.visible);
   };
 
   dispose(): void {
     window.removeEventListener('keydown', this.onKeyDown);
+    document.body.classList.remove('debug-gui-open');
     this.gui.destroy();
   }
 }

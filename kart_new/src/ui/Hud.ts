@@ -21,7 +21,7 @@ export class Hud {
         <span class="hud-speed-value">0</span><span class="hud-speed-unit">km/h</span>
       </div>
       <div class="hud-stats">FPS <span class="hud-fps">0</span> · <span class="hud-drift">—</span></div>
-      <div class="hud-help">W/↑ 油门 · S/↓ 刹车倒车 · A D/← → 转向 · Space 刹车 · Shift 漂移</div>
+      <div class="hud-help">W/↑ 油门 · S/↓ 刹车倒车 · A D/← → 转向 · Space 刹车 · Shift 漂移 · R 重开 · H 收调参面板</div>
     `;
     parent.appendChild(this.root);
 

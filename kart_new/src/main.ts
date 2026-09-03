@@ -18,8 +18,12 @@ import { DriftSparks } from './render/DriftSparks';
 import { FollowCamera } from './render/FollowCamera';
 import { KartView } from './render/KartView';
 import { World } from './render/World';
-import { createTrackDebugState, DebugGui } from './ui/DebugGui';
+import { browserRecordStorage, LapRecordStore } from './race/LapRecord';
+import { RaceState } from './race/RaceState';
+import { formatTimeOrDash } from './race/formatTime';
+import { createRaceDebugState, createTrackDebugState, DebugGui } from './ui/DebugGui';
 import { Hud } from './ui/Hud';
+import { RaceHud, type RaceResults } from './ui/RaceHud';
 
 const container = document.getElementById('app')!;
 
@@ -78,20 +82,35 @@ let previous: KartState = { ...current };
 followCamera.snapTo(current, kartConfig);
 kartView.update(current, kartConfig, 1 / 60);
 
+// --- 比赛 ---
+const PLAYER = 'player';
+const race = new RaceState([{ id: PLAYER, name: '你', isPlayer: true }]);
+const lapRecord = new LapRecordStore(browserRecordStorage());
+/** 本局有没有破纪录，结算面板要用 */
+let newRecordThisRace = false;
+let raceResults: RaceResults | null = null;
+
 // --- UI ---
 const hud = new Hud(container);
+const raceHud = new RaceHud(container);
 const trackDebug = createTrackDebugState();
+const raceDebug = createRaceDebugState();
 const resetKart = () => {
   current = spawnState();
   previous = { ...current };
   followCamera.snapTo(current, kartConfig);
+  race.restart();
+  newRecordThisRace = false;
+  raceResults = null;
 };
 new DebugGui({
   kart: kartConfig,
   camera: followCamera.config,
   view: kartView.config,
   track: trackDebug,
+  race: raceDebug,
   onResetKart: resetKart,
+  onClearRecord: () => lapRecord.clear(),
 });
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') resetKart();
@@ -111,6 +130,39 @@ function onKartEvent(event: KartEvent): void {
       // 火花颜色直接读 state.driftLevel，这里暂时不用额外处理。
       // 之后接音效就挂在这几个分支上
       break;
+  }
+}
+
+// --- 比赛事件 -> HUD ---
+function drainRaceEvents(): void {
+  for (const event of race.consumeEvents()) {
+    switch (event.type) {
+      case 'go':
+        raceHud.showGo();
+        break;
+      case 'lap': {
+        // 纪录只认玩家自己的圈速
+        const record = event.id === PLAYER && lapRecord.submit(event.time);
+        if (record) newRecordThisRace = true;
+        if (event.id === PLAYER) raceHud.showLapSplit(event.lap, event.time, event.best, record);
+        break;
+      }
+      case 'raceFinished': {
+        const progress = race.getProgress(PLAYER)!;
+        raceResults = {
+          place: race.getStanding(PLAYER)?.place ?? 1,
+          totalTime: progress.totalTime,
+          lapTimes: [...progress.lapTimes],
+          bestLap: progress.bestLap,
+          newRecord: newRecordThisRace,
+        };
+        break;
+      }
+      case 'countdownTick':
+      case 'racerFinished':
+        // 倒计时数字由 RaceHud 直接读 race.countdown 画，这里不用管
+        break;
+    }
   }
 }
 
@@ -135,9 +187,19 @@ function makeLoop(physics: PhysicsSystem): FixedStepLoop {
     fixedDt: 1 / 60,
     update: (dt) => {
       previous = current;
-      // 射线在这里打：kartStep 是纯函数，不许自己去查地形
-      const ground = physics.sample(current.x, current.y, current.z);
-      current = stepKart(current, input.sample(), ground, kartConfig, dt);
+      const playerProgress = race.getProgress(PLAYER)!;
+      // 射线在这里打：kartStep 是纯函数，不许自己去查地形。
+      // 重生点用上一个 checkpoint，而不是最近的样条点（见 RaceProgress.getLastCheckpoint）
+      const ground = physics.sample(
+        current.x,
+        current.y,
+        current.z,
+        playerProgress.getLastCheckpoint().t,
+      );
+      // 先更新比赛状态：倒计时和冲线后的输入锁要在这一步之前生效
+      race.update(dt, { [PLAYER]: ground.progress });
+      const gated = race.gateInput(PLAYER, input.sample());
+      current = stepKart(current, gated, ground, kartConfig, dt);
       // 每个子步都取一次事件：一个渲染帧可能跑多步，只在 render 里比 prev/current 会漏
       for (const event of diffKartEvents(previous, current)) onKartEvent(event);
     },
@@ -161,10 +223,38 @@ function makeLoop(physics: PhysicsSystem): FixedStepLoop {
       const boostIntensity = Math.min(state.boostTime / 0.35, 1) * 0.85;
       hud.update(state.speed, frameDt, boostIntensity, driftLabel(state));
 
+      drainRaceEvents();
+      const progress = race.getProgress(PLAYER)!;
+      raceHud.update(
+        {
+          phase: race.phase,
+          lap: progress.lap + 1,
+          totalLaps: race.config.totalLaps,
+          lapTime: progress.lapTime,
+          lastLap: progress.lastLap,
+          bestLap: progress.bestLap,
+          recordLap: lapRecord.best,
+          countdown: race.countdown,
+          lapValid: progress.lapValid,
+          place: race.getStanding(PLAYER)?.place ?? 1,
+          racerCount: race.racerCount,
+          standings: race.standings,
+          results: raceResults,
+        },
+        frameDt,
+      );
+
       centerLine.visible = trackDebug.showCenterLine;
       trackDebug.progress = round(state.trackProgress, 4);
       trackDebug.lateral = round(state.lateralOffset, 2);
       trackDebug.airborne = state.airborne;
+
+      raceDebug.phase = race.phase;
+      raceDebug.lap = `${Math.min(progress.lap + 1, race.config.totalLaps)}/${race.config.totalLaps}`;
+      raceDebug.sector = progress.sector;
+      raceDebug.lapValid = progress.lapValid;
+      raceDebug.bestLap = formatTimeOrDash(progress.bestLap);
+      raceDebug.record = formatTimeOrDash(lapRecord.best);
 
       renderer.render(world.scene, followCamera.camera);
     },

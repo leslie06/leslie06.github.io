@@ -1,4 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
+import * as THREE from 'three';
 import type { GroundSample } from '../kart/GroundSample';
 import { drivableHalfWidth, type TrackConfig } from '../track/TrackConfig';
 import { DEFAULT_TRACK_CONFIG } from '../track/TrackConfig';
@@ -51,6 +52,8 @@ export class PhysicsSystem {
     respawnHeading: 0,
   };
   private readonly halfWidth: number;
+  /** 重生点查询的复用向量 */
+  private readonly respawnPoint = new THREE.Vector3();
 
   private constructor(
     private readonly spline: TrackSpline,
@@ -78,8 +81,11 @@ export class PhysicsSystem {
   /**
    * 探一次地面。结果直接喂给 stepKart。
    * @param y 当前车高。射线从 y + RAY_UP 往下打，所以车沉下去一点也能打到
+   * @param respawnT 指定重生点在样条上的位置（RaceProgress.getLastCheckpoint().t）。
+   *   不传就退回"最近的样条点"。之所以要能指定：从赛道外面横着摔出去时，
+   *   最近样条点可能落在赛道**另一段**上，那等于摔一跤白送一大截近道。
    */
-  sample(x: number, y: number, z: number): GroundSample {
+  sample(x: number, y: number, z: number, respawnT?: number): GroundSample {
     const out = this.sampleOut;
 
     this.ray.origin.x = x;
@@ -113,10 +119,20 @@ export class PhysicsSystem {
     out.toCenterX = Math.sin(p.heading - Math.PI / 2) * sign;
     out.toCenterZ = Math.cos(p.heading - Math.PI / 2) * sign;
 
-    out.respawnX = p.centerX;
-    out.respawnY = p.centerY;
-    out.respawnZ = p.centerZ;
-    out.respawnHeading = p.heading;
+    if (respawnT === undefined) {
+      out.respawnX = p.centerX;
+      out.respawnY = p.centerY;
+      out.respawnZ = p.centerZ;
+      out.respawnHeading = p.heading;
+    } else {
+      // getPointAt 写的是自己的 target，不碰 spline 内部的 tmp；getHeadingAt 才用 tmpA，
+      // 所以必须先取点再取朝向（上面的 getProgress 已经把要用的值拷出来了）
+      const rp = this.spline.getPointAt(respawnT, this.respawnPoint);
+      out.respawnX = rp.x;
+      out.respawnY = rp.y;
+      out.respawnZ = rp.z;
+      out.respawnHeading = this.spline.getHeadingAt(respawnT);
+    }
     return out;
   }
 }

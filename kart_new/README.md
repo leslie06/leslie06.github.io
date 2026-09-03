@@ -1,7 +1,8 @@
 # Kart Prototype
 
 马里奥赛车那种街机手感的卡丁车原型。Three.js + Vite + TypeScript。
-现在有：一条程序化生成的闭合赛道（带起伏、路肩、护栏）、一辆贴地形跑的车、一个跟随相机。
+现在有：一条程序化生成的闭合赛道（带起伏、路肩、护栏）、一辆贴地形跑的车、一个跟随相机，
+以及一套完整的比赛流程 —— 倒计时发车、checkpoint 防抄近道、圈速计时、名次、结算面板。
 
 ## 跑起来
 
@@ -21,7 +22,7 @@ npm test         # vitest
 | `A` `D` / `←` `→` | 转向 |
 | `Space` | 刹车 |
 | `Shift` | 漂移蓄力，松开放 mini-turbo |
-| `R` | 回到起跑线 |
+| `R` | 重开比赛（回起跑线 + 倒计时重来） |
 | `H` | 收起 / 展开调参面板 |
 
 ## 架构
@@ -48,8 +49,14 @@ src/
     World.ts           地面网格 + 光照 + 参照物
     KartView.ts        Box 拼的占位车 + 纯视觉的侧倾/后仰/前轮转角
     FollowCamera.ts    弹簧阻尼跟随，速度越快拉得越远、FOV 越大
+  race/
+    RaceProgress.ts    单车的圈数 / checkpoint / 圈速。纯逻辑，只吃 t 和 dt
+    RaceState.ts       倒计时 -> 比赛中 -> 结束的状态机 + 输入锁 + 名次。接口按多车写
+    LapRecord.ts       最佳圈速存 localStorage，存储对象从外面注入所以可测
+    formatTime.ts      秒 -> `m:ss.mmm`
   ui/
     Hud.ts             DOM 显示速度和 FPS
+    RaceHud.ts         DOM 显示圈数 / 圈速 / 倒计时 / 结算面板
     DebugGui.ts        lil-gui，三组参数全部实时可调
 ```
 
@@ -226,10 +233,68 @@ kartStep 拿到 `GroundSample` 之后：
 GUI 的「赛道」一栏：显示样条中心线（品红色 `Line`）、当前进度 `t`、当前横向偏移、
 是否掉出赛道。后三个是只读读数，每帧回读。
 
+## 比赛：圈速 / checkpoint / 名次
+
+`RaceProgress` 和 `RaceState` 跟 `kartStep` 守同一条线：不 import three / rapier / DOM，
+只吃赛道进度 `t` 和 `dt`。有测试直接读源码断言这一点。
+
+### 为什么不直接积分 t 的增量
+
+"每帧把 Δt 累加起来，过 1 就是一圈"挡不住抄近道：从赛道内侧横穿过去，`getProgress`
+找的是**最近的样条点**，`t` 会直接从 0.3 跳到 0.7，累加器照收不误。
+
+所以按 checkpoint 走：样条均分成 8 段（sector），checkpoint `i` = sector `i` 的入口
+（`t = i/8`），0 号就是起点线。**只认相邻的 sector 变化**，非相邻的跳变一律判为
+抄近道/传送，整圈作废。漏了任何一个 checkpoint，过起点线不计圈。
+
+### 倒车过线
+
+比"不加圈"要细一点。反向穿过起点线时把刚记上的那一圈**整个撤销**：圈数减一、
+圈速弹回来接着走、已通过的 checkpoint 恢复。再正着开过来会重新记这一圈 ——
+净效果就是不加圈，而且来回折腾浪费的时间会算进那一圈里，不会白送。
+
+这里有个必须守的标志 `_lineCredited`：漏了 checkpoint 的那次过线本来就没加圈，
+退回去时当然也不能去减前面某一圈。没有它的话"跑完一圈 → 第二圈漏 checkpoint 过线 →
+倒车退回"会把第一圈吃掉。
+
+### 重生点
+
+掉出赛道后送回 `getLastCheckpoint()`（当前 sector 的入口），不是最近的样条点。
+从赛道外面横着摔出去时，最近样条点可能落在赛道**另一段**上，那等于摔一跤白送一大截近道。
+`PhysicsSystem.sample()` 多了一个可选的 `respawnT` 参数走这条路。
+
+代价是往回退得比较狠：周长 1012m / 8 段 = 每段 126m，平均退 63m。嫌罚重就把
+`RaceConfig.checkpointCount` 调到 16，其余逻辑不用动。
+
+### 状态机与输入锁
+
+`'countdown' | 'racing' | 'finished'`。倒计时和冲线后 `gateInput()` 一律返回
+`NEUTRAL_INPUT`，车靠 `coastFriction` 自然减速停下 —— 不需要在 `kartStep` 里加任何状态。
+
+> **坑**：倒计时归零的判定用了 `1e-6` 阈值。3 秒按 `1/60` 减 180 次，二进制误差会剩下
+> ~1e-14，直接写 `<= 0` 会卡住多跑一帧。
+
+名次按 `totalProgress`（= 已完成圈数 + 当前进度）降序，已冲线的按冲线顺序排在最前。
+现在只有玩家一辆车，但 `RaceState` 的接口是按多车写的。
+
+注意 `totalProgress` 在"漏了 checkpoint 却过了线"时会掉回将近 1 —— 那一圈确实不算，
+名次也就该退回去。
+
+### HUD
+
+`RaceHud` 走 DOM 不走 3D：左上圈数、右上三行计时（本局最佳金色、破纪录绿色）、
+中央倒计时和圈速弹窗、完赛结算面板。最佳圈速存 localStorage，破纪录时中央弹窗带绿色辉光。
+
+> **坑一**：`el.hidden` 藏不住 `display: flex` 的元素 —— 作者样式的 `display` 会盖掉
+> UA 的 `[hidden]{display:none}`，结果空的结算面板一直挂在屏幕中间。
+> 样式表里补了一条 `.race-hud [hidden]{display:none!important}`。
+>
+> **坑二**：计时面板和 lil-gui 都钉在右上角，会被压住。`DebugGui` 现在往 `body` 上打
+> 一个 `debug-gui-open` class，HUD 据此左移，按 `H` 收起面板时自动回位。
+
 ## 下一步
 
 - 触屏摇杆（实现 `InputAdapter` 即可）
 - 换 glTF 车模型（保证车头朝 `+Z`、轮子贴地 `y=0`，外面代码不用动）
-- 圈速 / 计圈（`getProgress` 的 `t` 已经是现成的进度）
-- 道具、人机对手
+- 道具、人机对手（`RaceState` 的接口已经是按多车写的，加车只要多传几个 racer）
 - 真正的护栏碰撞体（现在是按横向偏移拉回来的）
