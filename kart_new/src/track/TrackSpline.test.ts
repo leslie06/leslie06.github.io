@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { TrackSpline } from './TrackSpline';
-import { DEFAULT_TRACK_CONFIG, drivableHalfWidth, TRACK_CONTROL_POINTS } from './TrackConfig';
+import { DEFAULT_TRACK_CONFIG, drivableHalfWidth } from './TrackConfig';
+import { SUNSET } from './tracks/sunset';
 
-const spline = new TrackSpline();
+/** 几何测试都拿黄昏赛道当参照：它是最早那条，注释里那些实测值都是按它写的 */
+const TRACK_CONTROL_POINTS = SUNSET.points;
+
+const spline = new TrackSpline(TRACK_CONTROL_POINTS);
 
 /** 按 KartState.heading 的约定取"车手视角的右" */
 function rightOf(heading: number): [number, number] {

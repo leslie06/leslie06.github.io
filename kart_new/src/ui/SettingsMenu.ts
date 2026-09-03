@@ -1,5 +1,16 @@
 import type { Prefs } from '../core/Prefs';
 import type { InputMode, InputModeSetting } from '../input/InputMode';
+import {
+  ACTION_LABELS,
+  INPUT_ACTIONS,
+  isBindable,
+  isDefaultBindings,
+  keyLabel,
+  rebind,
+  sanitizeKeyBindings,
+  type InputAction,
+  type KeyBindings,
+} from '../input/KeyBindings';
 import type { QualityTier, TierOverride } from '../render/QualityTiers';
 import { injectTheme } from './theme';
 
@@ -22,6 +33,12 @@ export interface SettingsMenuOptions {
   /** 音量改变。bus 'master' 是总音量，'music' 是背景音乐 */
   onVolume: (bus: 'master' | 'music', value: number) => void;
   onMuted: (muted: boolean) => void;
+  /** 按键映射改了。整张表传过去，调用方存 prefs 并喂给 KeyboardAdapter */
+  onKeys: (bindings: KeyBindings) => void;
+  /** 触屏惯用手改了 */
+  onHanded: (handed: 'right' | 'left') => void;
+  /** 清空本地记录（圈速、幽灵车、杯赛进度）。**不可撤销**，所以要二次确认 */
+  onResetRecords: () => void;
 }
 
 const TIER_LABELS: Record<TierOverride, string> = {
@@ -43,9 +60,19 @@ export class SettingsMenu {
   private readonly note: HTMLElement;
   private readonly toggleButton: HTMLButtonElement;
   private readonly muteButton: HTMLButtonElement;
+  private readonly keyList: HTMLElement;
+  private readonly keysTag: HTMLElement;
+  private readonly dangerButton: HTMLButtonElement;
   private readonly qualityButtons = new Map<TierOverride, HTMLButtonElement>();
   private readonly inputButtons = new Map<InputModeSetting, HTMLButtonElement>();
+  private readonly handedButtons = new Map<'right' | 'left', HTMLButtonElement>();
   private open = false;
+  private bindings: KeyBindings;
+  /** 正在等玩家按键的那个格子。null = 没在改键 */
+  private capturing: { action: InputAction; slot: number; button: HTMLButtonElement } | null = null;
+  /** 清空记录的二次确认状态 */
+  private confirmingReset = false;
+  private confirmTimer = 0;
 
   constructor(parent: HTMLElement, private readonly options: SettingsMenuOptions) {
     injectTheme();
@@ -73,7 +100,17 @@ export class SettingsMenu {
           <div class="settings-label">音乐</div>
           <input class="k-range settings-music" type="range" min="0" max="1" step="0.05" aria-label="音乐音量" />
         </div>
+        <div class="settings-row settings-row-handed">
+          <div class="settings-label">布局</div>
+          <div class="k-seg settings-handed"></div>
+        </div>
+        <details class="settings-keys">
+          <summary>按键映射<span class="settings-keys-tag"></span></summary>
+          <div class="settings-keys-list"></div>
+          <button class="settings-keys-reset" type="button">恢复默认按键</button>
+        </details>
         <div class="settings-note"></div>
+        <button class="settings-danger" type="button">清空本地记录</button>
       </div>
     `;
     parent.appendChild(this.root);
@@ -82,6 +119,10 @@ export class SettingsMenu {
     this.note = this.root.querySelector('.settings-note')!;
     this.toggleButton = this.root.querySelector('.settings-toggle')!;
     this.muteButton = this.root.querySelector('.settings-mute')!;
+    this.keyList = this.root.querySelector('.settings-keys-list')!;
+    this.keysTag = this.root.querySelector('.settings-keys-tag')!;
+    this.dangerButton = this.root.querySelector('.settings-danger')!;
+    this.bindings = sanitizeKeyBindings(options.prefs.keys);
 
     const qualityRow = this.root.querySelector('.settings-quality')!;
     for (const value of ['auto', 'high', 'medium', 'low'] as const) {
@@ -113,7 +154,22 @@ export class SettingsMenu {
       this.setMuted(muted);
     });
 
+    const handedRow = this.root.querySelector('.settings-handed')!;
+    for (const value of ['right', 'left'] as const) {
+      this.handedButtons.set(value, this.addButton(handedRow, HANDED_LABELS[value], () => {
+        this.options.onHanded(value);
+        this.setHanded(value);
+      }));
+    }
+
+    this.root.querySelector('.settings-keys-reset')!.addEventListener('click', () => {
+      this.applyBindings(sanitizeKeyBindings(null));
+    });
+    this.dangerButton.addEventListener('click', () => this.onDangerClick());
+
     this.toggleButton.addEventListener('click', () => this.toggle());
+    this.renderKeys();
+    this.setHanded(options.prefs.handed);
     this.setQuality(options.prefs.quality);
     this.setInput(options.prefs.input);
     this.setMuted(options.prefs.muted);
@@ -131,6 +187,111 @@ export class SettingsMenu {
   private toggle(): void {
     this.open = !this.open;
     this.panel.classList.toggle('is-open', this.open);
+    // 面板收起来时把两个"半途状态"清掉，否则下次打开会看到一个还在等按键的格子
+    if (!this.open) {
+      this.cancelCapture();
+      this.resetDanger();
+    }
+  }
+
+  // --- 按键映射 -------------------------------------------------------------
+
+  /**
+   * 改键是"点一下格子，然后按一个键"。
+   *
+   * 捕获期间用的是 **capture 阶段**的监听器并且 preventDefault：不这么做的话
+   * 按下的那个键会同时被 KeyboardAdapter 收到 —— 玩家想把油门改成空格，
+   * 结果车在后面猛地窜出去。
+   */
+  private beginCapture(action: InputAction, slot: number, button: HTMLButtonElement): void {
+    this.cancelCapture();
+    this.capturing = { action, slot, button };
+    button.classList.add('is-capturing');
+    button.textContent = '按一个键…';
+    window.addEventListener('keydown', this.onCaptureKey, true);
+  }
+
+  private readonly onCaptureKey = (event: KeyboardEvent) => {
+    if (!this.capturing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const { action, slot } = this.capturing;
+    // Esc = 放弃改键。它本身不许绑（绑上去之后就再也退不出捕获了）
+    if (event.code !== 'Escape' && isBindable(event.code)) {
+      this.applyBindings(rebind(this.bindings, action, slot, event.code));
+    }
+    this.cancelCapture();
+  };
+
+  private cancelCapture(): void {
+    if (!this.capturing) return;
+    window.removeEventListener('keydown', this.onCaptureKey, true);
+    this.capturing = null;
+    this.renderKeys();
+  }
+
+  private applyBindings(next: KeyBindings): void {
+    this.bindings = next;
+    this.options.onKeys(next);
+    this.renderKeys();
+  }
+
+  /** 整块重画。改一个键可能牵动别的动作（键会从原来那儿被摘走），所以不做局部更新 */
+  private renderKeys(): void {
+    this.keyList.textContent = '';
+    for (const action of INPUT_ACTIONS) {
+      const row = document.createElement('div');
+      row.className = 'settings-key-row';
+
+      const label = document.createElement('span');
+      label.className = 'settings-key-label';
+      label.textContent = ACTION_LABELS[action];
+      row.appendChild(label);
+
+      const keys = document.createElement('span');
+      keys.className = 'settings-key-slots';
+      this.bindings[action].forEach((code, slot) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'settings-key';
+        button.textContent = keyLabel(code);
+        button.title = code;
+        button.addEventListener('click', () => this.beginCapture(action, slot, button));
+        keys.appendChild(button);
+      });
+      row.appendChild(keys);
+      this.keyList.appendChild(row);
+    }
+    this.keysTag.textContent = isDefaultBindings(this.bindings) ? '' : ' · 已改';
+  }
+
+  // --- 清空记录 -------------------------------------------------------------
+
+  /**
+   * 二次确认。这个操作会抹掉所有圈速纪录、幽灵车和杯赛进度，**没法撤销**，
+   * 而按钮就在设置面板里，手滑点到的代价太大。
+   * 用"再点一次确认"而不是 confirm()：后者在移动端是个系统弹窗，很突兀。
+   */
+  private onDangerClick(): void {
+    if (!this.confirmingReset) {
+      this.confirmingReset = true;
+      this.dangerButton.textContent = '真的清空？再点一次';
+      this.dangerButton.classList.add('is-confirming');
+      clearTimeout(this.confirmTimer);
+      this.confirmTimer = setTimeout(() => this.resetDanger(), 4000) as unknown as number;
+      return;
+    }
+    this.options.onResetRecords();
+    this.resetDanger();
+    this.dangerButton.textContent = '已清空';
+    setTimeout(() => this.resetDanger(), 2000);
+  }
+
+  private resetDanger(): void {
+    clearTimeout(this.confirmTimer);
+    this.confirmingReset = false;
+    this.dangerButton.textContent = '清空本地记录';
+    this.dangerButton.classList.remove('is-confirming');
   }
 
   /** 同步画质那一行的高亮 + 说明文字 */
@@ -141,6 +302,10 @@ export class SettingsMenu {
 
   setInput(value: InputModeSetting): void {
     for (const [key, button] of this.inputButtons) button.classList.toggle('is-on', key === value);
+  }
+
+  setHanded(value: 'right' | 'left'): void {
+    for (const [key, button] of this.handedButtons) button.classList.toggle('is-on', key === value);
   }
 
   setMuted(muted: boolean): void {
@@ -163,9 +328,16 @@ export class SettingsMenu {
   }
 
   dispose(): void {
+    this.cancelCapture();
+    clearTimeout(this.confirmTimer);
     this.root.remove();
   }
 }
+
+const HANDED_LABELS: Record<'right' | 'left', string> = {
+  right: '右手（摇杆在左）',
+  left: '左手（摇杆在右）',
+};
 
 let injected = false;
 function injectSettingsStyles(): void {
@@ -210,6 +382,55 @@ function injectSettingsStyles(): void {
     .settings-mute.is-muted { color: var(--k-danger); }
     .settings-note {
       font-size: 11px; color: var(--k-text-dim); line-height: 1.5; white-space: pre-line;
+    }
+    /* 触屏布局那一行只在触屏模式下有意义 */
+    .settings-row-handed { display: none; }
+    body.touch-input .settings-row-handed { display: flex; }
+    .settings-row-handed .k-seg button { font-size: 11px; }
+
+    /* 按键映射：默认折起来。它是一大块，展开着会把面板顶出屏幕 */
+    .settings-keys { margin-bottom: 10px; }
+    .settings-keys summary {
+      cursor: pointer; font-size: 12px; color: var(--k-text-dim);
+      padding: 4px 0; -webkit-tap-highlight-color: transparent;
+    }
+    .settings-keys-tag { color: var(--k-gold); }
+    .settings-keys-list { display: flex; flex-direction: column; gap: 5px; margin: 6px 0 8px; }
+    .settings-key-row { display: flex; align-items: center; gap: 8px; }
+    .settings-key-label { font-size: 12px; color: var(--k-text-dim); flex: 1; min-width: 0; }
+    .settings-key-slots { display: flex; gap: 4px; flex: none; }
+    .settings-key {
+      pointer-events: auto; min-width: 46px; padding: 4px 7px;
+      font-family: var(--k-font); font-size: 11px; font-weight: 700;
+      border-radius: var(--k-r-sm); cursor: pointer;
+      border: 1px solid var(--k-panel-line);
+      background: rgba(255,255,255,0.08); color: var(--k-text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* 等待按键时闪一下，不然玩家不知道该干什么 */
+    .settings-key.is-capturing {
+      background: var(--k-gold); color: var(--k-ink);
+      border-color: var(--k-gold); animation: settings-blink 900ms ease-in-out infinite;
+    }
+    @keyframes settings-blink { 50% { opacity: 0.55; } }
+    .settings-keys-reset {
+      pointer-events: auto; width: 100%; padding: 6px 0;
+      font-family: var(--k-font); font-size: 11px; cursor: pointer;
+      border-radius: var(--k-r-sm); border: 1px solid var(--k-panel-line);
+      background: rgba(255,255,255,0.06); color: var(--k-text-dim);
+    }
+
+    /* 清空记录：危险操作，放在最下面，颜色和别的键区分开 */
+    .settings-danger {
+      pointer-events: auto; width: 100%; margin-top: 10px; padding: 8px 0;
+      font-family: var(--k-font); font-size: 12px; font-weight: 700; cursor: pointer;
+      border-radius: var(--k-r-sm);
+      border: 1px solid rgba(255,95,109,0.45);
+      background: rgba(255,95,109,0.12); color: var(--k-danger);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .settings-danger.is-confirming {
+      background: var(--k-danger); color: var(--k-ink); border-color: var(--k-danger);
     }
   `;
   document.head.appendChild(style);

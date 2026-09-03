@@ -47,6 +47,13 @@ export interface RaceHudView {
   dots: readonly TrackDot[];
   /** 完赛结算数据，没完赛是 null */
   results: RaceResults | null;
+  /** 杯赛信息，不在杯赛里是 null */
+  cup: CupView | null;
+  /**
+   * 和幽灵车的差距（米，正 = 玩家领先）。没有幽灵车时是 null。
+   * 用米不用秒：换算成秒要假设一个速度，而在弯里和直道上那个假设差得很远
+   */
+  ghostGap: number | null;
 }
 
 export interface RaceResults {
@@ -78,6 +85,30 @@ export interface RaceHudActions {
   onRestart?: () => void;
   /** "换赛道"：回主菜单重选 */
   onChangeTrack?: () => void;
+  /** "下一场"：杯赛里跳到下一条赛道（重载页面，不回主菜单） */
+  onNextRound?: () => void;
+}
+
+/** 杯赛的一行积分 */
+export interface CupStandingRow {
+  name: string;
+  color: string;
+  isPlayer: boolean;
+  place: number;
+  points: number;
+  /** 每一场的名次，没跑的是 null */
+  rounds: readonly (number | null)[];
+}
+
+/** 杯赛信息。不在杯赛里就是 null */
+export interface CupView {
+  name: string;
+  /** 当前第几场（1-based） */
+  round: number;
+  total: number;
+  /** 四场都跑完了 */
+  finished: boolean;
+  standings: readonly CupStandingRow[];
 }
 
 /** 中央弹出提示的默认时长（秒） */
@@ -101,6 +132,8 @@ export class RaceHud {
   private readonly warn: HTMLElement;
   private readonly results: HTMLElement;
   private readonly trackBar: HTMLElement;
+  private readonly cupBadge: HTMLElement;
+  private readonly ghostGap: HTMLElement;
   /** 进度条上的小圆点，按 id 复用 DOM，不每帧重建 */
   private readonly dotEls = new Map<string, HTMLElement>();
 
@@ -135,6 +168,8 @@ export class RaceHud {
         <div class="race-row race-row-best"><span class="race-k">最佳</span><span class="race-v k-num">--.---</span></div>
         <div class="race-row race-row-record"><span class="race-k">纪录</span><span class="race-v k-num">--.---</span></div>
       </div>
+      <div class="race-cup k-chip" hidden></div>
+      <div class="race-ghost k-outline" hidden></div>
       <div class="race-track" hidden><div class="race-track-line"></div></div>
       <div class="race-center k-outline-lg" hidden></div>
       <div class="race-warn" hidden>⚠ 漏了 checkpoint · 本圈不计</div>
@@ -153,6 +188,8 @@ export class RaceHud {
     this.recordRow = q('.race-row-record');
     this.recordValue = q('.race-row-record .race-v');
     this.trackBar = q('.race-track');
+    this.cupBadge = q('.race-cup');
+    this.ghostGap = q('.race-ghost');
     this.center = q('.race-center');
     this.warn = q('.race-warn');
     this.results = q('.race-results');
@@ -198,6 +235,20 @@ export class RaceHud {
     const beatingRecord =
       view.bestLap !== null && (view.recordLap === null || view.bestLap <= view.recordLap);
     this.bestValue.classList.toggle('race-v-record', beatingRecord);
+
+    // --- 杯赛角标：第几场 / 当前总分第几 ---
+    this.cupBadge.hidden = view.cup === null;
+    if (view.cup) {
+      const me = view.cup.standings.find((r) => r.isPlayer);
+      setText(
+        this.cupBadge,
+        `${view.cup.name} 第 ${view.cup.round}/${view.cup.total} 场` +
+          (me ? ` · 总分 ${me.points}（第 ${me.place}）` : ''),
+      );
+    }
+
+    // --- 和幽灵车的差距 ---
+    this.renderGhostGap(view.ghostGap);
 
     // --- 赛道进度条 ---
     this.renderDots(view.dots);
@@ -251,6 +302,20 @@ export class RaceHud {
     }
   }
 
+  /**
+   * 幽灵车差距。领先绿、落后红，差得很少（1m 以内）时显示"并排"——
+   * 一个在 +0.4 和 -0.4 之间反复横跳的数字比没有还烦
+   */
+  private renderGhostGap(gap: number | null): void {
+    this.ghostGap.hidden = gap === null;
+    if (gap === null) return;
+    const ahead = gap > 0;
+    const text = Math.abs(gap) < 1 ? '与幽灵并排' : `${ahead ? '领先' : '落后'} ${Math.abs(gap).toFixed(0)} m`;
+    setText(this.ghostGap, text);
+    this.ghostGap.classList.toggle('is-ahead', Math.abs(gap) >= 1 && ahead);
+    this.ghostGap.classList.toggle('is-behind', Math.abs(gap) >= 1 && !ahead);
+  }
+
   private renderCountdown(remaining: number): void {
     const n = Math.ceil(remaining);
     const frac = remaining - Math.floor(remaining); // 每一秒内从 1 走到 0
@@ -298,7 +363,10 @@ export class RaceHud {
     }
     // 排名表也进签名：AI 还在跑，名次会一直变，内容变了就得重画
     const standings = r.standings.map((s) => `${s.place}${s.name}${s.finishTime ?? s.lap}`).join(';');
-    const signature = `${r.place}|${r.totalTime}|${r.lapTimes.join(',')}|${r.newRecord}|${standings}`;
+    const cupSig = view.cup
+      ? `${view.cup.round}/${view.cup.total}|${view.cup.standings.map((c) => `${c.place}:${c.points}`).join(',')}`
+      : '';
+    const signature = `${r.place}|${r.totalTime}|${r.lapTimes.join(',')}|${r.newRecord}|${standings}|${cupSig}`;
     if (signature === this.resultsSignature) return;
     this.resultsSignature = signature;
 
@@ -318,9 +386,19 @@ export class RaceHud {
       <div class="race-res-best">最佳圈 <span class="k-num">${formatTimeOrDash(r.bestLap)}</span></div>
       ${r.newRecord ? '<div class="race-res-record">★ 打破本地纪录</div>' : ''}
       ${renderStandings(r.standings)}
+      ${renderCup(view.cup)}
       <div class="race-res-actions">
-        <button class="k-btn race-res-again" type="button">再来一局</button>
-        <button class="k-btn k-btn-ghost race-res-change" type="button">换赛道</button>
+        ${
+          // 杯赛没打完时"下一场"是主按钮，"再来一局"退成次要的 ——
+          // 杯赛里重跑一场是允许的（这一场的成绩会被覆盖），但那不是常见选择
+          view.cup && !view.cup.finished
+            ? '<button class="k-btn race-res-next" type="button">下一场</button>' +
+              '<button class="k-btn k-btn-ghost race-res-again" type="button">重跑本场</button>'
+            : '<button class="k-btn race-res-again" type="button">再来一局</button>'
+        }
+        <button class="k-btn k-btn-ghost race-res-change" type="button">${
+          view.cup ? '回主菜单' : '换赛道'
+        }</button>
       </div>
       <div class="race-res-hint">或按 R 重开</div>
     `;
@@ -328,10 +406,43 @@ export class RaceHud {
       .querySelector('.race-res-again')!
       .addEventListener('click', () => this.actions.onRestart?.());
     this.results
+      .querySelector('.race-res-next')
+      ?.addEventListener('click', () => this.actions.onNextRound?.());
+    this.results
       .querySelector('.race-res-change')!
       .addEventListener('click', () => this.actions.onChangeTrack?.());
     this.results.hidden = false;
   }
+}
+
+/**
+ * 结算面板里的杯赛积分表。
+ *
+ * 每行末尾把各场名次排成一串小数字（`1 2 - -`），这样"我是稳定发挥还是崩了一场"
+ * 一眼就能看出来 —— 只给总分的话看不出这个。
+ */
+function renderCup(cup: CupView | null): string {
+  if (!cup) return '';
+  const title = cup.finished ? '杯赛最终成绩' : `杯赛积分 · 第 ${cup.round}/${cup.total} 场后`;
+  const rows = cup.standings
+    .map((row) => {
+      const marks = row.rounds
+        .map((place) => `<i class="race-cup-round">${place === null ? '–' : place}</i>`)
+        .join('');
+      return `<li class="race-rank-row${row.isPlayer ? ' race-rank-me' : ''}">
+        <span class="race-rank-place">${row.place}</span>
+        <i class="race-rank-chip" style="background:${escapeAttr(row.color)}"></i>
+        <span class="race-rank-name">${escapeHtml(row.name)}</span>
+        <span class="race-cup-rounds">${marks}</span>
+        <span class="race-cup-points">${row.points}</span>
+      </li>`;
+    })
+    .join('');
+  const champion =
+    cup.finished && cup.standings[0]
+      ? `<div class="race-res-record">🏆 ${escapeHtml(cup.standings[0].name)} 夺得${escapeHtml(cup.name)}</div>`
+      : '';
+  return `<div class="race-rank-title">${title}</div><ol class="race-rank">${rows}</ol>${champion}`;
 }
 
 /** 结算面板下半截的完整排名表。单人局（空数组）不画。 */
@@ -428,6 +539,22 @@ function injectRaceStyles(): void {
       right: calc(30px + clamp(58px, 12vmin, 92px) + env(safe-area-inset-right));
     }
 
+    /* 杯赛角标：顶部正中，比赛过程中一直挂着 */
+    .race-cup {
+      position: absolute; left: 50%; top: 18px; transform: translateX(-50%);
+      padding: 6px 14px; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+      white-space: nowrap;
+    }
+    body.touch-input .race-cup { top: calc(14px + env(safe-area-inset-top)); }
+
+    /* 幽灵车差距：挂在杯赛角标下面一点，计时赛里才有 */
+    .race-ghost {
+      position: absolute; left: 50%; top: 56px; transform: translateX(-50%);
+      font-size: 17px; font-weight: 800; letter-spacing: 1px; white-space: nowrap;
+    }
+    .race-ghost.is-ahead { color: var(--k-mint); }
+    .race-ghost.is-behind { color: var(--k-danger); }
+
     /* 中央：倒计时 / 圈速弹窗 */
     .race-center {
       position: absolute; left: 50%; top: 42%;
@@ -497,6 +624,18 @@ function injectRaceStyles(): void {
       box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
     }
     .race-rank-name { flex: 1; min-width: 5ch; }
+    /* 杯赛：每场名次排成一串，最后是总分 */
+    .race-cup-rounds { display: flex; gap: 3px; flex: none; }
+    .race-cup-round {
+      width: 16px; height: 16px; line-height: 16px; text-align: center;
+      border-radius: 4px; font-size: 10px; font-style: normal;
+      background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.75);
+      font-family: var(--k-font-num);
+    }
+    .race-cup-points {
+      width: 3ch; text-align: right; font-weight: 800;
+      font-family: var(--k-font-num); color: var(--k-gold);
+    }
     .race-rank-time { opacity: 0.9; font-family: var(--k-font-num); }
     .race-rank-dnf { opacity: 0.5; }
 
@@ -539,6 +678,15 @@ function injectRaceStyles(): void {
     /* 触屏：左上角那一列也要让开刘海 */
     body.touch-input .race-lap { left: calc(20px + env(safe-area-inset-left)); }
     body.touch-input .race-pos { left: calc(20px + env(safe-area-inset-left)); }
+    /* 左手布局：道具键跑到左上角去了，所以右上的计时面板不用再让位，
+       反过来左上的圈数/名次要给它让开 */
+    body.touch-input.touch-left-handed .race-times {
+      right: calc(18px + env(safe-area-inset-right));
+    }
+    body.touch-input.touch-left-handed .race-lap,
+    body.touch-input.touch-left-handed .race-pos {
+      left: calc(30px + clamp(58px, 12vmin, 92px) + env(safe-area-inset-left));
+    }
 
     @media (max-width: 640px) {
       .race-lap-value { font-size: 30px; }

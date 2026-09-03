@@ -4,13 +4,14 @@ import { stubCanvasForNode } from '../test/stubCanvas';
 import { DEFAULT_TRACK_CONFIG, drivableHalfWidth } from './TrackConfig';
 import { TrackMesh } from './TrackMesh';
 import { TrackSpline } from './TrackSpline';
+import { SUNSET } from './tracks/sunset';
 
 let spline: TrackSpline;
 let track: TrackMesh;
 
 beforeAll(() => {
   stubCanvasForNode();
-  spline = new TrackSpline();
+  spline = new TrackSpline(SUNSET.points);
   track = new TrackMesh(spline);
 });
 

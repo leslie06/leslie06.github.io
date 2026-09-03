@@ -73,6 +73,11 @@ export class ItemHud {
     this.effectRow = q('.item-effects');
   }
 
+  /** 计时赛不开道具，整块藏起来 —— 一个永远空着的道具槽只会让人以为是 bug */
+  setVisible(visible: boolean): void {
+    this.root.style.display = visible ? '' : 'none';
+  }
+
   /** 抽到道具时叫一下，播个短动画 */
   playRoll(): void {
     this.rollTime = ROLL_DURATION;

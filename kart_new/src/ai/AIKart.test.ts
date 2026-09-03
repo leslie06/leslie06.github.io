@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TrackSpline } from '../track/TrackSpline';
+import { SUNSET } from '../track/tracks/sunset';
 import { DEFAULT_TRACK_CONFIG, drivableHalfWidth } from '../track/TrackConfig';
 import { createGroundSample, type GroundSample } from '../kart/GroundSample';
 import { cloneKartConfig } from '../kart/KartConfig';
@@ -26,7 +27,7 @@ const cfg = cloneKartConfig();
 const trackCfg = DEFAULT_TRACK_CONFIG;
 const halfWidth = drivableHalfWidth(trackCfg);
 
-const spline = new TrackSpline(undefined, trackCfg.lutSamples);
+const spline = new TrackSpline(SUNSET.points, trackCfg.lutSamples);
 const aiTrack = createSplineSampler(spline);
 const grid = buildStartGrid(aiTrack, 8);
 

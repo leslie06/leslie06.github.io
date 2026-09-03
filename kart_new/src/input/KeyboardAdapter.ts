@@ -1,30 +1,24 @@
 import { createInputState, type InputAdapter, type InputState } from './InputState';
+import {
+  codeToAction,
+  DEFAULT_KEY_BINDINGS,
+  type InputAction,
+  type KeyBindings,
+} from './KeyBindings';
 
 /**
- * 键盘 -> InputState 的映射。WASD / 方向键 / 空格刹车 / Shift 漂移 / Q 用道具。
+ * 键盘 -> InputState 的映射。
  *
- * 道具键**不能**用 Shift：Shift 是漂移键，而且是长按的，绑在一起等于每次漂移
- * 都自动把道具丢掉。除了 Q 之外，鼠标右键也能用道具（见 useItem 的处理）。
+ * 键位表本身在 KeyBindings.ts（纯数据，可以被玩家改、存 localStorage），
+ * 这里只负责"按下了哪个 code -> 哪个动作 -> 这一帧的 InputState"。
+ *
+ * 除了绑定的键之外，鼠标右键也能用道具 —— 这条是写死的：右键在赛车游戏里
+ * 没有别的用途，而且它不占键盘上的位置，不该进可改的映射表。
  */
-const KEY_MAP = {
-  left: ['ArrowLeft', 'KeyA'],
-  right: ['ArrowRight', 'KeyD'],
-  forward: ['ArrowUp', 'KeyW'],
-  back: ['ArrowDown', 'KeyS'],
-  brake: ['Space'],
-  drift: ['ShiftLeft', 'ShiftRight'],
-  useItem: ['KeyQ'],
-} as const;
-
-type Action = keyof typeof KEY_MAP;
-
-const CODE_TO_ACTION = new Map<string, Action>();
-for (const action of Object.keys(KEY_MAP) as Action[]) {
-  for (const code of KEY_MAP[action]) CODE_TO_ACTION.set(code, action);
-}
-
 export class KeyboardAdapter implements InputAdapter {
-  private readonly held = new Set<Action>();
+  private readonly held = new Set<InputAction>();
+  /** code -> 动作。改键之后整张表换掉 */
+  private lookup: Map<string, InputAction>;
   private readonly state: InputState = createInputState();
   /**
    * 攒着的"用道具"请求。
@@ -35,7 +29,11 @@ export class KeyboardAdapter implements InputAdapter {
    */
   private usePending = false;
 
-  constructor(private readonly target: EventTarget = window) {
+  constructor(
+    private readonly target: EventTarget = window,
+    bindings: KeyBindings = DEFAULT_KEY_BINDINGS,
+  ) {
+    this.lookup = codeToAction(bindings);
     this.target.addEventListener('keydown', this.onKeyDown);
     this.target.addEventListener('keyup', this.onKeyUp);
     this.target.addEventListener('mousedown', this.onMouseDown);
@@ -43,10 +41,20 @@ export class KeyboardAdapter implements InputAdapter {
     window.addEventListener('blur', this.onBlur);
   }
 
+  /**
+   * 换一套键位。**要把按住的键清掉** —— 不清的话改键那一刻按着的键会永远
+   * 卡在"按下"状态（它的 keyup 在新表里找不到对应动作，删不掉）。
+   */
+  setBindings(bindings: KeyBindings): void {
+    this.lookup = codeToAction(bindings);
+    this.held.clear();
+    this.usePending = false;
+  }
+
   private readonly onKeyDown = (event: Event) => {
     const e = event as KeyboardEvent;
     if (e.repeat) return;
-    const action = CODE_TO_ACTION.get(e.code);
+    const action = this.lookup.get(e.code);
     if (!action) return;
     e.preventDefault();
     this.held.add(action);
@@ -64,7 +72,7 @@ export class KeyboardAdapter implements InputAdapter {
   private readonly onContextMenu = (event: Event) => event.preventDefault();
 
   private readonly onKeyUp = (event: Event) => {
-    const action = CODE_TO_ACTION.get((event as KeyboardEvent).code);
+    const action = this.lookup.get((event as KeyboardEvent).code);
     if (action) this.held.delete(action);
   };
 

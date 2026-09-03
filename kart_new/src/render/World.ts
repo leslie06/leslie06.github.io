@@ -1,6 +1,32 @@
 import * as THREE from 'three';
 import { QUALITY_TIERS, type QualitySettings } from './QualityTiers';
-import { AFTERNOON_SUN_DIR, SkyEnvironment } from './SkyEnvironment';
+import { AFTERNOON_SKY, AFTERNOON_SUN_DIR, SkyEnvironment, type SkyColors } from './SkyEnvironment';
+
+/**
+ * 赛道两侧的参照物配置。每条赛道一套（TrackDefinition.decor）——
+ * 换一套配色和密度是"换了个地方"最省事也最有效的信号。
+ * 结构和 track/tracks/types.ts 里的 TrackDecor 一样，故意不 import：渲染层不依赖赛道表。
+ */
+export interface WorldDecor {
+  cones: number;
+  blocks: number;
+  pillarRatio: number;
+  radius: readonly [min: number, max: number];
+  palette: readonly string[];
+  groundColor: string;
+  groundLineColor: string;
+}
+
+/** 没给 decor 时的默认值（测试里就是这么跑的） */
+export const DEFAULT_DECOR: WorldDecor = {
+  cones: 260,
+  blocks: 235,
+  pillarRatio: 0.23,
+  radius: [20, 480],
+  palette: ['#ff5d5d', '#ffd23f', '#3ddc97', '#4d9bff', '#ff8ac4', '#ffffff'],
+  groundColor: '#4f7a45',
+  groundLineColor: 'rgba(255,255,255,0.10)',
+};
 
 export interface WorldOptions {
   /**
@@ -17,6 +43,10 @@ export interface WorldOptions {
   isBlocked?: (x: number, z: number) => boolean;
   /** 画质档位参数。雾距离、阴影分辨率、装饰物密度全从这里读 */
   quality?: Readonly<QualitySettings>;
+  /** 这条赛道的天空配色。雾色跟着它走 */
+  sky?: Readonly<SkyColors>;
+  /** 这条赛道的参照物配置（数量、配色、地面颜色） */
+  decor?: Readonly<WorldDecor>;
 }
 
 /** 场景：天空 + 地面 + 光照 + 一堆参照物（用来判断速度感）。 */
@@ -34,9 +64,11 @@ export class World {
   /** 平行光离车多远。只影响阴影相机的近远平面，不影响光照方向（平行光没有位置衰减） */
   private static readonly SUN_DISTANCE = 120;
 
-  /** 装饰物按满档数量建好，实际画多少条由 InstancedMesh.count 控制（见 setQuality） */
-  private static readonly CONE_BUDGET = 260;
-  private static readonly BOX_BUDGET = 235;
+  /**
+   * 装饰物按**满档数量**建好，实际画多少由 InstancedMesh.count 控制（见 setQuality）。
+   * 数量是每条赛道自己定的，所以是实例字段不是常量
+   */
+  private readonly decor: Readonly<WorldDecor>;
 
   private readonly fog: THREE.Fog;
   private readonly groundTexture: THREE.Texture;
@@ -46,9 +78,10 @@ export class World {
 
   constructor(private readonly options: WorldOptions = {}) {
     this.quality = options.quality ?? QUALITY_TIERS.high;
+    this.decor = options.decor ?? DEFAULT_DECOR;
 
     // --- 天空。雾色 = 天空的地平线色，这两个对不上远处就会有一条硬边 ---
-    this.sky = new SkyEnvironment();
+    this.sky = new SkyEnvironment(options.sky ?? AFTERNOON_SKY);
     const skyColor = this.sky.fogColor;
     // 背景色兜底：天空球正常情况下盖住整个视野，万一它没画上也不该是黑的
     this.scene.background = skyColor;
@@ -128,8 +161,8 @@ export class World {
     this.groundTexture.needsUpdate = true;
 
     const density = Math.max(0, Math.min(1, settings.propDensity));
-    this.cones.count = Math.round(World.CONE_BUDGET * density);
-    this.boxes.count = Math.round(World.BOX_BUDGET * density);
+    this.cones.count = Math.round(this.decor.cones * density);
+    this.boxes.count = Math.round(this.decor.blocks * density);
   }
 
   /**
@@ -155,7 +188,9 @@ export class World {
   }
 
   private buildGround(): THREE.Mesh {
-    const texture = new THREE.CanvasTexture(makeGridTexture());
+    const texture = new THREE.CanvasTexture(
+      makeGridTexture(this.decor.groundColor, this.decor.groundLineColor),
+    );
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(World.GROUND_SIZE / World.GRID_TILE, World.GROUND_SIZE / World.GRID_TILE);
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -184,17 +219,19 @@ export class World {
   private buildProps(): { group: THREE.Group; cones: THREE.InstancedMesh; boxes: THREE.InstancedMesh } {
     const group = new THREE.Group();
     const rand = mulberry32(0xc0ffee);
-    const palette = ['#ff5d5d', '#ffd23f', '#3ddc97', '#4d9bff', '#ff8ac4', '#ffffff'].map(
-      (c) => new THREE.Color(c),
-    );
+    const palette = this.decor.palette.map((c) => new THREE.Color(c));
 
     const material = new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.05 });
     const cones = new THREE.InstancedMesh(
       new THREE.ConeGeometry(0.9, 2.4, 12),
       material,
-      World.CONE_BUDGET,
+      Math.max(1, this.decor.cones),
     );
-    const boxes = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, World.BOX_BUDGET);
+    const boxes = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      material,
+      Math.max(1, this.decor.blocks),
+    );
     for (const mesh of [cones, boxes]) {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -210,11 +247,14 @@ export class World {
     const quaternion = new THREE.Quaternion();
     const scale = new THREE.Vector3(1, 1, 1);
 
+    const [minRadius, maxRadius] = this.decor.radius;
+
     /** 摇一个不压在赛道上的位置；连续摇不到就放弃这一个，别死循环 */
     const place = (mesh: THREE.InstancedMesh, index: number, y: number): boolean => {
       for (let attempt = 0; attempt < 12; attempt++) {
         const angle = rand() * Math.PI * 2;
-        const radius = 20 + Math.sqrt(rand()) * 460;
+        // sqrt 是为了在圆盘上均匀分布：直接用 rand() 的话会全挤在圆心附近
+        const radius = minRadius + Math.sqrt(rand()) * (maxRadius - minRadius);
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         if (blocked(x, z)) continue;
@@ -230,13 +270,14 @@ export class World {
       return false;
     };
 
-    for (let i = 0; i < World.CONE_BUDGET; i++) {
+    for (let i = 0; i < this.decor.cones; i++) {
       scale.set(1, 1, 1);
       place(cones, i, 1.2);
     }
-    for (let i = 0; i < World.BOX_BUDGET; i++) {
-      // 前 180 个是矮方块，后面 55 个是高柱子（远处也能看出在移动）
-      const pillar = i >= 180;
+    const pillarFrom = Math.round(this.decor.blocks * (1 - this.decor.pillarRatio));
+    for (let i = 0; i < this.decor.blocks; i++) {
+      // 前面一批是矮方块，后面一批是高柱子（远处也能看出在移动）
+      const pillar = i >= pillarFrom;
       const h = pillar ? 10 + rand() * 22 : 1 + rand() * 5;
       if (pillar) scale.set(2.5, h, 2.5);
       else scale.set(1 + rand() * 2.5, h, 1 + rand() * 2.5);
@@ -262,17 +303,17 @@ const HEMI_WITH_ENV = 0.35;
 /** 没有环境贴图时（low 档）的半球光强度。全靠它撑背光面，不然车会有一半是死黑的 */
 const HEMI_WITHOUT_ENV = 1.15;
 
-/** 一格网格纹理：深色底 + 亮线，再加一点内格分隔。 */
-function makeGridTexture(): HTMLCanvasElement {
+/** 一格网格纹理：底色 + 亮线，再加一点内格分隔。颜色跟着赛道走 */
+function makeGridTexture(groundColor: string, lineColor: string): HTMLCanvasElement {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#4f7a45';
+  ctx.fillStyle = groundColor;
   ctx.fillRect(0, 0, size, size);
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+  ctx.strokeStyle = lineColor;
   ctx.lineWidth = 2;
   for (let i = 1; i < 4; i++) {
     const p = (size / 4) * i;
@@ -284,7 +325,8 @@ function makeGridTexture(): HTMLCanvasElement {
     ctx.stroke();
   }
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  // 格子边框比内部分隔线亮得多：远处只剩边框还看得见，速度感就靠它
+  ctx.strokeStyle = lineColor.replace(/[\d.]+\)$/, '0.45)');
   ctx.lineWidth = 6;
   ctx.strokeRect(0, 0, size, size);
 

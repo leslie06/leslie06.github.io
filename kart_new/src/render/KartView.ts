@@ -70,6 +70,18 @@ const _yaw = new THREE.Quaternion();
 /** 要哪几个轮子的位置：漂移火花只要后轮，越野扬尘四个都要 */
 export type WheelFilter = 'rear' | 'front' | 'all';
 
+export interface KartViewOptions {
+  /**
+   * 幽灵车：半透明、不投影、不写深度。
+   *
+   * 半透明是**功能性**的，不是装饰：幽灵车会和玩家的车重叠（那正是你追平它的
+   * 那一刻），不透明的话你会被自己的历史记录挡住视线撞墙。
+   */
+  ghost?: boolean;
+  /** 幽灵车的不透明度。太淡了看不见，太浓了挡视线 */
+  ghostOpacity?: number;
+}
+
 /**
  * 一辆车的可视部分。
  *
@@ -117,8 +129,14 @@ export class KartView {
     return this.usingModel;
   }
 
-  constructor(palette: Partial<KartPalette> = {}) {
+  /** 幽灵车形态。所有材质换成半透明的那一套，而且不投影 */
+  private readonly ghost: boolean;
+  private readonly ghostOpacity: number;
+
+  constructor(palette: Partial<KartPalette> = {}, options: KartViewOptions = {}) {
     this.palette = { ...DEFAULT_KART_PALETTE, ...palette };
+    this.ghost = options.ghost ?? false;
+    this.ghostOpacity = options.ghostOpacity ?? 0.34;
     this.buildPlaceholder();
   }
 
@@ -136,11 +154,13 @@ export class KartView {
     }
 
     applyTint(model, this.palette);
+    if (this.ghost) applyGhostMaterials(model, this.ghostOpacity);
     model.traverse((node) => {
       const mesh = node as THREE.Mesh;
       if (!mesh.isMesh) return;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
+      // 幽灵车不投影：地上多一片影子会让人以为那儿真的有辆车
+      mesh.castShadow = !this.ghost;
+      mesh.receiveShadow = !this.ghost;
     });
 
     const rig: KartRig = buildKartRig(this.root, model);
@@ -217,21 +237,22 @@ export class KartView {
       [box(0.34, 0.3, 0.32, 0, 1.16, -0.28), SKIN],
     ];
 
+    const set = sharedMaterials(this.ghost, this.ghostOpacity);
     for (const [parts, material] of [
-      [glossy, sharedMaterials().glossy],
-      [matte, sharedMaterials().matte],
+      [glossy, set.glossy],
+      [matte, set.matte],
     ] as const) {
       const geometry = mergeColored(parts);
       this.ownedGeometries.push(geometry);
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
+      mesh.castShadow = !this.ghost;
+      mesh.receiveShadow = !this.ghost;
       this.chassis.add(mesh);
     }
   }
 
   private buildWheels(): void {
-    const material = sharedMaterials().wheel;
+    const material = sharedMaterials(this.ghost, this.ghostOpacity).wheel;
 
     const layout: Array<[x: number, z: number, r: number, w: number, front: boolean]> = [
       [-0.82, 0.95, 0.32, 0.26, true],
@@ -251,7 +272,7 @@ export class KartView {
       ]);
       this.ownedGeometries.push(geometry);
       const wheel = new THREE.Mesh(geometry, material);
-      wheel.castShadow = true;
+      wheel.castShadow = !this.ghost;
 
       // 前轮要能转向，套一层 pivot
       const pivot = new THREE.Group();
@@ -369,14 +390,69 @@ const HUB = '#e8e8ee';
  * 八辆车就是八次没必要的编译（开局第一次出现在画面里时会顿一下）。
  * 懒建是因为模块加载时不一定有 WebGL 上下文（测试里就没有）。
  */
-let materials: { glossy: THREE.Material; matte: THREE.Material; wheel: THREE.Material } | null = null;
-function sharedMaterials() {
+type MaterialSet = { glossy: THREE.Material; matte: THREE.Material; wheel: THREE.Material };
+let materials: MaterialSet | null = null;
+let ghostMaterials: MaterialSet | null = null;
+
+function sharedMaterials(ghost: boolean, opacity: number): MaterialSet {
+  if (ghost) {
+    ghostMaterials ??= {
+      glossy: makeGhostMaterial(opacity),
+      matte: makeGhostMaterial(opacity),
+      wheel: makeGhostMaterial(opacity),
+    };
+    return ghostMaterials;
+  }
   materials ??= {
     glossy: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.15 }),
     matte: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 }),
     wheel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 }),
   };
   return materials;
+}
+
+/**
+ * 幽灵车的材质。
+ *
+ * depthWrite 关掉：开着的话幽灵车自己的前后部件会互相遮挡出硬边，
+ * 半透明就变成了"一堆不透明的碎片"。代价是它和别的透明物体之间的前后关系不准，
+ * 但场上唯一的透明物体就是它自己和粒子，无所谓。
+ */
+function makeGhostMaterial(opacity: number): THREE.Material {
+  return new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.6,
+    metalness: 0,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    // 稍微自发光一点，免得在阴影里彻底看不见
+    emissive: new THREE.Color('#3a5a7a'),
+    emissiveIntensity: 0.35,
+  });
+}
+
+/** 把一棵模型树上的材质全换成半透明的。按原材质缓存，同一个模型只克隆一次 */
+const ghostCache = new Map<string, THREE.Material>();
+function applyGhostMaterials(root: THREE.Object3D, opacity: number): void {
+  root.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const slots = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const next = slots.map((material) => {
+      const key = material.uuid;
+      let ghost = ghostCache.get(key);
+      if (!ghost) {
+        ghost = material.clone();
+        ghost.transparent = true;
+        ghost.opacity = opacity;
+        ghost.depthWrite = false;
+        ghostCache.set(key, ghost);
+      }
+      return ghost;
+    });
+    mesh.material = Array.isArray(mesh.material) ? next : next[0]!;
+  });
 }
 
 type ColoredPart = readonly [geometry: THREE.BufferGeometry, color: string];

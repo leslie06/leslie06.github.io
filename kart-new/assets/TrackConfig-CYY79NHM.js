@@ -1,0 +1,1 @@
+var e={trackWidth:17,shoulderWidth:2.4,shoulderDrop:.12,wallHeight:1.5,wallThickness:.7,meshSegments:480,lutSamples:500,roadTileLength:9,shoulderTileLength:3,skirtBottomY:-4};function t(e){return e.trackWidth/2+e.shoulderWidth}export{t as n,e as t};

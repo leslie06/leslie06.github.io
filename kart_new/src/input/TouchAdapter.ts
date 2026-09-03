@@ -34,6 +34,13 @@ const BUTTONS: readonly ButtonSpec[] = [
 export interface TouchAdapterOptions {
   /** 摇杆手感。半径同时决定视觉大小，改了要一起改 CSS 变量 */
   steer?: Partial<TouchSteerConfig>;
+  /**
+   * 惯用手。'right' = 摇杆在左、按钮在右（大多数人）；'left' 整个镜像过来。
+   *
+   * 这不是审美偏好：转向是**连续**的精细操作，油门刹车是开关。惯用手应该管转向，
+   * 所以左撇子必须能把摇杆换到右边，否则精细的那一半交给了不灵活的手。
+   */
+  handed?: 'right' | 'left';
 }
 
 export class TouchAdapter implements InputAdapter {
@@ -46,6 +53,8 @@ export class TouchAdapter implements InputAdapter {
   private readonly pointerAction = new Map<number, ButtonAction>();
   private usePending = false;
 
+  /** 当前布局。setHanded 之后 CSS 会把摇杆和按钮左右对调 */
+  private handed: 'right' | 'left';
   private readonly stickZone: HTMLDivElement;
   private readonly stickBase: HTMLDivElement;
   private readonly stickKnob: HTMLDivElement;
@@ -58,10 +67,14 @@ export class TouchAdapter implements InputAdapter {
 
   constructor(parent: HTMLElement, options: TouchAdapterOptions = {}) {
     this.steerConfig = { ...DEFAULT_TOUCH_STEER, ...options.steer };
+    this.handed = options.handed ?? 'right';
     injectTouchStyles();
 
     this.root = document.createElement('div');
     this.root.className = 'touch-controls';
+    // 镜像布局只是一个类：所有位置都是 left/right 成对写的，
+    // 换手就是把这一对互换，不需要第二套 DOM
+    if (options.handed === 'left') this.root.classList.add('is-left-handed');
     this.root.style.setProperty('--stick-radius', `${this.steerConfig.radius}px`);
 
     this.stickZone = document.createElement('div');
@@ -195,6 +208,16 @@ export class TouchAdapter implements InputAdapter {
     return s;
   }
 
+  /** 运行时换手。设置面板里点一下就生效，不用重建适配器 */
+  setHanded(handed: 'right' | 'left'): void {
+    if (this.handed === handed) return;
+    this.handed = handed;
+    this.root.classList.toggle('is-left-handed', handed === 'left');
+    // 摇杆的圆心是"按下那一点"，换手之后那个位置在另一半屏幕上，
+    // 不复位的话下一次按下之前会看到一个悬在旧位置的圈
+    this.releaseStick();
+  }
+
   dispose(): void {
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.releaseAll();
@@ -295,6 +318,25 @@ function injectTouchStyles(): void {
     }
     .touch-btn-item .touch-btn-label { font-size: 14px; }
     .touch-btn-item .touch-btn-hint { display: none; }
+
+    /* --- 左手布局：整个控件区左右镜像 ---
+       所有位置本来就是成对写的（摇杆 left / 按钮组 right），所以换手就是把这一对
+       互换，不需要第二套 DOM，也不用重建适配器。
+       注意安全区也要跟着换边：刘海在横屏时只在一侧 */
+    .touch-controls.is-left-handed .touch-stick-zone {
+      left: auto; right: 0;
+      padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
+    }
+    .touch-controls.is-left-handed .touch-pad {
+      right: auto;
+      left: calc(18px + env(safe-area-inset-left));
+      /* 油门在最靠角那一格：镜像之后"角"换到了左边 */
+      grid-template-areas: "drift ." "throttle brake";
+    }
+    .touch-controls.is-left-handed .touch-btn-item {
+      right: auto;
+      left: calc(18px + env(safe-area-inset-left));
+    }
 
     /* 屏幕矮的时候（横屏手机）整体缩一点，别把画面挡完 */
     @media (max-height: 420px) {

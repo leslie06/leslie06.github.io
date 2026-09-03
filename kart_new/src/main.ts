@@ -23,7 +23,8 @@ import {
 } from './kart/kartCollision';
 import type { PhysicsSystem as PhysicsSystemType } from './physics/PhysicsSystem';
 import { drivableHalfWidth } from './track/TrackConfig';
-import { trackAt, type TrackId } from './track/TrackCatalog';
+import { trackAt, TRACK_IDS, type TrackId } from './track/tracks';
+import { ErrorReporter } from './core/ErrorReporter';
 import { createCenterLine, TrackMesh } from './track/TrackMesh';
 import { TrackSpline } from './track/TrackSpline';
 import { AIKart } from './ai/AIKart';
@@ -56,6 +57,27 @@ import { KART_MODEL_URL, SKY_HDRI_URL } from './assets/ModelPaths';
 import { AudioManager } from './audio/AudioManager';
 import { RaceAudio } from './audio/RaceAudio';
 import { browserRecordStorage, lapRecordKey, LapRecordStore } from './race/LapRecord';
+import {
+  browserCupStorage,
+  CUPS,
+  cupStandings,
+  currentRound,
+  currentTrack,
+  CupStore,
+  isCupFinished,
+  recordRound,
+  startCup,
+  totalRounds,
+  type CupState,
+} from './race/Cup';
+import { GAME_MODES } from './race/GameMode';
+import {
+  browserGhostStorage,
+  GhostPlayback,
+  GhostRecorder,
+  GhostStore,
+  type GhostSample,
+} from './race/Ghost';
 import { RaceState, type RacerInit } from './race/RaceState';
 import { buildStartGrid, type GridSlot } from './race/StartGrid';
 import { formatTimeOrDash } from './race/formatTime';
@@ -76,7 +98,8 @@ import { Hud } from './ui/Hud';
 import { ItemHud, type ItemHudView } from './ui/ItemHud';
 import { RaceHud, type RaceResults, type ResultRow, type TrackDot } from './ui/RaceHud';
 import { LoadingScreen } from './ui/LoadingScreen';
-import { MainMenu } from './ui/MainMenu';
+import { MainMenu, type MenuSelection } from './ui/MainMenu';
+import { showFatalScreen } from './ui/FatalScreen';
 import { SettingsMenu } from './ui/SettingsMenu';
 import { THEME } from './ui/theme';
 import { Toast } from './ui/Toast';
@@ -85,8 +108,13 @@ import { installContextLossGuard, installGestureGuards, OrientationGate } from '
 const container = document.getElementById('app')!;
 
 // ============================================================================
-// 启动：先定档位和操作方式，再建东西
+// 启动：先收错误，再定档位和操作方式，最后才建东西
 // ============================================================================
+// 错误收集要挂在**最早**的地方：启动期间的异常正是最要命的那一批，
+// 晚一行挂上就可能漏掉
+const errors = new ErrorReporter();
+errors.install();
+
 // 这两件事必须在建渲染器之前定下来：antialias 是构造参数，建完就改不了；
 // AI 数量决定要 new 多少辆车，也没法中途加减
 // ?quality=low&input=touch 可以临时压过存储里的设置，方便在真机上直接验低画质
@@ -95,6 +123,25 @@ const caps = probeDeviceCaps();
 let { tier, settings, detected: detectedTier } = resolveTier(caps, prefs.quality);
 const inputModes = resolveInputMode(caps, prefs.input);
 let inputMode: InputMode = inputModes.mode;
+
+errors.setContext('画质', `${prefs.quality} -> ${tier}`);
+errors.setContext('GPU', caps.gpu || '(未知)');
+errors.setContext('WebGL2', String(caps.webgl2));
+
+// WebGL2 是硬门槛：整套渲染（后处理的 half-float 缓冲、实例化、KTX2）都建在它上面。
+// 与其让玩家看一屏黑再自己猜，不如直接说清楚是什么问题、能怎么办
+if (!caps.webgl2) {
+  showFatalScreen(container, {
+    title: '这个浏览器跑不了',
+    message:
+      '游戏需要 WebGL 2，而当前浏览器没有提供。\n' +
+      '常见原因：浏览器版本太老、显卡驱动没装、或者在设置里关掉了硬件加速。\n' +
+      '换成新版 Chrome / Edge / Safari 通常就能跑。',
+    diagnostics: () => errors.report(),
+  });
+  // 抛出去而不是继续：下面每一行都建立在"有 WebGL"这个前提上
+  throw new Error('WebGL2 unavailable');
+}
 
 // ============================================================================
 // 主菜单：选赛道
@@ -113,37 +160,90 @@ const audio = new AudioManager({
 });
 const raceAudio = new RaceAudio(audio);
 
-const selectedTrackId: TrackId = await new Promise<TrackId>((resolve) => {
-  const menu = new MainMenu(container, {
-    initial: prefs.track,
-    quality: prefs.quality,
-    detectedTier,
-    onQuality: (value) => {
-      prefs.quality = value;
-      savePrefs(prefs);
-      // 这时候渲染器、世界、AI 都还没建，所以"生效"就是把档位重算一遍写回去 ——
-      // 菜单关掉之后下面才拿着 settings 去建渲染器（antialias 是构造参数）
-      // 和车队（AI 数量），这两样开局之后就改不了了
-      ({ tier, settings, detected: detectedTier } = resolveTier(caps, prefs.quality));
-    },
-    bestLapOf: (id) => new LapRecordStore(browserRecordStorage(), lapRecordKey(id)).best,
-    onSelect: (id) => {
-      prefs.track = id;
-      savePrefs(prefs);
-    },
-    onStart: (id) => {
-      prefs.track = id;
-      savePrefs(prefs);
-      // 这一句必须在点击的调用栈里同步跑掉，异步之后 iOS 就不认这个手势了
-      audio.init();
-      audio.play('uiClick');
-      menu.hide();
-      resolve(id);
-    },
-  });
-});
+const cupStore = new CupStore(browserCupStorage());
+/** 进行中的杯赛。跑完一场之后在这里累加，存 localStorage 跨页面刷新 */
+let cupState: CupState | null = cupStore.load();
 
+/**
+ * 跳过主菜单直接开下一场。
+ *
+ * 只有结算面板上的"下一场"会写这个标记 —— 杯赛的四场之间要重载页面
+ * （换赛道就是重载），每次都回主菜单点一遍太烦。用 sessionStorage 而不是
+ * URL 参数：它不该出现在玩家分享出去的链接里。
+ */
+const AUTO_CONTINUE_KEY = 'kart.cupAutoContinue';
+const autoContinue = readAutoContinue();
+
+function readAutoContinue(): boolean {
+  try {
+    const flag = sessionStorage.getItem(AUTO_CONTINUE_KEY) === '1';
+    if (flag) sessionStorage.removeItem(AUTO_CONTINUE_KEY);
+    return flag;
+  } catch {
+    return false; // 无痕模式：老老实实回主菜单
+  }
+}
+
+const selection: MenuSelection =
+  autoContinue && cupState && !isCupFinished(cupState)
+    ? { mode: 'cup', trackId: prefs.track, cupId: cupState.cupId }
+    : await new Promise<MenuSelection>((resolve) => {
+        const menu = new MainMenu(container, {
+          initial: { mode: prefs.mode, trackId: prefs.track, cupId: prefs.cup },
+          quality: prefs.quality,
+          detectedTier,
+          cupInProgress: cupState,
+          onQuality: (value) => {
+            prefs.quality = value;
+            savePrefs(prefs);
+            // 这时候渲染器、世界、AI 都还没建，所以"生效"就是把档位重算一遍写回去 ——
+            // 菜单关掉之后下面才拿着 settings 去建渲染器（antialias 是构造参数）
+            // 和车队（AI 数量），这两样开局之后就改不了了
+            ({ tier, settings, detected: detectedTier } = resolveTier(caps, prefs.quality));
+          },
+          bestLapOf: (id) => new LapRecordStore(browserRecordStorage(), lapRecordKey(id)).best,
+          ghostLapOf: (id) => new GhostStore(browserGhostStorage(), id).load()?.lapTime ?? null,
+          onAbandonCup: () => {
+            cupStore.clear();
+            cupState = null;
+          },
+          onSelect: (next) => {
+            prefs.mode = next.mode;
+            prefs.track = next.trackId;
+            prefs.cup = next.cupId;
+            savePrefs(prefs);
+          },
+          onStart: (next) => {
+            prefs.mode = next.mode;
+            prefs.track = next.trackId;
+            prefs.cup = next.cupId;
+            savePrefs(prefs);
+            // 这一句必须在点击的调用栈里同步跑掉，异步之后 iOS 就不认这个手势了
+            audio.init();
+            audio.play('uiClick');
+            menu.hide();
+            resolve(next);
+          },
+        });
+      });
+
+const mode = GAME_MODES[selection.mode];
+
+// 杯赛：没有进行中的（或者换了个杯赛、上一个已经打完了）就开一个新的。
+// **对手数量在开杯那一刻定死**，中途改画质也不变 —— 不然积分表会凭空多出或少掉几行
+if (mode.cup) {
+  if (!cupState || cupState.cupId !== selection.cupId || isCupFinished(cupState)) {
+    cupState = startCup(selection.cupId, settings.aiCount);
+    cupStore.save(cupState);
+  }
+} else {
+  cupState = null;
+}
+
+/** 这一局跑哪条赛道。杯赛听杯赛的，别的听菜单的 */
+const selectedTrackId: TrackId = (cupState && currentTrack(cupState)) ?? selection.trackId;
 const variant = trackAt(selectedTrackId);
+errors.setContext('赛道', `${variant.id} (${selection.mode})`);
 
 // 加载界面接在菜单后面，底色是同一片天，看着是一个连续的画面
 const loading = new LoadingScreen(container);
@@ -188,6 +288,10 @@ const world = new World({
   groundY: trackConfig.skirtBottomY,
   isBlocked: (x, z) => Math.abs(spline.getProgress(x, z).lateral) < propClearance,
   quality: settings,
+  // 天空配色和参照物跟着赛道走 —— 换条道就该是另一个地方，
+  // 光换形状不换颜色的话四条道看着都一样
+  sky: variant.sky,
+  decor: variant.decor,
   // 烘环境贴图（PMREM）要用渲染器。不传的话场景只剩半球光，背光面会很平
   renderer,
 });
@@ -200,9 +304,12 @@ const postFx = new PostFx(renderer, world.scene, followCamera.camera, settings);
 // --- 输入。键盘和触屏是平级的两套适配器，随时可以换 ---
 let input: InputAdapter = makeInput(inputMode);
 
-function makeInput(mode: InputMode): InputAdapter {
-  document.body.classList.toggle('touch-input', mode === 'touch');
-  return mode === 'touch' ? new TouchAdapter(container) : new KeyboardAdapter();
+function makeInput(inputMode: InputMode): InputAdapter {
+  document.body.classList.toggle('touch-input', inputMode === 'touch');
+  document.body.classList.toggle('touch-left-handed', prefs.handed === 'left');
+  return inputMode === 'touch'
+    ? new TouchAdapter(container, { handed: prefs.handed })
+    : new KeyboardAdapter(window, prefs.keys);
 }
 
 function setInputMode(setting: InputModeSetting): void {
@@ -228,8 +335,13 @@ const kartConfig: KartConfig = cloneKartConfig();
 // 阵容
 // ============================================================================
 const PLAYER = 'player';
-/** 对手数量跟着画质档位走（high 7 / medium 5 / low 3）。改档位要重开页面才生效 */
-const AI_COUNT = settings.aiCount;
+/**
+ * 对手数量。三个来源，优先级从高到低：
+ *   - **计时赛**：0。这个模式的对手是自己的幽灵车，多一辆 AI 就变成"被撞掉一圈"；
+ *   - **杯赛**：开杯那一刻定死的数量（存在 CupState 里），中途改画质也不变；
+ *   - 其它：跟着画质档位走（high 7 / medium 5 / low 3），改档位要重开页面才生效。
+ */
+const AI_COUNT = !mode.ai ? 0 : (cupState?.aiCount ?? settings.aiCount);
 /** 玩家排在最后一格。从队尾往前超才有得玩，也让镜头一开局就看得见对手 */
 const PLAYER_SLOT = AI_COUNT;
 const DEFAULT_DIFFICULTY: AIDifficulty = 'normal';
@@ -327,8 +439,26 @@ trails.setVisible(settings.boostTrail);
 world.scene.add(trails.mesh);
 
 // 假阴影：low 档关掉实时阴影之后靠它给出"车贴着地"的线索。一个 InstancedMesh 画全场
-const blobShadows = new BlobShadows(AI_COUNT + 1);
+// +2 而不是 +1：玩家 + 所有 AI + 幽灵车（计时赛里有）
+const blobShadows = new BlobShadows(AI_COUNT + 2);
 world.scene.add(blobShadows.mesh);
+
+// ============================================================================
+// 幽灵车
+// ============================================================================
+// 只在计时赛里有：有 AI 的局里被撞一下就废掉一圈，那种圈速当参照物没有意义。
+// 幽灵车不参与任何逻辑 —— 没有碰撞、不进名次、不吃道具，它就是一段回放。
+const ghostStore = new GhostStore(browserGhostStorage(), variant.id);
+const ghostRecording = mode.ghost ? ghostStore.load() : null;
+const ghostPlayback = ghostRecording ? new GhostPlayback(ghostRecording) : null;
+const ghostView = ghostPlayback?.valid ? new KartView(PLAYER_PALETTE, { ghost: true }) : null;
+if (ghostView) world.scene.add(ghostView.root);
+/** 录这一圈。过线时如果比历史最好还快就存下来 */
+const ghostRecorder = mode.recordGhost ? new GhostRecorder() : null;
+/** 复用的采样对象，别每帧新建 */
+const ghostSample: GhostSample = { x: 0, y: 0, z: 0, heading: 0 };
+/** 幽灵车这一帧的状态，喂给 KartView 用。只有位置和朝向是真的，其余都是中性值 */
+const ghostState: KartState = createKartState();
 
 /** 粒子的屏幕大小依赖 drawingBuffer 的高度，换分辨率/转屏时要重设 */
 function syncParticleViewport(): void {
@@ -357,6 +487,14 @@ for (const r of racerInits) items.register(r.id);
 const lapRecord = new LapRecordStore(browserRecordStorage(), lapRecordKey(variant.id));
 /** 本局有没有破纪录，结算面板要用 */
 let newRecordThisRace = false;
+/**
+ * 页面加载时的杯赛状态快照。
+ *
+ * 记成绩时**永远从这份快照往上加**，而不是往当前状态上追加 —— 否则"重跑本场"
+ * 会让杯赛凭空多出一场（第一次跑完记了第 1 场，重跑一次又记成第 2 场，
+ * 四场的杯赛两场就打完了）。从快照加等于"这一场的成绩覆盖掉上一次的"。
+ */
+const cupAtBoot = cupState;
 let raceResults: RaceResults | null = null;
 
 /** 每辆车一份地面采样结果。共享一个的话前面几辆的采样会被后面覆盖掉 */
@@ -420,6 +558,7 @@ function hasTargetAhead(fromT: number, id: string): boolean {
 
 // --- 道具的渲染 ---
 const itemBoxViews = new ItemBoxViews(items.boxes.boxes);
+itemBoxViews.group.visible = mode.items;
 const projectileViews = new ProjectileViews();
 const trapViews = new TrapViews();
 world.scene.add(itemBoxViews.group);
@@ -429,6 +568,7 @@ world.scene.add(trapViews.group);
 // --- UI ---
 const hud = new Hud(container);
 const itemHud = new ItemHud(container);
+itemHud.setVisible(mode.items);
 // 结算面板上的两个按钮。触屏上没有 R 键，"再来一局"是唯一的重开入口。
 //
 // "换赛道"是**重载页面**：赛道网格、rapier 的碰撞体、发车格、AI 的赛道采样器
@@ -439,6 +579,18 @@ const raceHud = new RaceHud(container, {
   onChangeTrack: () => {
     audio.play('uiClick');
     savePrefs(prefs);
+    location.reload();
+  },
+  onNextRound: () => {
+    audio.play('uiClick');
+    savePrefs(prefs);
+    // 下一场的赛道是从 CupState 里读的（上面已经存好了），所以这里只要留个
+    // "别再回主菜单"的标记然后重载
+    try {
+      sessionStorage.setItem(AUTO_CONTINUE_KEY, '1');
+    } catch {
+      // 无痕模式：标记存不下，那就回主菜单，杯赛进度本身还在
+    }
     location.reload();
   },
 });
@@ -518,6 +670,28 @@ const settingsMenu = new SettingsMenu(container, {
   // 当前真实音量的地方），所以这里只管把值转过去
   onVolume: (bus, value) => audio.setVolume(bus, value),
   onMuted: (muted) => audio.setMuted(muted),
+  onKeys: (bindings) => {
+    prefs.keys = bindings;
+    savePrefs(prefs);
+    // 键盘适配器可能这会儿不存在（触屏模式），存下来就行：
+    // 切回键盘时 makeInput 会拿新的这份去建
+    if (input instanceof KeyboardAdapter) input.setBindings(bindings);
+  },
+  onHanded: (handed) => {
+    prefs.handed = handed;
+    savePrefs(prefs);
+    document.body.classList.toggle('touch-left-handed', handed === 'left');
+    if (input instanceof TouchAdapter) input.setHanded(handed);
+  },
+  onResetRecords: () => {
+    // 三样一起清：只清一样的话玩家会觉得"怎么还有记录没删掉"
+    for (const id of TRACK_IDS) {
+      new LapRecordStore(browserRecordStorage(), lapRecordKey(id)).clear();
+      new GhostStore(browserGhostStorage(), id).clear();
+    }
+    cupStore.clear();
+    toast.show('本地记录已清空（圈速、幽灵车、杯赛进度）', 3);
+  },
 });
 
 // --- 移动端的几个专项处理 ---
@@ -556,6 +730,7 @@ const resetKart = () => {
   items.reset();
   newRecordThisRace = false;
   raceResults = null;
+  ghostRecorder?.reset();
   // 特效也要清干净：不清的话上一局的火花会飘在新赛道上，
   // 拖尾更明显 —— 它会从旧位置拉出一条横跨全场的带子
   sparks.clear();
@@ -648,7 +823,17 @@ function drainRaceEvents(): void {
           newRecordThisRace = true;
           raceAudio.onNewRecord();
         }
-        if (event.id === PLAYER) raceHud.showLapSplit(event.lap, event.time, event.best, record);
+        if (event.id === PLAYER) {
+          raceHud.showLapSplit(event.lap, event.time, event.best, record);
+          // 这一圈跑完了：比历史最好还快就把轨迹存下来当新的幽灵车。
+          // **无论存不存都要 reset**，否则下一圈会接在这一圈后面，
+          // 录出来的是一条几公里长的轨迹
+          const recording = ghostRecorder?.finish(event.time);
+          if (recording && ghostStore.saveIfFaster(recording)) {
+            toast.show(`幽灵车已更新（${formatTimeOrDash(event.time)}）`, 2.5);
+          }
+          ghostRecorder?.reset();
+        }
         break;
       }
       case 'raceFinished': {
@@ -661,6 +846,18 @@ function drainRaceEvents(): void {
           newRecord: newRecordThisRace,
           standings: buildResultRows(),
         };
+        // 杯赛：把这一场的名次记进积分表。从**开局时的快照**往上加，
+        // 所以重跑本场是覆盖而不是追加（见 cupAtBoot 的说明）
+        if (cupAtBoot) {
+          const places: Record<string, number> = {};
+          for (const standing of race.standings) places[standing.id] = standing.place;
+          cupState = recordRound(cupAtBoot, {
+            trackId: variant.id,
+            places,
+            playerTime: progress.totalTime,
+          });
+          cupStore.save(cupState);
+        }
         break;
       }
       case 'countdownTick':
@@ -685,6 +882,48 @@ function buildResultRows(): ResultRow[] {
     lap: s.lap,
     finished: s.finished,
   }));
+}
+
+/**
+ * 和幽灵车的距离（米，正 = 玩家领先）。没有幽灵车时是 null。
+ *
+ * 比的是**赛道进度**而不是直线距离：两辆车可能隔着一个发夹弯，
+ * 直线距离 20m 但实际差了半圈。进度差乘中心线长度才是"落后多少米"。
+ */
+function ghostGapMeters(): number | null {
+  if (!ghostPlayback || !ghostView) return null;
+  const mine = playerGround.progress;
+  const theirs = spline.getProgress(ghostState.x, ghostState.z).t;
+  // 折到 [-0.5, 0.5]：差过半圈的时候符号要反过来（那是被套圈/套圈了）
+  let delta = mine - theirs;
+  if (delta > 0.5) delta -= 1;
+  else if (delta < -0.5) delta += 1;
+  return delta * spline.length;
+}
+
+/**
+ * 结算面板和顶部角标要用的杯赛信息。不在杯赛里返回 null。
+ *
+ * 场次用**开局时的快照**算（"我正在打第几场"，跑完之后也不该跳到下一场），
+ * 积分用**当前状态**算（这一场的分数跑完就得算进去）。两者取同一份的话，
+ * 要么结算面板上写着"第 2/4 场后"（其实刚跑完第 1 场），要么积分少了这一场。
+ */
+function buildCupView() {
+  if (!cupState || !cupAtBoot) return null;
+  return {
+    name: CUPS[cupState.cupId].name,
+    round: currentRound(cupAtBoot),
+    total: totalRounds(cupAtBoot),
+    finished: isCupFinished(cupState),
+    standings: cupStandings(cupState).map((row) => ({
+      name: row.name,
+      color: row.color,
+      isPlayer: row.isPlayer,
+      place: row.place,
+      points: row.points,
+      rounds: row.rounds,
+    })),
+  };
 }
 
 /** 进度条上的小圆点。用赛道进度 t（totalProgress 的小数部分）定位 */
@@ -919,6 +1158,15 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
       copyConfigInto(playerConfig, kartConfig);
       items.effectsOf(PLAYER).applyTo(playerConfig);
       current = stepKart(current, gated, playerGround, playerConfig, dt);
+      // 幽灵车录制走**物理时钟**而不是渲染帧：录像要和圈速对得上，
+      // 用渲染帧的话掉帧时轨迹会被拉长，回放出来比实际圈速慢
+      if (ghostRecorder && race.phase === 'racing') {
+        ghostSample.x = current.x;
+        ghostSample.y = current.y;
+        ghostSample.z = current.z;
+        ghostSample.heading = current.heading;
+        ghostRecorder.push(dt, ghostSample);
+      }
       // 每个子步都取一次事件：一个渲染帧可能跑多步，只在 render 里比 prev/current 会漏
       for (const event of diffKartEvents(previous, current)) onKartEvent(event);
 
@@ -949,7 +1197,8 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
       //    不然 boost 会写进一个马上就被丢掉的对象里，吃了等于没吃
       itemKarts[0]!.state = current;
       for (let i = 0; i < ais.length; i++) itemKarts[i + 1]!.state = ais[i]!.current;
-      items.update(itemKarts, dt);
+      // 计时赛不开道具（见 GameMode 的说明），连箱子都不刷
+      if (mode.items) items.update(itemKarts, dt);
 
       // 7. 车车碰撞。放在最后统一解一次，
       //    否则先算的车会占便宜（它推开别人时别人这一帧还没动）
@@ -995,6 +1244,20 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
         // low 档只给玩家喷火花和扬尘（粒子多了之后每帧的顶点更新在低端机上是实打实的
         // 一笔），但拖尾照推 —— 它是按辆固定占一段顶点的，跳过就等于把那条尾巴冻在原地
         emitKartFx(i + 1, aiState, ai.config, view, ground, frameDt, settings.aiSparks);
+      }
+      // 幽灵车：按**本圈已用时**取样。它跑的是自己那一圈，和玩家的圈数无关，
+      // 所以两辆车会在同一条起跑线上同时出发，之后差多远就是差多远
+      if (ghostPlayback && ghostView) {
+        const g = ghostPlayback.sampleAt(race.getProgress(PLAYER)!.lapTime);
+        ghostState.x = g.x;
+        ghostState.y = g.y;
+        ghostState.z = g.z;
+        ghostState.heading = g.heading;
+        // 假一个速度给视觉用（轮子转、车身侧倾）。录像里没存速度，
+        // 存了也只是为了这一点视觉细节，不值那几 KB
+        ghostState.speed = kartConfig.maxSpeed * 0.8;
+        ghostView.update(ghostState, kartConfig, frameDt);
+        blobShadows.add(ghostState.x, ghostState.y, ghostState.z, 0);
       }
       blobShadows.finish();
       // 三个池子每帧各推进一次，放在所有 emit 之后
@@ -1044,6 +1307,8 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
           standings: race.standings,
           dots: buildDots(),
           results: raceResults,
+          cup: buildCupView(),
+          ghostGap: ghostGapMeters(),
         },
         frameDt,
       );

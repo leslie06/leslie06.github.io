@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": null,
+  "headers": [
+    {
+      "//": "带 hash 的产物永远不变，可以放心让浏览器缓存一年（immutable 表示连重验都不用）",
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "//": "入口页不能缓存：它引用的是带 hash 的产物，缓存住了就等于永远发不出新版本",
+      "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "//": "KTX2 压缩贴图。服务器认不出这个后缀会退回 application/octet-stream，虽然 fetch 照样能拿到，但代理和 CDN 的行为会变得没法预测",
+      "source": "/(.*).ktx2",
+      "headers": [
+        { "key": "Content-Type", "value": "image/ktx2" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "//": "wasm 必须是 application/wasm，否则 WebAssembly.instantiateStreaming 会直接拒绝",
+      "source": "/(.*).wasm",
+      "headers": [{ "key": "Content-Type", "value": "application/wasm" }]
+    },
+    {
+      "//": "HDR 环境贴图。没有官方 MIME，image/vnd.radiance 是事实标准",
+      "source": "/(.*).hdr",
+      "headers": [{ "key": "Content-Type", "value": "image/vnd.radiance" }]
+    }
+  ]
+}

@@ -59,6 +59,22 @@ describe('sanitizePrefs', () => {
     expect(sanitizePrefs({ track: 'meadow' }).track).toBe('meadow');
     expect(sanitizePrefs({ track: 'atlantis' }).track).toBe(DEFAULT_PREFS.track);
   });
+
+  it('惯用手只认 left / right', () => {
+    expect(sanitizePrefs({ handed: 'left' }).handed).toBe('left');
+    for (const bad of ['LEFT', 1, null, {}]) {
+      expect(sanitizePrefs({ handed: bad }).handed).toBe('right');
+    }
+  });
+
+  it('键位表交给 sanitizeKeyBindings，坏值不会漏进来', () => {
+    expect(sanitizePrefs({ keys: { forward: ['KeyI'] } }).keys.forward).toEqual(['KeyI']);
+    // 没写的动作补默认，整张表坏掉也退回默认
+    expect(sanitizePrefs({ keys: 'nope' }).keys).toEqual(DEFAULT_PREFS.keys);
+    expect(sanitizePrefs({ keys: { forward: [] } }).keys.forward).toEqual(
+      DEFAULT_PREFS.keys.forward,
+    );
+  });
 });
 
 describe('loadPrefs / savePrefs', () => {
@@ -71,7 +87,7 @@ describe('loadPrefs / savePrefs', () => {
   });
 
   it('存储里是坏 JSON 时退回默认', () => {
-    const storage = fakeStorage({ 'kart.prefs.v2': '{oops' });
+    const storage = fakeStorage({ 'kart.prefs.v3': '{oops' });
     expect(loadPrefs(storage)).toEqual(DEFAULT_PREFS);
   });
 

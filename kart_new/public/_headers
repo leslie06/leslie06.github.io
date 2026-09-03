@@ -1,0 +1,30 @@
+# Cloudflare Pages 的响应头配置。这个文件会被原样复制到站点根目录。
+#
+# gzip / brotli 不用在这里配：Cloudflare 对所有可压缩类型自动开 brotli
+# （Vercel 和 GitHub Pages 也一样自动压）。这里管的是**缓存**和 **MIME**，
+# 那两样没有默认值可依赖。
+
+# 带 hash 的产物永远不变，缓存一年
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 入口页引用的是带 hash 的产物，缓存住它等于永远发不出新版本
+/index.html
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache
+
+# KTX2 压缩贴图。认不出后缀的话会退回 application/octet-stream，
+# fetch 照样拿得到，但代理和 CDN 的行为会变得没法预测
+/*.ktx2
+  Content-Type: image/ktx2
+  Cache-Control: public, max-age=31536000, immutable
+
+# wasm 的类型错了 WebAssembly.instantiateStreaming 会直接拒绝
+/*.wasm
+  Content-Type: application/wasm
+
+# HDR 没有官方 MIME，image/vnd.radiance 是事实标准
+/*.hdr
+  Content-Type: image/vnd.radiance

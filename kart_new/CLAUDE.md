@@ -94,3 +94,39 @@
 - 换赛道是**重载页面**（?track= 或者结算面板上的按钮）：赛道网格、rapier 碰撞体、
   发车格、AI 采样器全是按那条赛道建的，运行时换等于把整个世界拆了重搭
 - 画质档位在主菜单里也能改，因为**对手数量在开局时就定死了**，进游戏后改档位不影响它
+
+# 赛道 / 模式 / 记录
+- **加一条赛道 = 在 src/track/tracks/ 下加一个文件**，再在同目录 index.ts 的 TRACKS 里挂上。
+  一条赛道自带控制点、路宽、道具箱、装饰物、天空配色、难度和圈数（见 tracks/types.ts）。
+  tracks.test.ts 会验不自交、坡度、最小曲率半径、相邻控制点间距、道具箱在不在柏油上 ——
+  **别跳过**：自交的赛道跑起来只表现为"进度突然跳一大截"，肉眼很难当场看出来
+- TrackConfig.ts 只剩尺寸参数和类型，**具体某条赛道长什么样不在那儿**。
+  TrackSpline 也没有默认控制点了：它是纯几何，不该知道项目里有哪些赛道
+- 缩略图是从控制点**现算**的（trackThumbnail.ts，纯函数）。不截图：截的图会过期而且没人发现
+- **加一个玩法 = 往 src/race/GameMode.ts 的表里加一条**。有没有 AI、放不放幽灵车、
+  录不录像、算不算杯赛积分、开不开道具全是字段，别处不许写 `if (mode === 'timeTrial')`
+- **加一个杯赛 = 往 src/race/Cup.ts 的 CUPS 里加一条**。积分表 CUP_POINTS 也在那儿
+- 杯赛的对手数量在**开杯那一刻**定死（存在 CupState 里）：中途改画质档位的话
+  积分表会凭空多出或少掉几行，那个冠军就没意义了
+- 幽灵车录的是**物理时钟**下的采样（20Hz），不是渲染帧 —— 用渲染帧的话掉帧时轨迹会被
+  拉长，回放出来比实际圈速慢。存储走定点数 + 差值 + zigzag varint，一圈 60 秒约 8KB
+- 圈速纪录、幽灵车、杯赛进度都是**每条赛道/每个杯赛一个键**。共用一个键的话
+  跑一次长道就把短道的纪录永久顶掉了
+- 按键映射存的是 `KeyboardEvent.code`（物理键位）不是 `key`：后者受输入法和键盘布局影响
+
+# 工程化 / 部署
+- `ErrorReporter` 在 main.ts 的**第一行**挂上（启动期间的异常正是最要命的那批）。
+  它只往内存里攒，不往任何服务器发东西 —— 这个项目没有后端。
+  真机上排查：在地址栏敲 `kartReport()`，或者用致命错误页上的"复制诊断信息"
+- 起不来的时候要给**说人话的页面**，不是一屏黑：没有 WebGL2 直接告诉玩家换浏览器
+  （FatalScreen.ts）。别用 alert：移动端上它挡住整页而且没法复制
+- 分包在 vite.config.ts 的 advancedChunks 里：three / postprocessing / howler 各一块。
+  目标不是"块更小"而是**缓存命中率** —— 改游戏逻辑不该让用户重下 three。
+  规则要写成 `three/build/`，写成 `three/` 会把动态 import 的 GLTFLoader 也吸进去，
+  那就等于把懒加载废了
+- `npm run size` 打印每个产物的 原始 / gzip / brotli 三列。首屏预算说的是**压缩后**
+- 部署是 GitHub Pages（这个仓库本身就是 leslie06.github.io）：`npm run deploy`
+  把 dist 拷进 ../kart-new/，提交即上线。base 用相对路径 './'，
+  所以同一份产物在 Pages 子路径和 Vercel/CF 根路径下都能跑
+- Vercel 的响应头在 vercel.json，Cloudflare Pages 的在 public/_headers（会被原样拷进 dist）。
+  两边管的都是**缓存和 MIME**，gzip/brotli 三个平台都自动开，不用配

@@ -17,6 +17,11 @@
  */
 import * as THREE from 'three';
 
+/**
+ * 天空四色。每条赛道自己一套（TrackDefinition.sky），
+ * 结构和 track/tracks/types.ts 里的 TrackSkyColors 一样 —— 故意不 import 它：
+ * 渲染层不该依赖赛道表，靠结构类型对上就够了。
+ */
 export interface SkyColors {
   /** 天顶 */
   top: string;

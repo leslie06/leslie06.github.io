@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { TrackSpline } from './TrackSpline';
-import { drivableHalfWidth } from './TrackConfig';
-import { TRACK_IDS, TRACKS, isTrackId, type TrackVariant } from './TrackCatalog';
+import { TrackSpline } from '../TrackSpline';
+import { drivableHalfWidth } from '../TrackConfig';
+import { TRACK_IDS, TRACKS, isTrackId, type TrackDefinition } from './index';
 
 /**
  * 每条赛道都要过和默认道一样的几何关：不自交、坡度不至于让车飞起来、
@@ -10,7 +10,7 @@ import { TRACK_IDS, TRACKS, isTrackId, type TrackVariant } from './TrackCatalog'
  * 加新赛道时这个测试是第一道关口 —— 自交的赛道跑起来的表现是
  * "进度突然跳一大截"，肉眼很难当场看出来是赛道的问题。
  */
-function splineOf(track: TrackVariant): TrackSpline {
+function splineOf(track: TrackDefinition): TrackSpline {
   return new TrackSpline(track.points, track.config.lutSamples);
 }
 

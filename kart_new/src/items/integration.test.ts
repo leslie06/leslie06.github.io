@@ -8,7 +8,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TrackSpline } from '../track/TrackSpline';
-import { DEFAULT_TRACK_CONFIG, drivableHalfWidth, ITEM_BOX_ROWS } from '../track/TrackConfig';
+import { DEFAULT_TRACK_CONFIG, drivableHalfWidth } from '../track/TrackConfig';
+import { SUNSET } from '../track/tracks/sunset';
+
+const ITEM_BOX_ROWS = SUNSET.itemBoxRows;
 import { createGroundSample, type GroundSample } from '../kart/GroundSample';
 import { cloneKartConfig } from '../kart/KartConfig';
 import { RaceState } from '../race/RaceState';
@@ -25,7 +28,7 @@ const DT = 1 / 60;
 const cfg = cloneKartConfig();
 const tc = DEFAULT_TRACK_CONFIG;
 const halfWidth = drivableHalfWidth(tc);
-const spline = new TrackSpline(undefined, tc.lutSamples);
+const spline = new TrackSpline(SUNSET.points, tc.lutSamples);
 const aiTrack = createSplineSampler(spline);
 
 /** PhysicsSystem.sample 的无 rapier 版：地面高度直接取中心线高度 */

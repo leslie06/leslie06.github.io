@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DEFAULT_TRACK_CONFIG, TRACK_CONTROL_POINTS, type ControlPoint } from './TrackConfig';
+import { DEFAULT_TRACK_CONFIG, type ControlPoint } from './TrackConfig';
 
 /** getProgress 的结果。 */
 export interface TrackProgress {
@@ -45,8 +45,12 @@ export class TrackSpline {
    *  共用的话刚取到的中心点会被下一句调用覆盖掉（横向偏移会算成几十米）。 */
   private readonly tmpCenter = new THREE.Vector3();
 
+  /**
+   * @param points 中心线控制点。**没有默认值** —— 这个类是纯几何，
+   *               不该知道项目里有哪些赛道（那是 src/track/tracks/ 的事）
+   */
   constructor(
-    points: readonly ControlPoint[] = TRACK_CONTROL_POINTS,
+    points: readonly ControlPoint[],
     sampleCount: number = DEFAULT_TRACK_CONFIG.lutSamples,
   ) {
     this.curve = new THREE.CatmullRomCurve3(

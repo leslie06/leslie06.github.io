@@ -4,13 +4,14 @@ import { stubCanvasForNode } from '../test/stubCanvas';
 import { DEFAULT_TRACK_CONFIG, drivableHalfWidth } from '../track/TrackConfig';
 import { TrackMesh } from '../track/TrackMesh';
 import { TrackSpline } from '../track/TrackSpline';
+import { SUNSET } from '../track/tracks/sunset';
 
 let spline: TrackSpline;
 let physics: PhysicsSystem;
 
 beforeAll(async () => {
   stubCanvasForNode();
-  spline = new TrackSpline();
+  spline = new TrackSpline(SUNSET.points);
   const track = new TrackMesh(spline);
   physics = await PhysicsSystem.create(spline, track.collision);
 });

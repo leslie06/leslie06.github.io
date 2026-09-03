@@ -5,8 +5,11 @@
  * 写的、也可能是人手改的，不校验的话一个坏值就能让整个启动流程炸掉。
  */
 import { isInputMode, type InputModeSetting } from '../input/InputMode';
+import { sanitizeKeyBindings, type KeyBindings } from '../input/KeyBindings';
 import { isQualityTier, type TierOverride } from '../render/QualityTiers';
-import { DEFAULT_TRACK_ID, isTrackId, type TrackId } from '../track/TrackCatalog';
+import { DEFAULT_TRACK_ID, isTrackId, type TrackId } from '../track/tracks';
+import { isGameMode, type GameMode } from '../race/GameMode';
+import { isCupId, type CupId } from '../race/Cup';
 
 export interface Prefs {
   /** 画质档位覆盖，'auto' = 听设备探测的 */
@@ -21,6 +24,18 @@ export interface Prefs {
   muted: boolean;
   /** 上一次选的赛道，主菜单默认停在它上面 */
   track: TrackId;
+  /** 上一次选的玩法 */
+  mode: GameMode;
+  /** 上一次选的杯赛 */
+  cup: CupId;
+  /** 按键映射。改过之后整张表存下来，不存差量 —— 差量在默认值变了之后会很难解释 */
+  keys: KeyBindings;
+  /**
+   * 触屏布局的惯用手。'right' = 右手操作按钮（摇杆在左），左撇子反过来。
+   * 这是"能不能舒服地玩"的问题，不是偏好问题：惯用手在摇杆那一侧的话，
+   * 精细的转向操作交给了不灵活的那只手。
+   */
+  handed: 'right' | 'left';
 }
 
 export const DEFAULT_PREFS: Readonly<Prefs> = Object.freeze({
@@ -30,10 +45,14 @@ export const DEFAULT_PREFS: Readonly<Prefs> = Object.freeze({
   musicVolume: 0.55,
   muted: false,
   track: DEFAULT_TRACK_ID,
+  mode: 'single',
+  cup: 'grand',
+  keys: sanitizeKeyBindings(null),
+  handed: 'right',
 });
 
 /** 存储键带版本号：字段变了直接换 key，比写迁移代码省事，代价只是重选一次设置 */
-const STORAGE_KEY = 'kart.prefs.v2';
+const STORAGE_KEY = 'kart.prefs.v3';
 
 /** 校验 + 补默认值。任何看不懂的字段都退回默认，不抛异常 */
 export function sanitizePrefs(raw: unknown): Prefs {
@@ -43,11 +62,16 @@ export function sanitizePrefs(raw: unknown): Prefs {
   if (source.quality === 'auto' || isQualityTier(source.quality)) out.quality = source.quality;
   if (source.input === 'auto' || isInputMode(source.input)) out.input = source.input;
   if (isTrackId(source.track)) out.track = source.track;
+  if (isGameMode(source.mode)) out.mode = source.mode;
+  if (isCupId(source.cup)) out.cup = source.cup;
   out.volume = volumeOr(source.volume, DEFAULT_PREFS.volume);
   out.musicVolume = volumeOr(source.musicVolume, DEFAULT_PREFS.musicVolume);
   // 只认真正的 true：localStorage 里存过 'false' 这种字符串的话，
   // 松散判断会把它当成静音，玩家会觉得"声音莫名其妙没了"
   if (typeof source.muted === 'boolean') out.muted = source.muted;
+  if (source.handed === 'left' || source.handed === 'right') out.handed = source.handed;
+  // 键位表自己有一套校验（缺的补默认、空的退回默认），这里不重复写
+  out.keys = sanitizeKeyBindings(source.keys);
   return out;
 }
 
@@ -87,7 +111,7 @@ export function loadPrefs(storage: PrefsStorage | null = browserPrefsStorage()):
 }
 
 /**
- * URL 参数覆盖：?quality=low&input=touch&track=ridge&mute=1。
+ * URL 参数覆盖：?quality=low&input=touch&track=ridge&mode=timeTrial&mute=1。
  *
  * 真机上调试用：手机上没有控制台可以敲 localStorage，扫个二维码就能直接进低画质。
  * **不写回存储** —— 它是一次性的，关掉参数就回到平时的设置。
@@ -100,6 +124,7 @@ export function applyUrlOverrides(prefs: Prefs, search: string): Prefs {
     quality: params.get('quality') ?? prefs.quality,
     input: params.get('input') ?? prefs.input,
     track: params.get('track') ?? prefs.track,
+    mode: params.get('mode') ?? prefs.mode,
     // ?mute=1 / ?mute=0 都要认：录屏时想静音，调音效时想强制打开
     muted: mute === null ? prefs.muted : mute !== '0' && mute !== 'false',
   });
