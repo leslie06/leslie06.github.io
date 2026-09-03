@@ -14,7 +14,10 @@
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",
+    "@types/howler": "^2.2.13",
+    "howler": "^2.2.4",
     "lil-gui": "^0.21.0",
+    "postprocessing": "^6.39.4",
     "three": "^0.185.1"
   },
   "devDependencies": {

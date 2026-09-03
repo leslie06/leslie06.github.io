@@ -8,6 +8,7 @@
  */
 import { formatTime, formatTimeOrDash } from '../race/formatTime';
 import type { RacePhase, Standing } from '../race/RaceState';
+import { injectTheme } from './theme';
 
 /**
  * 赛道进度条上的一个点。每辆车一个。
@@ -72,6 +73,13 @@ export interface ResultRow {
   finished: boolean;
 }
 
+export interface RaceHudActions {
+  /** "再来一局"：同一条赛道从头开始 */
+  onRestart?: () => void;
+  /** "换赛道"：回主菜单重选 */
+  onChangeTrack?: () => void;
+}
+
 /** 中央弹出提示的默认时长（秒） */
 const POPUP_DURATION = 1.6;
 /** 破纪录多留一会儿，这个是要让人看见的 */
@@ -102,31 +110,35 @@ export class RaceHud {
   /** 结算面板已经按这个签名渲染过了，内容没变就不重建 DOM */
   private resultsSignature = '';
 
-  /** @param onRestart 结算面板上"再来一局"按下时调。触屏上没有 R 键，这个按钮是唯一的入口 */
-  constructor(parent: HTMLElement, private readonly onRestart?: () => void) {
+  /**
+   * @param actions 结算面板上两个按钮的回调。触屏上没有 R 键，
+   *                "再来一局"是唯一的重开入口；"换赛道"要重载页面（见 main.ts 的说明）
+   */
+  constructor(parent: HTMLElement, private readonly actions: RaceHudActions = {}) {
+    injectTheme();
     injectRaceStyles();
 
     this.root = document.createElement('div');
     this.root.className = 'race-hud';
     this.root.innerHTML = `
-      <div class="race-lap">
+      <div class="race-lap k-outline">
         <span class="race-lap-label">LAP</span><!--
-     --><span class="race-lap-value">1</span><!--
-     --><span class="race-lap-total">/3</span>
+     --><span class="race-lap-value k-num">1</span><!--
+     --><span class="race-lap-total k-num">/3</span>
       </div>
-      <div class="race-pos" hidden>
-        <span class="race-pos-value">1</span><span class="race-pos-label">位</span>
+      <div class="race-pos k-outline-lg" hidden>
+        <span class="race-pos-value k-num">1</span><span class="race-pos-label">位</span>
       </div>
-      <div class="race-times">
-        <div class="race-row race-row-cur"><span class="race-k">本圈</span><span class="race-v">0.000</span></div>
-        <div class="race-row race-row-last"><span class="race-k">上圈</span><span class="race-v">--.---</span></div>
-        <div class="race-row race-row-best"><span class="race-k">最佳</span><span class="race-v">--.---</span></div>
-        <div class="race-row race-row-record"><span class="race-k">纪录</span><span class="race-v">--.---</span></div>
+      <div class="race-times k-chip">
+        <div class="race-row race-row-cur"><span class="race-k">本圈</span><span class="race-v k-num">0.000</span></div>
+        <div class="race-row race-row-last"><span class="race-k">上圈</span><span class="race-v k-num">--.---</span></div>
+        <div class="race-row race-row-best"><span class="race-k">最佳</span><span class="race-v k-num">--.---</span></div>
+        <div class="race-row race-row-record"><span class="race-k">纪录</span><span class="race-v k-num">--.---</span></div>
       </div>
       <div class="race-track" hidden><div class="race-track-line"></div></div>
-      <div class="race-center" hidden></div>
+      <div class="race-center k-outline-lg" hidden></div>
       <div class="race-warn" hidden>⚠ 漏了 checkpoint · 本圈不计</div>
-      <div class="race-results" hidden></div>
+      <div class="race-results k-panel" hidden></div>
     `;
     parent.appendChild(this.root);
 
@@ -299,17 +311,25 @@ export class RaceHud {
       .join('');
 
     this.results.innerHTML = `
-      <div class="race-res-title">完赛</div>
-      ${view.racerCount > 1 ? `<div class="race-res-place">第 ${r.place} 名</div>` : ''}
-      <div class="race-res-total">${formatTime(r.totalTime)}</div>
+      <div class="race-res-title k-label">完赛</div>
+      ${view.racerCount > 1 ? `<div class="race-res-place k-outline">第 ${r.place} 名</div>` : ''}
+      <div class="race-res-total k-num">${formatTime(r.totalTime)}</div>
       <ol class="race-res-laps">${rows}</ol>
-      <div class="race-res-best">最佳圈 ${formatTimeOrDash(r.bestLap)}</div>
+      <div class="race-res-best">最佳圈 <span class="k-num">${formatTimeOrDash(r.bestLap)}</span></div>
       ${r.newRecord ? '<div class="race-res-record">★ 打破本地纪录</div>' : ''}
       ${renderStandings(r.standings)}
-      <button class="race-res-btn" type="button">再来一局</button>
-      <div class="race-res-hint">或按 R</div>
+      <div class="race-res-actions">
+        <button class="k-btn race-res-again" type="button">再来一局</button>
+        <button class="k-btn k-btn-ghost race-res-change" type="button">换赛道</button>
+      </div>
+      <div class="race-res-hint">或按 R 重开</div>
     `;
-    this.results.querySelector('.race-res-btn')!.addEventListener('click', () => this.onRestart?.());
+    this.results
+      .querySelector('.race-res-again')!
+      .addEventListener('click', () => this.actions.onRestart?.());
+    this.results
+      .querySelector('.race-res-change')!
+      .addEventListener('click', () => this.actions.onChangeTrack?.());
     this.results.hidden = false;
   }
 }
@@ -357,45 +377,51 @@ function injectRaceStyles(): void {
   style.textContent = `
     .race-hud {
       position: absolute; inset: 0; pointer-events: none;
-      color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6);
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      --race-best: #ffd34d;
-      --race-record: #7cf7c4;
+      color: var(--k-text); font-family: var(--k-font);
     }
     /* 下面好几个块都是 display:flex，会盖掉 UA 的 [hidden]{display:none}，
        于是 el.hidden = true 根本藏不住（实测：空的结算面板会一直挂在屏幕中间）。
        这一条把 hidden 抢回来。 */
     .race-hud [hidden] { display: none !important; }
+
     /* 左上：圈数。Hud.ts 的 .hud-stats 占了 top:20，这里往下让一行 */
     .race-lap {
-      position: absolute; left: 24px; top: 54px;
+      position: absolute; left: 26px; top: 56px;
       display: flex; align-items: baseline; gap: 4px;
     }
-    .race-lap-label { font-size: 13px; opacity: 0.7; margin-right: 4px; letter-spacing: 1px; }
-    .race-lap-value { font-size: 40px; font-weight: 700; line-height: 1; }
-    .race-lap-total { font-size: 20px; opacity: 0.65; }
+    .race-lap-label {
+      font-size: 12px; font-weight: 800; letter-spacing: 3px;
+      opacity: 0.75; margin-right: 5px;
+    }
+    .race-lap-value { font-size: 44px; font-weight: 900; line-height: 0.95; }
+    .race-lap-total { font-size: 20px; font-weight: 700; opacity: 0.7; }
+    /* 名次：整块 HUD 里最大的一个数字。它是"我现在打得怎么样"的唯一答案，
+       扫一眼就该看到，所以字号压过速度表 */
     .race-pos {
-      position: absolute; left: 24px; top: 104px;
-      display: flex; align-items: baseline; gap: 3px;
+      position: absolute; left: 26px; top: 106px;
+      display: flex; align-items: baseline; gap: 4px;
     }
-    .race-pos-value { font-size: 30px; font-weight: 700; line-height: 1; }
-    .race-pos-label { font-size: 13px; opacity: 0.7; }
+    .race-pos-value {
+      font-size: 56px; font-weight: 900; line-height: 0.9;
+      color: var(--k-gold);
+    }
+    .race-pos-label { font-size: 15px; font-weight: 700; opacity: 0.8; }
 
-    /* 右上：三行计时。lil-gui 也钉在右上角（宽 245px），开着的时候往左让开 */
+    /* 右上：四行计时。lil-gui 也钉在右上角（宽 245px），开着的时候往左让开 */
     .race-times {
-      position: absolute; right: 24px; top: 20px;
+      position: absolute; right: 26px; top: 20px;
       transition: right 120ms ease;
-      display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
-      background: rgba(0,0,0,0.28); padding: 8px 12px; border-radius: 8px;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+      padding: 10px 14px;
     }
-    .race-row { display: flex; align-items: baseline; gap: 10px; }
-    .race-k { font-size: 11px; opacity: 0.65; letter-spacing: 1px; }
-    .race-v { font-size: 17px; font-variant-numeric: tabular-nums; min-width: 8ch; text-align: right; }
-    .race-row-cur .race-v { font-size: 26px; font-weight: 700; }
-    .race-row-best .race-v { color: var(--race-best); }
-    .race-row-best .race-v.race-v-record { color: var(--race-record); }
+    .race-row { display: flex; align-items: baseline; gap: 12px; }
+    .race-k { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--k-text-dim); }
+    .race-v { font-size: 17px; min-width: 8ch; text-align: right; }
+    .race-row-cur .race-v { font-size: 27px; font-weight: 800; }
+    .race-row-best .race-v { color: var(--k-gold); }
+    .race-row-best .race-v.race-v-record { color: var(--k-mint); }
     .race-row-record .race-v { opacity: 0.75; font-size: 14px; }
-    body.debug-gui-open .race-times { right: 264px; }
+    body.debug-gui-open .race-times { right: 268px; }
     /* 触屏时右上角被道具键占着，计时面板往左让，同时避开刘海 */
     body.touch-input .race-times {
       top: calc(14px + env(safe-area-inset-top));
@@ -406,101 +432,94 @@ function injectRaceStyles(): void {
     .race-center {
       position: absolute; left: 50%; top: 42%;
       transform: translate(-50%, -50%);
-      display: flex; flex-direction: column; align-items: center; gap: 2px;
-      font-weight: 800; letter-spacing: -1px; white-space: nowrap;
-      text-shadow: 0 4px 22px rgba(0,0,0,0.7);
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      font-weight: 900; letter-spacing: -1px; white-space: nowrap;
     }
-    .race-center-count { font-size: 130px; line-height: 1; }
-    .race-center-go { font-size: 110px; line-height: 1; color: #8dff9e; }
-    .race-pop-tag { font-size: 19px; font-weight: 700; letter-spacing: 4px; opacity: 0.9; }
-    .race-pop-time { font-size: 54px; font-variant-numeric: tabular-nums; }
-    .race-center-best .race-pop-time, .race-center-best .race-pop-tag { color: var(--race-best); }
-    .race-center-record .race-pop-time, .race-center-record .race-pop-tag {
-      color: var(--race-record);
-      text-shadow: 0 0 18px rgba(124,247,196,0.75), 0 4px 22px rgba(0,0,0,0.7);
-    }
+    .race-center-count { font-size: 140px; line-height: 1; }
+    .race-center-go { font-size: 118px; line-height: 1; color: var(--k-mint); }
+    .race-pop-tag { font-size: 19px; font-weight: 800; letter-spacing: 5px; opacity: 0.92; }
+    .race-pop-time { font-size: 56px; font-family: var(--k-font-num); font-variant-numeric: tabular-nums; }
+    .race-center-best .race-pop-time, .race-center-best .race-pop-tag { color: var(--k-gold); }
+    .race-center-record .race-pop-time, .race-center-record .race-pop-tag { color: var(--k-mint); }
     .race-center-record .race-pop-tag { font-size: 24px; }
 
     .race-warn {
       position: absolute; left: 50%; top: 14%; transform: translateX(-50%);
-      font-size: 14px; color: #ffb3b3;
-      background: rgba(90,0,0,0.4); padding: 5px 12px; border-radius: 999px;
+      font-size: 13px; font-weight: 700; color: #fff;
+      background: rgba(190, 30, 40, 0.75);
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 6px 14px; border-radius: var(--k-r-pill);
+      box-shadow: var(--k-shadow-chip);
     }
 
     /* 结算面板 */
     .race-results {
       z-index: 40;
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      min-width: 300px; padding: 22px 30px 18px;
-      background: rgba(10,12,18,0.82); border: 1px solid rgba(255,255,255,0.14);
-      border-radius: 14px; backdrop-filter: blur(6px);
+      min-width: 320px; max-width: min(92vw, 420px); max-height: 88vh; overflow-y: auto;
+      padding: 24px 30px 20px;
       display: flex; flex-direction: column; align-items: center; gap: 6px;
+      /* 面板整体是 pointer-events: auto，否则滚动排名表时手指会穿到摇杆上 */
+      pointer-events: auto;
     }
-    .race-res-title { font-size: 15px; letter-spacing: 6px; opacity: 0.7; }
-    .race-res-place { font-size: 22px; font-weight: 700; }
-    .race-res-total { font-size: 46px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .race-res-laps { list-style: none; margin: 10px 0 4px; padding: 0; width: 100%; }
+    .race-res-title { font-size: 12px; }
+    .race-res-place { font-size: 26px; font-weight: 900; color: var(--k-gold); }
+    .race-res-total { font-size: 48px; font-weight: 900; line-height: 1; }
+    .race-res-laps { list-style: none; margin: 12px 0 4px; padding: 0; width: 100%; }
     .race-res-lap {
       display: flex; justify-content: space-between; gap: 24px;
-      font-size: 15px; padding: 3px 0; font-variant-numeric: tabular-nums;
+      font-size: 15px; padding: 4px 0;
+      font-family: var(--k-font-num); font-variant-numeric: tabular-nums;
       border-bottom: 1px solid rgba(255,255,255,0.07);
     }
-    .race-res-lap-best { color: var(--race-best); font-weight: 700; }
-    .race-res-best { font-size: 14px; color: var(--race-best); }
-    .race-res-record { font-size: 14px; color: var(--race-record); font-weight: 700; }
-    .race-res-hint { font-size: 12px; opacity: 0.55; margin-top: 6px; }
-    /* HUD 整层是 pointer-events: none，按钮要自己把事件收回来；
-       z-index 要压过触屏摇杆区（那一块也是 pointer-events: auto，会盖住半个面板） */
-    .race-res-btn {
-      pointer-events: auto; margin-top: 14px; padding: 10px 26px;
-      border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
-      background: #4d9bff; color: #06101f; font-weight: 700;
-      font-family: inherit; font-size: 15px; cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-    }
+    .race-res-lap-best { color: var(--k-gold); font-weight: 700; }
+    .race-res-best { font-size: 14px; color: var(--k-gold); }
+    .race-res-record { font-size: 14px; color: var(--k-mint); font-weight: 800; letter-spacing: 1px; }
+    .race-res-actions { display: flex; gap: 10px; margin-top: 16px; }
+    .race-res-hint { font-size: 12px; color: var(--k-text-dim); margin-top: 8px; }
 
     /* 结算面板下半截：完整排名表 */
-    .race-rank-title {
-      font-size: 12px; letter-spacing: 4px; opacity: 0.6; margin-top: 12px;
-    }
+    .race-rank-title { font-size: 11px; letter-spacing: 4px; color: var(--k-text-dim); margin-top: 14px; }
     .race-rank {
-      list-style: none; margin: 4px 0 0; padding: 0; width: 100%;
-      max-height: 40vh; overflow-y: auto;
+      list-style: none; margin: 6px 0 0; padding: 0; width: 100%;
+      max-height: 34vh; overflow-y: auto;
     }
     .race-rank-row {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 14px; padding: 3px 0; font-variant-numeric: tabular-nums;
+      display: flex; align-items: center; gap: 9px;
+      font-size: 14px; padding: 4px 0;
+      font-variant-numeric: tabular-nums;
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .race-rank-me { color: var(--race-best); font-weight: 700; }
-    .race-rank-place { width: 2ch; text-align: right; opacity: 0.75; }
+    .race-rank-me { color: var(--k-gold); font-weight: 800; }
+    .race-rank-place { width: 2ch; text-align: right; opacity: 0.75; font-family: var(--k-font-num); }
     .race-rank-chip {
-      width: 10px; height: 10px; border-radius: 3px; flex: none;
+      width: 11px; height: 11px; border-radius: 4px; flex: none;
       box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
     }
     .race-rank-name { flex: 1; min-width: 5ch; }
-    .race-rank-time { opacity: 0.9; }
+    .race-rank-time { opacity: 0.9; font-family: var(--k-font-num); }
     .race-rank-dnf { opacity: 0.5; }
 
     /* 底部中央：赛道进度条。一条横线，每辆车一个小圆点。
        路面是浅色的，所以垫一层深色底，不然白点和白线在直道上会糊掉。
-       bottom 要给 .hud-help 那行按键提示（bottom: 6px）让开位置 */
+       bottom 要给 .hud-help 那行按键提示（bottom: 8px）让开位置 */
     .race-track {
-      position: absolute; left: 50%; bottom: 32px; transform: translateX(-50%);
+      position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%);
       width: min(46vw, 520px); height: 18px;
       padding: 0 10px; box-sizing: content-box;
-      background: rgba(0,0,0,0.34); border-radius: 10px;
-      backdrop-filter: blur(3px);
+      background: rgba(13,17,27,0.45); border-radius: var(--k-r-pill);
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
     }
     .race-track-line {
       position: absolute; left: 10px; right: 10px; top: 50%; height: 4px;
       margin-top: -2px; border-radius: 2px;
-      background: rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.28);
     }
     /* 起点/终点线：进度条的两端 */
     .race-track-line::before, .race-track-line::after {
       content: ''; position: absolute; top: -3px; width: 2px; height: 10px;
-      background: rgba(255,255,255,0.75);
+      background: rgba(255,255,255,0.8);
     }
     .race-track-line::before { left: 0; }
     .race-track-line::after { right: 0; }
@@ -520,15 +539,17 @@ function injectRaceStyles(): void {
     /* 触屏：左上角那一列也要让开刘海 */
     body.touch-input .race-lap { left: calc(20px + env(safe-area-inset-left)); }
     body.touch-input .race-pos { left: calc(20px + env(safe-area-inset-left)); }
-    body.touch-input .race-progress { bottom: calc(20px + env(safe-area-inset-bottom)); }
 
     @media (max-width: 640px) {
-      .race-lap-value { font-size: 28px; }
+      .race-lap-value { font-size: 30px; }
+      .race-pos-value { font-size: 40px; }
       .race-row-cur .race-v { font-size: 20px; }
       .race-v { font-size: 14px; }
-      .race-center-count { font-size: 84px; }
-      .race-center-go { font-size: 70px; }
-      .race-pop-time { font-size: 38px; }
+      .race-center-count { font-size: 92px; }
+      .race-center-go { font-size: 76px; }
+      .race-pop-time { font-size: 40px; }
+      .race-results { min-width: 0; padding: 18px 20px 16px; }
+      .race-res-total { font-size: 38px; }
     }
   `;
   document.head.appendChild(style);

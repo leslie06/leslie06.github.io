@@ -33,6 +33,18 @@ export interface FollowCameraConfig {
   punchFov: number;
   /** 推镜回落的衰减速率，越大回得越快 */
   punchDecay: number;
+  /**
+   * 漂移时相机往弯外侧平移多少米。
+   * 这一条比侧倾更能"强化转向感"：镜头挪开之后玩家能看到弯内侧更多路面，
+   * 主观上会觉得车转得更急了 —— 但车的实际转向半径一点没变。
+   */
+  driftSideOffset: number;
+  /** 撞击震动的幅度上限（米）。这个值极容易调过头，0.2 已经很明显了 */
+  shakeAmount: number;
+  /** 震动的衰减速率，越大停得越快 */
+  shakeDecay: number;
+  /** 震动的频率（Hz）。太低像坐船，太高像画面撕裂 */
+  shakeFrequency: number;
 }
 
 export const DEFAULT_FOLLOW_CAMERA_CONFIG: FollowCameraConfig = {
@@ -49,6 +61,10 @@ export const DEFAULT_FOLLOW_CAMERA_CONFIG: FollowCameraConfig = {
   fovSmoothing: 4,
   punchFov: 10,
   punchDecay: 3.2,
+  driftSideOffset: 1.5,
+  shakeAmount: 0.16,
+  shakeDecay: 7,
+  shakeFrequency: 22,
 };
 
 export const FOLLOW_CAMERA_RANGES: Record<keyof FollowCameraConfig, [number, number, number]> = {
@@ -65,6 +81,10 @@ export const FOLLOW_CAMERA_RANGES: Record<keyof FollowCameraConfig, [number, num
   fovSmoothing: [0.5, 20, 0.1],
   punchFov: [0, 40, 0.5],
   punchDecay: [0.5, 12, 0.1],
+  driftSideOffset: [0, 6, 0.05],
+  shakeAmount: [0, 1, 0.01],
+  shakeDecay: [1, 20, 0.5],
+  shakeFrequency: [4, 50, 0.5],
 };
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -88,6 +108,16 @@ export class FollowCamera {
   private floorY = 0;
   /** 叠加在 fov 上的瞬时推镜量，自己衰减回 0 */
   private fovPunch = 0;
+  /** 当前震动幅度（米），自己衰减回 0 */
+  private shakeMag = 0;
+  /** 震动的相位。用连续相位而不是每帧随机：随机数在高帧率下会糊成一片抖动，
+      看着像画面撕裂而不是"被撞了一下" */
+  private shakePhase = 0;
+  /** 平滑后的漂移侧移量（米，车的右手方向为正） */
+  private driftSide = 0;
+  private readonly shakeOffset = new THREE.Vector3();
+  /** 上一帧的间隔。computeDesired 在 snapTo 里也会被调到，那时没有 dt 可用 */
+  private lastFrameDt = 1 / 60;
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(this.config.baseFov, aspect, 0.1, 1200);
@@ -106,10 +136,14 @@ export class FollowCamera {
     this.smoothedLook.copy(this.lookTarget);
     this.fov = this.config.baseFov;
     this.fovPunch = 0;
+    this.shakeMag = 0;
+    this.driftSide = 0;
+    this.shakeOffset.set(0, 0, 0);
     this.applyToCamera();
   }
 
   update(state: Readonly<KartState>, cfg: Readonly<KartConfig>, frameDt: number): void {
+    this.lastFrameDt = frameDt;
     this.computeDesired(state, cfg);
 
     // 弹簧阻尼，拆成小步积分保证稳定
@@ -134,6 +168,7 @@ export class FollowCamera {
     this.fovPunch *= Math.exp(-this.config.punchDecay * frameDt);
     if (this.fovPunch < 0.01) this.fovPunch = 0;
 
+    this.updateShake(frameDt);
     this.applyToCamera();
   }
 
@@ -155,7 +190,23 @@ export class FollowCamera {
     const leadX = fx * state.speed * lead;
     const leadZ = fz * state.speed * lead;
 
-    this.desired.set(state.x - fx * distance + leadX, height, state.z - fz * distance + leadZ);
+    // 漂移侧移：车的右手方向是 (cos h, -sin h)（和 heading 的 (sin, cos) 差 90°）。
+    // 往**弯外侧**挪 —— driftDir 是漂移方向，取负号就是外侧
+    const sideTarget =
+      state.driftPhase === 'drifting'
+        ? -state.driftDir * this.config.driftSideOffset * (0.4 + 0.6 * speedRatio)
+        : 0;
+    // 这里的平滑是按"每秒收敛比例"写的，和帧率无关；系数固定 6，
+    // 因为它不是手感参数 —— 太快会跳、太慢就跟不上起漂那一下
+    this.driftSide = lerp(this.driftSide, sideTarget, 1 - Math.exp(-6 * this.lastFrameDt));
+    const sideX = Math.cos(state.heading) * this.driftSide;
+    const sideZ = -Math.sin(state.heading) * this.driftSide;
+
+    this.desired.set(
+      state.x - fx * distance + leadX + sideX,
+      height,
+      state.z - fz * distance + leadZ + sideZ,
+    );
     this.lookTarget.set(
       state.x + fx * this.config.lookAhead,
       state.y + this.config.lookHeight,
@@ -169,6 +220,39 @@ export class FollowCamera {
     this.fovPunch = Math.max(this.fovPunch, amount);
   }
 
+  /**
+   * 撞一下。amount 是幅度倍率（0..1），会乘上 config.shakeAmount。
+   *
+   * 取 max 而不是累加：连续撞击时不会把幅度叠到玩家看不清路。
+   * 屏幕震动是最容易做过头的一件事 —— 幅度大一点就从"有打击感"变成"晕"，
+   * 所以默认值压得很低（16cm），调参面板上再往上加要非常克制。
+   */
+  shake(amount = 1): void {
+    this.shakeMag = Math.max(this.shakeMag, clamp(amount, 0, 1) * this.config.shakeAmount);
+  }
+
+  /** 当前震动幅度（米），给测试和调试看 */
+  get currentShake(): number {
+    return this.shakeMag;
+  }
+
+  private updateShake(frameDt: number): void {
+    if (this.shakeMag <= 0.0001) {
+      this.shakeMag = 0;
+      this.shakeOffset.set(0, 0, 0);
+      return;
+    }
+    this.shakePhase += frameDt * this.config.shakeFrequency;
+    this.shakeMag *= Math.exp(-this.config.shakeDecay * frameDt);
+    // 三个不同频率的正弦：互质的频率比让它在几个周期内不重复，
+    // 看着像随机抖动，但每一帧之间是连续的
+    this.shakeOffset.set(
+      Math.sin(this.shakePhase * 6.283) * this.shakeMag,
+      Math.sin(this.shakePhase * 9.156 + 1.7) * this.shakeMag * 0.7,
+      Math.sin(this.shakePhase * 7.541 + 3.1) * this.shakeMag,
+    );
+  }
+
   /** 当前实际 FOV（含推镜），给测试用 */
   get currentFov(): number {
     return this.fov + this.fovPunch;
@@ -177,9 +261,11 @@ export class FollowCamera {
   private applyToCamera(): void {
     // 别让相机钻到地面底下
     this.camera.position.set(
-      this.position.x,
-      Math.max(this.position.y, this.floorY + 0.4),
-      this.position.z,
+      this.position.x + this.shakeOffset.x,
+      // 震动加在钳制**之后**：钳制是为了不让相机钻进地里，
+      // 加在前面的话震动会被地面吃掉一半，看着像只往上抖
+      Math.max(this.position.y, this.floorY + 0.4) + this.shakeOffset.y,
+      this.position.z + this.shakeOffset.z,
     );
     this.camera.lookAt(this.smoothedLook);
     const fov = this.fov + this.fovPunch;

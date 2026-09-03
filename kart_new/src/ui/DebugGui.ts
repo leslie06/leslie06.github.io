@@ -128,6 +128,10 @@ export interface PerfDebugState {
   pixelRatio: number;
   /** low 档预算，只读显示 */
   budget: string;
+  /** 三个粒子池当前活着的粒子数（火花 / 扬尘 / 爆闪）。调特效手感时盯这个 */
+  particles: string;
+  /** 有几条音效在用程序化占位音（public/audio/ 下没找到文件） */
+  audioFallback: string;
   /** 帧率自适应总开关。调参时关掉，免得它在你面前偷偷降档 */
   autoAdapt: boolean;
 }
@@ -140,6 +144,8 @@ export function createPerfDebugState(tier: QualityTier): PerfDebugState {
     triangles: 0,
     pixelRatio: 1,
     budget: `drawcall ≤ ${PERF_BUDGET_LOW.drawCalls} · 三角面 ≤ ${PERF_BUDGET_LOW.triangles / 1000}k`,
+    particles: '0 / 0 / 0',
+    audioFallback: '—',
     autoAdapt: true,
   };
 }
@@ -251,6 +257,8 @@ export class DebugGui {
     perf.add(targets.perf, 'drawCalls').name('drawcall').listen().disable();
     perf.add(targets.perf, 'triangles').name('三角面').listen().disable();
     perf.add(targets.perf, 'pixelRatio').name('像素比').listen().disable();
+    perf.add(targets.perf, 'particles').name('粒子 火花/尘/爆闪').listen().disable();
+    perf.add(targets.perf, 'audioFallback').name('占位音效').disable();
     perf.add(targets.perf, 'budget').name('low 档预算').disable();
     perf.add(targets.perf, 'autoAdapt').name('帧率自适应降档');
 

@@ -33,6 +33,23 @@ export interface QualitySettings {
   postFx: PostFxLevel;
   /** bloom 强度（postFx 为 none 时无意义） */
   bloomStrength: number;
+  /** bloom 的扩散半径 0..1。越大溢得越开，也越糊 */
+  bloomRadius: number;
+  /** SMAA 抗锯齿。关了就靠像素比顶着 */
+  smaa: boolean;
+  /** 暗角强度 0..1，0 = 不加这一 pass */
+  vignette: number;
+  /**
+   * 环境贴图（PMREM）的立方图边长；0 = 不生成，只靠半球光。
+   * 天空是程序化渐变球，所以这一项不吃下载量，只吃一次性的预处理时间和显存。
+   */
+  envMapSize: number;
+  /** 每辆车的轮胎扬尘粒子池容量；0 = 不喷扬尘 */
+  dustCapacity: number;
+  /** 全场共用的爆闪/命中粒子池容量 */
+  burstCapacity: number;
+  /** boost 期间的车尾拖尾 */
+  boostTrail: boolean;
   /** AI 对手数量 */
   aiCount: number;
   /** 每辆车的漂移火花粒子池容量 */
@@ -76,6 +93,13 @@ export const QUALITY_TIERS: Readonly<Record<QualityTier, Readonly<QualitySetting
     cameraFar: 900,
     maxTextureSize: 2048,
     textureAnisotropy: 8,
+    bloomRadius: 0.55,
+    smaa: true,
+    vignette: 0.32,
+    envMapSize: 256,
+    dustCapacity: 160,
+    burstCapacity: 320,
+    boostTrail: true,
   }),
   medium: Object.freeze({
     maxPixelRatio: 1.5,
@@ -94,6 +118,13 @@ export const QUALITY_TIERS: Readonly<Record<QualityTier, Readonly<QualitySetting
     cameraFar: 620,
     maxTextureSize: 2048,
     textureAnisotropy: 4,
+    bloomRadius: 0.4,
+    smaa: false,
+    vignette: 0.22,
+    envMapSize: 128,
+    dustCapacity: 80,
+    burstCapacity: 180,
+    boostTrail: true,
   }),
   low: Object.freeze({
     maxPixelRatio: 1,
@@ -112,6 +143,13 @@ export const QUALITY_TIERS: Readonly<Record<QualityTier, Readonly<QualitySetting
     cameraFar: 360,
     maxTextureSize: 1024,
     textureAnisotropy: 1,
+    bloomRadius: 0,
+    smaa: false,
+    vignette: 0,
+    envMapSize: 0,
+    dustCapacity: 0,
+    burstCapacity: 60,
+    boostTrail: false,
   }),
 });
 

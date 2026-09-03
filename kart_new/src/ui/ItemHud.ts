@@ -7,6 +7,7 @@
  */
 import type { EffectType } from '../items/EffectSystem';
 import type { ItemDef, ItemRarity } from '../items/ItemDefs';
+import { injectTheme, THEME } from './theme';
 
 /** 每帧喂进来的快照 */
 export interface ItemHudView {
@@ -29,8 +30,8 @@ const EFFECT_STYLE: Record<EffectType, { label: string; color: string }> = {
 /** 稀有度 -> 道具框的边框色 */
 const RARITY_BORDER: Record<ItemRarity, string> = {
   common: 'rgba(255,255,255,0.35)',
-  uncommon: '#7cc4ff',
-  rare: '#ffd34d',
+  uncommon: THEME.accent,
+  rare: THEME.gold,
 };
 
 /** 拿到道具时轮盘转多久（秒） */
@@ -50,12 +51,13 @@ export class ItemHud {
   private lastSignature = '';
 
   constructor(parent: HTMLElement) {
+    injectTheme();
     injectItemStyles();
 
     this.root = document.createElement('div');
     this.root.className = 'item-hud';
     this.root.innerHTML = `
-      <div class="item-slot item-slot-empty">
+      <div class="item-slot k-chip item-slot-empty">
         <span class="item-icon"></span>
         <span class="item-label">无道具</span>
       </div>
@@ -154,45 +156,44 @@ function injectItemStyles(): void {
   itemStylesInjected = true;
   const style = document.createElement('style');
   style.textContent = `
-    /* 左下角。.hud-speed（速度数字）占了 left:24 bottom:22，所以往上让开一截 */
+    /* 左下角。.hud-speed（速度数字）占了 left:26 bottom:24，所以往上让开一截 */
     .item-hud {
-      position: absolute; left: 24px; bottom: 108px;
-      pointer-events: none; color: #fff;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
-      display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+      position: absolute; left: 26px; bottom: 118px;
+      pointer-events: none; color: var(--k-text);
+      font-family: var(--k-font);
+      display: flex; flex-direction: column; align-items: flex-start; gap: 7px;
     }
     .item-slot {
-      width: 82px; height: 82px; border-radius: 14px;
-      border: 2px solid rgba(255,255,255,0.18);
-      background: rgba(0,0,0,0.3);
+      width: 86px; height: 86px; border-radius: var(--k-r-md);
+      border-width: 2px; border-style: solid;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 2px; transform-origin: center;
+      gap: 3px; transform-origin: center;
       transition: background 140ms ease, border-color 140ms ease;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
-    .item-icon { font-size: 30px; line-height: 1; }
-    .item-label { font-size: 12px; letter-spacing: 1px; }
+    .item-icon { font-size: 32px; line-height: 1; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5)); }
+    .item-label { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
     .item-slot-empty { opacity: 0.45; }
     .item-slot-empty .item-label { font-size: 11px; }
 
-    .item-effects { display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+    .item-effects { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
     .item-eff {
-      font-size: 11px; letter-spacing: 1px;
-      background: rgba(0,0,0,0.4); border-radius: 5px;
-      padding: 2px 7px 4px; min-width: 62px;
-      display: flex; flex-direction: column; gap: 2px;
+      font-size: 11px; font-weight: 700; letter-spacing: 1px;
+      background: rgba(13,17,27,0.55); border-radius: var(--k-r-sm);
+      padding: 3px 8px 5px; min-width: 68px;
+      display: flex; flex-direction: column; gap: 3px;
     }
-    .item-eff-bar { height: 2px; border-radius: 1px; width: 100%; display: block; }
+    /* 进度条从满走到空，用 transition 会让它一顿一顿的（每帧都在改宽度），
+       所以不给它任何过渡 —— 每帧写一次就是最平滑的 */
+    .item-eff-bar { height: 3px; border-radius: 2px; width: 100%; display: block; }
 
-    .item-hint { font-size: 11px; opacity: 0.55; letter-spacing: 1px; }
+    .item-hint { font-size: 11px; color: var(--k-text-dim); letter-spacing: 1px; }
     /* 触屏上道具键在右上角，"Q / 右键"这行提示是错的 */
     body.touch-input .item-hint { display: none; }
 
     @media (max-width: 640px) {
-      .item-hud { bottom: 84px; }
-      .item-slot { width: 62px; height: 62px; border-radius: 11px; }
-      .item-icon { font-size: 24px; }
+      .item-hud { bottom: 88px; }
+      .item-slot { width: 64px; height: 64px; }
+      .item-icon { font-size: 26px; }
       .item-hint { display: none; }
     }
   `;

@@ -93,7 +93,10 @@ describe('QUALITY_TIERS 表', () => {
   const tiers: QualityTier[] = ['low', 'medium', 'high'];
 
   it('画质开销随档位单调不减', () => {
-    const keys = ['maxPixelRatio', 'aiCount', 'sparkCapacity', 'propDensity', 'fogFar'] as const;
+    const keys = [
+      'maxPixelRatio', 'aiCount', 'sparkCapacity', 'propDensity', 'fogFar',
+      'bloomRadius', 'vignette', 'envMapSize', 'dustCapacity', 'burstCapacity',
+    ] as const;
     for (const key of keys) {
       for (let i = 1; i < tiers.length; i++) {
         expect(QUALITY_TIERS[tiers[i]!][key]).toBeGreaterThanOrEqual(QUALITY_TIERS[tiers[i - 1]!][key]);
@@ -115,6 +118,30 @@ describe('QUALITY_TIERS 表', () => {
   it('low 档只留 tonemapping，不做 bloom', () => {
     expect(QUALITY_TIERS.low.postFx).toBe('none');
     expect(QUALITY_TIERS.low.bloomStrength).toBe(0);
+  });
+
+  it('postFx 关掉的档位，后处理里的每一项也都得是关的', () => {
+    for (const tier of tiers) {
+      if (QUALITY_TIERS[tier].postFx !== 'none') continue;
+      expect(QUALITY_TIERS[tier].bloomStrength).toBe(0);
+      expect(QUALITY_TIERS[tier].smaa).toBe(false);
+      expect(QUALITY_TIERS[tier].vignette).toBe(0);
+    }
+  });
+
+  it('SMAA 只在 full 档开：bloom 档已经在省带宽了，再加一个全屏 pass 没道理', () => {
+    expect(QUALITY_TIERS.high.smaa).toBe(true);
+    expect(QUALITY_TIERS.medium.smaa).toBe(false);
+    expect(QUALITY_TIERS.low.smaa).toBe(false);
+  });
+
+  it('low 档把吃粒子和吃带宽的都关掉', () => {
+    expect(QUALITY_TIERS.low.envMapSize).toBe(0);
+    expect(QUALITY_TIERS.low.dustCapacity).toBe(0);
+    expect(QUALITY_TIERS.low.boostTrail).toBe(false);
+    expect(QUALITY_TIERS.low.aiSparks).toBe(false);
+    // 但爆闪要留着：道具打中了没有任何反馈的话，玩家不知道自己为什么慢了
+    expect(QUALITY_TIERS.low.burstCapacity).toBeGreaterThan(0);
   });
 
   it('相机远裁剪面比雾的远端更远，否则远处会被裁出硬边', () => {

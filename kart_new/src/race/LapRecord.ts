@@ -12,6 +12,16 @@ export interface RecordStorage {
 
 export const DEFAULT_LAP_RECORD_KEY = 'kart-new.bestLap.v1';
 
+/**
+ * 每条赛道一个纪录键。
+ *
+ * 不同赛道的圈速没有可比性（草原环线 850m、山脊长道 1200m），共用一个键的话
+ * 跑一次长道就会把短道的纪录永久顶掉，而且再也破不了。
+ */
+export function lapRecordKey(trackId: string): string {
+  return `kart-new.bestLap.v1.${trackId}`;
+}
+
 export class LapRecordStore {
   private cached: number | null;
 

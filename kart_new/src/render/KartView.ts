@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { KartState } from '../kart/kartStep';
 import type { KartConfig } from '../kart/KartConfig';
+import { applyTint, buildKartRig, type KartRig, type TintTag } from './kartRig';
 
 /** 纯视觉参数：车身侧倾、后仰、前轮转角。这些东西不进 kartStep。 */
 export interface KartViewConfig {
@@ -48,17 +49,11 @@ const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi 
  * 车的配色。玩家和每辆 AI 各一套，纯视觉，不进任何逻辑。
  * 只换这四个颜色就够区分了 —— 轮胎、座舱地板这些深色件所有车共用，
  * 换掉反而会让车看起来不是同一个系列。
+ *
+ * 换到 glTF 模型之后，这四个键就是 kartRig 认的四个材质名标签
+ * （材质名里带 body / accent / trim / suit）。
  */
-export interface KartPalette {
-  /** 底盘主色 */
-  body: string;
-  /** 车头 / 尾翼 */
-  accent: string;
-  /** 防撞条 */
-  trim: string;
-  /** 驾驶员衣服 */
-  suit: string;
-}
+export type KartPalette = Record<TintTag, string>;
 
 export const DEFAULT_KART_PALETTE: KartPalette = {
   body: '#ff3b30',
@@ -72,9 +67,20 @@ const _normal = new THREE.Vector3();
 const _tilt = new THREE.Quaternion();
 const _yaw = new THREE.Quaternion();
 
+/** 要哪几个轮子的位置：漂移火花只要后轮，越野扬尘四个都要 */
+export type WheelFilter = 'rear' | 'front' | 'all';
+
 /**
- * 占位卡丁车：几个 Box 拼出来的，配色明快。
- * 之后换成 glTF 时只要保证"车头朝 +Z、轮子贴地 y=0"，外面的代码就不用动。
+ * 一辆车的可视部分。
+ *
+ * 两种形态，外面完全看不出区别：
+ *   - **占位车**：几个 Box 拼的，颜色烘进顶点色（构造时的默认形态）；
+ *   - **glTF 模型**：setModel() 之后换上去，轮子按名字拆成独立子对象。
+ *
+ * 换形态是运行时的：模型是慢慢下的，先拿占位车开着，下完了再无缝换上，
+ * 不用为了等一个模型把加载界面多顶几秒。
+ *
+ * 两种形态共同的约定：**车头朝 +Z、轮子贴地 y = 0**，外面的代码只认这个。
  */
 export class KartView {
   readonly root = new THREE.Group();
@@ -82,13 +88,17 @@ export class KartView {
   readonly palette: KartPalette;
 
   /** 车身（会侧倾/俯仰），轮子挂在 root 上保持贴地 */
-  private readonly chassis = new THREE.Group();
-  private readonly frontPivots: THREE.Group[] = [];
-  private readonly rearPivots: THREE.Group[] = [];
-  private readonly allWheels: THREE.Mesh[] = [];
+  private chassis!: THREE.Group;
+  private frontPivots: THREE.Group[] = [];
+  private rearPivots: THREE.Group[] = [];
+  private allWheels: THREE.Object3D[] = [];
+  /** 占位车自己生成的几何体，换模型时要释放；模型的几何体是共享的，不能释放 */
+  private ownedGeometries: THREE.BufferGeometry[] = [];
+  private usingModel = false;
 
   private roll = 0;
   private pitch = 0;
+  private wheelSpin = 0;
   private lastSpeed = 0;
   private smoothedAccel = 0;
 
@@ -102,15 +112,71 @@ export class KartView {
     return this.frontPivots[0]?.rotation.y ?? 0;
   }
 
+  /** 现在挂的是 glTF 模型还是占位车 */
+  get hasModel(): boolean {
+    return this.usingModel;
+  }
+
   constructor(palette: Partial<KartPalette> = {}) {
     this.palette = { ...DEFAULT_KART_PALETTE, ...palette };
+    this.buildPlaceholder();
+  }
+
+  /**
+   * 换上 glTF 模型。传 null 退回占位车。
+   *
+   * @param model **克隆**出来的场景（ModelLibrary.instantiate），不能是模板本身 ——
+   *              建 rig 会就地重挂轮子，改到模板上就把别的车也毁了。
+   */
+  setModel(model: THREE.Object3D | null): void {
+    this.teardown();
+    if (!model) {
+      this.buildPlaceholder();
+      return;
+    }
+
+    applyTint(model, this.palette);
+    model.traverse((node) => {
+      const mesh = node as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    });
+
+    const rig: KartRig = buildKartRig(this.root, model);
+    this.chassis = rig.chassis;
+    for (const wheel of rig.wheels) {
+      (wheel.front ? this.frontPivots : this.rearPivots).push(wheel.pivot);
+      this.allWheels.push(wheel.pivot.children[0] ?? wheel.pivot);
+    }
+    // 滚动速度得用模型自己的轮子半径，不然大轮子的车看着像在打滑。
+    // 量出来的值直接写进 config，lil-gui 上还能接着调
+    if (rig.wheelRadius && rig.wheelRadius > 0.05) this.config.wheelRadius = rig.wheelRadius;
+    this.usingModel = true;
+  }
+
+  /** 拆掉当前形态。模型的几何体/材质是共享的，只释放占位车自己造的那些 */
+  private teardown(): void {
+    this.root.clear();
+    for (const geometry of this.ownedGeometries) geometry.dispose();
+    this.ownedGeometries = [];
+    this.frontPivots = [];
+    this.rearPivots = [];
+    this.allWheels = [];
+    this.usingModel = false;
+    this.roll = 0;
+    this.pitch = 0;
+  }
+
+  private buildPlaceholder(): void {
+    this.chassis = new THREE.Group();
     this.root.add(this.chassis);
     this.buildChassis();
     this.buildWheels();
   }
 
   /**
-   * 车身。
+   * 占位车身。
    *
    * 十几个 Box 不是十几个 Mesh：全部**按材质合并**成两个几何体，颜色烘进顶点色。
    * 一辆车从 23 个 drawcall 降到 6 个（车身 2 + 轮子 4）——
@@ -152,10 +218,12 @@ export class KartView {
     ];
 
     for (const [parts, material] of [
-      [glossy, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.15 })],
-      [matte, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 })],
+      [glossy, sharedMaterials().glossy],
+      [matte, sharedMaterials().matte],
     ] as const) {
-      const mesh = new THREE.Mesh(mergeColored(parts), material);
+      const geometry = mergeColored(parts);
+      this.ownedGeometries.push(geometry);
+      const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.chassis.add(mesh);
@@ -163,9 +231,7 @@ export class KartView {
   }
 
   private buildWheels(): void {
-    // 轮胎和轮毂也合并：一个轮子一个 drawcall。
-    // 轮毂条要看得出转动，所以颜色差别留着，只是共用一份粗糙度
-    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 });
+    const material = sharedMaterials().wheel;
 
     const layout: Array<[x: number, z: number, r: number, w: number, front: boolean]> = [
       [-0.82, 0.95, 0.32, 0.26, true],
@@ -177,10 +243,13 @@ export class KartView {
     for (const [x, z, r, w, front] of layout) {
       const tire = new THREE.CylinderGeometry(r, r, w, WHEEL_SEGMENTS);
       tire.rotateZ(Math.PI / 2); // 圆柱默认沿 y，转成沿 x 当轮轴
+      // 轮胎和轮毂也合并：一个轮子一个 drawcall。
+      // 轮毂条要看得出转动，所以颜色差别留着，只是共用一份粗糙度
       const geometry = mergeColored([
         [tire, TIRE],
         [box(w + 0.02, r * 0.5, r * 0.5, 0, 0, 0), HUB],
       ]);
+      this.ownedGeometries.push(geometry);
       const wheel = new THREE.Mesh(geometry, material);
       wheel.castShadow = true;
 
@@ -243,25 +312,44 @@ export class KartView {
     const steerAngle = -state.steer * this.config.steerVisualAngle;
     for (const pivot of this.frontPivots) pivot.rotation.y = steerAngle;
 
-    // 轮子滚动
-    const spin = (state.speed / Math.max(this.config.wheelRadius, 0.05)) * frameDt;
-    for (const wheel of this.allWheels) wheel.rotation.x += spin;
+    // 轮子滚动。累计到一个共享的角度上再写，省得每个轮子各存一份
+    this.wheelSpin += (state.speed / Math.max(this.config.wheelRadius, 0.05)) * frameDt;
+    for (const wheel of this.allWheels) wheel.rotation.x = this.wheelSpin;
   }
 
   /**
-   * 后轮的世界坐标，给火花特效当发射点。
+   * 轮子的世界坐标，给火花和扬尘当发射点。
    * 会就地写进传入的数组，避免每帧新建 Vector3。
    */
-  getRearWheelWorldPositions(out: THREE.Vector3[]): THREE.Vector3[] {
+  getWheelWorldPositions(out: THREE.Vector3[], which: WheelFilter = 'rear'): THREE.Vector3[] {
+    const pivots =
+      which === 'rear'
+        ? this.rearPivots
+        : which === 'front'
+          ? this.frontPivots
+          : [...this.rearPivots, ...this.frontPivots];
     this.root.updateMatrixWorld(true);
-    for (let i = 0; i < this.rearPivots.length; i++) {
-      const pivot = this.rearPivots[i]!;
+    for (let i = 0; i < pivots.length; i++) {
       const target = out[i] ?? (out[i] = new THREE.Vector3());
-      target.setScalar(0);
-      pivot.localToWorld(target);
+      pivots[i]!.getWorldPosition(target);
     }
-    out.length = this.rearPivots.length;
+    out.length = pivots.length;
     return out;
+  }
+
+  /** 后轮的世界坐标。getWheelWorldPositions('rear') 的老名字，主循环还在用 */
+  getRearWheelWorldPositions(out: THREE.Vector3[]): THREE.Vector3[] {
+    return this.getWheelWorldPositions(out, 'rear');
+  }
+
+  /** 车尾中点的世界坐标，boost 拖尾从这里长出来 */
+  getTailWorldPosition(out: THREE.Vector3): THREE.Vector3 {
+    this.root.updateMatrixWorld(true);
+    return out.set(0, 0.5, -1.3).applyMatrix4(this.root.matrixWorld);
+  }
+
+  dispose(): void {
+    this.teardown();
   }
 }
 
@@ -272,6 +360,24 @@ const DARK = '#22262e';
 const SKIN = '#f0b48b';
 const TIRE = '#1b1d22';
 const HUB = '#e8e8ee';
+
+/**
+ * 占位车的三份材质，**所有车共用**。
+ *
+ * 颜色是烘在顶点色里的，所以不同配色的车用的是同一份材质 —— 那就没有理由
+ * 每辆车各 new 一套：材质各不相同的话每套都要单独编译一次着色器程序，
+ * 八辆车就是八次没必要的编译（开局第一次出现在画面里时会顿一下）。
+ * 懒建是因为模块加载时不一定有 WebGL 上下文（测试里就没有）。
+ */
+let materials: { glossy: THREE.Material; matte: THREE.Material; wheel: THREE.Material } | null = null;
+function sharedMaterials() {
+  materials ??= {
+    glossy: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.15 }),
+    matte: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 }),
+    wheel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 }),
+  };
+  return materials;
+}
 
 type ColoredPart = readonly [geometry: THREE.BufferGeometry, color: string];
 

@@ -1,9 +1,16 @@
 # Kart Prototype
 
-马里奥赛车那种街机手感的卡丁车原型。Three.js + Vite + TypeScript。
-现在有：一条程序化生成的闭合赛道（带起伏、路肩、护栏）、一辆贴地形跑的车、一个跟随相机，
-以及一套完整的比赛流程 —— 倒计时发车、checkpoint 防抄近道、圈速计时、名次、结算面板。
+马里奥赛车那种街机手感的卡丁车原型。Three.js + Vite + TypeScript，风格是明亮卡通低多边形。
+现在有：三条可选赛道（程序化生成，带起伏、路肩、护栏）、一辆贴地形跑的车、AI 对手、
+道具系统，以及一套完整的比赛流程 —— 主菜单选赛道、倒计时发车、checkpoint 防抄近道、
+圈速计时、名次、结算面板。
+视觉上有渐变天空 + PMREM 环境光、bloom / SMAA / 暗角后处理、漂移火花、轮胎扬尘、
+boost 拖尾和命中爆闪；音效走 Howler，引擎声的音高跟着速度走。
 手机上也能开：虚拟摇杆 + 三档画质自适应，见[移动端适配](#移动端适配)。
+
+> 外部美术资源（车模型 / HDRI / 音频文件）**现在一个都没有**，全部有程序化的东西顶着：
+> 占位车是 Box 拼的、天空是渐变球、音效是现场合成的。把文件放进 `public/` 的对应位置
+> 就自动换过去，代码一个字不用改 —— 路径和约定见 [`src/assets/ModelPaths.ts`](src/assets/ModelPaths.ts)。
 
 ## 跑起来
 
@@ -29,6 +36,9 @@ npm test         # vitest
 触屏（手机/平板自动切过去，也可以在左上角 ⚙ 设置里手动选）：左下浮动摇杆转向，
 右下三个按钮是油门 / 刹车倒车 / 漂移，右上角是道具键。
 
+调试用的 URL 参数：`?quality=low|medium|high|auto`、`?input=touch|keyboard`、
+`?track=meadow|sunset|ridge`、`?mute=1|0`（都不写回存储）。
+
 ## 架构
 
 ```
@@ -49,17 +59,25 @@ src/
     DeviceCaps.ts      UA / WebGL 参数 / 屏幕探测，探完变成裸数字结构
     Prefs.ts           画质档位和操作方式的本机设置（localStorage + URL 参数覆盖）
   track/
-    TrackConfig.ts     赛道控制点（带 y）+ 宽度/路肩/护栏尺寸
+    TrackConfig.ts     默认赛道的控制点（带 y）+ 宽度/路肩/护栏尺寸
+    TrackCatalog.ts    三条可选赛道的表（控制点 + 配置 + 圈数 + 道具箱），纯数据
     TrackSpline.ts     闭合 CatmullRom 中心线；getProgress 用 500 点预采样表查最近点
     TrackMesh.ts       沿样条挤出路面 + 路肩 + 护栏 + 裙边，顺带产出碰撞几何
   physics/
     PhysicsSystem.ts   只用 rapier 做 raycast：赛道 trimesh + 每帧一条向下的射线
   render/
-    World.ts           地面网格 + 光照 + 参照物（InstancedMesh，密度按档位）
-    KartView.ts        Box 拼的占位车，按材质合并成 6 个 drawcall + 纯视觉的侧倾/后仰
-    FollowCamera.ts    弹簧阻尼跟随，速度越快拉得越远、FOV 越大
+    World.ts           天空 + 地面 + 光照 + 参照物（InstancedMesh，密度按档位）
+    SkyEnvironment.ts  渐变天空球 + PMREM 环境贴图；HDRI 可选，下不到就用渐变的
+    KartView.ts        车的可视部分：Box 拼的占位车 / glTF 模型两种形态，外面看不出区别
+    kartRig.ts         从 glTF 树里拆出车身和四个轮子 + 按材质名标签换配色（TintCache）
+    FollowCamera.ts    弹簧阻尼跟随；速度相关的 FOV/距离、漂移侧移、撞击震动
     QualityTiers.ts    high/medium/low 三档参数表 + 分档逻辑（纯函数）
-    PostFx.ts          后处理链，按档位建 bloom / SMAA，low 档不建 composer
+    PostFx.ts          后处理链（postprocessing 库）：bloom / SMAA / 暗角 / ACES
+    ParticlePool.ts    通用粒子池：一个池一个 drawcall，世界坐标，全程零分配
+    DriftSparks.ts     漂移火花，按档位变色（白 -> 橙 -> 蓝）
+    TireDust.ts        轮胎扬尘，漂移和越野时从轮下扬起
+    ImpactFx.ts        命中/撞击的爆闪 + 碎光扩散
+    BoostTrails.ts     boost 拖尾，所有车的飘带在同一个几何体里
     BlobShadows.ts     贴片假影子，low 档没有实时阴影时顶上
     FrameMonitor.ts    最近 60 帧的账本，持续掉帧就建议降档（纯逻辑）
     PerfBudget.ts      拿 renderer.info 核 low 档预算
@@ -68,19 +86,26 @@ src/
     AssetLoader.ts     按 phase 分批加载 + 进度回调
     decoders.ts        KTX2 / draco / meshopt 的接线，故意不被 import（见下）
     LoadProgress.ts    加权任务的进度账本（下载之外还有 wasm 编译、网格生成）
+    ModelLibrary.ts    通用 glTF 加载 + 缓存；克隆共享几何体和材质
+    ModelPaths.ts      可选美术资源的路径（模型 / HDRI），没有就退回程序化的东西
   audio/
-    AudioUnlock.ts     第一次手势里解锁 AudioContext（iOS 不这么做就永远静音）
+    AudioManager.ts    所有声音的唯一入口（Howler）：两条总线 + 总音量 + 静音
+    SoundDefs.ts       音效表，纯数据。加音效 = 往这里加一条
+    synth.ts           音频文件缺失时现场合成占位音（纯函数，输出 WAV data URI）
+    RaceAudio.ts       "比赛里发生的事 -> 播哪个音"，不 import three
   race/
     RaceProgress.ts    单车的圈数 / checkpoint / 圈速。纯逻辑，只吃 t 和 dt
     RaceState.ts       倒计时 -> 比赛中 -> 结束的状态机 + 输入锁 + 名次。接口按多车写
     LapRecord.ts       最佳圈速存 localStorage，存储对象从外面注入所以可测
     formatTime.ts      秒 -> `m:ss.mmm`
   ui/
+    theme.ts           设计令牌（颜色 / 圆角 / 阴影 / 字体）+ 描边字、面板、按钮几个共用类
+    MainMenu.ts        主菜单 + 赛道选择（在所有重活之前，选完才开始建世界）
     Hud.ts             DOM 显示速度和 FPS
-    RaceHud.ts         DOM 显示圈数 / 圈速 / 倒计时 / 结算面板
-    DebugGui.ts        lil-gui，三组参数全部实时可调
+    RaceHud.ts         DOM 显示圈数 / 名次 / 圈速 / 倒计时 / 结算面板
+    DebugGui.ts        lil-gui，所有参数实时可调
     LoadingScreen.ts   首屏进度条
-    SettingsMenu.ts    画质档位 / 操作方式（给玩家看的那两行）
+    SettingsMenu.ts    画质 / 操作方式 / 音量 / 静音（给玩家看的那四行）
     DeviceOverlays.ts  竖屏遮罩、WebGL 上下文丢失、双击缩放拦截
     Toast.ts           "已自动降画质"这类一句话提示
 ```
@@ -429,8 +454,203 @@ AI 数量、火花池容量（typed array 建好不能改大小）、抗锯齿�
 调试用 URL 参数：`?quality=low|medium|high|auto`、`?input=touch|keyboard`，不写回存储，
 手机上扫个二维码就能直接进低画质。
 
+## 视觉打磨
+
+### 车模型：两种形态，外面看不出区别
+
+`KartView` 有占位车（十几个 Box 按材质合并成 6 个 drawcall）和 glTF 模型两种形态，
+`setModel()` 换。模型是**边玩边下**的：先拿占位车开着，下完了无缝换上，
+不为了等一个模型把加载界面多顶几秒；下不到（现在就是）就一直用占位车。
+
+模型的导出约定写在 [`src/render/kartRig.ts`](src/render/kartRig.ts) 顶上：
+车头朝 `+Z`、轮子贴地 `y=0`、轮子节点名带 `wheel`、可换色的材质名带
+`body`/`accent`/`trim`/`suit`。名字对不上也不会崩，只是轮子不转。
+
+轮子建 rig 时会**从车身子树里摘出来**挂到根节点上（世界变换保持不变）——
+车身要侧倾，轮子得一直贴着地，挂在车身下面的话车一歪四个轮子就跟着离地了。
+每个轮子外面再套一层 pivot：pivot 转 y 是转向，子对象转 x 是滚动，两个旋转互不干扰。
+
+换配色**不克隆整套材质**。最省事的写法是 `mesh.material = mesh.material.clone()`
+然后改 color，但那样每辆车都会多出一整套材质：材质各不相同 = 每份都要单独编译一次
+着色器，也再不可能被合批。这里换成按 `(原材质, 颜色)` 查表（`TintCache`），
+同色的车共用同一份材质，而且和模型里有多少个 mesh 无关。有测试钉着这条。
+
+### 天空、环境光、雾：三个颜色必须是一个
+
+低多边形模型的背光面如果只剩一个常数环境色，整台车会像一张贴纸。所以
+`SkyEnvironment` 生成一张 PMREM 环境贴图挂到 `scene.environment` 上，背光面就带上了
+天空的蓝和地面的反光。来源有两个、接口一样：程序化渐变天空球（默认，不占一个字节的
+下载量）或者 HDRI（`public/hdri/`，下不到就退回渐变的）。
+
+**雾色 == 天空地平线色 == 地面远处的颜色**，对不上远处就会出现一条硬边。
+所以颜色表在 `SkyEnvironment` 里，`World` 从 `sky.fogColor` 取雾色，不许各写各的。
+
+半球光和环境贴图是同一件事的两种做法（都在补背光面），强度**此消彼长**：
+有环境贴图的档位把半球光压到 0.35，没有的（low 档）拉回 1.15。两个都开满的后果是
+过曝，ACES 会把它压回来，代价是颜色全部发灰 —— 卡通风格最怕这个。
+
+主光源是午后的角度（仰角 34° 左右、偏暖），影子拉得够长能看出立体感，
+又不至于像黄昏那样长到糊住整条赛道。
+
+### 后处理：一个 pass，不是四个
+
+用 pmndrs 的 `postprocessing` 而不是 three 自带的 `EffectComposer`，理由只有一个：
+**合并 pass**。自带的那套是一个效果一个全屏 pass，bloom + SMAA + tonemapping + 暗角
+就是四次全屏读写；`postprocessing` 把所有 Effect 编译进**一个** `EffectPass` 的片元
+着色器里，全屏读写只发生一次。1080p 下能省两三毫秒，移动 GPU 上更多（它们卡的从来
+不是算力，是带宽）。
+
+三档：`full` = bloom + SMAA + 暗角 + ACES；`bloom` = 去掉 SMAA；`none` = 完全不建
+composer，直接画到屏幕。low 档为什么不是"建一个只有 tonemapping 的 composer"：
+composer 意味着先画进一张 half-float 的 RT 再拷回屏幕，这一次全屏拷贝在移动 GPU 上
+是实打实的带宽开销。
+
+两个容易踩的点：
+
+- **tonemapping 的归属跟着档位换手**。开 composer 时由 `ToneMappingEffect` 做，
+  这时 `renderer.toneMapping` 必须是 `NoToneMapping`，否则一帧被 tonemap 两次，
+  画面发灰发平；不开 composer 时反过来。`PostFx.setQuality` 每次都会摆平这件事。
+- **中间缓冲必须是 half-float**。bloom 要在 tonemapping **之前**取高光，
+  8bit 缓冲里超过 1.0 的亮度早就被截断了，阈值再怎么调也挑不出东西来。
+
+bloom 的阈值定在 0.85，只让本来就很亮的东西溢出（火花、道具箱的自发光、太阳）。
+卡通风格最忌讳整个画面糊着一层光。
+
+### 粒子：一个池子一个 drawcall
+
+火花、扬尘、爆闪全部走同一个 `ParticlePool`。三条设计约束：
+
+1. **粒子存世界坐标，所以全场共用一个池**。每辆车各一套火花和扬尘就是 16 个
+   drawcall，而 low 档总预算才 150 个。粒子既然是世界坐标的，谁发射的对渲染来说
+   毫无区别，合并是白赚的。用法是"每辆车 `emit` 一次，每帧 `step` 一次"。
+2. **全程零分配**。容量构造时定死（typed array 建好不能改大小），发射是覆盖最老的
+   一颗（环形游标），`spawn` 的参数走一个复用的描述对象 —— 每帧几百次 `{...}`
+   是实打实的 GC 压力。
+3. **每颗粒子有自己的大小和透明度**，所以用 `ShaderMaterial` 而不是 `PointsMaterial`
+   （后者的 size 是整个材质一个值）。扬尘要"边飘边变大变淡"、火花要"越飞越小"，
+   没有 per-particle size 就做不了。
+
+`gl_PointSize` 里带上了 `projectionMatrix[1][1]`（= `1/tan(fov/2)`），
+而不是照抄 three 内置的那套：boost 时相机 FOV 会被推出去十几度，不带这一项的话
+粒子的屏幕大小不跟着变，看着像粒子突然被拉近了。
+
+自己写 `ShaderMaterial` 时有两个坑，都踩过：用 `color` 属性要开 `vertexColors`
+（否则着色器里根本没有那个 attribute，直接编译失败）；吃雾要把
+`THREE.UniformsLib.fog` **合并进 uniforms**，只写 `fog: true` 会让 three 的
+`refreshFogUniforms` 读到 `undefined` 直接抛 —— 表现是白屏加一条堆栈里完全看不出
+出处的报错。
+
+特效一共只吃 5 个 drawcall（火花 / 扬尘 / 爆闪 / 拖尾 / 假阴影各一个），
+**和场上有几辆车无关**。boost 拖尾也是这个思路：所有车的飘带在同一个几何体里，
+每辆车固定占一段顶点区间。
+
+### 相机
+
+在弹簧跟随的基础上加了三件事，都是为了强化"我开得很快 / 我在过弯"的主观感受，
+而车的实际物理一点没变：
+
+- 速度相关的距离和 FOV（原来就有），boost 起步时 FOV 短促推一下再自己回落；
+- **漂移时相机往弯外侧平移**。玩家能看到弯内侧更多路面，主观上会觉得车转得更急了；
+- **撞击时的屏幕震动**。三个互质频率的正弦叠出来的，不是每帧随机 ——
+  随机数在高帧率下会糊成一片抖动，看着像画面撕裂而不是"被撞了一下"。
+  幅度默认压到 16cm：这是最容易做过头的一件事，大一点就从"有打击感"变成"晕"。
+
+## 音效
+
+全部走 `AudioManager` 一个入口（Howler），上层只说"播 boost"，不碰 `Howl`。
+两条总线（sfx / music）各有自己的音量，再乘一个总音量，外加静音开关，三个值都存
+localStorage。
+
+**加一个音效 = 往 [`SoundDefs.ts`](src/audio/SoundDefs.ts) 的表里加一条**，
+别处不许写 `if (soundId === ...)`：音量、循环与否、走哪条总线、同时发声数上限
+全是表里的字段。和道具表是同一个路子。
+
+### 没有音频文件也能出声
+
+`public/audio/` 下现在一个文件都没有。最省事的做法是静音，但那样整套音频系统就没法
+验 —— 引擎声的音高有没有跟上速度、蓄力音有没有分档、音量开关有没有生效，全都看不
+出来。所以 [`synth.ts`](src/audio/synth.ts) 会现场合成一份占位音：一段参数描述
+（波形、频率、扫频、泛音、噪声、包络）渲染成 WAV 的 data URI，喂给 Howler 的接口和
+真文件完全一样。加载失败就换合成音，把真文件放进 `public/audio/` 就自动切回去。
+
+这个文件是纯函数（不 import Howler、不碰 DOM、噪声走带种子的 PRNG），有测试。
+循环音的时长会被凑成**整数个周期**并且不做包络，否则每循环一次接口处就"啪"一声。
+
+### 三条循环音
+
+引擎、漂移摩擦、蓄力是**一直在播**的，靠音量和音高表达状态，不反复启停 ——
+移动端每次 `play()` 都有几十毫秒延迟，启停的漂移声会碎成一片。
+
+- 引擎：一个低频锯齿 + 6 个泛音的循环音，`rate` 从 0.75 拉到 2.35 跟着速度走，
+  boost 时再拔高一点，腾空时音量减 40%（轮子不着地，引擎空转）；
+- 漂移摩擦：音量跟着速度；
+- 蓄力：音高按档位跳一级（纯五度往上叠，1 : 1.5 : 2.25），还没成档时用最低档的
+  音高、音量减半。
+
+撞墙没有专门的事件，是从"横向偏移顶到可行驶半宽"推出来的，留了 0.15m 余量
+（`kartStep` 把车推回来之后 lateral 会正好卡在边界上，严格相等会在贴墙行驶时反复
+触发）。撞车只数**玩家**的接触对数，不数全场的 —— 八辆车互相挤的时候全场对数一直
+在跳，拿它驱动音效和震动的话，玩家会在完全没被碰到的时候被晃一下。
+
+### 解锁
+
+iOS/Chrome 只允许在**用户手势的事件处理函数里**启动音频，不这么做 context 会一直是
+`suspended`，之后播什么都是静音而且不报任何错。所以 `AudioManager.init()` 必须在点击
+的调用栈里同步调 —— 主菜单的"开始比赛"那一下正好是。另外兜两层底：后续手势再
+resume 一次、切回前台时 resume（iOS 会在切后台时把 context 挂起）。
+
+## 主菜单 / 赛道选择
+
+菜单排在**所有重活前面**：赛道网格、rapier 的碰撞体、环境贴图全都是按选中的那条
+赛道建的，先建就白建了。顺带解决了音频解锁 —— "开始比赛"那一下就是那个手势。
+
+三条赛道在 [`TrackCatalog.ts`](src/track/TrackCatalog.ts) 里，纯数据。
+**加一条赛道 = 往表里加一条**（控制点 + `TrackConfig` + 道具箱位置 + 圈数）。
+控制点都是用"半径随角度变化的星形"生成再取整的（星形保证不自交），
+`TrackCatalog.test.ts` 会验不自交、坡度、最小曲率半径、相邻控制点间距和道具箱是不是
+落在柏油上 —— 自交的赛道跑起来只表现为"进度突然跳一大截"，肉眼很难当场看出来。
+
+最小曲率半径这个数决定了赛道的性格：满速时普通转向的转弯半径约 30m，所以
+草原环线（62m）全程不用松油门、黄昏赛道（33m）是临界、山脊长道（24m）好几个弯必须
+减速或者漂过去。
+
+| 赛道 | 长度 | 路宽 | 最小曲率半径 | 圈数 |
+|---|---|---|---|---|
+| 草原环线 | 850m | 20m | 62m | 3 |
+| 黄昏赛道 | 1010m | 17m | 33m | 3 |
+| 山脊长道 | 1200m | 15m | 24m | 2 |
+
+**换赛道是重载页面**（`?track=` 或者结算面板上的按钮）。赛道网格、rapier 碰撞体、
+发车格、AI 的赛道采样器全是按那条赛道建的，运行时换等于把整个世界拆了重搭；
+重载几秒钟就完事，而且加载界面本来就在，比维护一套"拆干净"的代码可靠得多。
+
+画质档位在主菜单里也能改，因为**对手数量在开局时就定死了**（高 7 / 中 5 / 低 3），
+进游戏之后再改档位对手也不会跟着变。
+
+纪录是**每条赛道一份**的：850m 的草原和 1200m 的山脊圈速没有可比性，共用一个键的话
+跑一次长道就把短道的纪录永久顶掉，而且再也破不了。
+
+## UI 风格
+
+所有界面的颜色、圆角、阴影、字体从 [`theme.ts`](src/ui/theme.ts) 的令牌取，
+**不许再硬编码一个 `#4d9bff` 或者 `border-radius: 12px`**。和 `QualityTiers` 是同一个
+道理：想统一风格就改一处。
+
+两个具体决定：
+
+- **描边字不是投影字**。赛道是明亮的浅色（天蓝 + 草绿 + 白色路肩），纯投影在浅底上
+  几乎看不见，白字直接糊进背景里。描边（八个方向的 `text-shadow` 拼出来的）不管底色
+  深浅都能把字抠出来，而且正好是卡通风格该有的样子。用 `-webkit-text-stroke` 不行：
+  它的描边是压在字身上的（往里吃掉一半笔画），小字号下会糊成一团。
+- **不下载任何字体文件**。`ui-rounded` 在苹果系统上就是 SF Pro Rounded，其它平台按栈
+  往下退。为一套 UI 拖一个几百 KB 的 webfont 不值 —— 首屏预算总共才 10MB，
+  而且字体是阻塞渲染的。
+
+名次是整块 HUD 里最大的一个数字，字号压过速度表：它是"我现在打得怎么样"的唯一答案，
+应该扫一眼就看到。
+
 ## 下一步
 
-- 换 glTF 车模型（保证车头朝 `+Z`、轮子贴地 `y=0`，外面代码不用动）
-- 道具、人机对手（`RaceState` 的接口已经是按多车写的，加车只要多传几个 racer）
 - 真正的护栏碰撞体（现在是按横向偏移拉回来的）
+- 分屏 / 联机（`RaceState` 的接口已经是按多车写的）
+- 赛道主题（不同赛道换一套天空颜色和装饰物，`SkyColors` 已经是参数了）

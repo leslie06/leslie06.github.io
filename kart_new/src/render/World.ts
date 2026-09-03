@@ -1,7 +1,13 @@
 import * as THREE from 'three';
 import { QUALITY_TIERS, type QualitySettings } from './QualityTiers';
+import { AFTERNOON_SUN_DIR, SkyEnvironment } from './SkyEnvironment';
 
 export interface WorldOptions {
+  /**
+   * 渲染器。烘环境贴图（PMREM）要用它。
+   * 不传就只有半球光，场景会明显平一些 —— 测试里就是这么跑的。
+   */
+  renderer?: THREE.WebGLRenderer;
   /** 草地平面的高度。赛道的裙边一直垂到这里，所以两个值要一致 */
   groundY?: number;
   /**
@@ -13,13 +19,20 @@ export interface WorldOptions {
   quality?: Readonly<QualitySettings>;
 }
 
-/** 场景：地面 + 网格纹理 + 光照 + 一堆参照物（用来判断速度感）。 */
+/** 场景：天空 + 地面 + 光照 + 一堆参照物（用来判断速度感）。 */
 export class World {
   readonly scene = new THREE.Scene();
   readonly sun: THREE.DirectionalLight;
+  /** 渐变天空 + 环境贴图。雾色也从它那儿取 */
+  readonly sky: SkyEnvironment;
+  /** 半球光。强度跟着"有没有环境贴图"变，见构造函数里的说明 */
+  private readonly hemi: THREE.HemisphereLight;
 
   private static readonly GROUND_SIZE = 2000;
   private static readonly GRID_TILE = 8; // 一格 8 米
+
+  /** 平行光离车多远。只影响阴影相机的近远平面，不影响光照方向（平行光没有位置衰减） */
+  private static readonly SUN_DISTANCE = 120;
 
   /** 装饰物按满档数量建好，实际画多少条由 InstancedMesh.count 控制（见 setQuality） */
   private static readonly CONE_BUDGET = 260;
@@ -34,21 +47,30 @@ export class World {
   constructor(private readonly options: WorldOptions = {}) {
     this.quality = options.quality ?? QUALITY_TIERS.high;
 
-    const skyColor = new THREE.Color('#8fd3ff');
+    // --- 天空。雾色 = 天空的地平线色，这两个对不上远处就会有一条硬边 ---
+    this.sky = new SkyEnvironment();
+    const skyColor = this.sky.fogColor;
+    // 背景色兜底：天空球正常情况下盖住整个视野，万一它没画上也不该是黑的
     this.scene.background = skyColor;
+    this.scene.add(this.sky.mesh);
     this.fog = new THREE.Fog(skyColor, this.quality.fogNear, this.quality.fogFar);
     this.scene.fog = this.fog;
 
     // --- 光照 ---
-    const hemi = new THREE.HemisphereLight('#cfe9ff', '#5c7a4a', 1.6);
-    hemi.position.set(0, 50, 0);
-    this.scene.add(hemi);
+    // 半球光和环境贴图是**同一件事的两种做法**（都在补背光面），所以强度要此消彼长：
+    // 有环境贴图的档位把半球光压到 0.35，没有的（low 档）拉回 1.15。
+    // 两个都开满的后果是整个画面过曝 —— ACES 会把它压回来，代价是颜色全部发灰，
+    // 卡通风格最怕的就是这个。切换在 setQuality 里做
+    this.hemi = new THREE.HemisphereLight('#d6ecff', '#6b8a52', HEMI_WITHOUT_ENV);
+    this.hemi.position.set(0, 50, 0);
+    this.scene.add(this.hemi);
 
-    this.sun = new THREE.DirectionalLight('#fff4e0', 2.4);
-    this.sun.position.set(60, 90, 40);
+    // 主光源：午后的角度（仰角 34° 左右），偏暖。影子拉得够长能看出立体感
+    this.sun = new THREE.DirectionalLight('#ffe9c4', 2.4);
+    this.sun.position.copy(AFTERNOON_SUN_DIR).multiplyScalar(World.SUN_DISTANCE);
     const cam = this.sun.shadow.camera;
     cam.near = 1;
-    cam.far = 320;
+    cam.far = World.SUN_DISTANCE * 2.6;
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.sun);
@@ -95,6 +117,13 @@ export class World {
       }
     }
 
+    // 环境贴图。烘一次是几毫秒的 GPU stall，所以只在这里（开局 / 改档位）做
+    const hasEnv = settings.envMapSize > 0 && this.options.renderer !== undefined;
+    if (this.options.renderer) {
+      this.sky.apply(this.options.renderer, this.scene, settings.envMapSize);
+    }
+    this.hemi.intensity = hasEnv ? HEMI_WITH_ENV : HEMI_WITHOUT_ENV;
+
     this.groundTexture.anisotropy = settings.textureAnisotropy;
     this.groundTexture.needsUpdate = true;
 
@@ -111,7 +140,18 @@ export class World {
     if (!this.sun.castShadow) return;
     this.sun.target.position.set(x, y, z);
     this.sun.target.updateMatrixWorld();
-    this.sun.position.set(x + 60, y + 90, z + 40);
+    this.sun.position
+      .copy(AFTERNOON_SUN_DIR)
+      .multiplyScalar(World.SUN_DISTANCE)
+      .add(this.sun.target.position);
+  }
+
+  /**
+   * 每帧调一次：天空球跟着相机走。
+   * 不跟的话开出去几百米就会看到天空的边缘（球半径 300m，赛道跨度 500m）。
+   */
+  update(camera: THREE.Camera): void {
+    this.sky.follow(camera);
   }
 
   private buildGround(): THREE.Mesh {
@@ -216,6 +256,11 @@ export class World {
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+/** 有环境贴图时的半球光强度。环境贴图已经在补背光面了，这里只留一点点垫底 */
+const HEMI_WITH_ENV = 0.35;
+/** 没有环境贴图时（low 档）的半球光强度。全靠它撑背光面，不然车会有一半是死黑的 */
+const HEMI_WITHOUT_ENV = 1.15;
 
 /** 一格网格纹理：深色底 + 亮线，再加一点内格分隔。 */
 function makeGridTexture(): HTMLCanvasElement {

@@ -22,7 +22,8 @@ import {
   type KartCollisionConfig,
 } from './kart/kartCollision';
 import type { PhysicsSystem as PhysicsSystemType } from './physics/PhysicsSystem';
-import { DEFAULT_TRACK_CONFIG, drivableHalfWidth, ITEM_BOX_ROWS } from './track/TrackConfig';
+import { drivableHalfWidth } from './track/TrackConfig';
+import { trackAt, type TrackId } from './track/TrackCatalog';
 import { createCenterLine, TrackMesh } from './track/TrackMesh';
 import { TrackSpline } from './track/TrackSpline';
 import { AIKart } from './ai/AIKart';
@@ -30,6 +31,9 @@ import type { AIItemView } from './ai/AIDriver';
 import { personaAt, type AIDifficulty } from './ai/AIProfiles';
 import { createSplineSampler } from './ai/SplineSampler';
 import { DriftSparks } from './render/DriftSparks';
+import { TireDust } from './render/TireDust';
+import { ImpactFx } from './render/ImpactFx';
+import { BoostTrails } from './render/BoostTrails';
 import { FollowCamera } from './render/FollowCamera';
 import { KartView } from './render/KartView';
 import { World } from './render/World';
@@ -47,8 +51,11 @@ import {
 import { reportPerfBudget } from './render/PerfBudget';
 import { AssetLoader } from './assets/AssetLoader';
 import { LoadProgress } from './assets/LoadProgress';
-import { AudioUnlock } from './audio/AudioUnlock';
-import { browserRecordStorage, LapRecordStore } from './race/LapRecord';
+import { ModelLibrary } from './assets/ModelLibrary';
+import { KART_MODEL_URL, SKY_HDRI_URL } from './assets/ModelPaths';
+import { AudioManager } from './audio/AudioManager';
+import { RaceAudio } from './audio/RaceAudio';
+import { browserRecordStorage, lapRecordKey, LapRecordStore } from './race/LapRecord';
 import { RaceState, type RacerInit } from './race/RaceState';
 import { buildStartGrid, type GridSlot } from './race/StartGrid';
 import { formatTimeOrDash } from './race/formatTime';
@@ -69,7 +76,9 @@ import { Hud } from './ui/Hud';
 import { ItemHud, type ItemHudView } from './ui/ItemHud';
 import { RaceHud, type RaceResults, type ResultRow, type TrackDot } from './ui/RaceHud';
 import { LoadingScreen } from './ui/LoadingScreen';
+import { MainMenu } from './ui/MainMenu';
 import { SettingsMenu } from './ui/SettingsMenu';
+import { THEME } from './ui/theme';
 import { Toast } from './ui/Toast';
 import { installContextLossGuard, installGestureGuards, OrientationGate } from './ui/DeviceOverlays';
 
@@ -87,7 +96,56 @@ let { tier, settings, detected: detectedTier } = resolveTier(caps, prefs.quality
 const inputModes = resolveInputMode(caps, prefs.input);
 let inputMode: InputMode = inputModes.mode;
 
-// 加载界面在任何重活之前先挂上去，别让手机上那几秒是黑屏
+// ============================================================================
+// 主菜单：选赛道
+// ============================================================================
+// 菜单必须排在所有重活**前面**，因为赛道网格、rapier 的碰撞体、环境贴图
+// 全都是按选中的那条赛道建的，先建就白建了。
+// 顺带解决第二件事：音频只能在用户手势里初始化，"开始比赛"那一下正好是。
+const audio = new AudioManager({
+  settings: { master: prefs.volume, music: prefs.musicVolume, muted: prefs.muted },
+  onSettingsChange: (next) => {
+    prefs.volume = next.master;
+    prefs.musicVolume = next.music;
+    prefs.muted = next.muted;
+    savePrefs(prefs);
+  },
+});
+const raceAudio = new RaceAudio(audio);
+
+const selectedTrackId: TrackId = await new Promise<TrackId>((resolve) => {
+  const menu = new MainMenu(container, {
+    initial: prefs.track,
+    quality: prefs.quality,
+    detectedTier,
+    onQuality: (value) => {
+      prefs.quality = value;
+      savePrefs(prefs);
+      // 这时候渲染器、世界、AI 都还没建，所以"生效"就是把档位重算一遍写回去 ——
+      // 菜单关掉之后下面才拿着 settings 去建渲染器（antialias 是构造参数）
+      // 和车队（AI 数量），这两样开局之后就改不了了
+      ({ tier, settings, detected: detectedTier } = resolveTier(caps, prefs.quality));
+    },
+    bestLapOf: (id) => new LapRecordStore(browserRecordStorage(), lapRecordKey(id)).best,
+    onSelect: (id) => {
+      prefs.track = id;
+      savePrefs(prefs);
+    },
+    onStart: (id) => {
+      prefs.track = id;
+      savePrefs(prefs);
+      // 这一句必须在点击的调用栈里同步跑掉，异步之后 iOS 就不认这个手势了
+      audio.init();
+      audio.play('uiClick');
+      menu.hide();
+      resolve(id);
+    },
+  });
+});
+
+const variant = trackAt(selectedTrackId);
+
+// 加载界面接在菜单后面，底色是同一片天，看着是一个连续的画面
 const loading = new LoadingScreen(container);
 const progress = new LoadProgress(
   [
@@ -109,15 +167,17 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// PCFSoft 在 three 0.185 里已经弃用（内部会静默退回 PCF，只留一条警告），
+// 直接写 PCF，省掉每次启动的那条控制台噪音
+renderer.shadowMap.type = THREE.PCFShadowMap;
 // 统计要手动清零：开了后处理之后一帧里有好几个 pass，自动清零的话
 // info.render 里只剩最后那个全屏 pass 的数字（1 个 drawcall），预算就白核了
 renderer.info.autoReset = false;
 container.appendChild(renderer.domElement);
 
-// --- 赛道 ---
-const trackConfig = DEFAULT_TRACK_CONFIG;
-const spline = new TrackSpline(undefined, trackConfig.lutSamples);
+// --- 赛道。形状 / 路宽 / 圈数 / 道具箱位置全部来自 TrackCatalog 里选中的那条 ---
+const trackConfig = variant.config;
+const spline = new TrackSpline(variant.points, trackConfig.lutSamples);
 const track = new TrackMesh(spline, trackConfig);
 const centerLine = createCenterLine(spline);
 centerLine.visible = false; // 默认关掉，GUI 里的"显示中心线"再打开
@@ -128,6 +188,8 @@ const world = new World({
   groundY: trackConfig.skirtBottomY,
   isBlocked: (x, z) => Math.abs(spline.getProgress(x, z).lateral) < propClearance,
   quality: settings,
+  // 烘环境贴图（PMREM）要用渲染器。不传的话场景只剩半球光，背光面会很平
+  renderer,
 });
 world.scene.add(track.group);
 world.scene.add(centerLine);
@@ -211,7 +273,7 @@ const ais: AIKart[] = aiSlots.map(
 // ============================================================================
 // 箱子位置写在 TrackConfig 里（ITEM_BOX_ROWS），这里把 (t, lateral) 换算成世界坐标。
 // 判定用世界坐标而不是 (t, lateral)：进度 t 在终点线附近会绕回去
-const itemBoxPlacements = ITEM_BOX_ROWS.flatMap((row) => {
+const itemBoxPlacements = variant.itemBoxRows.flatMap((row) => {
   const center = spline.getPointAt(row.t);
   const heading = spline.getHeadingAt(row.t);
   // 车手视角的"右" = (sin(h - π/2), cos(h - π/2))，和 TrackSpline.lateral 同一套约定
@@ -225,33 +287,56 @@ const itemBoxPlacements = ITEM_BOX_ROWS.flatMap((row) => {
 });
 const items = new ItemSystem(aiTrack, new ItemBoxField(itemBoxPlacements), { seed: 0x4b41 });
 
-// --- 渲染侧：玩家 + 每辆 AI 各一套 KartView / 火花 ---
+// --- 渲染侧：每辆车一个 KartView，特效池全场共用 ---
 const kartView = new KartView(PLAYER_PALETTE);
 world.scene.add(kartView.root);
-// 火花挂在 scene 上而不是车上：粒子存的是世界坐标，挂车上会跟着车走。
-// 池子容量按档位开：typed array 建好就不能改大小了，所以这个值只在启动时定一次
-const sparks = new DriftSparks(settings.sparkCapacity);
-world.scene.add(sparks.points);
 
-// 假阴影：low 档关掉实时阴影之后靠它给出"车贴着地"的线索。一个 InstancedMesh 画全场
-const blobShadows = new BlobShadows(AI_COUNT + 1);
-world.scene.add(blobShadows.mesh);
-
-interface AIVisual {
-  view: KartView;
-  sparks: DriftSparks;
-}
-const aiVisuals: AIVisual[] = ais.map((ai) => {
+const aiViews: KartView[] = ais.map((ai) => {
   const view = new KartView({
     body: ai.persona.color,
     accent: ai.persona.accent,
     suit: ai.persona.accent,
   });
-  const s = new DriftSparks(settings.sparkCapacity);
   world.scene.add(view.root);
-  world.scene.add(s.points);
-  return { view, sparks: s };
+  return view;
 });
+/** 玩家 + 所有 AI，顺序固定：0 是玩家。拖尾的槽位、车尾坐标都按这个下标走 */
+const allViews: KartView[] = [kartView, ...aiViews];
+
+// 特效池挂在 scene 上而不是车上：粒子存的是世界坐标，挂车上会跟着车走。
+//
+// **全场一个池子**，不是每辆车一个：一个 Points = 一个 drawcall，八辆车各一套
+// 火花和扬尘就是 16 个 drawcall，而 low 档总共才 150 个。粒子既然是世界坐标的，
+// 谁发射的对渲染来说毫无区别，合并是白赚的。
+// 容量按档位乘上车数：typed array 建好就不能改大小，所以只在启动时定一次
+const sparkKarts = settings.aiSparks ? AI_COUNT + 1 : 1;
+const sparks = new DriftSparks(settings.sparkCapacity * sparkKarts);
+world.scene.add(sparks.points);
+
+// 扬尘：low 档 dustCapacity 是 0，整个池子就不建
+const dust = settings.dustCapacity > 0 ? new TireDust(settings.dustCapacity * sparkKarts) : null;
+if (dust) world.scene.add(dust.points);
+
+// 命中爆闪。全场一个，容量最小的 low 档也有 60 颗
+const impacts = new ImpactFx(settings.burstCapacity);
+world.scene.add(impacts.points);
+
+// boost 拖尾：所有车的飘带在同一个几何体里，1 个 drawcall
+const trails = new BoostTrails(AI_COUNT + 1);
+trails.setVisible(settings.boostTrail);
+world.scene.add(trails.mesh);
+
+// 假阴影：low 档关掉实时阴影之后靠它给出"车贴着地"的线索。一个 InstancedMesh 画全场
+const blobShadows = new BlobShadows(AI_COUNT + 1);
+world.scene.add(blobShadows.mesh);
+
+/** 粒子的屏幕大小依赖 drawingBuffer 的高度，换分辨率/转屏时要重设 */
+function syncParticleViewport(): void {
+  const height = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
+  sparks.setViewportHeight(height);
+  dust?.setViewportHeight(height);
+  impacts.setViewportHeight(height);
+}
 
 followCamera.snapTo(current, kartConfig);
 kartView.update(current, kartConfig, 1 / 60);
@@ -265,9 +350,11 @@ const racerInits: RacerInit[] = [
     startT: grid[aiSlots[i]!]!.t,
   })),
 ];
-const race = new RaceState(racerInits);
+const race = new RaceState(racerInits, { totalLaps: variant.laps });
 for (const r of racerInits) items.register(r.id);
-const lapRecord = new LapRecordStore(browserRecordStorage());
+// 每条赛道一份纪录：850m 的草原和 1200m 的山脊圈速没有可比性，
+// 共用一个键的话跑一次长道就把短道的纪录永久顶掉了
+const lapRecord = new LapRecordStore(browserRecordStorage(), lapRecordKey(variant.id));
 /** 本局有没有破纪录，结算面板要用 */
 let newRecordThisRace = false;
 let raceResults: RaceResults | null = null;
@@ -342,8 +429,19 @@ world.scene.add(trapViews.group);
 // --- UI ---
 const hud = new Hud(container);
 const itemHud = new ItemHud(container);
-// 结算面板上的"再来一局"：触屏上没有 R 键，那个按钮是唯一的重开入口
-const raceHud = new RaceHud(container, () => resetKart());
+// 结算面板上的两个按钮。触屏上没有 R 键，"再来一局"是唯一的重开入口。
+//
+// "换赛道"是**重载页面**：赛道网格、rapier 的碰撞体、发车格、AI 的赛道采样器
+// 全是按这条赛道建的，运行时换等于把整个世界拆了重搭。重载几秒钟就完事，
+// 而且加载界面本来就在，比维护一套"拆干净"的代码可靠得多
+const raceHud = new RaceHud(container, {
+  onRestart: () => resetKart(),
+  onChangeTrack: () => {
+    audio.play('uiClick');
+    savePrefs(prefs);
+    location.reload();
+  },
+});
 const toast = new Toast(container);
 const trackDebug = createTrackDebugState();
 const raceDebug = createRaceDebugState();
@@ -376,6 +474,12 @@ function applyQuality(nextTier: QualityTier): void {
 
   followCamera.camera.far = settings.cameraFar;
   followCamera.camera.updateProjectionMatrix();
+
+  // 拖尾在 low 档整个关掉。池子还留着（它就一个几何体，不占什么），
+  // 只是不画 —— 这样从 low 调回 high 不用重建
+  trails.setVisible(settings.boostTrail);
+  // 像素比可能变了，粒子的屏幕大小要跟着重算
+  syncParticleViewport();
 
   perfDebug.tier = nextTier;
   frameMonitor.reset();
@@ -410,6 +514,10 @@ const settingsMenu = new SettingsMenu(container, {
   detectedInput: inputModes.detected,
   onQuality: setQualityOverride,
   onInput: setInputMode,
+  // 音量的持久化在 AudioManager 的 onSettingsChange 里做（它是唯一知道
+  // 当前真实音量的地方），所以这里只管把值转过去
+  onVolume: (bus, value) => audio.setVolume(bus, value),
+  onMuted: (muted) => audio.setMuted(muted),
 });
 
 // --- 移动端的几个专项处理 ---
@@ -432,10 +540,6 @@ installContextLossGuard(renderer.domElement, container, {
 // 触摸设备一律装上手势拦截：双击缩放、长按选中、整页橡皮筋在游戏里全是干扰
 if (caps.maxTouchPoints > 0) installGestureGuards();
 
-// 音频必须在第一次手势里初始化，否则 iOS 上之后播什么都是静音（现在还没有音效，
-// 但 context 先解锁着，接音效的时候不用再折腾一遍）
-const audio = new AudioUnlock();
-audio.onUnlock(() => console.info('[audio] AudioContext 已解锁，可以出声了'));
 
 /** 主循环，物理起来之后才建 */
 let loop: FixedStepLoop | null = null;
@@ -452,6 +556,13 @@ const resetKart = () => {
   items.reset();
   newRecordThisRace = false;
   raceResults = null;
+  // 特效也要清干净：不清的话上一局的火花会飘在新赛道上，
+  // 拖尾更明显 —— 它会从旧位置拉出一条横跨全场的带子
+  sparks.clear();
+  dust?.clear();
+  impacts.clear();
+  trails.clear();
+  raceAudio.reset();
 };
 
 const applyAISettings = () => {
@@ -487,24 +598,45 @@ window.addEventListener('keydown', (e) => {
 
 // --- 漂移事件 -> 特效 ---
 function onKartEvent(event: KartEvent): void {
+  raceAudio.onKartEvent(event);
   switch (event.type) {
     case 'boostStart':
       // 档位越高推得越狠
       followCamera.punch(followCamera.config.punchFov * (0.6 + 0.2 * event.level));
       break;
     case 'driftLevelUp':
+      // 成档那一下在车尾炸一小簇同色的光，"到档了"这件事不用盯着火花数颜色
+      kartView.getTailWorldPosition(_tail);
+      impacts.burst(
+        _tail.x,
+        _tail.y,
+        _tail.z,
+        `#${DriftSparks.LEVEL_COLORS[event.level - 1]!.getHexString()}`,
+        0.35,
+        8,
+      );
+      break;
     case 'driftStart':
     case 'driftEnd':
     case 'boostEnd':
-      // 火花颜色直接读 state.driftLevel，这里暂时不用额外处理。
-      // 之后接音效就挂在这几个分支上
+      // 这几个由火花颜色和循环音的音量变化表达，不用额外做什么
       break;
   }
+}
+
+/** 复用的车尾坐标，避免每次事件都 new 一个 Vector3 */
+const _tail = new THREE.Vector3();
+
+/** 按 id 找车的当前位置。命中特效要在挨打的那辆车身上炸 */
+function stateOf(id: string): Readonly<KartState> | null {
+  if (id === PLAYER) return current;
+  return ais.find((ai) => ai.id === id)?.current ?? null;
 }
 
 // --- 比赛事件 -> HUD ---
 function drainRaceEvents(): void {
   for (const event of race.consumeEvents()) {
+    raceAudio.onRaceEvent(event, PLAYER);
     switch (event.type) {
       case 'go':
         raceHud.showGo();
@@ -512,7 +644,10 @@ function drainRaceEvents(): void {
       case 'lap': {
         // 纪录只认玩家自己的圈速
         const record = event.id === PLAYER && lapRecord.submit(event.time);
-        if (record) newRecordThisRace = true;
+        if (record) {
+          newRecordThisRace = true;
+          raceAudio.onNewRecord();
+        }
         if (event.id === PLAYER) raceHud.showLapSplit(event.lap, event.time, event.best, record);
         break;
       }
@@ -572,6 +707,7 @@ function buildDots(): TrackDot[] {
 // --- 道具事件 -> HUD / 特效 ---
 function drainItemEvents(): void {
   for (const event of items.consumeEvents()) {
+    raceAudio.onItemEvent(event, PLAYER);
     switch (event.type) {
       case 'pickup':
         // 只播玩家自己的抽奖动画。AI 拿到道具是它们自己的事
@@ -579,12 +715,23 @@ function drainItemEvents(): void {
         break;
       case 'use':
         break;
-      case 'hit':
-        // 自己中招时镜头晃一下，跟 boost 的推镜共用同一个通道（负值 = 拉远）
-        if (event.kartId === PLAYER) followCamera.punch(-followCamera.config.punchFov * 0.5);
+      case 'hit': {
+        // 爆闪打在挨打的那辆车身上 —— 包括 AI，看着别人被打中也是反馈的一部分
+        const victim = stateOf(event.kartId);
+        if (victim) impacts.burst(victim.x, victim.y + 0.7, victim.z, THEME.danger, 1, 26);
+        if (event.kartId === PLAYER) {
+          // 自己中招：镜头拉远一下（负值走 punch 那条通道）+ 一记短促的震动
+          followCamera.punch(-followCamera.config.punchFov * 0.5);
+          followCamera.shake(1);
+        }
         break;
-      case 'blocked':
+      }
+      case 'blocked': {
+        // 护盾挡下来的那一下用护盾色，和"被打中"分得开
+        const owner = stateOf(event.kartId);
+        if (owner) impacts.burst(owner.x, owner.y + 0.7, owner.z, THEME.mint, 0.7, 14);
         break;
+      }
     }
   }
 }
@@ -630,7 +777,85 @@ const round = (v: number, digits: number): number => {
 };
 
 // --- 主循环：物理固定 60Hz，渲染插值 ---
-const rearWheels: THREE.Vector3[] = [];
+/** 复用的轮子世界坐标数组，避免每帧新建 Vector3 */
+const wheelPoints: THREE.Vector3[] = [];
+/**
+ * 这一帧**玩家**和几辆车挨上了。
+ *
+ * 只数玩家的，不数全场的：八辆车互相挤的时候全场接触对数一直在跳，
+ * 拿它驱动音效和震动的话，玩家会在完全没被碰到的时候被晃一下。
+ */
+let playerContacts = 0;
+/** 上一帧的值，用来把"刚撞上"和"一直挤着"区分开 */
+let prevPlayerContacts = 0;
+
+/** 和 resolveKartCollisions 同一套判定：水平距离小于两倍半径，且高度差不大 */
+function countPlayerContacts(): number {
+  let n = 0;
+  const r2 = (collisionConfig.radius * 2) ** 2;
+  for (const ai of ais) {
+    if (Math.abs(ai.current.y - current.y) > collisionConfig.maxHeightDiff) continue;
+    const dx = ai.current.x - current.x;
+    const dz = ai.current.z - current.z;
+    if (dx * dx + dz * dz < r2) n++;
+  }
+  return n;
+}
+
+/**
+ * 一辆车这一帧要喷的所有特效：漂移火花、轮胎扬尘、boost 拖尾。
+ *
+ * 玩家和 AI 走的是同一个函数 —— 特效规则只写一遍，不会出现"玩家有扬尘、
+ * AI 没有"这种半套状态（low 档整体关掉 AI 的特效是另一回事，那是有意的）。
+ *
+ * @param slot 拖尾的槽位，0 是玩家
+ */
+function emitKartFx(
+  slot: number,
+  state: Readonly<KartState>,
+  cfg: Readonly<KartConfig>,
+  view: KartView,
+  ground: Readonly<GroundSample>,
+  frameDt: number,
+  particles: boolean,
+): void {
+  const drifting = state.driftPhase === 'drifting' && !state.airborne;
+
+  // --- 火花：漂移且已成档才喷。没成档就有火花的话，"到档了"就没有提示作用了 ---
+  if (particles && drifting && state.driftLevel > 0) {
+    sparks.emit(view.getWheelWorldPositions(wheelPoints, 'rear'), state.driftLevel, frameDt, ground.height);
+  }
+
+  // --- 扬尘：漂移时从后轮扬，压出柏油（路肩/草地）时四个轮子都扬 ---
+  if (particles && dust && !state.airborne) {
+    const speedRatio = Math.min(Math.abs(state.speed) / Math.max(cfg.maxSpeed, 0.001), 1);
+    // halfWidth 是"路面 + 路肩"，路面本身只有它的一部分；
+    // 超出柏油半宽就算越野，颜色换成土黄
+    const offroad = Math.abs(state.lateralOffset) > trackConfig.trackWidth / 2;
+    const intensity = drifting ? 0.5 + 0.5 * speedRatio : offroad ? 0.35 + 0.65 * speedRatio : 0;
+    if (intensity > 0) {
+      dust.emit(
+        view.getWheelWorldPositions(wheelPoints, offroad ? 'all' : 'rear'),
+        intensity,
+        frameDt,
+        ground.height,
+        offroad,
+      );
+    }
+  }
+
+  // --- boost 拖尾。**每辆车每帧都要 push**（包括没在 boost 的、包括 low 档关掉
+  //     粒子的那些车），不 push 的话它的尾巴不会化掉，会一直挂在原地 ---
+  if (settings.boostTrail) {
+    view.getTailWorldPosition(_tail);
+    // 末尾 0.3s 内淡出，不要"啪"地一下消失
+    const intensity = Math.min(state.boostTime / 0.3, 1);
+    const color = state.boostLevel > 0
+      ? `#${DriftSparks.LEVEL_COLORS[state.boostLevel - 1]!.getHexString()}`
+      : THEME.gold;
+    trails.push(slot, _tail.x, _tail.y, _tail.z, state.heading, intensity, color, frameDt);
+  }
+}
 
 function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
   return new FixedStepLoop({
@@ -732,6 +957,7 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
       collisionBodies.push(current);
       for (const ai of ais) collisionBodies.push(ai.current);
       resolveKartCollisions(collisionBodies, collisionConfig, dt);
+      playerContacts = countPlayerContacts();
     },
     render: (alpha, frameDt) => {
       renderer.info.reset(); // 这一帧的 drawcall 从这里开始数（阴影 pass 和后处理都算进来）
@@ -740,40 +966,42 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
       kartView.update(state, kartConfig, frameDt);
       followCamera.update(state, kartConfig, frameDt);
       world.followShadow(state.x, state.y, state.z);
+      // 天空球跟着相机走，否则开出去几百米就能看到天空的边
+      world.update(followCamera.camera);
+
+      // 撞车的那一下：震一下 + 在两车之间炸一小簇。
+      // 只在接触对数**涨起来**的那一帧做，一直挤着的时候不重复触发
+      if (playerContacts > prevPlayerContacts) {
+        const force = Math.min(Math.abs(state.speed) / Math.max(kartConfig.maxSpeed, 0.001), 1);
+        followCamera.shake(0.35 + 0.4 * force);
+        impacts.burst(state.x, state.y + 0.6, state.z, '#ffffff', 0.4, 10);
+      }
+      prevPlayerContacts = playerContacts;
 
       // 假阴影（low 档没有实时阴影时才可见）。影子留在路面高度上，
       // 车飞起来时它不跟着飞，这样"腾空了多高"一眼能看出来
       blobShadows.begin();
       blobShadows.add(state.x, playerGround.height, state.z, state.y - playerGround.height);
+      emitKartFx(0, state, kartConfig, kartView, playerGround, frameDt, true);
 
-      // 火花：只有漂移且已成档才喷
-      const emitting = state.driftPhase === 'drifting' && state.driftLevel > 0;
-      sparks.update(
-        emitting ? kartView.getRearWheelWorldPositions(rearWheels) : [],
-        state.driftLevel,
-        frameDt,
-        state.y,
-      );
-
-      // AI 车走同一套渲染路径（同样的插值、同样的火花规则），只是没有相机
+      // AI 车走同一套渲染路径（同样的插值、同样的特效规则），只是没有相机
       for (let i = 0; i < ais.length; i++) {
         const ai = ais[i]!;
-        const visual = aiVisuals[i]!;
+        const view = aiViews[i]!;
         const aiState = lerpKartState(ai.previous, ai.current, alpha);
-        visual.view.update(aiState, ai.config, frameDt);
-        const aiGroundY = aiGrounds[i]!.height;
-        blobShadows.add(aiState.x, aiGroundY, aiState.z, aiState.y - aiGroundY);
-        // low 档只留玩家自己的火花：八套粒子系统的顶点更新在低端机上是实打实的一笔
-        if (!settings.aiSparks) continue;
-        const aiEmitting = aiState.driftPhase === 'drifting' && aiState.driftLevel > 0;
-        visual.sparks.update(
-          aiEmitting ? visual.view.getRearWheelWorldPositions(rearWheels) : [],
-          aiState.driftLevel,
-          frameDt,
-          aiState.y,
-        );
+        view.update(aiState, ai.config, frameDt);
+        const ground = aiGrounds[i]!;
+        blobShadows.add(aiState.x, ground.height, aiState.z, aiState.y - ground.height);
+        // low 档只给玩家喷火花和扬尘（粒子多了之后每帧的顶点更新在低端机上是实打实的
+        // 一笔），但拖尾照推 —— 它是按辆固定占一段顶点的，跳过就等于把那条尾巴冻在原地
+        emitKartFx(i + 1, aiState, ai.config, view, ground, frameDt, settings.aiSparks);
       }
       blobShadows.finish();
+      // 三个池子每帧各推进一次，放在所有 emit 之后
+      sparks.step(frameDt);
+      dust?.step(frameDt);
+      impacts.step(frameDt);
+      trails.flush();
 
       // 道具的实体
       itemBoxViews.update(items.boxes.boxes, frameDt);
@@ -783,6 +1011,17 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
       // boost 速度线：末尾 0.35s 内淡出，不要"啪"地一下消失
       const boostIntensity = Math.min(state.boostTime / 0.35, 1) * 0.85;
       hud.update(state.speed, frameDt, boostIntensity, driftLabel(state));
+
+      // 音频。引擎音高、漂移摩擦、撞墙撞车全在 RaceAudio 里按状态推出来，
+      // 主循环只负责把这一帧的状态转过去
+      raceAudio.update({
+        state,
+        config: kartConfig,
+        halfWidth: playerGround.halfWidth,
+        contacts: playerContacts,
+        racing: race.phase === 'racing',
+        frameDt,
+      });
 
       drainItemEvents();
       itemHud.update(playerItemView(), frameDt);
@@ -845,7 +1084,7 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
       );
 
       // 后处理链自己决定要不要走 composer（low 档是直接画到屏幕，省一次全屏拷贝）
-      postFx.render();
+      postFx.render(frameDt);
 
       // --- 性能读数 + 帧率自适应 ---
       // 统计要在 render 之后读，读的是刚画完这一帧
@@ -853,6 +1092,8 @@ function makeLoop(physics: PhysicsSystemType): FixedStepLoop {
       perfDebug.triangles = renderer.info.render.triangles;
       perfDebug.pixelRatio = round(renderer.getPixelRatio(), 2);
       perfDebug.fps = Math.round(frameMonitor.averageFps);
+      perfDebug.particles =
+        `${sparks.activeCount} / ${dust?.activeCount ?? 0} / ${impacts.activeCount}`;
       if (perfDebug.autoAdapt && frameMonitor.push(frameDt)) autoDowngrade();
       checkBudgetOnce();
     },
@@ -877,6 +1118,9 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   postFx.setSize(window.innerWidth, window.innerHeight);
   followCamera.resize(window.innerWidth / window.innerHeight);
+  // 粒子的 gl_PointSize 是按 drawingBuffer 高度算的，不重设的话
+  // 转屏之后粒子会突然变大或变小
+  syncParticleViewport();
 });
 
 // ============================================================================
@@ -913,7 +1157,45 @@ loading.hide();
 
 loop = makeLoop(physics);
 started = true;
+// 三条循环音（引擎、漂移摩擦、蓄力）在这里起来，之后靠音量和音高表达状态，
+// 不反复启停 —— 移动端每次 play() 都有几十毫秒延迟，启停的漂移声会碎成一片
+raceAudio.start();
+perfDebug.audioFallback =
+  audio.syntheticCount > 0 ? `${audio.syntheticCount} 条用合成音` : '无（全部用真文件）';
+if (audio.syntheticCount > 0) {
+  console.info(
+    `[audio] ${audio.syntheticCount} 条音效没找到文件，用的是程序化占位音。` +
+      '把真文件放进 public/audio/（路径见 src/audio/SoundDefs.ts）就会自动换过去。',
+  );
+}
 if (!(inputMode === 'touch' && orientationGate.isPortrait)) loop.start();
 
 // 剩下的资源边玩边补。失败也不影响开局，所以不 await
 void assets.loadPhase('deferred');
+
+// ============================================================================
+// 卡丁车模型
+// ============================================================================
+// 也是边玩边下：先拿 Box 拼的占位车开着，模型下完了再无缝换上。
+// 文件不存在（现在就是）时 ModelLibrary 返回 null，占位车一直留着 ——
+// 所以 public/models/kart.glb 放不放都能跑，放了就自动用上。
+//
+// 配色不是每辆车复制一套材质：applyTint 走 TintCache 按 (原材质, 颜色) 查表，
+// 同色的车共用同一份材质（见 render/kartRig.ts）。
+// HDRI 也是可选的：下到了就拿它烘环境贴图并当背景，下不到就继续用渐变天空球。
+// 控制台会因此多一条 404 —— 这是"可选资源"的固有代价，换来的是把文件丢进
+// public/hdri/ 就自动生效，不用改任何代码
+void world.sky.loadHdri(import.meta.env.BASE_URL + SKY_HDRI_URL, world.scene).then((ok) => {
+  if (ok) world.setQuality(settings); // 重新烘一次环境贴图，这次用 HDRI
+});
+
+const models = new ModelLibrary();
+void models.load(KART_MODEL_URL).then((gltf) => {
+  if (!gltf) return;
+  for (const view of allViews) {
+    // 每辆车一份克隆：建 rig 要就地重挂轮子，共用一棵树的话第二辆车就把第一辆拆了
+    const clone = models.instantiate(KART_MODEL_URL);
+    if (clone) view.setModel(clone);
+  }
+  console.info(`[models] 卡丁车模型已换上（${allViews.length} 辆）`);
+});

@@ -10,6 +10,9 @@ import {
 import { detectInputMode, resolveInputMode } from '../input/InputMode';
 import { makeCaps } from './DeviceCaps';
 
+/** 只写关心的字段，其余补默认值。加新字段时不用回来改每一条断言 */
+const prefs = (over: Partial<typeof DEFAULT_PREFS> = {}) => ({ ...DEFAULT_PREFS, ...over });
+
 function fakeStorage(initial: Record<string, string> = {}): PrefsStorage & { data: Record<string, string> } {
   const data = { ...initial };
   return {
@@ -23,7 +26,9 @@ function fakeStorage(initial: Record<string, string> = {}): PrefsStorage & { dat
 
 describe('sanitizePrefs', () => {
   it('认识合法值', () => {
-    expect(sanitizePrefs({ quality: 'low', input: 'touch' })).toEqual({ quality: 'low', input: 'touch' });
+    expect(sanitizePrefs({ quality: 'low', input: 'touch', track: 'ridge' })).toEqual(
+      prefs({ quality: 'low', input: 'touch', track: 'ridge' }),
+    );
   });
 
   it('垃圾输入一律退回默认，不抛异常', () => {
@@ -33,25 +38,46 @@ describe('sanitizePrefs', () => {
   });
 
   it('只有一个字段合法时，另一个字段用默认值', () => {
-    expect(sanitizePrefs({ quality: 'high' })).toEqual({ quality: 'high', input: 'auto' });
+    expect(sanitizePrefs({ quality: 'high' })).toEqual(prefs({ quality: 'high' }));
+  });
+
+  it('音量：合法的收下，越界/非数字退回默认', () => {
+    expect(sanitizePrefs({ volume: 0, musicVolume: 1 })).toEqual(prefs({ volume: 0, musicVolume: 1 }));
+    for (const bad of [-0.1, 1.5, NaN, Infinity, '0.5', null]) {
+      expect(sanitizePrefs({ volume: bad }).volume).toBe(DEFAULT_PREFS.volume);
+    }
+  });
+
+  it('静音只认真正的 boolean —— 存过字符串 "false" 的话不能被当成静音', () => {
+    expect(sanitizePrefs({ muted: true }).muted).toBe(true);
+    for (const bad of ['false', 'true', 1, 0, null]) {
+      expect(sanitizePrefs({ muted: bad }).muted).toBe(false);
+    }
+  });
+
+  it('赛道 id 认不出来就退回默认赛道', () => {
+    expect(sanitizePrefs({ track: 'meadow' }).track).toBe('meadow');
+    expect(sanitizePrefs({ track: 'atlantis' }).track).toBe(DEFAULT_PREFS.track);
   });
 });
 
 describe('loadPrefs / savePrefs', () => {
   it('存了能读回来', () => {
     const storage = fakeStorage();
-    savePrefs({ quality: 'medium', input: 'keyboard' }, storage);
-    expect(loadPrefs(storage)).toEqual({ quality: 'medium', input: 'keyboard' });
+    savePrefs(prefs({ quality: 'medium', input: 'keyboard', volume: 0.3, muted: true }), storage);
+    expect(loadPrefs(storage)).toEqual(
+      prefs({ quality: 'medium', input: 'keyboard', volume: 0.3, muted: true }),
+    );
   });
 
   it('存储里是坏 JSON 时退回默认', () => {
-    const storage = fakeStorage({ 'kart.prefs.v1': '{oops' });
+    const storage = fakeStorage({ 'kart.prefs.v2': '{oops' });
     expect(loadPrefs(storage)).toEqual(DEFAULT_PREFS);
   });
 
   it('没有存储（无痕模式）时既不抛也不崩', () => {
     expect(loadPrefs(null)).toEqual(DEFAULT_PREFS);
-    expect(() => savePrefs({ quality: 'low', input: 'touch' }, null)).not.toThrow();
+    expect(() => savePrefs(prefs({ quality: 'low', input: 'touch' }), null)).not.toThrow();
   });
 
   it('setItem 抛异常（Safari 无痕）时吞掉', () => {
@@ -61,36 +87,45 @@ describe('loadPrefs / savePrefs', () => {
         throw new Error('QuotaExceededError');
       },
     };
-    expect(() => savePrefs({ quality: 'low', input: 'touch' }, storage)).not.toThrow();
+    expect(() => savePrefs(prefs({ quality: 'low', input: 'touch' }), storage)).not.toThrow();
   });
 });
 
 describe('applyUrlOverrides', () => {
-  const base = { quality: 'high', input: 'keyboard' } as const;
+  const base = prefs({ quality: 'high', input: 'keyboard' });
 
   it('URL 参数压过存储里的设置', () => {
-    expect(applyUrlOverrides({ ...base }, '?quality=low&input=touch')).toEqual({
-      quality: 'low',
-      input: 'touch',
-    });
+    expect(applyUrlOverrides({ ...base }, '?quality=low&input=touch&track=meadow')).toEqual(
+      prefs({ quality: 'low', input: 'touch', track: 'meadow' }),
+    );
   });
 
   it('没写的那一项保持原样', () => {
-    expect(applyUrlOverrides({ ...base }, '?quality=medium')).toEqual({
-      quality: 'medium',
-      input: 'keyboard',
-    });
+    expect(applyUrlOverrides({ ...base }, '?quality=medium')).toEqual(
+      prefs({ quality: 'medium', input: 'keyboard' }),
+    );
   });
 
   it('乱填的参数被忽略（退回默认，不是崩）', () => {
-    expect(applyUrlOverrides({ ...base }, '?quality=ultra')).toEqual({
-      quality: 'auto',
-      input: 'keyboard',
-    });
+    expect(applyUrlOverrides({ ...base }, '?quality=ultra')).toEqual(
+      prefs({ quality: 'auto', input: 'keyboard' }),
+    );
   });
 
   it('没有参数时原样返回', () => {
     expect(applyUrlOverrides({ ...base }, '')).toEqual(base);
+  });
+
+  it('?mute 两个方向都认：录屏要静音，调音效要强制打开', () => {
+    const muted = prefs({ muted: true });
+    expect(applyUrlOverrides({ ...base }, '?mute=1').muted).toBe(true);
+    expect(applyUrlOverrides({ ...muted }, '?mute=0').muted).toBe(false);
+    expect(applyUrlOverrides({ ...muted }, '').muted).toBe(true);
+  });
+
+  it('音量这类不适合放 URL 的设置不受影响', () => {
+    const loud = prefs({ volume: 0.25 });
+    expect(applyUrlOverrides({ ...loud }, '?quality=low').volume).toBe(0.25);
   });
 });
 

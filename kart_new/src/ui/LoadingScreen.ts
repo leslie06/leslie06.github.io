@@ -1,4 +1,5 @@
 import type { LoadSnapshot } from '../assets/LoadProgress';
+import { injectTheme } from './theme';
 
 /**
  * 首屏加载界面：一条进度条 + 当前在做什么。
@@ -14,16 +15,17 @@ export class LoadingScreen {
   private readonly percent: HTMLElement;
 
   constructor(parent: HTMLElement) {
+    injectTheme();
     injectLoadingStyles();
     this.root = document.createElement('div');
     this.root.className = 'loading-screen';
     this.root.innerHTML = `
       <div class="loading-box">
-        <div class="loading-title">KART</div>
+        <div class="loading-title k-outline-lg">KART</div>
         <div class="loading-bar"><div class="loading-fill"></div></div>
         <div class="loading-foot">
           <span class="loading-label">准备中…</span>
-          <span class="loading-percent">0%</span>
+          <span class="loading-percent k-num">0%</span>
         </div>
       </div>
     `;
@@ -58,28 +60,30 @@ function injectLoadingStyles(): void {
     .loading-screen {
       position: fixed; inset: 0; z-index: 100;
       display: flex; align-items: center; justify-content: center;
-      background: radial-gradient(circle at 50% 40%, #1b2230, #0d1017 70%);
-      color: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      /* 和主菜单同一片天：菜单 -> 加载 -> 赛道，底色是连续的 */
+      background: radial-gradient(120% 90% at 50% 12%, #7fc4f2 0%, #3f7fc0 48%, #16233a 100%);
+      color: var(--k-text); font-family: var(--k-font);
       transition: opacity 320ms ease;
     }
     .loading-screen.is-hidden { opacity: 0; pointer-events: none; }
     .loading-box { width: min(72vw, 420px); }
     .loading-title {
-      font-size: 34px; font-weight: 800; letter-spacing: 8px;
-      text-align: center; margin-bottom: 18px; opacity: 0.9;
+      font-size: clamp(38px, 9vw, 56px); font-weight: 900; letter-spacing: 10px;
+      text-align: center; margin: 0 -10px 22px 0;
     }
     .loading-bar {
-      height: 6px; border-radius: 3px; overflow: hidden;
-      background: rgba(255,255,255,0.14);
+      height: 8px; border-radius: var(--k-r-pill); overflow: hidden;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.16);
     }
     .loading-fill {
-      height: 100%; width: 0%;
-      background: linear-gradient(90deg, #4db8ff, #ffd34d);
+      height: 100%; width: 0%; border-radius: var(--k-r-pill);
+      background: linear-gradient(90deg, var(--k-accent), var(--k-gold));
       transition: width 110ms ease;
     }
     .loading-foot {
       display: flex; justify-content: space-between;
-      margin-top: 10px; font-size: 12px; opacity: 0.7;
+      margin-top: 12px; font-size: 12px; color: rgba(255,255,255,0.78);
     }
   `;
   document.head.appendChild(style);
