@@ -1,0 +1,29 @@
+{
+  "name": "gunfight",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "shot": "node scripts/shot.mjs",
+    "assets:fetch": "node scripts/fetch-assets.mjs",
+    "deploy": "npm run build && rm -rf ../gun-fight && mkdir -p ../gun-fight && cp -R dist/. ../gun-fight/"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.20.0",
+    "n8ao": "^2.0.1",
+    "postprocessing": "^6.39.4",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "@types/three": "^0.185.4",
+    "playwright": "^1.62.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

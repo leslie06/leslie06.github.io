@@ -1,0 +1,10 @@
+{
+  "name": "fabric_pattern_07",
+  "res": "1k",
+  "maps": {
+    "normal": "normal.jpg",
+    "rough": "rough.jpg",
+    "ao": "ao.jpg"
+  },
+  "license": "CC0 polyhaven.com"
+}

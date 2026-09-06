@@ -1,0 +1,11 @@
+{
+  "name": "painted_metal_shutter",
+  "res": "1k",
+  "maps": {
+    "diffuse": "diffuse.jpg",
+    "normal": "normal.jpg",
+    "rough": "rough.jpg",
+    "ao": "ao.jpg"
+  },
+  "license": "CC0 polyhaven.com"
+}

@@ -1,0 +1,11 @@
+node_modules
+dist
+.DS_Store
+shots
+ref/
+
+# CC0 assets from Polyhaven, restored with `npm run assets:fetch` (idempotent).
+# ~145MB of textures and HDRIs: reproducible input, so it does not belong in git.
+# The deployed copy under ../gun-fight/ carries them for GitHub Pages.
+public/textures
+public/hdri

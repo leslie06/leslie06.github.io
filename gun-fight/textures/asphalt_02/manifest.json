@@ -1,0 +1,11 @@
+{
+  "name": "asphalt_02",
+  "res": "2k",
+  "maps": {
+    "diffuse": "diffuse.jpg",
+    "normal": "normal.jpg",
+    "rough": "rough.jpg",
+    "ao": "ao.jpg"
+  },
+  "license": "CC0 polyhaven.com"
+}

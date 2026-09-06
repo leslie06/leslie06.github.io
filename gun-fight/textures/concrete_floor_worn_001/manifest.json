@@ -1,0 +1,12 @@
+{
+  "name": "concrete_floor_worn_001",
+  "res": "2k",
+  "maps": {
+    "diffuse": "diffuse.jpg",
+    "normal": "normal.jpg",
+    "rough": "rough.jpg",
+    "ao": "ao.jpg",
+    "disp": "disp.jpg"
+  },
+  "license": "CC0 polyhaven.com"
+}

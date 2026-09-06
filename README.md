@@ -8,12 +8,15 @@
 | --- | --- | --- |
 | [雪原杯](kart/) | 3D 卡丁车竞速，漂移攒涡轮，打人机 | https://leslie06.github.io/kart/ |
 | [暴力摩托](roadRash/) | 伪 3D 街头摩托竞速，能踹人 | https://leslie06.github.io/roadRash/ |
+| [枪火防线](gun-fight/) | 第一人称波次生存射击，three.js | https://leslie06.github.io/gun-fight/ |
 | [尸潮之夜](zombie/) | 俯视角波次生存射击，夜战 | https://leslie06.github.io/zombie/ |
 | [飛簷 · 屋顶轻功](wuxia/) | 3D 武侠屋顶跑酷，手写 WebGL | https://leslie06.github.io/wuxia/ |
 | [合金小队](contra/) | 魂斗罗风格横版跑射，三关 | https://leslie06.github.io/contra/ |
 | [超级酷跑兄弟](mario/) | 横版跳跃 | https://leslie06.github.io/mario/ |
 
 每个游戏目录里都有一份自己的 README，写了玩法、内容和改动方式。
+
+**一个例外**：[枪火防线](gun-fight/) 不符合上面的单文件约定。它用 three.js + Rapier 渲染和做物理，有构建步骤，并且用了 Polyhaven 的 CC0 贴图和 HDRI（约 145MB，在 `gun-fight/` 里，源码目录不存）。源码在 [`gunFight/`](gunFight/)。
 
 ## 加一个新游戏
 
