@@ -106,6 +106,12 @@ export interface SpawnChoiceInput {
   visible: (p: Vec3, index: number) => boolean;
   /** Indices of the most recently used spawn points, most recent first. */
   recent: readonly number[];
+  /**
+   * 0 normally; 1 when the map is empty and the player is standing around waiting. Biases the pick
+   * toward points the reinforcement can actually walk in from quickly, without ever relaxing the
+   * "not in the player's line of sight" rule.
+   */
+  urgency?: number;
   rng: RandomSource;
 }
 
@@ -125,6 +131,10 @@ export function spawnScore(p: Vec3, index: number, input: Omit<SpawnChoiceInput,
   const len = Math.hypot(dx, dz) || 1;
   const dot = (dx / len) * input.playerForward.x + (dz / len) * input.playerForward.z;
   if (dot > S.inViewDot) score -= S.inViewPenalty * ((dot - S.inViewDot) / (1 - S.inViewDot));
+  const urgency = input.urgency ?? 0;
+  if (urgency > 0 && d > S.idealMin) {
+    score -= S.urgentFarPenalty * urgency * Math.min(1, (d - S.idealMin) / Math.max(1e-3, S.tooFar - S.idealMin));
+  }
   if (input.visible(p, index)) score -= S.visiblePenalty;
   const r = input.recent.indexOf(index);
   if (r >= 0 && r < S.recentMemory) score -= S.recentPenalty * (1 - r / S.recentMemory);
@@ -184,9 +194,38 @@ export function nextSpawnDelay(input: DirectorInput): number {
   return def.interval;
 }
 
+/**
+ * Re-clamp the pending spawn timer against the field as it looks *now*.
+ *
+ * `nextSpawnDelay` is only consulted when a spawn is issued, so the delay is chosen for whatever the
+ * field looked like at that instant. A player who then wipes the field would sit out the rest of a
+ * delay that was picked for a full map — that is the "I killed everything and nothing came" bug.
+ * This runs every tick and only ever *shortens* the wait:
+ *   - empty map with enemies still to deploy -> at most `DIRECTOR.emptyFieldGrace`,
+ *   - thinned-out map -> the trickle rate, immediately, rather than at the next spawn.
+ * Returns `timer` unchanged once the wave has nothing left to deploy.
+ */
+export function reflowSpawnTimer(timer: number, toSpawn: number, input: DirectorInput): number {
+  if (toSpawn <= 0) return timer;
+  const want = input.alive <= 0 ? DIRECTOR.emptyFieldGrace : nextSpawnDelay(input);
+  return Math.min(timer, want);
+}
+
 /** True when the director may spawn right now (timer elapsed, enemies left to spawn, cap not reached). */
 export function canSpawn(timer: number, toSpawn: number, alive: number, maxAlive: number): boolean {
   return timer <= 0 && toSpawn > 0 && alive < maxAlive;
+}
+
+/**
+ * True when the wave has deployed everything it is going to: what the player can see is now exactly
+ * what is left. This is the moment the "N REMAINING" counter becomes a promise rather than a guess,
+ * and the moment worth telling the player about.
+ */
+export function deployComplete(toSpawn: number): boolean { return toSpawn <= 0; }
+
+/** Centre-screen callout for the moment the wave's last enemy has been deployed. */
+export function lastHostilesText(alive: number): string {
+  return alive === 1 ? 'FINAL HOSTILE' : `LAST ${alive} HOSTILES`;
 }
 
 /** True when the wave is over: everything spawned and dead, and the wave has run at least the minimum time. */

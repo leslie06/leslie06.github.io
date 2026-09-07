@@ -4,6 +4,7 @@ import { Input } from './Input';
 import { Physics } from './Physics';
 import { Assets } from './Assets';
 import { QUALITY, pickTier, type QualitySettings } from './Quality';
+import { newGovernor, step as governorStep, type GovernorConfig, type GovernorState } from './Resolution';
 
 /** A system gets a fixed-step tick (60Hz, physics/gameplay) and a per-frame update (render/visuals). */
 export interface System {
@@ -42,6 +43,11 @@ export class Engine {
   private raf = 0;
   readonly canvas: HTMLCanvasElement;
   private maxSubSteps = 4;
+  /** Adaptive resolution: see core/Resolution.ts for why pixelRatio alone is not enough. */
+  private governor: GovernorState;
+  private governorCfg: GovernorConfig;
+  /** Current drawing-buffer multiplier on quality.pixelRatio; the UI reads this. */
+  renderScale = 1;
   readonly hdr = true;
 
   constructor(container: HTMLElement) {
@@ -50,6 +56,9 @@ export class Engine {
     container.appendChild(this.canvas);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, powerPreference: 'high-performance', stencil: false, depth: true, alpha: false, preserveDrawingBuffer: new URLSearchParams(location.search).has('shot') });
     this.renderer.setPixelRatio(this.quality.pixelRatio);
+    this.governor = newGovernor(1);
+    this.governorCfg = { targetFps: this.quality.targetFps, minScale: this.quality.minRenderScale,
+      maxScale: this.quality.maxRenderScale, window: 30, cooldown: 20 };
     this.renderer.setSize(container.clientWidth, container.clientHeight, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -114,5 +123,14 @@ export class Engine {
     for (const s of this.systems) s.update?.(dt, alpha);
     this.renderer.info.reset();
     this.renderFrame(dt);
+    if (this.quality.adaptiveResolution && !forcedDt) {
+      // Feed the *frame interval*, not the time spent inside renderFrame. WebGL submission is
+      // asynchronous: the draw calls return long before the GPU has done the work, so timing around
+      // renderFrame measures CPU submit cost and reads ~1 ms even at 20 fps. `raw` is the real
+      // wall-clock gap between frames and is what the player actually feels.
+      // forcedDt means shot mode, where frames are stepped by hand and timing is meaningless.
+      const next = governorStep(this.governor, raw * 1000, this.governorCfg);
+      if (next !== null) { this.renderScale = next; this.renderer.setPixelRatio(this.quality.pixelRatio * next); this.resize(); }
+    }
   }
 }

@@ -5,8 +5,9 @@ import { Rng } from '../core/Rng';
 import type { AudioApi, BestRecord, EnemiesApi, GameApi, GamePhase, HudApi, LevelApi, PlayerApi, WeaponsApi } from './Contracts';
 import { DIRECTOR, PICKUPS } from './GameDefs';
 import {
-  advanceStreak, canSpawn, chooseSpawn, effectiveMaxAlive, expireStreak, fallbackSpawns, killScore, mergeBest, nextSpawnDelay,
-  pickArchetype, waveClearBonus, waveComplete, waveDef, type StreakState, type Vec3,
+  advanceStreak, canSpawn, chooseSpawn, deployComplete, effectiveMaxAlive, expireStreak, fallbackSpawns, killScore,
+  lastHostilesText, mergeBest, nextSpawnDelay, pickArchetype, reflowSpawnTimer, waveClearBonus, waveComplete, waveDef,
+  type StreakState, type Vec3,
 } from './GameLogic';
 import type { WaveDef } from './GameDefs';
 
@@ -27,6 +28,8 @@ export class GameMode implements GameApi {
   best: BestRecord = { score: 0, wave: 0, kills: 0 };
   phase: GamePhase = 'menu';
   enemiesRemaining = 0;
+  enemiesAlive = 0; enemiesPending = 0; deploying = false;
+  emptyFieldTime = 0;
   breatherLeft = 0;
   grenades = 0; maxGrenades = 0;
   interactPrompt = '';
@@ -44,6 +47,8 @@ export class GameMode implements GameApi {
   /** Died between waves (self-frag): restart moves on to the next wave instead of replaying a cleared one. */
   private diedInBreather = false;
   private incomingWarned = false;
+  /** "Last hostiles" callout fires once per wave, at the moment the wave stops deploying. */
+  private deployAnnounced = false;
   private recentSpawns: number[] = [];
   private rng = new Rng(SPAWN_SEED);
   private streakState: StreakState = { streak: 0, lastKillTime: -1e9 };
@@ -115,7 +120,8 @@ export class GameMode implements GameApi {
   quit(): void {
     this.clearField();
     this.running = false; this.phase = 'menu';
-    this.enemiesRemaining = 0; this.breatherLeft = 0;
+    this.enemiesRemaining = 0; this.enemiesAlive = 0; this.enemiesPending = 0; this.deploying = false;
+    this.emptyFieldTime = 0; this.breatherLeft = 0;
     this.persistBest();
     this.safe(() => this.hud?.showScreen?.('menu'));
   }
@@ -130,6 +136,7 @@ export class GameMode implements GameApi {
     const burst = Math.min(this.def.burst, cap, this.toSpawn);
     for (let i = 0; i < burst; i++) this.spawnOne();
     this.spawnTimer = nextSpawnDelay({ def: this.def, spawned: this.spawned, alive: this.aliveCount(), maxAlive: cap });
+    this.publishCounts(this.aliveCount());
     this.directorFrozen = this.shotMode;
   }
 
@@ -147,15 +154,24 @@ export class GameMode implements GameApi {
     if (this.directorFrozen) return;
     if (this.phase === 'wave') {
       this.waveTime += dt;
-      const alive = this.aliveCount();
+      let alive = this.aliveCount();
       const cap = effectiveMaxAlive(this.def, this.engine.quality.maxEnemies);
+      // How long the street has been empty while the wave still owes the player a fight. This is the
+      // number the player experiences as "the game is stuck", so the director keeps it bounded.
+      this.emptyFieldTime = alive === 0 && this.toSpawn > 0 ? this.emptyFieldTime + dt : 0;
       this.spawnTimer -= dt;
+      // The delay was picked for the field as it looked at the last spawn; re-clamp it against the
+      // field as it looks now, so clearing the map pulls the next contact in instead of buying silence.
+      this.spawnTimer = reflowSpawnTimer(this.spawnTimer, this.toSpawn, { def: this.def, spawned: this.spawned, alive, maxAlive: cap });
       if (canSpawn(this.spawnTimer, this.toSpawn, alive, cap)) {
-        this.spawnOne();
-        this.spawnTimer = nextSpawnDelay({ def: this.def, spawned: this.spawned, alive: alive + 1, maxAlive: cap });
+        this.spawnOne(alive === 0 ? 1 : 0);
+        alive += 1;
+        this.emptyFieldTime = 0;
+        this.spawnTimer = nextSpawnDelay({ def: this.def, spawned: this.spawned, alive, maxAlive: cap });
       }
-      this.enemiesRemaining = this.toSpawn + this.aliveCount();
-      if (waveComplete(this.toSpawn, this.aliveCount(), this.waveTime)) this.completeWave();
+      this.publishCounts(this.aliveCount());
+      if (!this.deployAnnounced && deployComplete(this.toSpawn)) this.announceLastHostiles();
+      if (waveComplete(this.toSpawn, this.enemiesAlive, this.waveTime)) this.completeWave();
     } else if (this.phase === 'breather') {
       this.breatherLeft = Math.max(0, this.breatherLeft - dt);
       if (!this.incomingWarned && this.breatherLeft <= DIRECTOR.incomingWarning) {
@@ -185,7 +201,8 @@ export class GameMode implements GameApi {
     this.waveStartScore = this.score; this.waveStartKills = this.kills;
     this.toSpawn = this.def.count; this.spawned = 0; this.spawnTimer = 0; this.waveTime = 0;
     this.phase = 'wave'; this.breatherLeft = 0; this.incomingWarned = false;
-    this.enemiesRemaining = this.def.count;
+    this.deployAnnounced = false; this.emptyFieldTime = 0;
+    this.enemiesRemaining = this.def.count; this.enemiesAlive = 0; this.enemiesPending = this.def.count; this.deploying = true;
     this.safe(() => this.enemies?.setDifficulty?.(this.def.difficulty));
     for (const r of this.resuppliables) this.safe(() => r.resupply());
     this.engine.events.emit('game:wave', { wave: n });
@@ -196,15 +213,41 @@ export class GameMode implements GameApi {
   }
 
   private completeWave(): void {
-    this.score += waveClearBonus(this.wave);
+    const bonus = waveClearBonus(this.wave);
+    this.score += bonus;
     this.phase = 'breather';
     this.breatherLeft = DIRECTOR.breather; this.incomingWarned = false;
-    this.enemiesRemaining = 0;
+    this.enemiesRemaining = 0; this.enemiesAlive = 0; this.enemiesPending = 0; this.deploying = false;
+    this.emptyFieldTime = 0;
     this.resupplyAmmo(PICKUPS.breatherMagsPerSlot);
     for (const r of this.resuppliables) this.safe(() => r.resupply());
     this.persistBest();
-    this.safe(() => this.hud?.showMessage?.(`WAVE ${this.wave} COMPLETE`, 3000));
+    // The breather is the one stretch where an empty street is correct, so it is signposted end to
+    // end: the clear banner holds until the "incoming" warning takes over, with no silent gap between.
+    const hold = Math.max(1.2, DIRECTOR.breather - DIRECTOR.incomingWarning);
+    this.safe(() => this.hud?.showMessage?.(`WAVE ${this.wave} COMPLETE  +${bonus}`, hold * 1000));
     this.safe(() => this.audio?.play('wave_complete'));
+  }
+
+  /**
+   * The wave has stopped deploying: everything left is on the map and visible. Told to the player
+   * explicitly, because "N REMAINING" alone cannot distinguish "four more are walking in" from
+   * "four more and then you are done".
+   */
+  private announceLastHostiles(): void {
+    this.deployAnnounced = true;
+    const alive = this.enemiesAlive;
+    if (alive <= 0) return; // the wave ended on the same tick; the clear banner says it better
+    this.safe(() => this.hud?.showMessage?.(lastHostilesText(alive), 2000));
+    this.safe(() => this.audio?.play('wave_incoming'));
+  }
+
+  /** Publish the three counters the HUD reads. `enemiesRemaining` stays the honest wave total. */
+  private publishCounts(alive: number): void {
+    this.enemiesAlive = alive;
+    this.enemiesPending = Math.max(0, this.toSpawn);
+    this.deploying = this.enemiesPending > 0;
+    this.enemiesRemaining = this.enemiesPending + alive;
   }
 
   private onEnemyDeath(enemyId: number, headshot: boolean): void {
@@ -262,14 +305,15 @@ export class GameMode implements GameApi {
     } catch { return false; }
   }
 
-  private spawnOne(): void {
+  /** `urgency` 1 means the map is empty right now: prefer points the reinforcement can reach fast. */
+  private spawnOne(urgency = 0): void {
     const pl = this.player;
     const spawns = this.spawnPoints();
     const playerPos: Vec3 = pl?.position ?? { x: 0, y: 1, z: 0 };
     const yaw = pl?.yaw ?? 0;
     const idx = chooseSpawn({
       spawns, playerPos, playerForward: { x: -Math.sin(yaw), y: 0, z: -Math.cos(yaw) },
-      visible: (p) => this.visibleFromPlayer(p), recent: this.recentSpawns, rng: this.rng,
+      visible: (p) => this.visibleFromPlayer(p), recent: this.recentSpawns, urgency, rng: this.rng,
     });
     this.toSpawn--; this.spawned++;
     if (idx < 0) return;

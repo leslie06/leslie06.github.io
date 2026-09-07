@@ -238,8 +238,37 @@ export interface GameApi extends System {
   best: BestRecord;
   /** 'menu' before start, 'wave' during combat, 'breather' between waves, 'dead' after player death. */
   phase: GamePhase;
-  /** Enemies still to be spawned + alive in the current wave (HUD counter). */
+  /**
+   * Enemies still to be spawned + alive in the current wave (HUD counter). Monotonically decreasing
+   * within a wave and exactly 0 when the wave ends, so it is the honest "how much of this wave is
+   * left" number — but on its own it cannot tell the player whether what is left is in front of
+   * them or still walking in. Use the three fields below to say which.
+   */
   enemiesRemaining: number;
+  /**
+   * Hostiles alive on the map right now — what the player can actually go and shoot.
+   * `enemiesAlive + enemiesPending === enemiesRemaining` at all times.
+   */
+  enemiesAlive: number;
+  /** Enemies of the current wave that have not been deployed yet. */
+  enemiesPending: number;
+  /**
+   * True while the wave still has enemies to deploy. Once false, `enemiesRemaining` is exactly what
+   * is on the map and the wave ends when the player clears it.
+   *
+   * Suggested HUD reading (ui/ owns the rendering; game/ only publishes these):
+   * show `enemiesAlive` as the actionable count while `deploying`, with `enemiesPending` as a
+   * secondary "+N inbound", and fall back to the single `enemiesRemaining` figure once deploying
+   * goes false. The spawn director guarantees `enemiesAlive > 0` during a wave (see
+   * `DIRECTOR.emptyFieldGrace`), so the actionable count is never a lie about an empty street.
+   */
+  deploying: boolean;
+  /**
+   * Seconds the map has been empty while the current wave still has enemies to deploy; 0 otherwise.
+   * The director force-spawns once this passes `DIRECTOR.emptyFieldGrace`, so in a healthy session
+   * it never climbs much above that. Exposed as the pacing diagnostic the regression test asserts on.
+   */
+  emptyFieldTime: number;
   /** Seconds left in the between-wave breather (0 during combat). */
   breatherLeft: number;
   /** Frag grenades in hand / max carried. */

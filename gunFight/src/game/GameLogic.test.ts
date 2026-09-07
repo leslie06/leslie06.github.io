@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advanceStreak, canSpawn, chooseSpawn, effectiveMaxAlive, enemyCount, expireStreak, explosionFalloff, fallbackSpawns,
-  killScore, mergeBest, nextSpawnDelay, pickArchetype, spawnScore, streakMultiplier, waveClearBonus, waveComplete, waveDef,
+  advanceStreak, canSpawn, chooseSpawn, deployComplete, effectiveMaxAlive, enemyCount, expireStreak, explosionFalloff,
+  fallbackSpawns, killScore, lastHostilesText, mergeBest, nextSpawnDelay, pickArchetype, reflowSpawnTimer, spawnScore,
+  streakMultiplier, waveClearBonus, waveComplete, waveDef,
 } from './GameLogic';
 import { DIRECTOR, SCORING, WAVE_EXTRAPOLATION, WAVE_TABLE } from './GameDefs';
 
@@ -37,6 +38,32 @@ describe('wave table', () => {
       expect(r.count).toBeGreaterThan(0);
       expect(r.burst).toBeLessThanOrEqual(r.count);
       expect(Object.keys(r.mix).length).toBeGreaterThan(0);
+    }
+  });
+  it('the opening burst fills the field, so a wave opens as a wave rather than a trickle', () => {
+    for (const r of WAVE_TABLE) expect(r.burst).toBe(r.maxAlive);
+    // and past the table the two stay in step rather than drifting apart
+    for (let w = WAVE_TABLE.length + 1; w <= 40; w++) {
+      const d = waveDef(w);
+      expect(d.burst).toBeLessThanOrEqual(d.maxAlive);
+      expect(d.burst).toBeGreaterThanOrEqual(d.maxAlive - 1);
+    }
+  });
+  it('pacing tightens monotonically: interval never grows, concurrency never shrinks', () => {
+    let interval = Infinity, maxAlive = 0;
+    for (let w = 1; w <= 40; w++) {
+      const d = waveDef(w);
+      expect(d.interval).toBeLessThanOrEqual(interval);
+      expect(d.maxAlive).toBeGreaterThanOrEqual(maxAlive);
+      interval = d.interval; maxAlive = d.maxAlive;
+    }
+  });
+  it('a wave deploys in a time the player will not read as an empty street', () => {
+    // Worst case: the field stays full, so every backfill waits the nominal interval.
+    for (let w = 1; w <= 10; w++) {
+      const d = waveDef(w);
+      const deploy = (d.burst - 1) * DIRECTOR.burstSpacing + (d.count - d.burst) * d.interval;
+      expect(deploy / d.count).toBeLessThan(1.2); // seconds of deployment per enemy
     }
   });
   it('picks archetypes by weight deterministically', () => {
@@ -105,6 +132,17 @@ describe('spawn selection', () => {
     const seen = spawnScore(ahead, 0, { ...base, visible: () => true });
     expect(hidden).toBeGreaterThan(seen);
   });
+  it('urgency prefers points a reinforcement can reach quickly, but still refuses visible ones', () => {
+    const near = { x: 0, y: 1, z: 2 };   // 18 m behind the player
+    const far = { x: 0, y: 1, z: 72 };   // 52 m behind the player
+    // Without urgency the far point is at least competitive; with it, near wins outright.
+    expect(spawnScore(near, 0, { ...base, urgency: 1 })).toBeGreaterThan(spawnScore(far, 1, { ...base, urgency: 1 }));
+    expect(spawnScore(near, 0, { ...base, urgency: 1 })).toBeGreaterThan(spawnScore(near, 0, { ...base, urgency: 1, visible: () => true }));
+    // Urgency only ever subtracts, and never touches points inside the ideal band.
+    expect(spawnScore(far, 1, { ...base, urgency: 1 })).toBeLessThan(spawnScore(far, 1, base));
+    const inBand = { x: 0, y: 1, z: -2 }; // 22 m, inside idealMin..idealMax
+    expect(spawnScore(inBand, 2, { ...base, urgency: 1 })).toBeLessThanOrEqual(spawnScore(inBand, 2, base));
+  });
   it('avoids recently used points', () => {
     const p = { x: 0, y: 1, z: -5 };
     expect(spawnScore(p, 0, { ...base, recent: [0] })).toBeLessThan(spawnScore(p, 0, base));
@@ -149,6 +187,42 @@ describe('spawn director', () => {
     expect(canSpawn(0.1, 3, 1, 4)).toBe(false);
     expect(canSpawn(0, 0, 1, 4)).toBe(false);
     expect(canSpawn(0, 3, 4, 4)).toBe(false);
+  });
+  it('never buys silence: an empty field pulls the next spawn in to the grace period', () => {
+    const maxAlive = def.maxAlive;
+    const full = { def, spawned: def.burst, alive: maxAlive, maxAlive };
+    // Timer was set for a full field (the nominal interval); the player then wipes the map.
+    expect(reflowSpawnTimer(def.interval, 5, { ...full, alive: 0 })).toBe(DIRECTOR.emptyFieldGrace);
+    // A thinned-out field gets the trickle rate immediately instead of at the next spawn.
+    expect(reflowSpawnTimer(def.interval, 5, { ...full, alive: 1 })).toBeCloseTo(def.interval * DIRECTOR.trickleScale);
+    // It only ever shortens the wait, never extends it.
+    expect(reflowSpawnTimer(0.05, 5, { ...full, alive: 0 })).toBe(0.05);
+    expect(reflowSpawnTimer(0.05, 5, full)).toBe(0.05);
+    // Nothing left to deploy: the timer is irrelevant and is left alone.
+    expect(reflowSpawnTimer(def.interval, 0, { ...full, alive: 0 })).toBe(def.interval);
+  });
+  it('an empty field can never outlast the grace period while the wave still owes enemies', () => {
+    // Drive the real loop: worst case is the timer having just been set for a full field.
+    for (let w = 1; w <= 12; w++) {
+      const d = waveDef(w);
+      const maxAlive = d.maxAlive;
+      let timer = d.interval, empty = 0;
+      const dt = 1 / 60;
+      for (let i = 0; i < 600; i++) {
+        empty += dt;
+        timer -= dt;
+        timer = reflowSpawnTimer(timer, 5, { def: d, spawned: d.burst, alive: 0, maxAlive });
+        if (canSpawn(timer, 5, 0, maxAlive)) break;
+      }
+      // grace, plus the tick the field emptied on, plus float slack on the countdown
+      expect(empty).toBeLessThanOrEqual(DIRECTOR.emptyFieldGrace + 2 * dt);
+    }
+  });
+  it('reports when a wave has stopped deploying, and names what is left', () => {
+    expect(deployComplete(3)).toBe(false);
+    expect(deployComplete(0)).toBe(true);
+    expect(lastHostilesText(1)).toBe('FINAL HOSTILE');
+    expect(lastHostilesText(4)).toBe('LAST 4 HOSTILES');
   });
   it('wave completes only when everything is spawned and dead after the minimum time', () => {
     expect(waveComplete(0, 0, DIRECTOR.minWaveTime)).toBe(true);

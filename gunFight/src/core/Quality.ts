@@ -103,6 +103,53 @@ export interface QualitySettings {
   caAds: number;
   /** Extra corner darkening at full ADS, added to the base 14% vignette (ref_03 drops 30-40%). */
   adsVignette: number;
+
+  // --- resolution policy (core/Resolution.ts) ----------------------------------------------------
+  /**
+   * Adaptive resolution governor. The whole post chain is per-pixel and linear in pixel count, so
+   * the frame time is set by the drawing-buffer size and nothing else: at `high` the same scene cost
+   * 11 ms at 1280x720 and 61 ms at 1728x1080 on a 2x display. `pixelRatio` alone cannot know that -
+   * it is picked at boot from the device, not from the machine's actual throughput - so the governor
+   * measures real frame times and moves the render scale between `minRenderScale` and
+   * `maxRenderScale` to hold `targetFps`. The canvas CSS size never changes; only the drawing buffer
+   * does, and the browser upscales it.
+   */
+  adaptiveResolution: boolean;
+  /** Frame rate the governor holds. It aims slightly under this (see `core/Resolution.ts`). */
+  targetFps: number;
+  /**
+   * Bounds on the multiplier applied to `pixelRatio`. The floor is a legibility floor, not a
+   * performance one: below ~0.6 of a 2x buffer (i.e. ~1.2x native) thin geometry - railings, weapon
+   * rails, the reticle - starts to crawl, and no frame rate buys that back.
+   */
+  minRenderScale: number;
+  maxRenderScale: number;
+
+  // --- post-chain fixed cost (render/PostFx.ts) --------------------------------------------------
+  /**
+   * Resolution scale of the world-depth copy that feeds soft particles. The copy is a full-screen
+   * pass whose only consumer fades particles over a few centimetres of depth difference, and it is
+   * already one frame old; half res is free of visible cost and quarters the pass.
+   */
+  depthCopyScale: number;
+  /**
+   * Resolution scale of the bloom luminance pass (the mip pyramid is built from it). Bloom is
+   * low-frequency by construction, so it does not need the full buffer to start from.
+   */
+  bloomScale: number;
+  /** Camera motion-blur taps. Each costs a colour fetch plus a depth fetch. */
+  motionBlurSamples: number;
+  /** Viewmodel/world DOF taps. */
+  dofSamples: number;
+  /** Sun-shaft radial-blur taps, and the resolution the shaft mask is built at. */
+  sunShaftSamples: number;
+  sunShaftScale: number;
+  /**
+   * Run the short-range contact AO pass at half resolution. The contact band is 5-30 cm at 1-4 m,
+   * which is 20-60 px at 2x - wide enough to survive a half-res pass with depth-aware upsampling,
+   * unlike the 2-3 px it would be at a distance (where it contributes nothing anyway).
+   */
+  aoContactHalfRes: boolean;
 }
 
 export const QUALITY: Record<QualityTier, QualitySettings> = {
@@ -114,6 +161,8 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     aoRadius: 0.8, aoIntensity: 2.6, shadowPcfTaps: 5, sunShafts: false, interiorProbe: true,
     aoDenoiseRadius: 4, aoDenoiseSamples: 4, aoContactRadius: 0, aoContactIntensity: 0, aoContactSamples: 0, interiorExposure: 3.6, clouds: false,
     cloudSteps: 2, dofFarCoc: 0, dofFarFocus: 14, dofFarRange: 55, caHip: 0, caAds: 0, adsVignette: 0.12,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1,
+    depthCopyScale: 0.5, bloomScale: 0.5, motionBlurSamples: 0, dofSamples: 8, sunShaftSamples: 12, sunShaftScale: 0.25, aoContactHalfRes: true,
   },
   medium: {
     tier: 'medium', pixelRatio: Math.min(1.5, window.devicePixelRatio || 1), shadowMapSize: 2048, shadowCascades: 2, shadowDistance: 80, anisotropy: 4,
@@ -123,15 +172,19 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     aoRadius: 0.9, aoIntensity: 2.6, shadowPcfTaps: 8, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 4, aoContactRadius: 0.30, aoContactIntensity: 1.6, aoContactSamples: 8, interiorExposure: 4.3, clouds: true,
     cloudSteps: 3, dofFarCoc: 2.4, dofFarFocus: 15, dofFarRange: 90, caHip: 0, caAds: 0.55, adsVignette: 0.16,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1,
+    depthCopyScale: 0.5, bloomScale: 0.5, motionBlurSamples: 8, dofSamples: 10, sunShaftSamples: 16, sunShaftScale: 0.25, aoContactHalfRes: true,
   },
   high: {
     tier: 'high', pixelRatio: Math.min(2, window.devicePixelRatio || 1), shadowMapSize: 4096, shadowCascades: 3, shadowDistance: 140, anisotropy: 8,
     postFx: true, ssao: true, bloom: true, motionBlur: true, dof: true, taa: true, volumetrics: true, ssr: false,
     particleBudget: 12000, decalBudget: 256, propDensity: 1, textureRes: 2048, maxEnemies: 14, dynamicLights: 8, fogDistance: 300,
-    csmMapSize: 2048, aoSamples: 12, aoHalfRes: false, godRays: true, sharpen: true, chromaticAberration: true, filmGrain: true, smaaPreset: 3,
+    csmMapSize: 2048, aoSamples: 12, aoHalfRes: true, godRays: true, sharpen: true, chromaticAberration: true, filmGrain: true, smaaPreset: 3,
     aoRadius: 0.9, aoIntensity: 2.85, shadowPcfTaps: 12, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 8, aoContactRadius: 0.26, aoContactIntensity: 1.75, aoContactSamples: 8, interiorExposure: 4.7, clouds: true,
     cloudSteps: 4, dofFarCoc: 3.0, dofFarFocus: 15, dofFarRange: 90, caHip: 0, caAds: 0.7, adsVignette: 0.17,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1,
+    depthCopyScale: 0.5, bloomScale: 0.5, motionBlurSamples: 6, dofSamples: 12, sunShaftSamples: 16, sunShaftScale: 0.25, aoContactHalfRes: true,
   },
   ultra: {
     tier: 'ultra', pixelRatio: Math.min(2, window.devicePixelRatio || 1), shadowMapSize: 4096, shadowCascades: 4, shadowDistance: 200, anisotropy: 16,
@@ -141,6 +194,8 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     aoRadius: 1.0, aoIntensity: 2.95, shadowPcfTaps: 16, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 8, aoContactRadius: 0.24, aoContactIntensity: 1.8, aoContactSamples: 12, interiorExposure: 4.7, clouds: true,
     cloudSteps: 5, dofFarCoc: 3.4, dofFarFocus: 15, dofFarRange: 90, caHip: 0, caAds: 0.7, adsVignette: 0.17,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.70, maxRenderScale: 1,
+    depthCopyScale: 0.5, bloomScale: 0.5, motionBlurSamples: 8, dofSamples: 12, sunShaftSamples: 24, sunShaftScale: 0.30, aoContactHalfRes: false,
   },
 };
 

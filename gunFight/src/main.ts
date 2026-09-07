@@ -30,6 +30,10 @@ async function boot() {
   await ui.install(engine, container);
   await game.install(engine);
   engine.resize();
+  // Always expose the engine, not just in shot mode. Several real bugs (wave progression, phantom
+  // auto-fire) could only be reproduced in a normal session, and without a handle there was no way
+  // to inspect one from a headless driver. Read-only by convention; nothing ships against it.
+  (window as unknown as { gunfight?: unknown }).gunfight = engine;
   if (shotMode) installShotMode(engine);
   else engine.start();
 }

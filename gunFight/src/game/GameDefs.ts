@@ -22,18 +22,26 @@ export interface WaveDef {
   difficulty: EnemyDifficulty;
 }
 
-/** Hand-tuned first ten waves; beyond that `waveDef()` extrapolates. */
+/**
+ * Hand-tuned first ten waves; beyond that `waveDef()` extrapolates.
+ *
+ * Pacing rule of thumb: `burst` fills the field to `maxAlive` at wave start (so a wave opens as a
+ * wave, not as a trickle) and `interval` only governs how fast kills are *backfilled*. Concurrency
+ * is therefore set by `maxAlive` alone — shortening `interval` makes the pressure continuous without
+ * making the peak fight any bigger. The old table opened wave 1 with 3 of 6 and backfilled every
+ * 2.4 s, so an efficient player spent more of the wave waiting for the next spawn than fighting.
+ */
 export const WAVE_TABLE: readonly WaveDef[] = [
-  { wave: 1, count: 6, maxAlive: 4, interval: 2.4, burst: 3, mix: { grunt: 1 }, difficulty: { accuracy: 0.55, damage: 0.8, reaction: 1.4, aggression: 0.8 } },
-  { wave: 2, count: 8, maxAlive: 5, interval: 2.2, burst: 3, mix: { grunt: 3, rifleman: 1 }, difficulty: { accuracy: 0.65, damage: 0.85, reaction: 1.3, aggression: 0.85 } },
-  { wave: 3, count: 11, maxAlive: 6, interval: 2.0, burst: 4, mix: { grunt: 2, rifleman: 2 }, difficulty: { accuracy: 0.72, damage: 0.9, reaction: 1.2, aggression: 0.9 } },
-  { wave: 4, count: 14, maxAlive: 7, interval: 1.9, burst: 4, mix: { grunt: 2, rifleman: 2, shotgunner: 1 }, difficulty: { accuracy: 0.8, damage: 0.95, reaction: 1.1, aggression: 1.0 } },
-  { wave: 5, count: 18, maxAlive: 8, interval: 1.7, burst: 5, mix: { grunt: 1, rifleman: 3, shotgunner: 1 }, difficulty: { accuracy: 0.88, damage: 1.0, reaction: 1.0, aggression: 1.05 } },
-  { wave: 6, count: 22, maxAlive: 9, interval: 1.6, burst: 5, mix: { grunt: 1, rifleman: 3, shotgunner: 1, heavy: 1 }, difficulty: { accuracy: 0.95, damage: 1.05, reaction: 0.95, aggression: 1.1 } },
-  { wave: 7, count: 26, maxAlive: 10, interval: 1.5, burst: 6, mix: { rifleman: 3, shotgunner: 2, heavy: 1 }, difficulty: { accuracy: 1.0, damage: 1.1, reaction: 0.9, aggression: 1.15 } },
-  { wave: 8, count: 30, maxAlive: 11, interval: 1.4, burst: 6, mix: { rifleman: 3, shotgunner: 2, heavy: 1, sniper: 1 }, difficulty: { accuracy: 1.05, damage: 1.15, reaction: 0.85, aggression: 1.2 } },
-  { wave: 9, count: 35, maxAlive: 12, interval: 1.3, burst: 7, mix: { rifleman: 3, shotgunner: 2, heavy: 2, sniper: 1 }, difficulty: { accuracy: 1.1, damage: 1.2, reaction: 0.8, aggression: 1.25 } },
-  { wave: 10, count: 40, maxAlive: 13, interval: 1.2, burst: 8, mix: { rifleman: 2, shotgunner: 2, heavy: 2, sniper: 1 }, difficulty: { accuracy: 1.15, damage: 1.25, reaction: 0.75, aggression: 1.3 } },
+  { wave: 1, count: 6, maxAlive: 4, interval: 1.6, burst: 4, mix: { grunt: 1 }, difficulty: { accuracy: 0.55, damage: 0.8, reaction: 1.4, aggression: 0.8 } },
+  { wave: 2, count: 9, maxAlive: 5, interval: 1.5, burst: 5, mix: { grunt: 3, rifleman: 1 }, difficulty: { accuracy: 0.65, damage: 0.85, reaction: 1.3, aggression: 0.85 } },
+  { wave: 3, count: 12, maxAlive: 6, interval: 1.45, burst: 6, mix: { grunt: 2, rifleman: 2 }, difficulty: { accuracy: 0.72, damage: 0.9, reaction: 1.2, aggression: 0.9 } },
+  { wave: 4, count: 15, maxAlive: 7, interval: 1.35, burst: 7, mix: { grunt: 2, rifleman: 2, shotgunner: 1 }, difficulty: { accuracy: 0.8, damage: 0.95, reaction: 1.1, aggression: 1.0 } },
+  { wave: 5, count: 18, maxAlive: 8, interval: 1.25, burst: 8, mix: { grunt: 1, rifleman: 3, shotgunner: 1 }, difficulty: { accuracy: 0.88, damage: 1.0, reaction: 1.0, aggression: 1.05 } },
+  { wave: 6, count: 22, maxAlive: 9, interval: 1.2, burst: 9, mix: { grunt: 1, rifleman: 3, shotgunner: 1, heavy: 1 }, difficulty: { accuracy: 0.95, damage: 1.05, reaction: 0.95, aggression: 1.1 } },
+  { wave: 7, count: 26, maxAlive: 10, interval: 1.1, burst: 10, mix: { rifleman: 3, shotgunner: 2, heavy: 1 }, difficulty: { accuracy: 1.0, damage: 1.1, reaction: 0.9, aggression: 1.15 } },
+  { wave: 8, count: 30, maxAlive: 11, interval: 1.05, burst: 11, mix: { rifleman: 3, shotgunner: 2, heavy: 1, sniper: 1 }, difficulty: { accuracy: 1.05, damage: 1.15, reaction: 0.85, aggression: 1.2 } },
+  { wave: 9, count: 35, maxAlive: 12, interval: 1.0, burst: 12, mix: { rifleman: 3, shotgunner: 2, heavy: 2, sniper: 1 }, difficulty: { accuracy: 1.1, damage: 1.2, reaction: 0.8, aggression: 1.25 } },
+  { wave: 10, count: 40, maxAlive: 13, interval: 0.95, burst: 13, mix: { rifleman: 2, shotgunner: 2, heavy: 2, sniper: 1 }, difficulty: { accuracy: 1.15, damage: 1.25, reaction: 0.75, aggression: 1.3 } },
 ];
 
 /** Growth applied per wave past the end of WAVE_TABLE. */
@@ -59,11 +67,18 @@ export const DIRECTOR = {
   /** Spacing between the wave-opening burst spawns. */
   burstSpacing: 0.35,
   /** When alive count drops to or below this fraction of maxAlive, spawn at the trickle rate. */
-  lowPressureFraction: 0.4,
+  lowPressureFraction: 0.6,
   /** Trickle interval scalar (fraction of the wave interval) used to keep pressure steady. */
-  trickleScale: 0.35,
+  trickleScale: 0.3,
+  /**
+   * Hard ceiling on how long the map may be EMPTY while the wave still has enemies to deploy.
+   * The interval exists to pace pressure, not to create silence: a player who clears the field
+   * must never be left hunting an empty street. Kept just long enough that the last kill's ragdoll
+   * and hitmarker land before the next contact appears.
+   */
+  emptyFieldGrace: 0.35,
   /** Seconds between waves. */
-  breather: 8,
+  breather: 6,
   /** Seconds before the next wave when the "incoming" warning shows. */
   incomingWarning: 3,
   /** Minimum wave duration before a wave may be declared complete (guards against stubbed enemies). */
@@ -87,6 +102,13 @@ export const SPAWN_SELECT = {
   /** Penalty for each of the last N used points (most recent gets full penalty). */
   recentPenalty: 25,
   recentMemory: 3,
+  /**
+   * Extra distance penalty applied when the director is spawning into an EMPTY field: the player is
+   * already waiting, so a point 55 m away that takes ten seconds to walk in is worse than a nearer
+   * one. Scales from 0 at `idealMin` to the full value at `tooFar`. Line-of-sight is still penalised
+   * at full strength — reinforcements must never pop in while the player is looking at the spot.
+   */
+  urgentFarPenalty: 30,
   /** Random jitter added so equal-scoring points alternate. */
   jitter: 8,
   /** Fallback ring radius when the level exposes no enemy spawns. */
