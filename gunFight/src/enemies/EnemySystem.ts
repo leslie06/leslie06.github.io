@@ -138,6 +138,11 @@ export class EnemySystem implements EnemiesApi {
     return id;
   }
 
+  /** Point every living soldier at `position`, ignoring perception ranges. See Brain.alertTo. */
+  alertAll(position: THREE.Vector3): void {
+    for (const e of this.enemies) if (e.alive) e.brain.alertTo(position);
+  }
+
   killAll(): void {
     for (const e of this.enemies) e.dispose();
     this.enemies.length = 0;

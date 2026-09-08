@@ -43,3 +43,46 @@ describe('resolution governor', () => {
     expect(seen.size).toBe(1);
   });
 });
+
+describe('resolution governor: bursty frames', () => {
+  /**
+   * The failure this control law exists for. Reported from a desktop whose browser had bound the
+   * APU's integrated Radeon: the panel read 13.1 ms / "76 fps" median with a 760 ms p95, and the
+   * governor sat at 1.00 while the game was unplayable. Most frames really were fast; the GPU was
+   * so far behind that the driver ran the CPU ahead and then blocked on the swap chain.
+   */
+  const bursty = (s: ReturnType<typeof newGovernor>, n = (C.window + C.cooldown) * 6) => {
+    let last: number | null = null;
+    for (let i = 0; i < n; i++) {
+      const ms = i % 18 === 17 ? 760 : 13.1;   // ~5.6% of frames stall, exactly as measured
+      const r = step(s, ms, C);
+      if (r !== null) last = r;
+    }
+    return last;
+  };
+
+  it('scales down for a fast median with long stalls', () => {
+    const s = newGovernor();
+    expect(bursty(s)).not.toBeNull();
+    expect(s.scale).toBeLessThan(0.9);
+  });
+
+  it('is not fooled into scaling up by the fast frames in between', () => {
+    const s = newGovernor(0.8);
+    bursty(s);
+    expect(s.scale).toBeLessThanOrEqual(0.8);
+  });
+
+  it('ignores a single one-off stall in an otherwise smooth window', () => {
+    const s = newGovernor(1);
+    // One 2 s compile hitch per ~150 frames must not cost the player their resolution.
+    for (let i = 0; i < 600; i++) step(s, i % 150 === 149 ? 2000 : 12, C);
+    expect(s.scale).toBe(1);
+  });
+
+  it('honours the warm-up cooldown before deciding anything', () => {
+    const s = newGovernor(1, 90);
+    for (let i = 0; i < 89; i++) expect(step(s, 500, C)).toBeNull();
+    expect(s.scale).toBe(1);
+  });
+});

@@ -19,6 +19,9 @@ export interface GameEvents {
   'game:start': Record<string, never>;
   'game:over': { kills: number; wave: number };
   'ui:hitmarker': { headshot: boolean; kill: boolean };
+  /** The GPU dropped the WebGL context (driver reset / out of memory). Nothing renders after this. */
+  'renderer:contextlost': Record<string, never>;
+  'renderer:contextrestored': Record<string, never>;
 }
 
 export type SurfaceType = 'concrete' | 'metal' | 'wood' | 'dirt' | 'brick' | 'plaster' | 'glass' | 'sandbag' | 'flesh' | 'water';

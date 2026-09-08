@@ -52,6 +52,12 @@ export class Enemy {
   lastFireTime = -10;
   shotsFired = 0;
   stuckTimer = 0;
+  /**
+   * Like `stuckTimer`, but nothing outside this class resets it. The brain zeroes `stuckTimer`
+   * every time it starts a detour, which is what makes that counter useless for spotting a soldier
+   * who is wedged for good rather than momentarily blocked. See MOVE.wedgedTime.
+   */
+  wedgedTime = 0;
   private progressPos = new THREE.Vector3();
   private progressT = 0;
   private wantedMove = 0;
@@ -137,8 +143,20 @@ export class Enemy {
     this.prevPos.copy(this.pos);
     this.brain.think(dt);
     this.move(dt);
+    if (this.alive && this.wedgedTime > MOVE.wedgedTime) { this.dieWedged(); return; }
     this.tickWeapon(dt);
     this.syncHitboxes();
+  }
+
+  /**
+   * A soldier the level has swallowed - through the floor, or into a pocket he cannot walk out of.
+   * He is written off as a kill rather than left standing, because the wave only ends when
+   * `aliveCount()` reaches zero: leaving him alive dead-ends the run, and the player has no way to
+   * reach him to fix it themselves.
+   */
+  private dieWedged(): void {
+    const point = _v3.copy(this.pos).setY(this.pos.y + 0.9).clone();
+    this.die(false, new THREE.Vector3(0, 1, 0), point);
   }
 
   private move(dt: number): void {
@@ -159,14 +177,18 @@ export class Enemy {
     const bnd = this.world.bounds;
     this.pos.x = THREE.MathUtils.clamp(this.pos.x, bnd.min.x + 1, bnd.max.x - 1);
     this.pos.z = THREE.MathUtils.clamp(this.pos.z, bnd.min.z + 1, bnd.max.z - 1);
-    if (this.pos.y < bnd.min.y) { this.pos.y = bnd.min.y + 1; this.vel.y = 0; }
+    // Under the level floor. Clamping y back inside the bounds (what this used to do) parks a
+    // soldier who fell through the world a metre below the map: alive, unreachable, and blocking
+    // the wave's `alive <= 0` clear condition for good. A pit is a death.
+    if (this.pos.y < bnd.min.y) { this.pos.y = bnd.min.y + 1; this.vel.y = 0; this.wedgedTime = MOVE.wedgedTime + 1; }
     if (!Number.isFinite(this.pos.x + this.pos.y + this.pos.z)) { this.pos.copy(this.prevPos); this.vel.set(0, 0, 0); }
     this.body.setNextKinematicTranslation({ x: this.pos.x, y: this.pos.y + MOVE.capsuleHalfHeight + MOVE.capsuleRadius, z: this.pos.z });
     // stuck detection: wanted to move but made no real progress over the last second (sliding along a wall counts as stuck)
     this.progressT += dt;
     if (this.progressT >= 1) {
       const moved = Math.hypot(this.pos.x - this.progressPos.x, this.pos.z - this.progressPos.z);
-      if (this.wantedMove > 0.5 && moved < MOVE.stuckSpeed) this.stuckTimer += this.progressT; else this.stuckTimer = 0;
+      if (this.wantedMove > 0.5 && moved < MOVE.stuckSpeed) { this.stuckTimer += this.progressT; this.wedgedTime += this.progressT; }
+      else { this.stuckTimer = 0; this.wedgedTime = 0; }
       this.progressPos.copy(this.pos); this.progressT = 0; this.wantedMove = 0;
     }
     this.wantedMove = Math.max(this.wantedMove, wl);

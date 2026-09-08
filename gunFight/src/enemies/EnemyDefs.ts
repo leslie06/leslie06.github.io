@@ -155,6 +155,18 @@ export const MOVE = {
   /** metres of progress per second below which we count as stuck */
   stuckSpeed: 0.35,
   stuckTime: 0.9,
+  /**
+   * Seconds of *continuous* failure to move before a soldier is written off as wedged and killed.
+   *
+   * `stuckTime` above only arms the AI's detour, and the detour resets `stuckTimer`, so no counter
+   * in the brain can ever notice a soldier who is permanently trapped - spawned inside geometry, or
+   * stranded on a nav island with no route out. The wave director's clear condition is `alive <= 0`,
+   * so exactly one such soldier ends the run: the player kills everything they can find and the
+   * next wave never starts. This is the backstop, and it is deliberately long - a soldier who is
+   * merely holding cover never reaches it, because the counter only advances while he is actively
+   * trying to move and failing.
+   */
+  wedgedTime: 25,
 };
 
 /**

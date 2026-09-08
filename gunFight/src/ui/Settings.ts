@@ -5,7 +5,7 @@
  */
 import type { Engine } from '../core/Engine';
 import type { AudioApi, PlayerApi } from '../game/Contracts';
-import type { QualityTier } from '../core/Quality';
+import { QUALITY_CHOICE_KEY, type QualityTier } from '../core/Quality';
 
 export interface SettingsData {
   sensitivity: number;  // multiplier on Input.sensitivity default (0.25..3)
@@ -79,6 +79,9 @@ export class Settings {
   /** Quality needs a reload (renderer/shadow maps are built at boot). */
   applyQualityAndReload(tier: QualityTier): void {
     this.data.quality = tier; this.save();
+    // Record the choice where `core/Quality.pickTier` can see it, so it survives a cold open and not
+    // just this tab's `?quality=`.
+    try { localStorage.setItem(QUALITY_CHOICE_KEY, tier); } catch { /* private mode - the URL param still carries it */ }
     const url = new URL(location.href);
     url.searchParams.set('quality', tier);
     location.href = url.toString();

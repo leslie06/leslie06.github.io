@@ -83,6 +83,13 @@ export const DIRECTOR = {
   incomingWarning: 3,
   /** Minimum wave duration before a wave may be declared complete (guards against stubbed enemies). */
   minWaveTime: 0.5,
+  /**
+   * Seconds between "come and find the player" nudges, once a wave has stopped deploying.
+   * See GameMode.huntPlayer — short enough that a straggler who drops back to patrol is re-tasked
+   * before the player gives up looking for him, long enough not to override the AI's own decisions
+   * (a soldier who is already fighting is left alone; `alertTo` only redirects idle/patrol).
+   */
+  huntInterval: 4,
 };
 
 /** Spawn-point selection scoring. Higher is better. */

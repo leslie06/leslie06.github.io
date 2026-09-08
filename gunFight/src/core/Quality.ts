@@ -2,6 +2,13 @@
  * Every tunable quality number lives here. Nothing else hardcodes pixel ratio,
  * shadow map size, particle counts, or post-fx toggles.
  */
+import { type GpuInfo } from './Gpu';
+
+// GPU detection lives in ./Gpu so the classifier stays importable without a DOM (this module reads
+// window.devicePixelRatio while building the tier table below). Re-exported because the tier choice
+// is its only consumer.
+export { classifyGpu, detectGpu, type GpuInfo, type GpuKind } from './Gpu';
+
 export type QualityTier = 'low' | 'medium' | 'high' | 'ultra';
 
 export interface QualitySettings {
@@ -124,6 +131,29 @@ export interface QualitySettings {
    */
   minRenderScale: number;
   maxRenderScale: number;
+  /**
+   * Hard cap on the drawing buffer, in megapixels, applied to the *base* ratio before the governor
+   * multiplies its scale on top.
+   *
+   * `pixelRatio` is a per-device number, and on its own it says nothing about how many pixels the
+   * window actually is: at 1.5x a 2560x1305 window is a 7.5 MP buffer, and the whole post chain is
+   * linear in pixel count (see core/Resolution.ts - 7.5 MP measured 53 ms on an M2 Pro at `high`).
+   * So the boot-time buffer has to be bounded by area, not by ratio; the governor then trims from
+   * there. Without this the first seconds on any scaled or large display are spent at 10-20 fps
+   * while the governor claws its way down, which is exactly when the player decides the game is
+   * broken.
+   */
+  maxPixels: number;
+  /**
+   * Frames per second the loop is allowed to present, or 0 to run at the display's refresh rate.
+   *
+   * `targetFps` above is what the *governor* aims for; nothing was enforcing it, so on a display
+   * faster than 60 Hz the loop rendered every refresh. That is the whole quality budget spent twice
+   * over for no gain — every number in this file is chosen so a frame fits in 16.7 ms, and frames
+   * 121-240 of a second buy nothing the design asked for while the GPU draws full power for them.
+   * Overridable per session with `?fps=N` (0 = uncapped) so a high-refresh display can opt out.
+   */
+  frameCap: number;
 
   // --- post-chain fixed cost (render/PostFx.ts) --------------------------------------------------
   /**
@@ -161,7 +191,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     aoRadius: 0.8, aoIntensity: 2.6, shadowPcfTaps: 5, sunShafts: false, interiorProbe: true,
     aoDenoiseRadius: 4, aoDenoiseSamples: 4, aoContactRadius: 0, aoContactIntensity: 0, aoContactSamples: 0, interiorExposure: 3.6, clouds: false,
     cloudSteps: 2, dofFarCoc: 0, dofFarFocus: 14, dofFarRange: 55, caHip: 0, caAds: 0, adsVignette: 0.12,
-    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1, maxPixels: 1.6, frameCap: 60,
     depthCopyScale: 0.5, bloomScale: 0.5, motionBlurSamples: 0, dofSamples: 8, sunShaftSamples: 12, sunShaftScale: 0.25, aoContactHalfRes: true,
   },
   medium: {
@@ -172,7 +202,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     aoRadius: 0.9, aoIntensity: 2.6, shadowPcfTaps: 8, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 4, aoContactRadius: 0.30, aoContactIntensity: 1.6, aoContactSamples: 8, interiorExposure: 4.3, clouds: true,
     cloudSteps: 3, dofFarCoc: 2.4, dofFarFocus: 15, dofFarRange: 90, caHip: 0, caAds: 0.55, adsVignette: 0.16,
-    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1, maxPixels: 2.4, frameCap: 60,
     depthCopyScale: 0.5, bloomScale: 0.5, motionBlurSamples: 8, dofSamples: 10, sunShaftSamples: 16, sunShaftScale: 0.25, aoContactHalfRes: true,
   },
   high: {
@@ -183,7 +213,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     aoRadius: 0.9, aoIntensity: 2.85, shadowPcfTaps: 12, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 8, aoContactRadius: 0.26, aoContactIntensity: 1.75, aoContactSamples: 8, interiorExposure: 4.7, clouds: true,
     cloudSteps: 4, dofFarCoc: 3.0, dofFarFocus: 15, dofFarRange: 90, caHip: 0, caAds: 0.7, adsVignette: 0.17,
-    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.60, maxRenderScale: 1, maxPixels: 3.2, frameCap: 60,
     depthCopyScale: 0.5, bloomScale: 0.5, motionBlurSamples: 6, dofSamples: 12, sunShaftSamples: 16, sunShaftScale: 0.25, aoContactHalfRes: true,
   },
   ultra: {
@@ -194,16 +224,44 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     aoRadius: 1.0, aoIntensity: 2.95, shadowPcfTaps: 16, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 8, aoContactRadius: 0.24, aoContactIntensity: 1.8, aoContactSamples: 12, interiorExposure: 4.7, clouds: true,
     cloudSteps: 5, dofFarCoc: 3.4, dofFarFocus: 15, dofFarRange: 90, caHip: 0, caAds: 0.7, adsVignette: 0.17,
-    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.70, maxRenderScale: 1,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.70, maxRenderScale: 1, maxPixels: 5.0, frameCap: 60,
     depthCopyScale: 0.5, bloomScale: 0.5, motionBlurSamples: 8, dofSamples: 12, sunShaftSamples: 24, sunShaftScale: 0.30, aoContactHalfRes: false,
   },
 };
 
-export function pickTier(): QualityTier {
+/**
+ * The tier the player last picked *by hand* in the settings menu.
+ *
+ * `ui/Settings` reloaded with `?quality=`, so the choice held for that tab and was then silently
+ * thrown away on the next cold open - the menu showed `low` while the engine had auto-picked `high`
+ * again. It now also writes this key, and this is the only place a boot-time decision can see it.
+ *
+ * Deliberately a key of its own rather than the `quality` field inside the settings blob: that field
+ * is a mirror of whatever the engine auto-picked and gets persisted as a side effect of changing the
+ * volume, which would pin an auto-picked `high` onto a machine that should never have got it. Only
+ * an explicit choice belongs here. The string is duplicated rather than imported because core must
+ * not depend on ui.
+ */
+export const QUALITY_CHOICE_KEY = 'gunfight.quality.choice';
+
+function savedTier(): QualityTier | null {
+  try {
+    const q = localStorage.getItem(QUALITY_CHOICE_KEY);
+    return q && q in QUALITY ? (q as QualityTier) : null;
+  } catch { return null; }
+}
+
+export function pickTier(gpu?: GpuInfo): QualityTier {
   const q = new URLSearchParams(location.search).get('quality') as QualityTier | null;
   if (q && q in QUALITY) return q;
+  const saved = savedTier();
+  if (saved) return saved;
   const isMobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
   if (isMobile) return 'low';
+  // A software rasteriser or an integrated part cannot carry this post chain at any resolution the
+  // governor is allowed to reach, so the effects themselves have to come off - that is a tier, not
+  // a render scale.
+  if (gpu && (gpu.kind === 'software' || gpu.kind === 'integrated')) return 'low';
   const cores = navigator.hardwareConcurrency || 4;
   return cores >= 8 ? 'high' : 'medium';
 }

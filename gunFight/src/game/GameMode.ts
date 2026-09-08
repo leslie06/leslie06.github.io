@@ -47,6 +47,8 @@ export class GameMode implements GameApi {
   /** Died between waves (self-frag): restart moves on to the next wave instead of replaying a cleared one. */
   private diedInBreather = false;
   private incomingWarned = false;
+  /** Seconds until the next "everyone come and find the player" nudge; see huntPlayer(). */
+  private huntTimer = 0;
   /** "Last hostiles" callout fires once per wave, at the moment the wave stops deploying. */
   private deployAnnounced = false;
   private recentSpawns: number[] = [];
@@ -171,6 +173,10 @@ export class GameMode implements GameApi {
       }
       this.publishCounts(this.aliveCount());
       if (!this.deployAnnounced && deployComplete(this.toSpawn)) this.announceLastHostiles();
+      if (deployComplete(this.toSpawn) && this.enemiesAlive > 0) {
+        this.huntTimer -= dt;
+        if (this.huntTimer <= 0) { this.huntTimer = DIRECTOR.huntInterval; this.huntPlayer(); }
+      }
       if (waveComplete(this.toSpawn, this.enemiesAlive, this.waveTime)) this.completeWave();
     } else if (this.phase === 'breather') {
       this.breatherLeft = Math.max(0, this.breatherLeft - dt);
@@ -201,7 +207,7 @@ export class GameMode implements GameApi {
     this.waveStartScore = this.score; this.waveStartKills = this.kills;
     this.toSpawn = this.def.count; this.spawned = 0; this.spawnTimer = 0; this.waveTime = 0;
     this.phase = 'wave'; this.breatherLeft = 0; this.incomingWarned = false;
-    this.deployAnnounced = false; this.emptyFieldTime = 0;
+    this.deployAnnounced = false; this.emptyFieldTime = 0; this.huntTimer = 0;
     this.enemiesRemaining = this.def.count; this.enemiesAlive = 0; this.enemiesPending = this.def.count; this.deploying = true;
     this.safe(() => this.enemies?.setDifficulty?.(this.def.difficulty));
     for (const r of this.resuppliables) this.safe(() => r.resupply());
@@ -240,6 +246,22 @@ export class GameMode implements GameApi {
     if (alive <= 0) return; // the wave ended on the same tick; the clear banner says it better
     this.safe(() => this.hud?.showMessage?.(lastHostilesText(alive), 2000));
     this.safe(() => this.audio?.play('wave_incoming'));
+  }
+
+  /**
+   * Once the wave has nothing left to deploy, everyone still alive is told where the player is.
+   *
+   * The enemies' own perception is range-limited by design (70 m sight and hearing, 55 m squad
+   * radius, on a map ~100 m across), which means a soldier who spawned in a far corner can patrol
+   * out the rest of the wave without ever learning there is a fight. While reinforcements are still
+   * arriving that is just texture; the moment the wave stops deploying it is a dead end, because
+   * the wave ends only when he dies and the player has no way to know which corner to search.
+   * Re-issued on a timer rather than once, so a straggler who loses the scent and drops back to
+   * patrol is put back on the trail.
+   */
+  private huntPlayer(): void {
+    const p = this.player; if (!p) return;
+    this.safe(() => this.enemies?.alertAll?.(p.position));
   }
 
   /** Publish the three counters the HUD reads. `enemiesRemaining` stays the honest wave total. */

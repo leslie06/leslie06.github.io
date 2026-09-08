@@ -77,6 +77,12 @@ export interface EnemiesApi extends System {
   applyExplosion(center: THREE.Vector3, radius: number, damage: number): void;
   /** Optional: the game mode pushes the current wave's difficulty scalars here at every wave start. */
   setDifficulty?(d: EnemyDifficulty): void;
+  /**
+   * Optional: point every living enemy at `position`, ignoring the sight/hearing/squad ranges.
+   * The wave director calls this once a wave has stopped deploying, so the survivors come to the
+   * player instead of patrolling a corner of the map he has no reason to search.
+   */
+  alertAll?(position: THREE.Vector3): void;
 }
 
 /** Per-wave difficulty scalars (all 1 = baseline). Set by game/, consumed by enemies/. */

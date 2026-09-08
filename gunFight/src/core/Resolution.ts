@@ -36,24 +36,51 @@ export interface GovernorConfig {
 
 export const DEFAULT_GOVERNOR: GovernorConfig = { targetFps: 60, minScale: 0.6, maxScale: 1, window: 30, cooldown: 20 };
 
-export function newGovernor(scale = 1): GovernorState {
-  return { scale, cooldown: 0, samples: [] };
+/**
+ * `cooldown` is also the warm-up: the first seconds of a session are full of one-off costs (shader
+ * compiles, texture uploads, the first ragdoll) that say nothing about steady-state throughput, and
+ * a governor that reacts to them starts the game at its floor.
+ */
+export function newGovernor(scale = 1, cooldown = 0): GovernorState {
+  return { scale, cooldown, samples: [] };
 }
+
+/**
+ * Per-sample ceiling, in ms, before a frame enters the mean. A single 2 s stall (an alt-tab, a
+ * shader compile, the browser reclaiming memory) is not a resolution problem, and without a clip it
+ * would drag a 30-frame mean far enough to slam the scale to the floor. 200 ms still says
+ * unambiguously "this frame was terrible" while keeping one outlier's contribution bounded.
+ */
+const SAMPLE_CLIP_MS = 200;
 
 /**
  * Feed one frame time (ms). Returns the new scale, or null when nothing should change.
  *
- * The dead band matters: without it the governor oscillates one step every window, which reads as a
- * pulsing image and is worse than a steady lower resolution. We only step down when we are clearly
- * missing the target, and only step up when we have real headroom for the *next* larger size —
- * scaling costs quadratic pixels, so going from 0.8 to 0.9 is ~27% more work, and we must be sure
- * it fits before spending it.
+ * Down and up read different statistics, and that asymmetry is the whole control law.
+ *
+ * Down uses the **mean**, because the mean frame interval is by definition the reciprocal of the
+ * frame rate the player actually got over the window. The median is not: a machine that renders 28
+ * frames at 13 ms and then stalls for 760 ms twice has a median of 13 ms (a confident "76 fps")
+ * and a real throughput of 16 fps. That is not a hypothetical - it is what an over-subscribed GPU
+ * does, because the driver lets the CPU run several frames ahead and then blocks on the swap chain,
+ * so the stutter arrives as a few enormous frames among many fast ones. A median-driven governor is
+ * blind to exactly the case it exists to fix, and sits at scale 1.00 while the game is unplayable.
+ *
+ * Up uses the **median**, and demands the predicted cost of the next size still fit with margin.
+ * Growing costs quadratic pixels, so 0.8 -> 0.9 is ~27% more work; we only spend that when the
+ * window was consistently fast, not when its average was dragged down by luck.
+ *
+ * The dead band matters in both directions: without it the governor oscillates one step every
+ * window, which reads as a pulsing image and is worse than a steady lower resolution.
  */
 export function step(s: GovernorState, frameMs: number, cfg: GovernorConfig): number | null {
   if (s.cooldown > 0) { s.cooldown--; return null; }
-  s.samples.push(frameMs);
+  s.samples.push(Math.min(frameMs, SAMPLE_CLIP_MS));
   if (s.samples.length < cfg.window) return null;
 
+  let sum = 0;
+  for (const v of s.samples) sum += v;
+  const mean = sum / s.samples.length;
   s.samples.sort((a, b) => a - b);
   const median = s.samples[s.samples.length >> 1];
   s.samples.length = 0;
@@ -61,11 +88,11 @@ export function step(s: GovernorState, frameMs: number, cfg: GovernorConfig): nu
   const budget = 1000 / cfg.targetFps;
   let next = s.scale;
 
-  if (median > budget * 1.1) {
+  if (mean > budget * 1.1) {
     // Aim straight at the budget instead of stepping down blindly: cost is ~linear in pixels and
-    // pixels go as scale², so the scale that fits is sqrt(budget/median).
-    next = s.scale * Math.sqrt(budget / median);
-  } else if (median < budget * 0.7 && s.scale < cfg.maxScale) {
+    // pixels go as scale², so the scale that fits is sqrt(budget/mean).
+    next = s.scale * Math.sqrt(budget / mean);
+  } else if (median < budget * 0.7 && mean < budget * 0.9 && s.scale < cfg.maxScale) {
     const up = Math.min(cfg.maxScale, s.scale * 1.12);
     // Only take the step if the predicted cost still fits with margin.
     if (median * (up / s.scale) ** 2 < budget * 0.9) next = up;

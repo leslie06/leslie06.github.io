@@ -161,6 +161,28 @@ export class Brain {
     }
   }
 
+  /**
+   * Task this soldier onto a known player position regardless of what he can see or hear.
+   *
+   * Every other route into `alerted` is range-limited on purpose - `viewDistance` and
+   * `hearingRadius` are 70 m and `squadRadius` is 55 m, on a map whose far corners are ~100 m
+   * apart - so a soldier who spawns across the level from the fight can legitimately patrol for
+   * ever without ever learning the player exists. That is fine while the wave is still deploying
+   * and awful the moment it stops: the wave ends only when he dies, and a player who cannot find
+   * him has no move left. The director calls this once the wave has nothing more to send in.
+   *
+   * He is given the position, not a sightline: `lastSeenTime` is stamped half-stale exactly as
+   * `shareContact` does it, so he walks over to look rather than snapping onto a target across the
+   * map.
+   */
+  alertTo(pos: THREE.Vector3): void {
+    if (this.scripted) return;
+    this.alerted = true;
+    this.lastSeen.copy(pos);
+    this.lastSeenTime = this.w.time - PERCEPTION.memoryTime * 0.5;
+    if (this.state === 'idle' || this.state === 'patrol') this.setState('investigate');
+  }
+
   /** World-only raycast between two points. */
   clear(a: THREE.Vector3, b: THREE.Vector3): boolean {
     const d = _v3.subVectors(b, a); const len = d.length(); if (len < 1e-3) return true;
