@@ -8,10 +8,11 @@ import { newGovernor, step as governorStep, type GovernorConfig, type GovernorSt
 
 /**
  * Frames the resolution governor ignores at boot. Shader compilation, the first texture uploads and
- * the first ragdoll all land in the first second or two and are one-off costs; reacting to them
- * starts every session at the render-scale floor and then spends ten seconds crawling back up.
+ * the first ragdoll all land in the first seconds and are one-off costs; reacting to them starts
+ * the session at the render-scale floor. 180 frames is 3 s at the 60 fps cap - long enough to cover
+ * the compile storm that follows the first time each material is drawn.
  */
-const WARMUP_FRAMES = 90;
+const WARMUP_FRAMES = 180;
 
 /** A system gets a fixed-step tick (60Hz, physics/gameplay) and a per-frame update (render/visuals). */
 export interface System {
@@ -73,7 +74,7 @@ export class Engine {
     // integrated GPU, and when they do the tier has to follow.
     this.gpu = detectGpu(this.renderer.getContext());
     this.quality = QUALITY[pickTier(this.gpu)];
-    this.governor = newGovernor(1, WARMUP_FRAMES);
+    this.governor = newGovernor(1, WARMUP_FRAMES, this.quality.maxRenderScale);
     this.governorCfg = { targetFps: this.quality.targetFps, minScale: this.quality.minRenderScale,
       maxScale: this.quality.maxRenderScale, window: 30, cooldown: 20 };
     this.frameCapMs = Engine.frameCapMs(this.quality.frameCap);

@@ -22,6 +22,20 @@ export interface GovernorState {
   /** Frames left to ignore after a scale change, while the pipeline re-settles. */
   cooldown: number;
   samples: number[];
+  /** Decisions since the last blind upward probe. See the `comfortable` branch of `step`. */
+  probe: number;
+  /**
+   * Lowest scale that has been measured missing the budget, or `maxScale` if none has. Blind probes
+   * stop just under it, and it relaxes a little every comfortable window so a ceiling set during
+   * one heavy moment (an explosion, a full squad on screen) does not cap the rest of the run.
+   */
+  ceiling: number;
+  /**
+   * How often probing has been wrong lately, 0..PROBE_FAIL_CAP. Each failure lengthens the wait
+   * before the next attempt; comfortable windows forget it slowly. A machine sitting exactly at its
+   * limit therefore stops poking at the wall instead of finding it every few seconds.
+   */
+  fails: number;
 }
 
 export interface GovernorConfig {
@@ -41,8 +55,8 @@ export const DEFAULT_GOVERNOR: GovernorConfig = { targetFps: 60, minScale: 0.6, 
  * compiles, texture uploads, the first ragdoll) that say nothing about steady-state throughput, and
  * a governor that reacts to them starts the game at its floor.
  */
-export function newGovernor(scale = 1, cooldown = 0): GovernorState {
-  return { scale, cooldown, samples: [] };
+export function newGovernor(scale = 1, cooldown = 0, maxScale = 1): GovernorState {
+  return { scale, cooldown, samples: [], probe: 0, ceiling: maxScale, fails: 0 };
 }
 
 /**
@@ -52,6 +66,40 @@ export function newGovernor(scale = 1, cooldown = 0): GovernorState {
  * unambiguously "this frame was terrible" while keeping one outlier's contribution bounded.
  */
 const SAMPLE_CLIP_MS = 200;
+
+/**
+ * Decisions between blind upward probes, and the size of one.
+ *
+ * Deliberately smaller and rarer than a measured step-up: a probe is a guess, and its cost when
+ * wrong is a window spent over budget. 1.06 on the scale is ~12% more pixels — enough to climb from
+ * the 0.6 floor back to 1.0 in about a dozen probes, small enough that a wrong one is a brief 6%
+ * softening rather than a visible pulse.
+ */
+const PROBE_WINDOWS = 6;
+const PROBE_STEP = 1.06;
+/** How fast a ceiling forgets. Per comfortable decision, so a scene that got heavier stays capped. */
+const CEILING_RELAX = 1.004;
+/**
+ * Extra windows to wait after a probe was wrong, multiplied by the recent failure count.
+ *
+ * Blind probing cannot converge silently: a machine sitting exactly at its limit will find the wall
+ * again every time it tries, and every scale change reallocates the post chain's render targets and
+ * costs a frame. Measured at a flat back-off, an M2 Pro at `high` settled into a 0.70-0.80 wobble
+ * changing scale every ~7 s, which is a hitch often enough to notice. Lengthening the wait with each
+ * failure turns that into a machine that probes, learns, and then leaves itself alone — while a
+ * machine that genuinely got faster (a background app closed, a thermal throttle lifted) still
+ * finds its way up, just more slowly. The alternative — never probing — is the one-way ratchet this
+ * whole branch exists to fix.
+ */
+const PROBE_BACKOFF = 12;
+const PROBE_FAIL_CAP = 6;
+/**
+ * Failures forgotten per comfortable decision — deliberately slow, one level per ~100 windows.
+ * At 0.05 the decay outran the failures and the counter sat at ~1 for ever, which left the wobble
+ * at one scale change every 7 s; the point of the counter is to let a machine that is genuinely at
+ * its limit climb to the cap and stay quiet.
+ */
+const PROBE_FAIL_DECAY = 0.01;
 
 /**
  * Feed one frame time (ms). Returns the new scale, or null when nothing should change.
@@ -86,16 +134,55 @@ export function step(s: GovernorState, frameMs: number, cfg: GovernorConfig): nu
   s.samples.length = 0;
 
   const budget = 1000 / cfg.targetFps;
+  /**
+   * Is this window smooth, or is its average being carried by outliers?
+   *
+   * Both upward branches below are about spending headroom on pixels, and neither is safe without
+   * this. A window of 29 frames at 7 ms and one 200 ms stall has a median of 7 (reads as 143 fps)
+   * and a mean of 13 (reads as spare capacity) — and is in fact a quarter-second freeze twice a
+   * second. Growing the buffer there makes the only thing that is actually wrong worse. A window
+   * genuinely locked to vsync has mean and median within a per cent of each other.
+   */
+  const steady = mean <= median * 1.25;
   let next = s.scale;
 
   if (mean > budget * 1.1) {
     // Aim straight at the budget instead of stepping down blindly: cost is ~linear in pixels and
     // pixels go as scale², so the scale that fits is sqrt(budget/mean).
     next = s.scale * Math.sqrt(budget / mean);
-  } else if (median < budget * 0.7 && mean < budget * 0.9 && s.scale < cfg.maxScale) {
-    const up = Math.min(cfg.maxScale, s.scale * 1.12);
-    // Only take the step if the predicted cost still fits with margin.
-    if (median * (up / s.scale) ** 2 < budget * 0.9) next = up;
+    s.ceiling = Math.min(s.ceiling, s.scale);   // this scale demonstrably does not fit
+    s.fails = Math.min(PROBE_FAIL_CAP, s.fails + 1);
+    s.probe = -PROBE_BACKOFF * Math.ceil(s.fails);
+  } else if (s.scale < cfg.maxScale && steady) {
+    if (median < budget * 0.7 && mean < budget * 0.9) {
+      // Measured headroom: the loop is running free and finishing well inside the budget.
+      const up = Math.min(cfg.maxScale, s.scale * 1.12);
+      // Only take the step if the predicted cost still fits with margin.
+      if (median * (up / s.scale) ** 2 < budget * 0.9) next = up;
+    } else if (mean <= budget * 1.05) {
+      // Locked to the presentation cadence, and the headroom above it is *unobservable*.
+      //
+      // This is the normal case, not an edge case: vsync (and the frame cap) hold every frame at
+      // the budget, so a machine with 3x the power it needs reports exactly the same 16.7 ms as one
+      // with barely enough. The measured branch above asks for 11.7 ms — 85 fps — which no display
+      // running at `targetFps` can ever show, so on its own the governor is a one-way ratchet: it
+      // steps down for a rough patch and then can never come back, and the player finishes the
+      // session at the floor. Measured on a 3060 Ti: pinned at 0.60, drawing 1.2 MP into a 3.3 MP
+      // window, at a rock-steady 59 fps.
+      //
+      // So stop measuring and try. If the step was too much the next window reports it as a miss
+      // and the branch above takes it straight back — and records the ceiling, so we do not walk
+      // into the same wall every few seconds.
+
+      s.ceiling = Math.min(cfg.maxScale, s.ceiling * CEILING_RELAX);
+      s.fails = Math.max(0, s.fails - PROBE_FAIL_DECAY);
+      s.probe++;
+      if (s.probe >= PROBE_WINDOWS) {
+        s.probe = 0;
+        const up = Math.min(cfg.maxScale, s.ceiling * 0.98, s.scale * PROBE_STEP);
+        if (up > s.scale) next = up;
+      }
+    }
   }
 
   next = Math.max(cfg.minScale, Math.min(cfg.maxScale, next));
