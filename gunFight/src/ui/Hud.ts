@@ -60,7 +60,7 @@ export class Hud implements HudApi {
   // per-frame state (reused, no allocations)
   private state: HudState = { t: 0, dt: 0, enemies: [], heading: 0, fovRad: 80 * Math.PI / 180, heightPx: 1080 };
   private playerBuf = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, health: 100, maxHealth: 100, alive: true, sprinting: false, aiming: false };
-  private gameBuf = { wave: 1, kills: 0, score: 0, running: false, grenades: undefined as number | undefined, remaining: undefined as number | undefined, interact: undefined as string | undefined };
+  private gameBuf = { wave: 1, kills: 0, score: 0, running: false, grenades: undefined as number | undefined, remaining: undefined as number | undefined, interact: undefined as string | undefined, phase: undefined as string | undefined, breatherLeft: undefined as number | undefined };
   private enemyPool: HudEnemy[] = [];
 
   // event bookkeeping
@@ -246,7 +246,12 @@ export class Hud implements HudApi {
     this.compass.update(s);
     this.minimap.update(s);
     let alive = 0; for (const e of s.enemies) if (e.alive) alive++;
-    this.objective.set('Eliminate all hostiles', s.game?.remaining ?? alive, 'remaining');
+    // The objective line is the only persistent read on wave state, so it has to change between
+    // phases. A player who cleared the field and saw "ELIMINATE ALL HOSTILES · 0 REMAINING" for the
+    // whole breather reasonably concluded the game was stuck.
+    const ph = s.game?.phase;
+    if (ph === 'breather') this.objective.set('Wave clear · next wave in', Math.max(0, Math.ceil(s.game?.breatherLeft ?? 0)), 'seconds');
+    else this.objective.set('Eliminate all hostiles', s.game?.remaining ?? alive, 'remaining');
     this.objective.update(s);
     // The game module owns the interaction hint; while it publishes one, it drives the prompt and
     // showPrompt/hidePrompt stay out of the way (they still work when no game module is present).
@@ -280,6 +285,7 @@ export class Hud implements HudApi {
       const b = this.gameBuf;
       b.wave = g.wave; b.kills = g.kills; b.score = g.score; b.running = g.running;
       b.grenades = g.grenades; b.remaining = g.enemiesRemaining; b.interact = g.interactPrompt;
+      b.phase = g.phase; b.breatherLeft = g.breatherLeft;
       s.game = b;
     }
     else s.game = undefined;

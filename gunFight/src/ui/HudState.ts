@@ -18,6 +18,10 @@ export interface HudGame {
   grenades?: number;
   /** Enemies left in the wave; falls back to the live alive-count when the game module is absent. */
   remaining?: number;
+  /** GameApi.phase — 'menu' | 'wave' | 'breather' | 'dead'. Drives the objective line. */
+  phase?: string;
+  /** Seconds left in the between-wave breather, when phase is 'breather'. */
+  breatherLeft?: number;
   /** GameApi.interactPrompt verbatim ("[E] RESUPPLY", '' when nothing is in reach). */
   interact?: string;
 }

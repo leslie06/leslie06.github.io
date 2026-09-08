@@ -699,8 +699,10 @@ export class Level implements System, LevelApi {
     slab(ctx, x0, z0, x1, z1, -0.1, base - 0.02, [], 'concrete', 'floorInt', { tint: 0xbdb8ae });
     // north facade intact
     wall(ctx, { axis: 'x', u0: x0, u1: x1, b0: z0, b1: z0 + T, y0: base, y1: top, out: -1, openings: [this.door(12, base, 1.1, 2.15, 'open'), this.win(16, base + 1.2, 1.2, 1.3, 'boarded'), this.win(20, base + 1.2, 1.2, 1.3), ...[11, 14.2, 17.4, 20.6].flatMap((u) => [this.win(u, f1 + 0.95), this.win(u, f2 + 0.95)])], mat, tint, innerSkin: inMat, innerTint: inTint, frameTint, courses: [f1 - 0.2, f2 - 0.2], damageFn: this.damageFn([[15, 7, -24, 1.6]], top, 0.12) });
-    // east facade: intact to z=-13, then broken down toward the corner
-    wall(ctx, { axis: 'z', u0: z0 + T, u1: -13, b0: x1 - T, b1: x1, y0: base, y1: top, out: 1, openings: [this.door(-20, base, 1.1, 2.15, 'open'), this.win(-16, base + 1.2, 1.2, 1.3, 'shutter'), ...[-21.5, -18.5, -15.5].flatMap((u) => [this.win(u, f1 + 0.95), this.win(u, f2 + 0.95)])], mat, tint, innerSkin: inMat, innerTint: inTint, frameTint, courses: [f1 - 0.2, f2 - 0.2], damageFn: this.damageFn([[23, 8.5, -13.5, 2.4], [23, 3, -14, 1.6]], top, 0.15) });
+    // east facade: intact to z=-13, then broken down toward the corner. The alley door at z=-20 opens
+    // straight into the stairwell, so its leaf is pinned flat against the wall — left to swing at the
+    // random 1.0-1.7 rad it pinched the only route from the stair door to the first run below 0.7 m.
+    wall(ctx, { axis: 'z', u0: z0 + T, u1: -13, b0: x1 - T, b1: x1, y0: base, y1: top, out: 1, openings: [{ ...this.door(-20, base, 1.1, 2.15, 'open'), swing: 2.6 }, this.win(-16, base + 1.2, 1.2, 1.3, 'shutter'), ...[-21.5, -18.5, -15.5].flatMap((u) => [this.win(u, f1 + 0.95), this.win(u, f2 + 0.95)])], mat, tint, innerSkin: inMat, innerTint: inTint, frameTint, courses: [f1 - 0.2, f2 - 0.2], damageFn: this.damageFn([[23, 8.5, -13.5, 2.4], [23, 3, -14, 1.6]], top, 0.15) });
     brokenWall(ctx, x1 - T / 2, -13, x1 - T / 2, z1, T, base, (t) => THREE.MathUtils.lerp(9.2, 2.6, t) + 0.6 * Math.sin(t * 9), mat, { tint });
     // west facade (main street): intact rear, broken front
     wall(ctx, { axis: 'z', u0: z0 + T, u1: -16, b0: x0, b1: x0 + T, y0: base, y1: top, out: -1, openings: [this.door(-20.2, base, 1.1, 2.15, 'open'), this.win(-22.5, base + 1.2, 1.0, 1.2, 'boarded'), this.win(-17.6, base + 1.2, 1.2, 1.3, 'broken'), ...[-22, -19, -17].flatMap((u) => [this.win(u, f1 + 0.95, 1.1, 1.4), this.win(u, f2 + 0.95, 1.1, 1.4)])], mat, tint, innerSkin: inMat, innerTint: inTint, frameTint, courses: [f1 - 0.2, f2 - 0.2], damageFn: this.damageFn([[9, 6.5, -16.5, 2.6], [9, 2.6, -18.5, 1.4]], top, 0.2) });
@@ -1250,6 +1252,10 @@ export class Level implements System, LevelApi {
         const y = base + f * FH;
         for (let k = 0; k < 9; k += 2) s.push(new THREE.Vector3(x0 + 0.62, y + (k + 1) * 0.18, zNear + dir * (0.3 + (k + 0.5) * 0.28)), new THREE.Vector3(x0 + 1.98, y + 1.62 + (k + 1) * 0.18, zNear + dir * (0.3 + 2.52 - (k + 0.5) * 0.28)));
         s.push(new THREE.Vector3(x0 + 1.3, y + 1.62, zNear + dir * 3.4), new THREE.Vector3(x0 + 1.98, y + FH, zNear + dir * 0.1), new THREE.Vector3(x0 + 1.95, y, zNear - dir * 0.9));
+        // Landing floor just inside the door, under the upper run. Without it the graph has to jump
+        // straight from the doorstep to the third tread, and that line clips the jamb — the route into
+        // a U-stair is a dog-leg, so it needs the corner node to exist.
+        s.push(new THREE.Vector3(x0 + 1.95, y, zNear + dir * 0.62), new THREE.Vector3(x0 + 0.9, y, zNear + dir * 0.62));
       }
     }
     // rubble slope centreline

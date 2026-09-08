@@ -110,6 +110,54 @@ export function nearestNodeIn(nodes: readonly NavNode[], p: V3, comp: number, yW
   return best;
 }
 
+/**
+ * Node pairs that would join two different connected components, shortest first, at most `perPair`
+ * per component pair. The level's graph is sampled on a grid and only links neighbours inside
+ * ~1.6 grid steps, so a doorway, a ramp or a patch of ground the sampler skipped leaves whole
+ * regions as separate islands — this level ships 32 of them, and `planPath` answers a cross-island
+ * request by routing to the nearest node of the goal's island, which can point an enemy the wrong
+ * way down a street. The caller line-of-walk tests each candidate before linking it.
+ *
+ * Call `labelComponents` first (comp labels are the input) and again after linking.
+ */
+export function bridgeCandidates(nodes: readonly NavNode[], maxGap: number, maxRise: number, perPair = 3): [number, number][] {
+  const cell = Math.max(1, maxGap);
+  const grid = new Map<number, number[]>();
+  const key = (gx: number, gz: number): number => gx * 100003 + gz;
+  for (let i = 0; i < nodes.length; i++) {
+    const p = nodes[i].p;
+    const k = key(Math.floor(p[0] / cell), Math.floor(p[2] / cell));
+    const a = grid.get(k);
+    if (a) a.push(i); else grid.set(k, [i]);
+  }
+  const pairs = new Map<number, { i: number; j: number; d: number }[]>();
+  for (let i = 0; i < nodes.length; i++) {
+    const a = nodes[i]; const ca = a.comp ?? 0;
+    const gx = Math.floor(a.p[0] / cell), gz = Math.floor(a.p[2] / cell);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+      const list = grid.get(key(gx + dx, gz + dz));
+      if (!list) continue;
+      for (const j of list) {
+        if (j <= i) continue;
+        const b = nodes[j]; const cb = b.comp ?? 0;
+        if (ca === cb) continue;
+        const d = distXZ(a.p, b.p);
+        if (d > maxGap || Math.abs(a.p[1] - b.p[1]) > maxRise) continue;
+        const lo = Math.min(ca, cb), hi = Math.max(ca, cb);
+        const k = lo * 100003 + hi;
+        const arr = pairs.get(k);
+        if (arr) arr.push({ i, j, d }); else pairs.set(k, [{ i, j, d }]);
+      }
+    }
+  }
+  const out: [number, number][] = [];
+  for (const arr of pairs.values()) {
+    arr.sort((x, y) => x.d - y.d);
+    for (let n = 0; n < Math.min(perPair, arr.length); n++) out.push([arr[n].i, arr[n].j]);
+  }
+  return out;
+}
+
 /** Full path in world points from `from` to `to` through the graph (falls back to a direct segment). */
 export function planPath(nodes: readonly NavNode[], from: V3, to: V3, penalty?: (i: number) => number): V3[] {
   if (nodes.length === 0) return [to];
@@ -165,11 +213,34 @@ export function ringSamples(c: V3, radii: readonly number[], count: number, phas
   return out;
 }
 
+/** Bonus a candidate gets for having a firing line on the player (and the penalty for not). */
+export const COVER_PEEK_BONUS = 4;
+/** Score per metre of standoff given up inside the engage band: how hard cover pulls the squad in. */
+export const COVER_CLOSE_IN = 0.3;
+const COVER_BLIND_PENALTY = -3;
+
+/**
+ * The half of `coverScore` that needs no raycast: engage-band fit plus how far we have to walk.
+ * `coverPrescore + COVER_PEEK_BONUS` is an admissible upper bound on the final score, so a caller
+ * can sort by it, probe best-first and stop as soon as the bound drops below the best real score.
+ * That matters: the LOS probes are the expensive part, and spending a fixed ray budget on
+ * candidates in *array order* is how the AI ended up choosing cover on the far side of the map.
+ */
+export function coverPrescore(cand: V3, me: V3, player: V3, dMin: number, dMax: number): number {
+  const dp = distXZ(cand, player);
+  // Inside the band the old score was flat, and the `near` term then always picked the candidate
+  // closest to *us* — i.e. the far edge of the band. A squad that only ever holds at 18 m reads as
+  // one that is avoiding the fight, so the band now slopes gently towards its near edge; `near`
+  // still stops anyone walking half the map for two metres of standoff.
+  const band = dp < dMin ? (dp - dMin) * 1.5
+    : dp > dMax ? (dMax - dp) * 0.6 - (dMax - dMin) * COVER_CLOSE_IN
+      : -(dp - dMin) * COVER_CLOSE_IN;
+  const near = -distXZ(cand, me) * 0.35;
+  return 10 + band + near;
+}
+
 /** Score a cover candidate: prefer distance in the engage band, hidden from the player, near us. */
 export function coverScore(cand: V3, me: V3, player: V3, hidden: boolean, peekable: boolean, dMin: number, dMax: number, claimed: boolean): number {
   if (!hidden || claimed) return -Infinity;
-  const dp = distXZ(cand, player);
-  const band = dp < dMin ? (dp - dMin) * 1.5 : dp > dMax ? (dMax - dp) * 0.6 : 0;
-  const near = -distXZ(cand, me) * 0.35;
-  return 10 + band + near + (peekable ? 4 : -3);
+  return coverPrescore(cand, me, player, dMin, dMax) + (peekable ? COVER_PEEK_BONUS : COVER_BLIND_PENALTY);
 }

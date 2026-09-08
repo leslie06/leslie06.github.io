@@ -157,6 +157,24 @@ export const MOVE = {
   stuckTime: 0.9,
 };
 
+/**
+ * Repair pass on the nav graph the level hands us. The graph is grid-sampled and only links
+ * neighbours a step or two apart, so it arrives split into islands; these numbers bound how big a
+ * gap the enemies module is willing to bridge, and how carefully.
+ */
+export const NAV = {
+  /** Largest gap (XZ metres) between two islands we will try to join. */
+  stitchMaxGap: 9,
+  /** Largest height difference across a bridge, and the ground tolerance at its midpoint. */
+  stitchMaxRise: 1.2,
+  /** Bridges attempted per pair of islands (a couple of links so one blocked probe is not fatal). */
+  stitchPerPair: 3,
+  /** Repeat so chains of islands merge (each pass re-labels components). */
+  stitchPasses: 3,
+  /** Knee and chest heights for the line-of-walk probe, matching the level builder's own test. */
+  stitchHeights: [0.55, 1.35],
+};
+
 export const PERCEPTION = {
   losInterval: 0.1,
   viewDistance: 70,
@@ -166,6 +184,8 @@ export const PERCEPTION = {
   hearingRadius: 70,
   eyeHeight: 1.62,
   crouchEyeHeight: 1.05,
+  /** How far a contact callout carries to squad-mates who have not seen the player themselves. */
+  squadRadius: 55,
 };
 
 export const COMBAT = {
@@ -181,7 +201,7 @@ export const COMBAT = {
   peekTimeMin: 1.4, peekTimeMax: 3.2,
   hideTimeMin: 0.7, hideTimeMax: 1.8,
   /** cycles at one cover before advancing to another */
-  coverCyclesBeforeMove: 3,
+  coverCyclesBeforeMove: 2,
   retreatHealthFrac: 0.3,
   engageDistanceMin: 7, engageDistanceMax: 18,
   coverSearchRadii: [3, 5.5, 8.5],
@@ -196,6 +216,44 @@ export const COMBAT = {
   fireOnMoveRange: 12,
   /** re-fire a contact burst after this long without shooting */
   contactRefire: 3.5,
+  /**
+   * Cover has to be somewhere we can reach and still be in the fight. Without this cap `findCover`
+   * happily returned a hole 30 m away on the far side of the map, and walking to it read to the
+   * player as the whole squad retreating and going silent.
+   */
+  coverMaxTravel: 14,
+  /** Candidates that get the (expensive) LOS probes, taken best-first off the ray-free prescore. */
+  coverProbeBudget: 30,
+  /** Iterations of the probe loop before we give up regardless of how many rays were spent. */
+  coverProbeScan: 120,
+  /** Retry delay after a cover search that found nothing shootable-from. */
+  coverSearchRetry: 1.1,
+  /** How far past the wanted band a held cover may sit before we bound forward out of it. */
+  coverBandSlack: 2,
+  /** Metres of ground a forward bound has to gain to be worth taking instead of assaulting. */
+  boundMinGain: 1.5,
+  /** Seconds spent out of cover closing on the player when no forward bound is available. */
+  assaultTime: 4,
+  /**
+   * Squad pressure. A soldier who is alerted but has no firing line on the player closes the
+   * engagement band at this rate until he gets one; contact gives the band back more slowly. This
+   * is what stops a squad parking behind hard cover at 18 m with nothing to shoot at.
+   */
+  pushRate: 1.1,
+  pushDecay: 0.7,
+  /** Metres of band collapse a hit buys back, so a player who fights back is not simply swarmed. */
+  pushRelief: 5,
+  /** Cap on the band collapse, and the closest the pushed band is ever allowed to ask for. */
+  pushMax: 11,
+  pushMinDistance: 5,
+  /** An investigate goal we never manage to reach must not hold us forever. */
+  investigateTimeout: 8,
+  /** Un-alerted wave enemies advance to contact: how far ahead of us the patrol goal is placed. */
+  advanceStride: 14,
+  /** Lateral spread of the advance-to-contact goal so a squad fans out instead of forming a queue. */
+  advanceSpread: 7,
+  /** Graph nodes LOS-probed when picking an advance goal, best-first. */
+  advanceProbes: 12,
 };
 
 /** CoD-like accuracy model constants (see Accuracy.ts) */

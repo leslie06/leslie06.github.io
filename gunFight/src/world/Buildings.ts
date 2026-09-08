@@ -12,6 +12,7 @@ export const T = 0.35;    // exterior wall thickness
 export const SLAB = 0.25; // slab thickness
 export const RISER = 0.18, TREAD = 0.28, STEPS = 9; // per run (U-stair, 2 runs per floor)
 export const RUN = STEPS * TREAD; // 2.52
+export const SOFFIT = 0.30;        // stringer depth under a run (mesh + collider)
 export const STAIR_W = 2.6, STAIR_D = 4.1;
 
 export interface BuildCtx {
@@ -328,7 +329,10 @@ export function wall(ctx: BuildCtx, s: WallSpec): void {
       const state = o.state ?? rng.pick<OpeningState>(['open', 'open', 'missing', 'closed']);
       if (state !== 'missing') {
         const leafW = w - 0.2, leafH = h - 0.12;
-        const swing = state === 'closed' ? 0 : (o.swing ?? rng.range(1.0, 1.7)) * (outLocal > 0 ? 1 : -1);
+        // Draw the angle whether or not the caller pins it, so pinning `swing` on the one door that
+        // opens into a stairwell does not shift every later rng draw in the level.
+        const swingRnd = state === 'closed' ? 0 : rng.range(1.0, 1.7);
+        const swing = state === 'closed' ? 0 : (o.swing ?? swingRnd) * (outLocal > 0 ? 1 : -1);
         // hinge at u0 side, on the interior face plane; leaf rotates into the building
         const rot = new THREE.Matrix4().makeRotationY(-swing * (outLocal > 0 ? 1 : -1));
         const g = new THREE.BoxGeometry(leafW, leafH, 0.05);
@@ -425,7 +429,7 @@ export function stairRun(ctx: BuildCtx, x0: number, x1: number, zStart: number, 
   const sx = (sOff: number) => -dir * sOff;
   shape.moveTo(sx(0), 0);
   for (let k = 0; k < STEPS; k++) { shape.lineTo(sx(k * TREAD), (k + 1) * RISER); shape.lineTo(sx((k + 1) * TREAD), (k + 1) * RISER); }
-  shape.lineTo(sx(RUN), STEPS * RISER - 0.3);
+  shape.lineTo(sx(RUN), STEPS * RISER - SOFFIT);
   shape.lineTo(sx(0.35), -0.02);
   shape.lineTo(sx(0), -0.02);
   shape.closePath();
@@ -436,7 +440,13 @@ export function stairRun(ctx: BuildCtx, x0: number, x1: number, zStart: number, 
   for (let k = 0; k < STEPS; k++) {
     const zc = zStart + dir * ((k + 0.5) * TREAD);
     const top = yBase + (k + 1) * RISER;
-    ctx.collideBox((x0 + x1) / 2, (yBase - 0.02 + top) / 2, zc, x1 - x0, top - yBase + 0.02, TREAD, 'concrete');
+    // The collider has to follow the extruded soffit, not fill the whole prism down to yBase.
+    // A flat-bottomed run is a phantom ceiling `yBase - 0.02` high over everything beneath it, and in
+    // a U-stair the only way in is *under* the upper run: with FH = 3.24 that left 1.60 m of headroom
+    // in front of every stairwell door and a 1.8 m capsule could never enter. The mesh already slopes
+    // (see the `lineTo(sx(0.35), -0.02)` edge); SOFFIT is the same 0.30 m stringer depth.
+    const bot = Math.max(yBase - 0.02, top - RISER - SOFFIT);
+    ctx.collideBox((x0 + x1) / 2, (bot + top) / 2, zc, x1 - x0, top - bot, TREAD, 'concrete');
   }
   return yBase + STEPS * RISER;
 }

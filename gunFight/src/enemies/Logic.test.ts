@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { footCurve, gaitFor, hipsCurve, phaseRate, springStep, damp, dampAngle, wrap01 } from './Gait';
-import { astar, coverScore, nearestNode, pickWhisker, planPath, ringSamples, separation, type NavNode } from './Nav';
+import { astar, bridgeCandidates, coverPrescore, coverScore, labelComponents, nearestNode, pickWhisker, planPath, ringSamples, separation, type NavNode } from './Nav';
 import { burstLength, bulletDamage, hitIntentChance, shotOffset } from './Accuracy';
 import { ACCURACY, ANIM } from './EnemyDefs';
 
@@ -98,6 +98,64 @@ describe('nav', () => {
     expect(hidden).toBeGreaterThan(coverScore([5, 0, 0], [0, 0, 0], [15, 0, 0], true, false, 7, 18, false));
     expect(coverScore([5, 0, 0], [0, 0, 0], [15, 0, 0], false, true, 7, 18, false)).toBe(-Infinity);
     expect(coverScore([5, 0, 0], [0, 0, 0], [15, 0, 0], true, true, 7, 18, true)).toBe(-Infinity);
+  });
+
+  it('coverPrescore bounds coverScore from above and leans toward the near edge of the band', () => {
+    const me: [number, number, number] = [0, 0, 0], player: [number, number, number] = [30, 0, 0];
+    // it is the ray-free half of the real score, so score = prescore + the peek term
+    for (const c of [[10, 0, 0], [18, 0, 0], [24, 0, 0]] as [number, number, number][]) {
+      expect(coverScore(c, me, player, true, true, 7, 18, false)).toBeCloseTo(coverPrescore(c, me, player, 7, 18) + 4, 9);
+      expect(coverPrescore(c, me, player, 7, 18) + 4).toBeGreaterThan(coverScore(c, me, player, true, false, 7, 18, false));
+    }
+    // inside the band, equal walking distance, the one closer to the player wins
+    const stand: [number, number, number] = [15, 0, 0];
+    const near = coverPrescore([18, 0, 0], stand, player, 7, 18);  // 3 m walk, 12 m standoff
+    const far = coverPrescore([12, 0, 0], stand, player, 7, 18);   // 3 m walk, 18 m standoff
+    expect(near).toBeGreaterThan(far);
+    // but walking distance still has a say: 15 m of ground is not worth 6 m of standoff
+    expect(coverPrescore([12, 0, 0], stand, player, 7, 18)).toBeGreaterThan(coverPrescore([18, 0, 15], stand, player, 7, 18));
+    // and the band is still the dominant term: nothing outside it beats something inside it
+    expect(coverPrescore([16, 0, 0], me, player, 7, 18)).toBeGreaterThan(coverPrescore([0, 0, 0], me, player, 7, 18));
+  });
+});
+
+describe('nav island stitching', () => {
+  /** Two 3-node rows on the same y, `gap` metres apart in x, linked only within each row. */
+  const twoIslands = (gap: number, rise = 0): NavNode[] => {
+    const n: NavNode[] = [
+      { p: [0, 0, 0], links: [1] }, { p: [0, 0, 2], links: [0, 2] }, { p: [0, 0, 4], links: [1] },
+      { p: [gap, rise, 0], links: [4] }, { p: [gap, rise, 2], links: [3, 5] }, { p: [gap, rise, 4], links: [4] },
+    ];
+    labelComponents(n);
+    return n;
+  };
+
+  it('offers the shortest crossings between two islands and nothing within one', () => {
+    const nodes = twoIslands(5);
+    const pairs = bridgeCandidates(nodes, 9, 1.2, 3);
+    expect(pairs.length).toBe(3);                       // capped at perPair
+    for (const [i, j] of pairs) expect(nodes[i].comp).not.toBe(nodes[j].comp);
+    // shortest first: the three straight-across crossings (5 m) beat the diagonals
+    expect(pairs.slice(0, 3).every(([i, j]) => Math.abs(nodes[i].p[2] - nodes[j].p[2]) < 1e-9)).toBe(true);
+  });
+
+  it('respects the gap and rise limits, and finds nothing once the islands are one component', () => {
+    expect(bridgeCandidates(twoIslands(12), 9, 1.2)).toEqual([]);
+    expect(bridgeCandidates(twoIslands(5, 3), 9, 1.2)).toEqual([]);
+    const joined = twoIslands(5);
+    (joined[1].links as number[]).push(4); (joined[4].links as number[]).push(1);
+    labelComponents(joined);
+    expect(bridgeCandidates(joined, 9, 1.2)).toEqual([]);
+  });
+
+  it('a stitched link makes a previously unreachable goal reachable', () => {
+    const nodes = twoIslands(5);
+    expect(astar(nodes, 0, 5)).toBeNull();
+    const [i, j] = bridgeCandidates(nodes, 9, 1.2, 1)[0];
+    (nodes[i].links as number[]).push(j); (nodes[j].links as number[]).push(i);
+    labelComponents(nodes);
+    expect(astar(nodes, 0, 5)).not.toBeNull();
+    expect(new Set(nodes.map((n) => n.comp)).size).toBe(1);
   });
 });
 
