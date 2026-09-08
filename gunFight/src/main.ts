@@ -1,5 +1,6 @@
 import { Engine } from './core/Engine';
 import { installShotMode, shotMode } from './debug/ShotMode';
+import { Diagnostics } from './debug/Diagnostics';
 import * as render from './render';
 import * as world from './world';
 import * as player from './player';
@@ -34,6 +35,7 @@ async function boot() {
   // auto-fire) could only be reproduced in a normal session, and without a handle there was no way
   // to inspect one from a headless driver. Read-only by convention; nothing ships against it.
   (window as unknown as { gunfight?: unknown }).gunfight = engine;
+  engine.add(new Diagnostics(engine, container));
   if (shotMode) installShotMode(engine);
   else engine.start();
 }
