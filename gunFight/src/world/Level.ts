@@ -1214,16 +1214,19 @@ export class Level implements System, LevelApi {
   private spawnsAndLandmarks(): void {
     const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
     this.spawnPoints = [v(0, 1.1, 33), v(-3, 1.1, 31)];
-    // not visible from the spawn: interiors, alleys, courtyard, back lots, upper floors
+    // not visible from the spawn: interiors, alleys, courtyard, back lots, upper floors.
+    // Every point must stand on open floor with a walkable way out: a wave ends only when all of its
+    // soldiers are dead, so one spawned where he cannot leave is a wave the player can never finish.
+    // Spawns.test.ts walks a soldier out of each one.
     this.enemySpawns = [
       v(-19, 1.25, -20), v(-12, 1.25, -20),                   // A ground floor rear
       v(-24.5, 1.25, -20), v(-16, 1.25, -31),                 // west alley, back lot
-      v(16, 1.25, -20), v(24.5, 1.25, -18),                   // C rear, east alley
-      v(-22, 1.25, 24), v(-26, 1.25, 18), v(-30, 1.25, 11),   // courtyard, N wing
-      v(19, 1.25, 18), v(13, 1.25, 12),                       // E interior
+      v(16, 1.25, -20), v(24.5, 1.25, -12),                   // C rear, east alley (south of the dumpster; north of it the gate seals a pocket)
+      v(-22, 1.25, 24), v(-26, 1.25, 18), v(-23, 1.25, 11),   // courtyard, N wing middle room (the west room has no ground-floor door)
+      v(19, 1.25, 18), v(15.5, 1.25, 11.5),                   // E interior, garage floor (13, 12 was the roof of the parked car)
       v(31, 1.25, 31), v(30, 1.25, 12),                       // market shed, east lot
-      v(-15, 0.15 + 2 * FH + 1.1, -18), v(16, 0.15 + FH + 1.1, -20), v(-11.5, 0.15 + FH + 1.1, 17), // upper floors
-      v(-31, 1.25, -20), v(31, 1.25, -20),                    // B, D ground floors
+      v(-15, 0.15 + 2 * FH + 1.1, -18), v(16, 0.15 + FH + 1.1, -20), v(16, 0.15 + FH + 1.1, 18), // upper floors: A, C, E (not the courtyard east wing: its stair room has no ground-floor door, so its upper floor is sealed)
+      v(-31, 1.25, -19.3), v(31, 1.25, -19.3),                // B, D ground floors, clear of the partition face at z -20
     ];
     const L = (x: number, y: number, z: number, yaw: number, pitch: number) => ({ position: v(x, y, z), yaw, pitch });
     this.landmarks = {
@@ -1260,6 +1263,20 @@ export class Level implements System, LevelApi {
     }
     // rubble slope centreline
     for (let z = -6; z >= -16; z -= 1.5) s.push(new THREE.Vector3(16, 4, z), new THREE.Vector3(12, 4, z), new THREE.Vector3(20, 4, z));
+    // Building C's ground-floor rear room (x 9..23, z -24..-16). Its doors fall between lattice columns,
+    // so no pair of grid nodes is close enough to link through them and the room was an island: a
+    // soldier who got in could not plan a way out, and the wave waited on him. One node per threshold
+    // joins it up. Each sits more than 0.8 m from every grid node, because the dedupe keeps the grid node
+    // and drops the seed — that is what silently discarded the stairwell's own door-approach seed here.
+    s.push(
+      new THREE.Vector3(9.175, 0.15, -20.2),   // west door, onto the main street
+      new THREE.Vector3(12, 0.15, -23.825),    // north door, onto the back lot
+      new THREE.Vector3(22, 0.15, -17.85),     // square in front of the stair-enclosure door
+    );
+    // Building A's second floor: the partition at x -16 has one 1.0 m door (z -14), also between lattice rows,
+    // which left the east half of the floor an island. The node sits on the threshold's north half — the only
+    // spot inside the jambs that is 0.8 m clear of the grid node at (-16.5, -14.5).
+    s.push(new THREE.Vector3(-16, 0.15 + 2 * FH, -13.85));
     return s;
   }
   private registerPoses(): void {
