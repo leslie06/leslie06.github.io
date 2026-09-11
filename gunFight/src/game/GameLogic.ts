@@ -3,6 +3,7 @@
  * director pacing. No three.js, no engine, no side effects — everything here is unit-tested.
  */
 import type { EnemyDifficulty } from './Contracts';
+import { t } from '../core/I18n';
 import { DIRECTOR, SCORING, SPAWN_SELECT, WAVE_EXTRAPOLATION, WAVE_TABLE, type ArchetypeMix, type WaveDef } from './GameDefs';
 
 export interface Vec3 { x: number; y: number; z: number }
@@ -225,7 +226,7 @@ export function deployComplete(toSpawn: number): boolean { return toSpawn <= 0; 
 
 /** Centre-screen callout for the moment the wave's last enemy has been deployed. */
 export function lastHostilesText(alive: number): string {
-  return alive === 1 ? 'FINAL HOSTILE' : `LAST ${alive} HOSTILES`;
+  return alive === 1 ? t('msg.finalHostile') : t('msg.lastHostiles', { n: alive });
 }
 
 /** True when the wave is over: everything spawned and dead, and the wave has run at least the minimum time. */

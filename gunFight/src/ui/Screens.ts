@@ -1,8 +1,11 @@
 /**
  * Full-screen menus layered over the live 3D scene (blurred/darkened): main menu, pause, death,
  * settings, controls. Pure DOM; the Hud owns game-flow side effects through `actions`.
+ * Labels are `L()` nodes, so switching language re-labels every screen in place.
  */
 import { div, span, el, setText, setClass, animate, fmtInt, pad2, type ShotAnim } from './dom';
+import { L } from './lang';
+import { t, lang, setLang, onLangChange, LANGS, LANG_NAME, type Lang, type TKey } from '../core/I18n';
 import type { Settings, SettingsData } from './Settings';
 import type { QualityTier } from '../core/Quality';
 
@@ -17,14 +20,25 @@ export interface ScreenActions {
 
 export interface DeadStats { kills: number; wave: number; score: number; streak: number }
 
-const CONTROLS: [string[], string][] = [
-  [['W', 'A', 'S', 'D'], 'Move'], [['SHIFT'], 'Sprint'], [['SPACE'], 'Jump'], [['CTRL', 'C'], 'Crouch / Slide'],
-  [['LMB'], 'Fire'], [['RMB'], 'Aim down sights'], [['R'], 'Reload'], [['1', '2', '3'], 'Weapon slots'], [['SCROLL'], 'Cycle weapon'],
-  [['V'], 'Melee'], [['G'], 'Grenade'], [['E'], 'Interact'], [['F'], 'Inspect weapon'], [['ESC'], 'Pause'],
+/** Fixed text, or a live-translated `L()` node. */
+type Label = Node | string;
+
+const CONTROLS: [string[], TKey][] = [
+  [['W', 'A', 'S', 'D'], 'ctl.move'], [['SHIFT'], 'ctl.sprint'], [['SPACE'], 'ctl.jump'], [['CTRL', 'C'], 'ctl.crouch'],
+  [['LMB'], 'ctl.fire'], [['RMB'], 'ctl.ads'], [['R'], 'ctl.reload'], [['1', '2', '3'], 'ctl.slots'], [['SCROLL'], 'ctl.cycle'],
+  [['V'], 'ctl.melee'], [['G'], 'ctl.grenade'], [['E'], 'ctl.interact'], [['F'], 'ctl.inspect'], [['ESC'], 'ctl.pause'],
 ];
 
-function button(label: string, idx: string, cls: string, onClick: () => void): HTMLDivElement {
-  const b = div('btn ' + cls, [span('idx', idx), span('', label)]);
+/** Keycaps that are words rather than the legend printed on the key; the rest stay as printed. */
+const KEY_WORDS: Record<string, TKey> = { SPACE: 'key.space', LMB: 'key.lmb', RMB: 'key.rmb', SCROLL: 'key.scroll' };
+const keycap = (k: string): Label => (KEY_WORDS[k] ? L(KEY_WORDS[k]) : k);
+
+const QUALITY_LABEL: Record<QualityTier, TKey> = { low: 'q.low', medium: 'q.medium', high: 'q.high', ultra: 'q.ultra' };
+
+const sp = (cls: string, label: Label): HTMLSpanElement => el('span', cls, undefined, [label]);
+
+function button(label: Label, idx: string, cls: string, onClick: () => void): HTMLDivElement {
+  const b = div('btn ' + cls, [span('idx', idx), sp('', label)]);
   b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
   return b;
 }
@@ -36,8 +50,8 @@ function slider(min: number, max: number, step: number, value: number, fmt: (v: 
   return div('ctl', [input, val]);
 }
 
-function segmented<T extends string>(options: T[], value: T, onPick: (v: T) => void): { el: HTMLDivElement; set(v: T): void } {
-  const opts = options.map((o) => { const d = div('o' + (o === value ? ' on' : ''), [o.toUpperCase()]); d.addEventListener('click', () => { set(o); onPick(o); }); return d; });
+function segmented<T extends string>(options: readonly T[], value: T, label: (o: T) => Label, onPick: (v: T) => void): { el: HTMLDivElement; set(v: T): void } {
+  const opts = options.map((o) => { const d = div('o' + (o === value ? ' on' : ''), [label(o)]); d.addEventListener('click', () => { set(o); onPick(o); }); return d; });
   const root = div('seg', opts);
   const set = (v: T) => opts.forEach((d, i) => setClass(d, 'on', options[i] === v));
   return { el: div('ctl', [root]), set };
@@ -48,12 +62,15 @@ export class Screens {
   current: ScreenName = 'none';
   private back: ScreenName = 'menu';
   private screens = new Map<ScreenName, HTMLDivElement>();
-  private pauseSub = div('sub', ['WAVE 01 · 0 KILLS']);
+  private pauseSub = div('sub');
+  private pauseWave = 1;
+  private pauseKills = 0;
   private dead!: { kills: HTMLElement; wave: HTMLElement; score: HTMLElement; streak: HTMLElement; cd: HTMLElement; deploy: HTMLElement };
   private countdown = 0;
   private lastCd = -1;
   private cdAnim: ShotAnim | null = null;
   private qualitySeg!: { set(v: QualityTier): void };
+  private langSegs: { set(v: Lang): void }[] = [];
   private bestWave!: HTMLElement; private bestScore!: HTMLElement; private bestKills!: HTMLElement;
 
   constructor(private settings: Settings, private actions: ScreenActions, private version: string, private isShot: boolean) {
@@ -63,6 +80,12 @@ export class Screens {
     this.buildDead();
     this.buildSettings();
     this.buildControls();
+    this.setPauseInfo(1, 0);
+    // L() nodes re-label themselves; these are the bits that are formatted or selected, not labelled.
+    onLangChange((l) => {
+      for (const s of this.langSegs) s.set(l);
+      this.setPauseInfo(this.pauseWave, this.pauseKills);
+    });
     window.addEventListener('keydown', (e) => this.onKey(e));
   }
 
@@ -72,7 +95,7 @@ export class Screens {
    * over-exposes and screens the bright end back in so the sun and sky glow through, and `vig`
    * darkens the corners. `bg` drifts slowly so the plate is never a still grey wall.
    */
-  private frame(cls: string, left: string, right: string, extras: (Node | string)[] = []): HTMLDivElement {
+  private frame(cls: string, left: Label, right: Label, extras: Label[] = []): HTMLDivElement {
     const s = div('screen ' + cls, [
       div('bg'), div('bloom'), div('vig'),
       div('edge top'), div('edge bot'), div('corner', [left]), div('corner r', [right]),
@@ -83,53 +106,62 @@ export class Screens {
   }
 
   /** Keycap + action, the way a shipped shooter prints its footer hints. */
-  private static hint(...pairs: [string, string][]): HTMLDivElement {
-    return div('hint', pairs.map(([k, a]) => div('hi', [span('k', k), span('a', a)])));
+  private static hint(...pairs: [Label, Label][]): HTMLDivElement {
+    return div('hint', pairs.map(([k, a]) => div('hi', [sp('k', k), sp('a', a)])));
+  }
+
+  /** 中文 | ENGLISH. Each option is written in its own language, so it can be found from either side. */
+  private langSwitch(): HTMLDivElement {
+    const seg = segmented<Lang>(LANGS, lang(), (o) => LANG_NAME[o], (v) => setLang(v));
+    this.langSegs.push(seg);
+    return seg.el;
   }
 
   private buildMenu(): void {
-    const title = div('title', [div('name', ['GUNFIGHT', el('i')]), div('tag', ['SURVIVAL · HOLD THE LINE'])]);
+    const title = div('title', [div('name', ['GUNFIGHT', el('i')]), div('tag', [L('menu.tag')])]);
     const list = div('menu-list', [
-      button('PLAY', '01', 'primary', () => this.actions.play()),
-      button('SETTINGS', '02', '', () => this.show('settings', 'menu')),
-      button('CONTROLS', '03', '', () => this.show('controls', 'menu')),
+      button(L('menu.play'), '01', 'primary', () => this.actions.play()),
+      button(L('menu.settings'), '02', '', () => this.show('settings', 'menu')),
+      button(L('menu.controls'), '03', '', () => this.show('controls', 'menu')),
     ]);
-    const hint = Screens.hint(['WASD', 'MOVE'], ['SHIFT', 'SPRINT'], ['RMB', 'AIM'], ['R', 'RELOAD']);
+    const hint = Screens.hint(['WASD', L('hint.move')], ['SHIFT', L('hint.sprint')], [keycap('RMB'), L('hint.aim')], ['R', L('hint.reload')]);
     const best = this.loadBest();
     this.bestWave = span('v', pad2(best.wave)); this.bestScore = span('v', fmtInt(best.score)); this.bestKills = span('v', String(best.kills));
     const brief = div('brief', [
-      div('h', ['MISSION BRIEFING']),
-      div('t', ['HOLD THE LINE']),
-      div('d', ['Hostile squads push the compound in escalating waves. Scavenge ammo, use cover, and survive as long as you can. Headshots score more.']),
-      div('best', [div('st', [span('l', 'BEST WAVE'), this.bestWave]), div('st', [span('l', 'BEST SCORE'), this.bestScore]), div('st', [span('l', 'MOST KILLS'), this.bestKills])]),
+      div('h', [L('brief.head')]),
+      div('t', [L('brief.title')]),
+      div('d', [L('brief.body')]),
+      div('best', [div('st', [sp('l', L('best.wave')), this.bestWave]), div('st', [sp('l', L('best.score')), this.bestScore]), div('st', [sp('l', L('best.kills')), this.bestKills])]),
     ]);
-    const s = this.frame('menu', 'GUNFIGHT // OPERATIONS', 'MAIN MENU', [title, list, brief, hint]);
+    // The right-hand corner is the language switch here rather than a "MAIN MENU" caption: the
+    // first screen is where someone who can't read the current language has to find it.
+    const s = this.frame('menu', L('frame.ops'), this.langSwitch(), [title, list, brief, hint]);
     this.screens.set('menu', s);
   }
 
   private buildPause(): void {
-    const title = div('title sm', [div('name', ['PAUSED']), this.pauseSub]);
+    const title = div('title sm', [div('name', [L('pause.title')]), this.pauseSub]);
     const list = div('menu-list lower', [
-      button('RESUME', '01', 'primary', () => this.actions.resume()),
-      button('SETTINGS', '02', '', () => this.show('settings', 'pause')),
-      button('CONTROLS', '03', '', () => this.show('controls', 'pause')),
-      button('QUIT TO MENU', '04', 'danger', () => this.actions.quit()),
+      button(L('pause.resume'), '01', 'primary', () => this.actions.resume()),
+      button(L('menu.settings'), '02', '', () => this.show('settings', 'pause')),
+      button(L('menu.controls'), '03', '', () => this.show('controls', 'pause')),
+      button(L('pause.quit'), '04', 'danger', () => this.actions.quit()),
     ]);
-    const hint = Screens.hint(['ESC', 'RESUME']);
-    const s = this.frame('pause', 'GUNFIGHT // OPERATIONS', 'PAUSED', [title, list, hint]);
+    const hint = Screens.hint(['ESC', L('hint.resume')]);
+    const s = this.frame('pause', L('frame.ops'), L('frame.paused'), [title, list, hint]);
     this.screens.set('pause', s);
   }
 
   private buildDead(): void {
-    const st = (l: string) => { const v = span('v', '0'); return { el: div('st', [span('l', l), v]), v }; };
-    const kills = st('KILLS'), wave = st('WAVE'), score = st('SCORE'), streak = st('BEST STREAK');
+    const st = (k: TKey) => { const v = span('v', '0'); return { el: div('st', [sp('l', L(k)), v]), v }; };
+    const kills = st('stat.kills'), wave = st('stat.wave'), score = st('stat.score'), streak = st('stat.streak');
     const cd = div('cd', ['3']);
-    const deployBtn = div('btn', ['DEPLOY']);
+    const deployBtn = div('btn', [L('dead.deploy')]);
     deployBtn.addEventListener('click', (e) => { e.stopPropagation(); this.actions.respawn(); });
-    const deploy = div('deploy', [div('l', ['DEPLOYING IN']), cd, deployBtn]);
-    const kia = div('kia', [div('big', ['K.I.A.']), div('sub', ['YOU WERE ELIMINATED']), div('ln'), div('stats', [kills.el, wave.el, score.el, streak.el])]);
-    const hint = Screens.hint(['SPACE', 'DEPLOY']);
-    const s = this.frame('dead', 'GUNFIGHT // AFTER ACTION', 'KILLED IN ACTION', [kia, deploy, hint]);
+    const deploy = div('deploy', [div('l', [L('dead.deployIn')]), cd, deployBtn]);
+    const kia = div('kia', [div('big', [L('dead.big')]), div('sub', [L('dead.sub')]), div('ln'), div('stats', [kills.el, wave.el, score.el, streak.el])]);
+    const hint = Screens.hint([keycap('SPACE'), L('hint.deploy')]);
+    const s = this.frame('dead', L('frame.afterAction'), L('frame.kia'), [kia, deploy, hint]);
     s.addEventListener('click', () => { if (this.countdown <= 0) this.actions.respawn(); });
     this.dead = { kills: kills.v, wave: wave.v, score: score.v, streak: streak.v, cd, deploy };
     this.screens.set('dead', s);
@@ -138,32 +170,33 @@ export class Screens {
   private buildSettings(): void {
     const d = this.settings.data;
     const rows: HTMLElement[] = [];
-    const row = (label: string, sub: string | null, ctl: HTMLElement) => {
+    const row = (label: Label, sub: Label | null, ctl: HTMLElement) => {
       const lab = div('lab', [label]);
       if (sub) lab.append(el('small', '', undefined, [sub]));
       rows.push(div('row', [lab, ctl]));
     };
-    row('MOUSE SENSITIVITY', null, slider(0.2, 3, 0.05, d.sensitivity, (v) => v.toFixed(2) + '×', (v) => this.settings.set('sensitivity', v)));
-    const inv = segmented(['off', 'on'], d.invertY ? 'on' : 'off', (v) => this.settings.set('invertY', v === 'on'));
-    row('INVERT LOOK Y', null, inv.el);
-    row('FIELD OF VIEW', 'Horizontal FOV, degrees', slider(60, 110, 1, d.fov, (v) => `${v}°`, (v) => this.settings.set('fov', v)));
-    const q = segmented<QualityTier>(['low', 'medium', 'high', 'ultra'], d.quality, (v) => { if (v !== this.settings.data.quality) this.settings.applyQualityAndReload(v); });
+    row(L('set.lang'), null, this.langSwitch());
+    row(L('set.sens'), null, slider(0.2, 3, 0.05, d.sensitivity, (v) => v.toFixed(2) + '×', (v) => this.settings.set('sensitivity', v)));
+    const inv = segmented(['off', 'on'], d.invertY ? 'on' : 'off', (o) => L(o === 'on' ? 'opt.on' : 'opt.off'), (v) => this.settings.set('invertY', v === 'on'));
+    row(L('set.invert'), null, inv.el);
+    row(L('set.fov'), L('set.fovSub'), slider(60, 110, 1, d.fov, (v) => `${v}°`, (v) => this.settings.set('fov', v)));
+    const q = segmented<QualityTier>(['low', 'medium', 'high', 'ultra'], d.quality, (o) => L(QUALITY_LABEL[o]), (v) => { if (v !== this.settings.data.quality) this.settings.applyQualityAndReload(v); });
     this.qualitySeg = q;
-    row('GRAPHICS QUALITY', 'Changing quality reloads the game', q.el);
-    row('MASTER VOLUME', null, slider(0, 1, 0.05, d.master, (v) => `${Math.round(v * 100)}%`, (v) => this.settings.set('master', v)));
-    row('SFX VOLUME', null, slider(0, 1, 0.05, d.sfx, (v) => `${Math.round(v * 100)}%`, (v) => this.settings.set('sfx', v)));
-    row('MUSIC VOLUME', null, slider(0, 1, 0.05, d.music, (v) => `${Math.round(v * 100)}%`, (v) => this.settings.set('music', v)));
-    const backBtn = button('BACK', '', '', () => this.goBack());
-    const panel = div('panel', [div('ph', ['SETTINGS']), div('ps', ['APPLIED INSTANTLY · SAVED IN THIS BROWSER']), div('rows', rows), div('foot', [backBtn, span('note', 'Esc to go back')])]);
-    const s = this.frame('settings', 'GUNFIGHT // OPERATIONS', 'SETTINGS', [panel, Screens.hint(['ESC', 'BACK'])]);
+    row(L('set.quality'), L('set.qualitySub'), q.el);
+    row(L('set.master'), null, slider(0, 1, 0.05, d.master, (v) => `${Math.round(v * 100)}%`, (v) => this.settings.set('master', v)));
+    row(L('set.sfx'), null, slider(0, 1, 0.05, d.sfx, (v) => `${Math.round(v * 100)}%`, (v) => this.settings.set('sfx', v)));
+    row(L('set.music'), null, slider(0, 1, 0.05, d.music, (v) => `${Math.round(v * 100)}%`, (v) => this.settings.set('music', v)));
+    const backBtn = button(L('ui.back'), '', '', () => this.goBack());
+    const panel = div('panel', [div('ph', [L('set.title')]), div('ps', [L('set.sub')]), div('rows', rows), div('foot', [backBtn, sp('note', L('ui.escBack'))])]);
+    const s = this.frame('settings', L('frame.ops'), L('frame.settings'), [panel, Screens.hint(['ESC', L('hint.back')])]);
     this.screens.set('settings', s);
   }
 
   private buildControls(): void {
-    const rows = CONTROLS.map(([keys, action]) => div('row', [div('lab', [action.toUpperCase()]), div('ctl', [div('keys', keys.map((k) => span('key', k)))])]));
-    const backBtn = button('BACK', '', '', () => this.goBack());
-    const panel = div('panel', [div('ph', ['CONTROLS']), div('ps', ['KEYBOARD & MOUSE']), div('rows', rows), div('foot', [backBtn, span('note', 'Esc to go back')])]);
-    const s = this.frame('controls', 'GUNFIGHT // OPERATIONS', 'CONTROLS', [panel, Screens.hint(['ESC', 'BACK'])]);
+    const rows = CONTROLS.map(([keys, action]) => div('row', [div('lab', [L(action)]), div('ctl', [div('keys', keys.map((k) => sp('key', keycap(k))))])]));
+    const backBtn = button(L('ui.back'), '', '', () => this.goBack());
+    const panel = div('panel', [div('ph', [L('ctl.title')]), div('ps', [L('ctl.sub')]), div('rows', rows), div('foot', [backBtn, sp('note', L('ui.escBack'))])]);
+    const s = this.frame('controls', L('frame.ops'), L('frame.controls'), [panel, Screens.hint(['ESC', L('hint.back')])]);
     this.screens.set('controls', s);
   }
 
@@ -177,7 +210,10 @@ export class Screens {
 
   goBack(): void { this.show(this.back); }
 
-  setPauseInfo(wave: number, kills: number): void { setText(this.pauseSub, `WAVE ${pad2(wave)} · ${kills} KILLS`); }
+  setPauseInfo(wave: number, kills: number): void {
+    this.pauseWave = wave; this.pauseKills = kills;
+    setText(this.pauseSub, t('pause.sub', { n: wave, nn: pad2(wave), k: kills }));
+  }
 
   setDeadStats(s: DeadStats): void {
     setText(this.dead.kills, String(s.kills)); setText(this.dead.wave, pad2(s.wave));

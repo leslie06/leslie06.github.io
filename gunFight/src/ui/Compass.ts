@@ -4,12 +4,14 @@
  * overlaid dead centre in gold between two hairlines (ref_10). Built once (three wraps) and only
  * translated per frame.
  */
-import { div, span, setVar, setText } from './dom';
-import { CARDINALS } from './icons';
+import { div, el, span, setVar, setText } from './dom';
+import { L } from './lang';
+import type { TKey } from '../core/I18n';
 import { bearingTo, wrapDeg, type HudState } from './HudState';
 
 const CLAMP = 46;       // markers beyond this are pinned to the edge of the strip
 const MARKERS = 10;
+const CARDINALS: TKey[] = ['dir.0', 'dir.1', 'dir.2', 'dir.3', 'dir.4', 'dir.5', 'dir.6', 'dir.7'];
 
 export class Compass {
   root: HTMLDivElement;
@@ -27,7 +29,7 @@ export class Compass {
       if (major) {
         const d = ((deg % 360) + 360) % 360;
         const card = d % 45 === 0;
-        const lb = div('lb' + (card ? ' cd' : ''), [span('', card ? CARDINALS[d / 45] : String(d))]);
+        const lb = div('lb' + (card ? ' cd' : ''), [el('span', '', undefined, [card ? L(CARDINALS[d / 45]) : String(d)])]);
         lb.style.left = `calc(var(--dpp) * ${deg})`;
         this.strip.append(lb);
       }

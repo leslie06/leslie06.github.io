@@ -8,6 +8,7 @@ import type { LevelApi, PlayerApi, WeaponState } from '../game/Contracts';
 import { registerPose } from '../debug/Poses';
 import type { Hud } from './Hud';
 import type { HudOverride } from './HudState';
+import { t } from '../core/I18n';
 
 const M4: WeaponState = { id: 'm4', name: 'M4A1', ammoInMag: 6, magSize: 30, reserveAmmo: 120, reloading: false, aiming: false, aimBlend: 0, spread: 0.028, firing: true, kind: 'rifle', fireMode: 'auto' };
 const SPAS: WeaponState = { id: 'spas', name: 'SPAS-12', ammoInMag: 8, magSize: 8, reserveAmmo: 32, reloading: false, aiming: false, aimBlend: 0, spread: 0.06, firing: false, kind: 'shotgun', fireMode: 'pump' };
@@ -23,7 +24,7 @@ function combatState(engine: Engine): HudOverride {
   return {
     weapon: M4, slots: [M4, SPAS, M1911],
     player: { x: px, y: 1, z: pz, yaw, pitch: -0.05, health: 64, maxHealth: 100, alive: true, sprinting: false, aiming: false },
-    game: { wave: 3, kills: 12, score: 4250, running: true, grenades: 2, remaining: 4, interact: '[E] RESUPPLY' },
+    game: { wave: 3, kills: 12, score: 4250, running: true, grenades: 2, remaining: 4, interact: t('msg.resupplyPrompt') },
     enemies: [
       { id: 1, x: px - 14, z: pz - 22, alive: true }, { id: 2, x: px + 9, z: pz - 30, alive: true },
       { id: 3, x: px + 26, z: pz - 12, alive: true }, { id: 4, x: px - 30, z: pz + 6, alive: true },

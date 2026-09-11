@@ -8,15 +8,18 @@ import { FIRE_MODE_ICONS, WEAPON_ICONS, GRENADE } from './icons';
 import { theme } from './theme';
 import type { WeaponState } from '../game/Contracts';
 import type { HudState } from './HudState';
+import { t, onLangChange, type TKey } from '../core/I18n';
+
+const MODE_LABEL: Record<WeaponState['fireMode'], TKey> = { auto: 'mode.auto', semi: 'mode.semi', burst: 'mode.burst', bolt: 'mode.bolt', pump: 'mode.pump' };
 
 export class Ammo {
   root: HTMLDivElement;
-  private rl = div('rl', ['RELOAD']);
+  private rl = div('rl', [t('hud.reload')]);
   private mag = span('mag', '30');
   private res = span('res', '120');
   private wpnIcon = svg(WEAPON_ICONS.rifle, '0 0 44 24', 'wi');
   private modeIcon = svg(FIRE_MODE_ICONS.auto, '0 0 14 14');
-  private modeTxt = span('', 'AUTO');
+  private modeTxt = span('', t('mode.auto'));
   private name = span('name', 'RIFLE');
   private nades = span('c', '2');
   private lastMode = '';
@@ -29,6 +32,7 @@ export class Ammo {
       div('meta', [div('mode', [this.modeIcon, this.modeTxt]), this.name]),
       div('eq', [svg(GRENADE, '0 0 24 24', 'gi'), this.nades, span('key', 'G')]),
     ]);
+    onLangChange(() => { this.lastMode = ''; }); // the fire-mode label is only rewritten when the mode changes
   }
 
   update(s: HudState): void {
@@ -43,7 +47,7 @@ export class Ammo {
     if (mode !== this.lastMode) {
       this.lastMode = mode;
       this.modeIcon.innerHTML = FIRE_MODE_ICONS[mode] ?? FIRE_MODE_ICONS.auto;
-      setText(this.modeTxt, mode.toUpperCase());
+      setText(this.modeTxt, t(MODE_LABEL[mode] ?? 'mode.auto'));
     }
     const nades = s.game?.grenades;
     setClass(this.root, 'noeq', nades === undefined);
@@ -56,7 +60,7 @@ export class Ammo {
     setClass(this.root, 'empty', empty && !reloading);
     setClass(this.root, 'rlp', (low || empty) && !reloading && reserve > 0);
     setClass(this.root, 'rlg', reloading);
-    setText(this.rl, reloading ? 'RELOADING' : reserve <= 0 && (low || empty) ? 'NO AMMO' : 'RELOAD');
+    setText(this.rl, t(reloading ? 'hud.reloading' : reserve <= 0 && (low || empty) ? 'hud.noAmmo' : 'hud.reload'));
   }
 }
 

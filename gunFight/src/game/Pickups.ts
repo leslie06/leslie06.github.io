@@ -5,6 +5,7 @@ import { CG, groups } from '../core/Physics';
 import type { AudioApi, HudApi, LevelApi, PlayerApi, WeaponsApi } from './Contracts';
 import { CRATE, buildCrateGeometry, crateMaterials, glowMaterial, statusMaterial } from './CrateMesh';
 import { PICKUPS } from './GameDefs';
+import { t, onLangChange } from '../core/I18n';
 
 interface Crate {
   pos: THREE.Vector3;
@@ -47,7 +48,10 @@ export class Pickups implements System {
   /** Written by the game mode so the HUD can show the hint. */
   onPrompt: (text: string) => void = () => {};
 
-  constructor(private engine: Engine) {}
+  constructor(private engine: Engine) {
+    // The prompt is only re-published when the nearest crate changes; force one after a language switch.
+    onLangChange(() => { this.nearIndex = -2; });
+  }
 
   private get player(): PlayerApi | undefined { return this.engine.get<PlayerApi>('player'); }
   private get weapons(): WeaponsApi | undefined { return this.engine.get<WeaponsApi>('weapons'); }
@@ -145,8 +149,8 @@ export class Pickups implements System {
     }
     if (near !== this.nearIndex) {
       this.nearIndex = near;
-      this.onPrompt(near >= 0 ? '[E]  RESUPPLY' : '');
-      if (near >= 0) this.safe(() => this.hud?.showMessage?.('[E]  RESUPPLY', 1200));
+      this.onPrompt(near >= 0 ? t('msg.resupplyPrompt') : '');
+      if (near >= 0) this.safe(() => this.hud?.showMessage?.(t('msg.resupplyPrompt'), 1200));
     }
     if (near >= 0 && this.engine.input.state.interact) this.take(this.crates[near]);
   }
@@ -187,7 +191,7 @@ export class Pickups implements System {
       for (const s of slots) if (s) w.addAmmo(s.kind, Math.max(1, (s.magSize || 30) * PICKUPS.magsPerSlot));
     });
     c.cooldown = PICKUPS.cooldown;
-    this.safe(() => this.hud?.showMessage?.('AMMO RESUPPLIED', 1500));
+    this.safe(() => this.hud?.showMessage?.(t('msg.resupplied'), 1500));
     this.safe(() => this.audio?.play('pickup_ammo', { position: c.pos }));
     this.nearIndex = -1; this.onPrompt('');
   }

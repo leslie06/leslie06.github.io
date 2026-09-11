@@ -22,6 +22,7 @@ import { WaveBanner, Message, Prompt, Objective } from './Banner';
 import { yawToHeading, type HudState, type HudOverride, type HudEnemy } from './HudState';
 import { animate } from './dom';
 import { version } from '../../package.json';
+import { t } from '../core/I18n';
 
 const SCREENS: ScreenName[] = ['menu', 'pause', 'dead', 'settings', 'controls', 'none'];
 
@@ -250,8 +251,8 @@ export class Hud implements HudApi {
     // phases. A player who cleared the field and saw "ELIMINATE ALL HOSTILES · 0 REMAINING" for the
     // whole breather reasonably concluded the game was stuck.
     const ph = s.game?.phase;
-    if (ph === 'breather') this.objective.set('Wave clear · next wave in', Math.max(0, Math.ceil(s.game?.breatherLeft ?? 0)), 'seconds');
-    else this.objective.set('Eliminate all hostiles', s.game?.remaining ?? alive, 'remaining');
+    if (ph === 'breather') this.objective.set(t('obj.clear'), Math.max(0, Math.ceil(s.game?.breatherLeft ?? 0)), t('obj.seconds'));
+    else this.objective.set(t('obj.eliminate'), s.game?.remaining ?? alive, t('obj.remaining'));
     this.objective.update(s);
     // The game module owns the interaction hint; while it publishes one, it drives the prompt and
     // showPrompt/hidePrompt stay out of the way (they still work when no game module is present).

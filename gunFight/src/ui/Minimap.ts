@@ -5,8 +5,10 @@
  * fired recently), and small cardinal letters on the rim. Deliberately *not* a radar: no sweep, no
  * blueprint grid — those are the two things that made it read as sci-fi rather than military.
  */
-import { div, span, setText, fmtInt, pad2 } from './dom';
+import { div, span, el, setText, fmtInt, pad2 } from './dom';
 import { theme } from './theme';
+import { L } from './lang';
+import { t } from '../core/I18n';
 import type { HudState } from './HudState';
 import type { LevelApi } from '../game/Contracts';
 
@@ -33,9 +35,9 @@ export class Minimap {
     this.root = div('mm', [
       div('map', [this.canvas, div('rim')]),
       div('mmst', [
-        div('s', [span('l', 'WAVE'), this.wave]),
-        div('s', [span('l', 'KILLS'), this.kills]),
-        div('s', [span('l', 'SCORE'), this.score]),
+        div('s', [el('span', 'l', undefined, [L('stat.wave')]), this.wave]),
+        div('s', [el('span', 'l', undefined, [L('stat.kills')]), this.kills]),
+        div('s', [el('span', 'l', undefined, [L('stat.score')]), this.score]),
       ]),
     ]);
   }
@@ -170,7 +172,7 @@ export class Minimap {
     g.font = `700 ${Math.round(9.5 * k)}px ${theme.font.display}`;
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(255,255,255,0.75)';
-    g.fillText('N', nx, ny);
+    g.fillText(t('dir.0'), nx, ny);
 
     // ---- player arrow, always centred, facing up
     const a = 7 * k;

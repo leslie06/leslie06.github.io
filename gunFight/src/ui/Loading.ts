@@ -4,6 +4,7 @@
  * the engine is about to start, but never sooner than MIN_MS so it doesn't strobe on fast machines.
  */
 import { cssVars } from './theme';
+import { t } from '../core/I18n';
 
 const MIN_MS = 2000;
 const shownAt = performance.now();
@@ -28,8 +29,8 @@ function show(): void {
   </style>
   <div class="n">GUNFIGHT<i></i></div>
   <div class="bar"><i></i></div>
-  <div class="l">LOADING</div>
-  <div class="ft">INITIALIZING RENDERER · PHYSICS · ASSETS</div>`;
+  <div class="l">${t('loading.label')}</div>
+  <div class="ft">${t('loading.detail')}</div>`;
   document.body.appendChild(root);
 }
 

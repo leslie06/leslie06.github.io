@@ -1,5 +1,5 @@
 // Screenshot harness for the critic loop.
-// Usage: node scripts/shot.mjs [--url http://127.0.0.1:5180] [--poses a,b,c|all] [--out shots] [--size 1920x1080] [--quality high] [--swiftshader] [--hud]
+// Usage: node scripts/shot.mjs [--url http://127.0.0.1:5180] [--poses a,b,c|all] [--out shots] [--size 1920x1080] [--quality high] [--swiftshader] [--hud] [--lang zh|en]
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,7 +22,7 @@ const logs = [];
 page.on('console', (m) => { const t = m.type(); if (t === 'error' || t === 'warning') logs.push(`[${t}] ${m.text()}`); });
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 
-const full = `${url}/?shot=1&quality=${quality}${args.hud ? '&hud=1' : ''}`;
+const full = `${url}/?shot=1&quality=${quality}${args.hud ? '&hud=1' : ''}${args.lang ? `&lang=${args.lang}` : ''}`;
 await page.goto(full, { waitUntil: 'load' });
 try { await page.waitForFunction(() => window.__gameReady === true, null, { timeout: 120000 }); }
 catch (e) { console.error('game never became ready'); console.error(logs.join('\n')); await page.screenshot({ path: path.join(out, '_failed.png') }); await browser.close(); process.exit(1); }

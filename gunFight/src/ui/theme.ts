@@ -1,3 +1,6 @@
+/** Simplified-Chinese UI faces (macOS, Windows, Linux/Android). Listed after every Latin face below. */
+const CJK = `"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC"`;
+
 /**
  * Design tokens for every piece of DOM UI. Nothing in ui/ hardcodes a color or font — it reads
  * these (as CSS custom properties on #ui, see styles.ts) so the whole HUD re-skins from one place.
@@ -15,11 +18,15 @@
  */
 export const theme = {
   font: {
-    /** Condensed display stack — reads like CoD's DIN/Industry. All system fonts, no requests. */
-    display: `"Avenir Next Condensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif`,
+    /**
+     * Condensed display stack — reads like CoD's DIN/Industry. All system fonts, no requests.
+     * CJK faces come after every Latin face, so English keeps the condensed type and only Chinese
+     * glyphs fall through to the platform's Hei face (PingFang on macOS, YaHei on Windows).
+     */
+    display: `"Avenir Next Condensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, ${CJK}, sans-serif`,
     /** Body / small labels. */
-    body: `"Avenir Next Condensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif`,
-    mono: `"SF Mono", Menlo, Consolas, "Roboto Mono", monospace`,
+    body: `"Avenir Next Condensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, ${CJK}, sans-serif`,
+    mono: `"SF Mono", Menlo, Consolas, "Roboto Mono", ${CJK}, monospace`,
   },
   color: {
     /** Reference white. HUD text uses `hud` (90%), never this at full strength. */

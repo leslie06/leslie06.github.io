@@ -144,7 +144,8 @@ export const STYLES = /* css */ `
 .compass .strip{position:absolute;left:50%;top:0;height:100%;width:0;transform:translateX(var(--x,0em));will-change:transform}
 .compass .tk{position:absolute;bottom:.3em;width:1px;height:.3em;background:currentColor;opacity:.45}
 .compass .tk.mj{height:.52em;opacity:.7}
-.compass .lb{position:absolute;top:.28em;transform:translateX(-50%);line-height:1}
+/* nowrap: the strip is zero-width, so a two-character CJK label (东北) would otherwise stack vertically. */
+.compass .lb{position:absolute;top:.28em;transform:translateX(-50%);line-height:1;white-space:nowrap}
 .compass .lb span{display:block;font-size:.76em;font-weight:600;letter-spacing:.5px;opacity:.5}
 .compass .lb.cd span{font-size:.9em;font-weight:700;letter-spacing:1px;opacity:.82}
 .compass .em{position:absolute;top:1.02em;width:.4em;height:.4em;background:var(--c-enemy);transform:translateX(-50%) rotate(45deg);opacity:0}
@@ -158,6 +159,8 @@ export const STYLES = /* css */ `
 .obj .t{font-size:.95em;letter-spacing:1.5px;font-weight:600}
 .obj .c{display:flex;align-items:baseline;gap:.3em;font-size:.85em;letter-spacing:1px;font-weight:600;color:var(--c-gold)}
 .obj .n{font-weight:700;font-variant-numeric:tabular-nums}
+/* The count phrase is split around the number; English has no prefix, Chinese no suffix. */
+.obj .tl:empty{display:none}
 .obj.settled{flex-direction:row;align-items:baseline;gap:.5em;opacity:.55;color:var(--c-gold)}
 .obj.settled .t{font-size:.82em;letter-spacing:1px}
 .obj.settled .c{font-size:.82em}
@@ -213,6 +216,9 @@ export const STYLES = /* css */ `
 .screen .edge.top{top:calc(var(--m) + 1.7em)}.screen .edge.bot{bottom:calc(var(--m) + 1.9em)}
 .screen .corner{position:absolute;top:var(--m);left:var(--m);font-size:.8em;letter-spacing:2px;opacity:.65;font-weight:600}
 .screen .corner.r{left:auto;right:var(--m);text-align:right}
+/* Main menu: the right-hand corner is the 中文 | ENGLISH switch, sized to sit above the top rule. */
+.screen .corner .seg .o{font-size:.92em;padding:.2em .8em}
+.screen .corner:has(.seg){opacity:.85}
 .screen .ver{position:absolute;right:var(--m);bottom:var(--m);font-size:.75em;letter-spacing:1.5px;opacity:.45;font-family:var(--font-mono);font-stretch:normal}
 .screen .hint{position:absolute;left:var(--m);bottom:var(--m);font-size:.78em;opacity:.6;display:flex;gap:1.3em}
 .screen .hint .hi{display:flex;align-items:center;gap:.4em}

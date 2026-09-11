@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
+import { t } from '../core/I18n';
 import type { AudioApi, BestRecord, EnemiesApi, GameApi, GamePhase, HudApi, LevelApi, PlayerApi, WeaponsApi } from './Contracts';
 import { DIRECTOR, PICKUPS } from './GameDefs';
 import {
@@ -182,7 +183,7 @@ export class GameMode implements GameApi {
       this.breatherLeft = Math.max(0, this.breatherLeft - dt);
       if (!this.incomingWarned && this.breatherLeft <= DIRECTOR.incomingWarning) {
         this.incomingWarned = true;
-        this.safe(() => this.hud?.showMessage?.(`WAVE ${this.wave + 1} INCOMING`, DIRECTOR.incomingWarning * 1000));
+        this.safe(() => this.hud?.showMessage?.(t('msg.waveIncoming', { n: this.wave + 1 }), DIRECTOR.incomingWarning * 1000));
         this.safe(() => this.audio?.play('wave_incoming'));
       }
       if (this.breatherLeft <= 0) this.beginWave(this.wave + 1);
@@ -213,7 +214,7 @@ export class GameMode implements GameApi {
     for (const r of this.resuppliables) this.safe(() => r.resupply());
     this.engine.events.emit('game:wave', { wave: n });
     if (!silent) {
-      this.safe(() => this.hud?.showMessage?.(`WAVE ${n}`, 2500));
+      this.safe(() => this.hud?.showMessage?.(t('msg.wave', { n }), 2500));
       this.safe(() => this.audio?.play('wave_start'));
     }
   }
@@ -231,7 +232,7 @@ export class GameMode implements GameApi {
     // The breather is the one stretch where an empty street is correct, so it is signposted end to
     // end: the clear banner holds until the "incoming" warning takes over, with no silent gap between.
     const hold = Math.max(1.2, DIRECTOR.breather - DIRECTOR.incomingWarning);
-    this.safe(() => this.hud?.showMessage?.(`WAVE ${this.wave} COMPLETE  +${bonus}`, hold * 1000));
+    this.safe(() => this.hud?.showMessage?.(t('msg.waveComplete', { n: this.wave, bonus }), hold * 1000));
     this.safe(() => this.audio?.play('wave_complete'));
   }
 

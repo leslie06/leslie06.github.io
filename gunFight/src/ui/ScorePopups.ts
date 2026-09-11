@@ -5,8 +5,9 @@
  */
 import { div, span, animate, type ShotAnim } from './dom';
 import { theme } from './theme';
+import { t, type TKey } from '../core/I18n';
 
-const STREAK_NAMES: Record<number, string> = { 2: 'DOUBLE KILL', 3: 'TRIPLE KILL', 4: 'QUAD KILL', 5: 'KILL FRENZY', 6: 'RAMPAGE' };
+const STREAK_NAMES: Record<number, TKey> = { 2: 'sp.streak2', 3: 'sp.streak3', 4: 'sp.streak4', 5: 'sp.streak5', 6: 'sp.streak6' };
 const MAX_LIVE = 2;
 
 export class ScorePopups {
@@ -39,8 +40,8 @@ export class ScorePopups {
   }
 
   kill(headshot: boolean, streak: number): void {
-    if (headshot) this.push(150, 'HEADSHOT', 'hs'); else this.push(100, 'KILL');
+    if (headshot) this.push(150, t('sp.headshot'), 'hs'); else this.push(100, t('sp.kill'));
     const name = STREAK_NAMES[Math.min(streak, 6)];
-    if (streak >= 2 && name) this.push(streak * 25, name, 'streak');
+    if (streak >= 2 && name) this.push(streak * 25, t(name), 'streak');
   }
 }

@@ -8,13 +8,14 @@ import { div, span, svg, animate } from './dom';
 import { SKULL, WEAPON_ICONS } from './icons';
 import { theme } from './theme';
 import type { WeaponState } from '../game/Contracts';
+import { t } from '../core/I18n';
 
 const MAX_ROWS = 4;
 
 export class Killfeed {
   root = div('kf');
 
-  push(weapon: Pick<WeaponState, 'kind' | 'name'>, headshot: boolean, victim = 'HOSTILE', killer = 'YOU'): void {
+  push(weapon: Pick<WeaponState, 'kind' | 'name'>, headshot: boolean, victim = t('kf.hostile'), killer = t('kf.you')): void {
     const row = div('row', [span('nm ally', killer)]);
     if (headshot) row.append(svg(SKULL, '0 0 24 24', 'sk'));
     row.append(svg(WEAPON_ICONS[weapon.kind] ?? WEAPON_ICONS.rifle, '0 0 44 24', 'w'));

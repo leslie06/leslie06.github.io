@@ -3,7 +3,8 @@
  * damage vignette. No segments — the segmented sci-fi readout fought the military type system.
  * A paler "chip" layer trails the fill by ~0.6 s so a burst of damage reads as a hit, not a jump.
  */
-import { div, span, setText, setClass, setVar } from './dom';
+import { div, span, el, setText, setClass, setVar } from './dom';
+import { L } from './lang';
 import type { HudState } from './HudState';
 
 const LOW = 0.35;
@@ -18,7 +19,7 @@ export class Health {
 
   constructor() {
     const bar = div('bar', [this.chip, this.fill]);
-    this.root = div('hp', [bar, div('rd', [this.num, span('lbl', 'HP')])]);
+    this.root = div('hp', [bar, div('rd', [this.num, el('span', 'lbl', undefined, [L('hud.hp')])])]);
   }
 
   update(s: HudState): void {

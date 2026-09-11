@@ -5,6 +5,7 @@ import {
   streakMultiplier, waveClearBonus, waveComplete, waveDef,
 } from './GameLogic';
 import { DIRECTOR, SCORING, WAVE_EXTRAPOLATION, WAVE_TABLE } from './GameDefs';
+import { setLang } from '../core/I18n';
 
 const fixedRng = (v = 0.5) => ({ next: () => v });
 const seq = (vals: number[]) => { let i = 0; return { next: () => vals[i++ % vals.length] }; };
@@ -221,8 +222,14 @@ describe('spawn director', () => {
   it('reports when a wave has stopped deploying, and names what is left', () => {
     expect(deployComplete(3)).toBe(false);
     expect(deployComplete(0)).toBe(true);
+    // Pinned: the default follows the machine's locale, and Node reports one (zh-CN on the dev Mac).
+    setLang('en');
     expect(lastHostilesText(1)).toBe('FINAL HOSTILE');
     expect(lastHostilesText(4)).toBe('LAST 4 HOSTILES');
+    setLang('zh');
+    expect(lastHostilesText(1)).toBe('最后一名敌人');
+    expect(lastHostilesText(4)).toBe('最后 4 名敌人');
+    setLang('en');
   });
   it('wave completes only when everything is spawned and dead after the minimum time', () => {
     expect(waveComplete(0, 0, DIRECTOR.minWaveTime)).toBe(true);

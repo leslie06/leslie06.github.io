@@ -8,11 +8,12 @@
 import { div, span, setText, setClass, animate, pad2, type ShotAnim } from './dom';
 import { theme } from './theme';
 import type { HudState } from './HudState';
+import { t, lang } from '../core/I18n';
 
 export class WaveBanner {
   root: HTMLDivElement;
-  private big = div('big', ['WAVE 01']);
-  private sub = div('sub', ['ENEMIES INBOUND']);
+  private big = div('big', [t('wave.banner', { n: 1, nn: '01' })]);
+  private sub = div('sub', [t('wave.inbound')]);
   private ln = div('ln');
   private anims: ShotAnim[] = [];
 
@@ -20,8 +21,8 @@ export class WaveBanner {
     this.root = div('wave', [this.ln, this.big, this.sub]);
   }
 
-  show(wave: number, subtitle = 'ENEMIES INBOUND'): void {
-    setText(this.big, `WAVE ${pad2(wave)}`);
+  show(wave: number, subtitle = t('wave.inbound')): void {
+    setText(this.big, t('wave.banner', { n: wave, nn: pad2(wave) }));
     setText(this.sub, subtitle);
     for (const a of this.anims) a.cancel();
     const life = theme.timing.waveBanner, hold = theme.timing.waveBannerHold;
@@ -68,7 +69,7 @@ export class Message {
 export class Prompt {
   root: HTMLDivElement;
   private key = span('key', 'E');
-  private txt = span('txt', 'INTERACT');
+  private txt = span('txt', t('prompt.interact'));
   private shown = false;
   private anim: ShotAnim | null = null;
 
@@ -109,27 +110,40 @@ export class Prompt {
  */
 export class Objective {
   root: HTMLDivElement;
-  private t = div('t', ['ELIMINATE ALL HOSTILES']);
+  private line = div('t', [t('obj.eliminate')]);
+  private pre = span('tl', '');
   private count = span('n', '0');
-  private tail = span('tl', 'REMAINING');
+  private tail = span('tl', '');
   private title = '';
+  private titleLang = lang();
+  private fmt = '';
   private since = -1e9;
 
   constructor() {
-    const c = div('c', [this.count, this.tail]);
-    this.root = div('obj settled', [this.t, c]);
+    const c = div('c', [this.pre, this.count, this.tail]);
+    this.root = div('obj settled', [this.line, c]);
   }
 
-  set(title: string, count: number, tail = 'REMAINING'): void {
+  /**
+   * `fmt` is the whole count phrase with `{n}` where the number goes ("{n} REMAINING", "剩余 {n}"),
+   * so each language keeps its own word order. Only re-split when it changes: this runs every frame.
+   */
+  set(title: string, count: number, fmt: string): void {
     const up = title.toUpperCase();
     if (up !== this.title) {
-      // The very first assignment is the HUD booting, not a new order: start already settled.
-      if (this.title !== '') this.since = -1;
-      this.title = up;
-      setText(this.t, up);
+      // The very first assignment is the HUD booting, not a new order: start already settled. Nor is
+      // a language switch: same order, new words.
+      if (this.title !== '' && this.titleLang === lang()) this.since = -1;
+      this.title = up; this.titleLang = lang();
+      setText(this.line, up);
+    }
+    if (fmt !== this.fmt) {
+      this.fmt = fmt;
+      const i = fmt.indexOf('{n}');
+      setText(this.pre, i > 0 ? fmt.slice(0, i).trim().toUpperCase() : '');
+      setText(this.tail, (i >= 0 ? fmt.slice(i + 3) : fmt).trim().toUpperCase());
     }
     setText(this.count, String(count));
-    setText(this.tail, tail.toUpperCase());
   }
 
   update(s: HudState): void {
