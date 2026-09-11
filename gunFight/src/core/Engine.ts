@@ -88,6 +88,7 @@ export class Engine {
     this.renderer.autoClear = true;
     this.renderer.info.autoReset = false;
     this.assets.anisotropy = Math.min(this.quality.anisotropy, this.renderer.capabilities.getMaxAnisotropy());
+    this.assets.maxTextureSize = this.quality.textureRes;
 
     const aspect = container.clientWidth / Math.max(1, container.clientHeight);
     this.camera = new THREE.PerspectiveCamera(80, aspect, 0.08, 600);

@@ -1118,6 +1118,8 @@ function buildWeapon(b: Builder, archetype: ArchetypeDef): void {
   b.add(box(0.036, 0.012, 0.03), MET, R, at(-0.052, -0.12, -0.15));
 }
 
+let blobGeometry: THREE.PlaneGeometry | null = null;
+
 export function createSoldier(archetypeId: string, materials: THREE.Material[]): SoldierRig {
   const archetype = ARCHETYPES[archetypeId] ?? ARCHETYPES.rifleman;
   const bones = buildSkeleton();
@@ -1135,7 +1137,9 @@ export function createSoldier(archetypeId: string, materials: THREE.Material[]):
   const muzzle = new THREE.Object3D();
   muzzle.position.copy(WEAPONS[weaponOf(archetype)].muzzle);
   bones[B.rifle].add(muzzle);
-  const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.8), blobMaterial());
+  // One shared quad: Enemy.dispose does not (and should not have to) dispose per-soldier geometry, and a
+  // fresh PlaneGeometry per spawn was one GPU buffer leaked per kill.
+  const blob = new THREE.Mesh(blobGeometry ??= new THREE.PlaneGeometry(1.1, 0.8), blobMaterial());
   blob.rotation.x = -Math.PI / 2;
   blob.position.set(0, 0.012, 0.02);
   blob.renderOrder = 1;

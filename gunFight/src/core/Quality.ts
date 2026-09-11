@@ -29,7 +29,13 @@ export interface QualitySettings {
   particleBudget: number;
   decalBudget: number;
   propDensity: number;
-  textureRes: 1024 | 2048;
+  /**
+   * Largest edge of a loaded PBR map; bigger source images are downscaled before upload (Assets.fit).
+   * The single biggest lever on GPU memory: the level holds ~130 file maps, and with mips a 2k map is
+   * 22 MB, a 1k map 5.6 MB, a 512 map 1.4 MB. On an integrated GPU that memory is system RAM, and
+   * the browser kills the tab long before the driver reports anything.
+   */
+  textureRes: 512 | 1024 | 2048;
   maxEnemies: number;
   dynamicLights: number;
   fogDistance: number;
@@ -186,7 +192,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
   low: {
     tier: 'low', pixelRatio: 1, shadowMapSize: 1024, shadowCascades: 1, shadowDistance: 40, anisotropy: 2,
     postFx: true, ssao: false, bloom: true, motionBlur: false, dof: false, taa: false, volumetrics: false, ssr: false,
-    particleBudget: 2000, decalBudget: 64, propDensity: 0.4, textureRes: 1024, maxEnemies: 6, dynamicLights: 2, fogDistance: 120,
+    particleBudget: 2000, decalBudget: 64, propDensity: 0.4, textureRes: 512, maxEnemies: 6, dynamicLights: 2, fogDistance: 120,
     csmMapSize: 1024, aoSamples: 8, aoHalfRes: true, godRays: false, sharpen: true, chromaticAberration: false, filmGrain: true, smaaPreset: 1,
     aoRadius: 0.8, aoIntensity: 2.6, shadowPcfTaps: 5, sunShafts: false, interiorProbe: true,
     aoDenoiseRadius: 4, aoDenoiseSamples: 4, aoContactRadius: 0, aoContactIntensity: 0, aoContactSamples: 0, interiorExposure: 3.6, clouds: false,
