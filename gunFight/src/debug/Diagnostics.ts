@@ -1,5 +1,6 @@
 import type { Engine } from '../core/Engine';
 import { shotMode } from './ShotMode';
+import { BlackBox } from './BlackBox';
 
 /**
  * On-screen diagnostics, toggled with F9 or `?diag=1`.
@@ -31,6 +32,7 @@ export class Diagnostics {
   private gl: string;
   /** Peak resource counts. A leak shows as peak climbing forever; a healthy scene plateaus. */
   private peakGeo = 0; private peakTex = 0; private peakHeap = 0;
+  private blackBox: BlackBox;
 
   constructor(private engine: Engine, container: HTMLElement) {
     this.el = document.createElement('div');
@@ -51,6 +53,39 @@ export class Diagnostics {
     engine.events.on('renderer:contextlost', () => { if (!shotMode) this.warnContextLost(container); });
 
     window.addEventListener('keydown', (e) => { if (e.code === 'F9') this.el.hidden = !this.el.hidden; });
+
+    // The flight recorder. If the browser killed the previous session, its last minutes are
+    // reported here, because that death leaves no other trace.
+    this.blackBox = new BlackBox(engine);
+    engine.add(this.blackBox);
+    if (this.blackBox.crashed) {
+      console.warn('[gunfight] previous session ended without a clean unload:\n' + this.blackBox.report());
+      if (!shotMode) this.warnCrashed(container);
+    }
+  }
+
+  /** The previous session died without unloading: show what it looked like just before. */
+  private warnCrashed(container: HTMLElement): void {
+    const box = document.createElement('div');
+    box.id = 'crash-report';
+    box.style.cssText = 'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:10000;' +
+      'max-width:min(760px,94vw);padding:10px 14px;background:rgba(10,12,18,.94);color:#f0e4d4;' +
+      'font:12px/1.6 ui-monospace,Menlo,monospace;border-left:3px solid #d9534f;border-radius:3px;' +
+      'box-shadow:0 8px 28px rgba(0,0,0,.5);pointer-events:auto';
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'margin:6px 0 0;max-height:34vh;overflow:auto;font:inherit;white-space:pre;opacity:.85';
+    pre.textContent = this.blackBox.report();
+    const head = document.createElement('div');
+    head.innerHTML = '<b style="color:#f6b26b">上次游戏没有正常退出（页面被浏览器重载或杀掉了）</b><br>' +
+      '下面是崩溃前最后几分钟的内存/资源记录，请复制发出来。<span style="opacity:.6">点标题关闭</span>';
+    head.style.cursor = 'pointer';
+    head.addEventListener('click', () => box.remove());
+    const copy = document.createElement('button');
+    copy.textContent = '复制记录';
+    copy.style.cssText = 'margin-top:6px;font:inherit;padding:2px 10px;cursor:pointer';
+    copy.addEventListener('click', () => { void navigator.clipboard?.writeText(this.blackBox.report()).then(() => { copy.textContent = '已复制'; }); });
+    box.append(head, pre, copy);
+    container.appendChild(box);
   }
 
   /**
@@ -140,8 +175,10 @@ export class Diagnostics {
       `绘制    ${info.calls} 次   ${(info.triangles / 1000).toFixed(0)}k 三角面   着色器 ${r.info.programs?.length ?? 0}`,
       `资源    几何 ${mem.geometries} (峰 ${this.peakGeo})   纹理 ${mem.textures} (峰 ${this.peakTex})` +
         (heapBytes ? `   JS 堆 ${heap.toFixed(0)} MB (峰 ${this.peakHeap.toFixed(0)})` : ''),
+      `资源释放 ${this.engine.assets.stats.released} 张源图 (${(this.engine.assets.stats.releasedPixels * 4 / 1048576).toFixed(0)} MB)   缩小 ${this.engine.assets.stats.shrunk} 张`,
+      this.blackBox.summary(),
       `F9 开关此面板`,
-    ].join('\n');
+    ].filter(Boolean).join('\n');
   }
 }
 

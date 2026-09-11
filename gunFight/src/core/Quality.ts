@@ -36,6 +36,13 @@ export interface QualitySettings {
    * the browser kills the tab long before the driver reports anything.
    */
   textureRes: 512 | 1024 | 2048;
+  /**
+   * Largest edge of a procedurally drawn canvas texture (sign/facade/decal atlases, weapon and
+   * soldier skins); bigger canvases are shrunk before upload (Assets.compact). Separate from
+   * `textureRes` because these are drawn at 1k-2k regardless of tier and a 2k atlas with mips is
+   * 22 MB - six of them were a quarter of the low tier's texture memory.
+   */
+  canvasTextureRes: 1024 | 2048 | 4096;
   maxEnemies: number;
   dynamicLights: number;
   fogDistance: number;
@@ -192,7 +199,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
   low: {
     tier: 'low', pixelRatio: 1, shadowMapSize: 1024, shadowCascades: 1, shadowDistance: 40, anisotropy: 2,
     postFx: true, ssao: false, bloom: true, motionBlur: false, dof: false, taa: false, volumetrics: false, ssr: false,
-    particleBudget: 2000, decalBudget: 64, propDensity: 0.4, textureRes: 512, maxEnemies: 6, dynamicLights: 2, fogDistance: 120,
+    particleBudget: 2000, decalBudget: 64, propDensity: 0.4, textureRes: 512, canvasTextureRes: 1024, maxEnemies: 6, dynamicLights: 2, fogDistance: 120,
     csmMapSize: 1024, aoSamples: 8, aoHalfRes: true, godRays: false, sharpen: true, chromaticAberration: false, filmGrain: true, smaaPreset: 1,
     aoRadius: 0.8, aoIntensity: 2.6, shadowPcfTaps: 5, sunShafts: false, interiorProbe: true,
     aoDenoiseRadius: 4, aoDenoiseSamples: 4, aoContactRadius: 0, aoContactIntensity: 0, aoContactSamples: 0, interiorExposure: 3.6, clouds: false,
@@ -203,7 +210,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
   medium: {
     tier: 'medium', pixelRatio: Math.min(1.5, window.devicePixelRatio || 1), shadowMapSize: 2048, shadowCascades: 2, shadowDistance: 80, anisotropy: 4,
     postFx: true, ssao: true, bloom: true, motionBlur: false, dof: false, taa: true, volumetrics: false, ssr: false,
-    particleBudget: 6000, decalBudget: 128, propDensity: 0.7, textureRes: 1024, maxEnemies: 10, dynamicLights: 4, fogDistance: 200,
+    particleBudget: 6000, decalBudget: 128, propDensity: 0.7, textureRes: 1024, canvasTextureRes: 2048, maxEnemies: 10, dynamicLights: 4, fogDistance: 200,
     csmMapSize: 2048, aoSamples: 8, aoHalfRes: true, godRays: true, sharpen: true, chromaticAberration: true, filmGrain: true, smaaPreset: 2,
     aoRadius: 0.9, aoIntensity: 2.6, shadowPcfTaps: 8, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 4, aoContactRadius: 0.30, aoContactIntensity: 1.6, aoContactSamples: 8, interiorExposure: 4.3, clouds: true,
@@ -214,7 +221,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
   high: {
     tier: 'high', pixelRatio: Math.min(2, window.devicePixelRatio || 1), shadowMapSize: 4096, shadowCascades: 3, shadowDistance: 140, anisotropy: 8,
     postFx: true, ssao: true, bloom: true, motionBlur: true, dof: true, taa: true, volumetrics: true, ssr: false,
-    particleBudget: 12000, decalBudget: 256, propDensity: 1, textureRes: 2048, maxEnemies: 14, dynamicLights: 8, fogDistance: 300,
+    particleBudget: 12000, decalBudget: 256, propDensity: 1, textureRes: 2048, canvasTextureRes: 2048, maxEnemies: 14, dynamicLights: 8, fogDistance: 300,
     csmMapSize: 2048, aoSamples: 12, aoHalfRes: true, godRays: true, sharpen: true, chromaticAberration: true, filmGrain: true, smaaPreset: 3,
     aoRadius: 0.9, aoIntensity: 2.85, shadowPcfTaps: 12, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 8, aoContactRadius: 0.26, aoContactIntensity: 1.75, aoContactSamples: 8, interiorExposure: 4.7, clouds: true,
@@ -225,7 +232,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
   ultra: {
     tier: 'ultra', pixelRatio: Math.min(2, window.devicePixelRatio || 1), shadowMapSize: 4096, shadowCascades: 4, shadowDistance: 200, anisotropy: 16,
     postFx: true, ssao: true, bloom: true, motionBlur: true, dof: true, taa: true, volumetrics: true, ssr: true,
-    particleBudget: 20000, decalBudget: 512, propDensity: 1, textureRes: 2048, maxEnemies: 18, dynamicLights: 12, fogDistance: 400,
+    particleBudget: 20000, decalBudget: 512, propDensity: 1, textureRes: 2048, canvasTextureRes: 2048, maxEnemies: 18, dynamicLights: 12, fogDistance: 400,
     csmMapSize: 4096, aoSamples: 32, aoHalfRes: false, godRays: true, sharpen: true, chromaticAberration: true, filmGrain: true, smaaPreset: 3,
     aoRadius: 1.0, aoIntensity: 2.95, shadowPcfTaps: 16, sunShafts: true, interiorProbe: true,
     aoDenoiseRadius: 3, aoDenoiseSamples: 8, aoContactRadius: 0.24, aoContactIntensity: 1.8, aoContactSamples: 12, interiorExposure: 4.7, clouds: true,

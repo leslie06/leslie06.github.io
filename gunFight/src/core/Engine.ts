@@ -56,6 +56,8 @@ export class Engine {
   private governorCfg: GovernorConfig;
   /** Current drawing-buffer multiplier on quality.pixelRatio; the UI reads this. */
   renderScale = 1;
+  /** Last `assets.compact` sweep (engine time); see Assets for what it releases. */
+  private lastCompact = -Infinity;
   /** The adapter the renderer actually bound. Drives the boot tier; the diagnostics panel shows it. */
   readonly gpu: GpuInfo;
   /** Minimum ms between presented frames (0 = every display refresh). See quality.frameCap. */
@@ -89,6 +91,7 @@ export class Engine {
     this.renderer.info.autoReset = false;
     this.assets.anisotropy = Math.min(this.quality.anisotropy, this.renderer.capabilities.getMaxAnisotropy());
     this.assets.maxTextureSize = this.quality.textureRes;
+    this.assets.maxCanvasSize = this.quality.canvasTextureRes;
 
     const aspect = container.clientWidth / Math.max(1, container.clientHeight);
     this.camera = new THREE.PerspectiveCamera(80, aspect, 0.08, 600);
@@ -202,6 +205,12 @@ export class Engine {
     const alpha = this.accumulator / fixed;
     this.time += dt; this.frame++;
     for (const s of this.systems) s.update?.(dt, alpha);
+    // Before the first render so oversized procedural canvases never reach the GPU at full size;
+    // afterwards every 2 s to pick up textures created during play (enemy skins).
+    if (this.time - this.lastCompact >= 2 || this.frame === 1) {
+      this.lastCompact = this.time;
+      this.assets.compact(this.renderer, [this.scene, this.viewmodelScene], [this.scene.environment, this.scene.background as THREE.Texture | null]);
+    }
     this.renderer.info.reset();
     this.renderFrame(dt);
     if (this.quality.adaptiveResolution && !forcedDt) {
