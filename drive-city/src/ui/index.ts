@@ -121,8 +121,8 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   document.addEventListener('pointerlockchange', () => {
     if (!TOUCH && !document.pointerLockElement && api.state === 'playing' && !new URLSearchParams(location.search).has('nolock')) api.pause();
   });
-  onLangChange(() => { document.title = `${t('title.name')} · ${t('title.place')}`; });
-  document.title = `${t('title.name')} · ${t('title.place')}`;
+  onLangChange(() => { document.title = t('title.name'); });
+  document.title = t('title.name');
   engine.add(api);
   api.showTitle();
 }

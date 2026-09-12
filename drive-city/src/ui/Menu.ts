@@ -12,7 +12,6 @@ css(`
 .menu .left{max-width:560px;display:grid;gap:14px}
 .menu .tag{font:700 12px/1 ${F.num};letter-spacing:.28em;color:${C.yellow};text-transform:uppercase}
 .menu h1{margin:0;font:900 clamp(56px,9vw,112px)/.88 ${F.num};letter-spacing:-.035em}
-.menu h1 .place{display:block;margin-top:10px;font:900 clamp(40px,6vw,76px)/1 ${F.ui};letter-spacing:.06em;color:${C.yellow}}
 .menu .sub{font:600 17px/1.5 ${F.ui};color:${C.paper}}
 .menu .note{font:400 14px/1.6 ${F.ui};color:${C.muted};max-width:46ch}
 .menu .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:8px}
@@ -61,7 +60,6 @@ export class Menu {
     const tag = el('div', 'tag', left); tag.appendChild(L('title.tag'));
     const h1 = this.title = el('h1', '', left);
     h1.appendChild(L('title.name'));
-    const place = el('span', 'place', h1); place.appendChild(L('title.place'));
     this.subEl = el('div', 'sub', left); this.subEl.appendChild(L('title.sub'));
     this.noteEl = el('div', 'note', left); this.noteEl.appendChild(L('title.note'));
     this.pauseHint = el('div', 'pausehint', left); this.pauseHint.appendChild(L('pause.hint'));

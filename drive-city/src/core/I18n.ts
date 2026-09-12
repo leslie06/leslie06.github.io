@@ -24,13 +24,12 @@ const STORE_KEY = 'drivecity.lang.v1';
 
 const EN = {
   'title.name': 'B CITY CHASE',
-  'title.place': 'BEIJING',
   'title.tag': 'OPEN WORLD',
-  'title.sub': 'Central Beijing, from Tiananmen to Guomao',
+  'title.sub': 'From Tiananmen to Guomao',
   'title.start': 'START DRIVING',
   'title.resume': 'RESUME',
   'title.loading': 'LOADING',
-  'title.note': 'Drive a Beijing taxi and pick up fares. Get out anywhere, take any car, and keep the police off your back.',
+  'title.note': 'Drive a taxi and pick up fares. Get out anywhere, take any car, and keep the police off your back.',
   'title.controls': 'CONTROLS',
 
   'ctl.drive': 'Accelerate / brake · reverse',
@@ -156,13 +155,12 @@ export type TParams = Record<string, string | number>;
 
 const ZH: Record<TKey, string> = {
   'title.name': 'b城追车',
-  'title.place': '北京',
   'title.tag': '开放世界',
-  'title.sub': '北京城中心 · 从天安门到国贸',
+  'title.sub': '从天安门到国贸',
   'title.start': '开始驾驶',
   'title.resume': '继续',
   'title.loading': '加载中',
-  'title.note': '开着北京出租车拉活儿。随时下车、随手抢车，别让警察盯上你。',
+  'title.note': '开着出租车拉活儿。随时下车、随手抢车，别让警察盯上你。',
   'title.controls': '操作',
 
   'ctl.drive': '油门 / 刹车 · 倒车',
