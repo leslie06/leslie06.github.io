@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "shot": "node scripts/shot.mjs"
+    "shot": "node scripts/shot.mjs",
+    "deploy": "node scripts/deploy.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",
