@@ -34,6 +34,11 @@ css(`
 .hud .toast.on{opacity:1}
 .hud .flipped{position:absolute;left:50%;top:42%;transform:translateX(-50%);padding:12px 20px;border-radius:8px;background:${C.inkGlass};font:700 18px/1 ${F.ui};border-left:3px solid ${C.yellow}}
 .hud .help{position:absolute;left:max(24px,3vw);top:calc(max(20px,3vh) + 58px);padding:14px 16px;border-radius:8px;background:${C.inkGlass};font:500 13px/1.9 ${F.ui};min-width:260px}
+/* The radar sits in the top-left corner (see Minimap.ts), so these stack below it. Only when a
+   radar exists: the yard has no nav, and would otherwise leave the corner empty. */
+body.dc-radar .hud .best{top:calc(var(--mm-top) + var(--mm-h) + 14px)}
+body.dc-radar .hud .hint{top:calc(var(--mm-top) + var(--mm-h) + 40px)}
+body.dc-radar .hud .help{top:calc(var(--mm-top) + var(--mm-h) + 72px)}
 .hud .help kbd{display:inline-block;min-width:22px;padding:0 6px;margin-right:6px;border-radius:4px;border:1px solid ${C.line};background:rgba(244,241,232,.08);font:700 11px/20px ${F.mono};text-align:center;color:${C.paper}}
 .hud .help .row{display:flex;justify-content:space-between;gap:18px}
 .hud .help .row span:last-child{color:${C.muted}}

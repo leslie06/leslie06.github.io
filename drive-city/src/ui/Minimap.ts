@@ -8,7 +8,8 @@ import { BLIP_COLOR, INK, drawBlip, drawEdgeArrow, drawPlayer, screenAngle, type
 import { C, F, css, el } from './theme';
 
 css(`
-.minimap{position:absolute;left:max(24px,3vw);bottom:max(18px,3vh);width:clamp(210px,16vw,320px);pointer-events:none}
+:root{--mm-left:max(24px,3vw);--mm-top:max(20px,3vh);--mm-w:clamp(210px,16vw,320px);--mm-h:calc(var(--mm-w) / 1.58 + 25px)}
+.minimap{position:absolute;left:var(--mm-left);top:var(--mm-top);width:var(--mm-w);pointer-events:none}
 .minimap .frame{position:relative;width:100%;aspect-ratio:1.58;border-radius:7px;overflow:hidden;background:rgba(15,18,20,.9);
   box-shadow:0 8px 26px rgba(0,0,0,.42),inset 0 0 0 1px rgba(244,241,232,.16)}
 .minimap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -32,7 +33,7 @@ const REF_SCALE = 0.6;
 const EDGE_KINDS = new Set<MarkKind>(['target', 'pickup', 'dropoff', 'mission', 'waypoint']);
 
 /**
- * GTA-V-style radar, bottom-left: rotates with the camera, zooms out with speed, the player a
+ * GTA-V-style radar, top-left: rotates with the camera, zooms out with speed, the player a
  * little below centre so more of the road ahead shows. Canvas 2D at 30 Hz: the roads are prebuilt
  * Path2D cells in world metres stroked under one world->screen transform, so a redraw is a few
  * dozen draw calls.

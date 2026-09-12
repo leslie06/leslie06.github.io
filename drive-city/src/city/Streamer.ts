@@ -74,6 +74,16 @@ class InstancePool {
 }
 
 /**
+ * The tile workers. Spawned on their own so the city can start their module fetch before it asks
+ * for anything else: on GitHub Pages this 42 KB script was only requested after the facade photos
+ * resolved, and then trickled in behind 10 MB of images - 42 s for 42 KB, with the whole boot
+ * waiting on it, because no tile can be meshed without a worker (`.scratch/waterfall.mjs`).
+ */
+export function spawnTileWorkers(n = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 2))): Worker[] {
+  return Array.from({ length: n }, () => new Worker(new URL('./tileWorker.ts', import.meta.url), { type: 'module' }));
+}
+
+/**
  * Streams the city around the camera. Tiles within `radius` are fetched and meshed in workers and
  * wrapped here (one tile per frame at most); tiles within `physRadius` of the focus also get their
  * static colliders (building walls as a trimesh, tree trunks and lamp posts as cylinders); trees
@@ -113,13 +123,11 @@ export class CityStreamer implements System {
   private _m = new THREE.Matrix4(); private _q = new THREE.Quaternion(); private _p = new THREE.Vector3(); private _s = new THREE.Vector3();
   onDetailChange?: (keys: Set<string>) => void;
 
-  constructor(private engine: Engine, private manifest: Manifest, private mats: CityMaterials, private env: EnvUniforms, private footprints: number[][]) {
+  constructor(private engine: Engine, private manifest: Manifest, private mats: CityMaterials, private env: EnvUniforms, private footprints: number[][], workers?: Worker[]) {
     const tier = engine.quality.tier;
     this.radius = tier === 'low' ? 2 : tier === 'medium' ? 3 : 4;
     this.vegRadius = tier === 'low' ? 1 : tier === 'medium' ? 2 : 3;
-    const n = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 2));
-    for (let i = 0; i < n; i++) {
-      const w = new Worker(new URL('./tileWorker.ts', import.meta.url), { type: 'module' });
+    for (const w of workers ?? spawnTileWorkers()) {
       w.onmessage = (ev: MessageEvent<TileResult>) => this.done.push(ev.data);
       this.workers.push(w);
     }

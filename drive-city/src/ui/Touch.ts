@@ -44,13 +44,17 @@ const SHEET = `
 body.dc-touch .hud .speedo{left:50%;right:auto;top:auto;bottom:calc(4px + env(safe-area-inset-bottom,0px));
   transform:translateX(-50%) scale(.62);transform-origin:bottom center}
 body.dc-touch .hud .hint{display:none}
-body.dc-touch .minimap{width:min(40vw,190px);left:calc(10px + env(safe-area-inset-left,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+/* Top-left on a phone too, but below the pause and map buttons (12 + 48 + 10 px). Overriding the
+   variables rather than the width keeps --mm-h, which the HUD stacks against, correct. */
+body.dc-touch{--mm-w:min(40vw,190px);--mm-left:calc(10px + env(safe-area-inset-left,0px));--mm-top:calc(70px + env(safe-area-inset-top,0px))}
 body.dc-touch .hud .wanted{top:calc(12px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));font-size:24px}
 body.dc-touch .hud .cash{top:calc(42px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));font-size:19px}
 body.dc-touch .hud .health{top:calc(68px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));width:92px}
 body.dc-touch .hud .toast{bottom:32vh}
 body.dc-touch .hud .prompt{bottom:25vh}
-body.dc-touch .hud .street{bottom:calc(118px + env(safe-area-inset-bottom,0px))}
+/* Clear of the pads: 16px inset + 64px top row + 10px gap + 82px gas button = 172px tall, so the
+   street name sat inside the buttons at 118px. */
+body.dc-touch .hud .street{bottom:calc(182px + env(safe-area-inset-bottom,0px))}
 /* Portrait is narrow: the dial cannot share the bottom edge with the pads, so it sits over the radar. */
 @media (orientation:portrait){
   body.dc-touch .hud .speedo{left:calc(4px + env(safe-area-inset-left,0px));transform:scale(.52);transform-origin:bottom left;bottom:calc(150px + env(safe-area-inset-bottom,0px))}

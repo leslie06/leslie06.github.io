@@ -8,7 +8,7 @@ import { project } from './Geo';
 import { createCityMaterials } from './Materials';
 import { Routes } from './Routes';
 import { SkylineLod } from './Skyline';
-import { CityStreamer } from './Streamer';
+import { CityStreamer, spawnTileWorkers } from './Streamer';
 
 export interface CityApi {
   name: 'city';
@@ -101,6 +101,9 @@ export async function install(engine: Engine): Promise<void> {
   const { scene, physics } = engine;
   const render = engine.get<RenderApi>('render');
   const env: EnvUniforms = render?.uniforms ?? { uNight: { value: 0 }, uWet: { value: 0 }, uTime: { value: 0 } };
+  // The tile workers first: their module fetch is 42 KB the boot cannot finish without, and it must
+  // go out before the facade photos below take the connection for the next minute (see Streamer).
+  const tileWorkers = spawnTileWorkers();
   const [manifest, network, skyline, mats, defs] = await Promise.all([
     loadCity<Manifest>('manifest.json'), loadCity<Network>('network.json'), loadCity<Skyline>('skyline.json'),
     createCityMaterials(engine, env), loadLandmarks(),
@@ -126,7 +129,7 @@ export async function install(engine: Engine): Promise<void> {
   const sky = new SkylineLod(skyline, env);
   sky.exclude(footprints);
   scene.add(sky.mesh);
-  const streamer = new CityStreamer(engine, manifest, mats, env, footprints);
+  const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers);
   streamer.onDetailChange = (keys) => sky.setDetailed(keys);
   engine.add(streamer);
   const routes = new Routes(network);

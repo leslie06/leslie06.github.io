@@ -35,7 +35,8 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   const menu = new Menu(engine, container);
   engine.add(hud);
   // Radar and full-screen map (city only; before `api` so the map's Esc/Tab handling runs first).
-  if (engine.get('nav')) { engine.add(new Minimap(engine, hud.root)); engine.add(new MapScreen(engine, container)); }
+  // `dc-radar` tells the HUD that the top-left corner is taken (the yard has no nav, no radar).
+  if (engine.get('nav')) { document.body.classList.add('dc-radar'); engine.add(new Minimap(engine, hud.root)); engine.add(new MapScreen(engine, container)); }
   const v = () => engine.get<VehicleApi>('vehicle')!;
   const cam = () => engine.get<CameraApi>('camera')!;
   const world = engine.get<WorldApi>('world')!;
