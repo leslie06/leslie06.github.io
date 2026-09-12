@@ -4,7 +4,7 @@ import type { CameraApi, HudApi, PlayerApi, VehicleApi, WantedApi, WorldApi } fr
 import { registerPose } from '../debug/PoseRegistry';
 import type { UiApi } from '../ui';
 import type { HomeSystem } from '.';
-import { ANCHOR, DOOR, ENTRY, GARAGE, HOUSE, PARK_AT, POOL } from './Layout';
+import { ANCHOR, DOOR, ENTRY, GARAGE, HOUSE, PARK_AT, POOL, STAIR } from './Layout';
 
 /**
  * 我家 screenshot poses (`node scripts/shot.mjs --world city --poses home_...`).
@@ -115,7 +115,20 @@ export function registerHomePoses(): void {
       await base(e);
       standAt(e, HOUSE.x0 + 13, HOUSE.z1 - 8, HOUSE.floor0 + 0.1, Math.PI);
       run(e, 0.4, 0);
-      await shot(e, [HOUSE.x0 + 4, HOUSE.floor0 + 1.7, HOUSE.z0 + 6], [HOUSE.x0 + 20, HOUSE.floor0 + 1.2, HOUSE.z1 - 2], 70);
+      await shot(e, [HOUSE.x0 + 3, HOUSE.floor0 + 1.75, HOUSE.z1 - 1.6], [HOUSE.x0 + 21, HOUSE.floor0 + 1.15, HOUSE.z0 + 7], 70);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_stair',
+    description: 'The open-riser stair and the void it comes up through: where the first floor is.',
+    async apply(e) {
+      await base(e);
+      standAt(e, HOUSE.x0 + 16, HOUSE.z1 - 3, HOUSE.floor0 + 0.1, 0);
+      run(e, 0.4, 0);
+      await shot(e, [HOUSE.x0 + 15, HOUSE.floor0 + 1.7, HOUSE.z1 - 1.5],
+        [STAIR.x, HOUSE.floor0 + 2.6, STAIR.zTop + 2], 68);
       run(e, 0.6, 0.6);
     },
   });

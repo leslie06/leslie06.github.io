@@ -99,6 +99,19 @@ describe('我家 the villa', () => {
     }
   });
 
+  it('brings the stair up through the void, not into a ceiling', () => {
+    // The stair used to run into a full-footprint ceiling quad and looked like it led nowhere.
+    expect(STAIR.x).toBeGreaterThan(VOID.x0);
+    expect(STAIR.x).toBeLessThan(VOID.x1);
+    expect(STAIR.x - STAIR.w / 2).toBeGreaterThan(VOID.x0 - 0.5);
+    // It arrives at the void's far edge, so the opening is above the top of the flight.
+    expect(STAIR.zTop).toBeGreaterThanOrEqual(VOID.z0 - 0.5);
+    expect(STAIR.zTop).toBeLessThan(VOID.z1);
+    // And the flight itself runs back inside the void's length, not past the house wall.
+    const run = Math.round((HOUSE.floor1 - HOUSE.floor0) / STAIR.rise) * STAIR.tread;
+    expect(STAIR.zTop + run).toBeLessThan(HOUSE.z1 - 0.5);
+  });
+
   it('keeps the pool inside the walls and its coping steppable', () => {
     expect(POOL.x1 + POOL.rim).toBeLessThan(PLOT.hw - WALL.inset - 1);
     expect(POOL.z1 + POOL.rim).toBeLessThan(PLOT.hd - WALL.inset - 1);

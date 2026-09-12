@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import type { ColliderSpec, EnvUniforms } from '../game/Contracts';
-import { Parts, box, circlePoly, cyl, flat, lathe, prism, rectPoly } from '../city/landmarks/kit/geo';
+import { Parts, box, circlePoly, cyl, flat, lathe, prism, rectPoly, tube, type V3 } from '../city/landmarks/kit/geo';
 import { landmarkMaterials, nightGlow } from '../city/landmarks/kit/mats';
-import { stairFlight } from '../city/landmarks/kit/hall';
 import {
   DOOR, DRIVE, ENTRY, FORECOURT, GARAGE, GARAGE_DOOR, GATE, HOUSE, LIGHTS, PARK_AT, PLOT, POOL,
   STAIR, TERRACE, TERRACE_DOOR, TREES, UPPER, VOID, WALL, Y,
@@ -38,7 +37,8 @@ const slab = (r: Rect, y0: number, y1: number): ColliderSpec =>
  * leaving the house silently absent from the city.
  */
 export const VILLA_KEYS = ['vStone', 'vWall', 'vTrim', 'vGlass', 'vWood', 'vFloor', 'vRoof',
-  'vDrive', 'vPave', 'vLawn', 'vWater', 'vHedge', 'vTrunk', 'vLeaf', 'vLight'] as const;
+  'vDrive', 'vPave', 'vLawn', 'vWater', 'vHedge', 'vTrunk', 'vLeaf', 'vLight',
+  'vWoodFloor', 'vFabric'] as const;
 export type VillaKey = (typeof VILLA_KEYS)[number];
 
 const matCache = new WeakMap<EnvUniforms, Record<string, THREE.Material>>();
@@ -82,8 +82,13 @@ export function villaMaterials(env: EnvUniforms): Record<string, THREE.Material>
     vGlass: glass,
     /** Timber: the entrance soffit, the deck, the furniture. */
     vWood: std({ color: '#9d7c53', roughness: 0.78 }, 'flood', '#ffe3b8', true),
-    /** Pale indoor floor, and the stair. */
+    /** Pale indoor floor (hall and kitchen), and the stair treads. */
     vFloor: std({ color: '#e3ded2', roughness: 0.42 }, 'lamp', '#ffe0b0'),
+    /** Oak boards over the living and dining end, and the bedroom. */
+    vWoodFloor: std({ color: '#8a6540', roughness: 0.5 }, 'lamp', '#ffdca8'),
+    /** Upholstery and soft furnishings: the sofa, the bed, the curtains. Was borrowing vHedge,
+     *  which is why the sofa used to be hedge green. */
+    vFabric: std({ color: '#9a958c', roughness: 0.9 }, 'lamp', '#ffe3c0', true),
     vRoof: std({ color: '#918f88', roughness: 0.88 }, null, '#fff', true),
     vDrive: layer(std({ color: '#54544f', roughness: 0.8 }, 'flood', '#ffe3b8', 'ground'), 2.6),
     vPave: layer(std({ color: '#cdc6b8', roughness: 0.8 }, 'flood', '#ffe3b8', 'ground'), 3.0),
@@ -121,6 +126,33 @@ function fascia(P: Parts, r: Rect, y: number, band = 0.45, h = 0.26): void {
   box(b, mid(r.x0, r.x1), y, r.z1, w + band, h, band);
   box(b, r.x0, y, mid(r.z0, r.z1), band, h, d);
   box(b, r.x1, y, mid(r.z0, r.z1), band, h, d);
+}
+
+/**
+ * Open-riser stair: treads on a stepped central stringer, with a rail down the open side. Returns
+ * the run in metres. The kit's `stairFlight` is built for palace terraces and puts solid 0.6 m
+ * stringers down both sides, which from inside a room hides every tread and reads as a white ramp.
+ */
+function stair(P: Parts, y0: number, y1: number): number {
+  const tread = P.get('vFloor'), steel = P.get('vTrim');
+  const n = Math.max(2, Math.round((y1 - y0) / STAIR.rise));
+  const rr = (y1 - y0) / n, run = n * STAIR.tread;
+  const zBot = STAIR.zTop + run;
+  const railX = STAIR.x - STAIR.w / 2 + 0.07;
+  const rail: V3[] = [];
+  for (let i = 0; i < n; i++) {
+    const y = y0 + (i + 1) * rr, z = zBot - (i + 0.5) * STAIR.tread;
+    box(tread, STAIR.x, y - 0.03, z, STAIR.w, 0.06, STAIR.tread);
+    // A slim stringer hugging the underside of each tread. A box from the floor up to every tread
+    // (which is what this was) stacks into a solid black wall under the whole flight.
+    box(steel, STAIR.x, y - 0.2, z, 0.34, 0.28, STAIR.tread);
+    if (i % 2 === 0) box(steel, railX, y + 0.48, z, 0.035, 0.9, 0.035);
+    rail.push([railX, y + 0.95, z]);
+  }
+  // A handrail that actually slopes: `tube` sweeps a polyline, where a box can only yaw, so the
+  // rail used to be a row of stubby T-pieces that never met.
+  tube(steel, rail, 0.028, 6);
+  return run;
 }
 
 type Gap = { along: 'x' | 'z'; at: number; w: number; top: number };
@@ -287,7 +319,11 @@ function house(P: Parts): ColliderSpec[] {
   const inside = { x0, x1, z0, z1 };
   out.push(slab(inside, 0, floor0));
   flat(P.get('vFloor'), poly(inside), floor0);
-  flat(P.get('vWall'), poly(inside), ceil0, true);
+  // The ceiling is tiled house-minus-void: one quad over the whole footprint capped the stairwell,
+  // so the stair ran straight into the ceiling and looked like it led nowhere. The undersides of the
+  // two first-floor slabs (below) cover the rest.
+  flat(P.get('vWall'), poly({ x0: UPPER.x1, x1, z0, z1 }), ceil0, true);
+  flat(P.get('vWall'), poly({ x0, x1: UPPER.x1, z0: UPPER.z1, z1 }), ceil0, true);
 
   // --- first floor: slab in two pieces, leaving the stair void open.
   const slabA = { x0: UPPER.x0, x1: VOID.x0, z0: UPPER.z0, z1: UPPER.z1 };
@@ -335,7 +371,7 @@ function house(P: Parts): ColliderSpec[] {
   }
 
   // --- stair up the east side, and the rail round the void it comes through.
-  const run = stairFlight(P, 'vFloor', { x: STAIR.x, z: STAIR.zTop, ry: 0, w: STAIR.w }, floor0, floor1, STAIR.rise, STAIR.tread);
+  const run = stair(P, floor0, floor1);
   const zBot = STAIR.zTop + run;
   out.push({
     kind: 'hull',
@@ -351,24 +387,98 @@ function house(P: Parts): ColliderSpec[] {
   box(rail, VOID.x0, floor1 + 1.12, mid(VOID.z0, VOID.z1), 0.1, 0.1, VOID.z1 - VOID.z0);
   out.push(slab({ x0: VOID.x0 - 0.1, x1: VOID.x0 + 0.1, z0: VOID.z0, z1: VOID.z1 }, floor1, floor1 + 1.1));
 
-  // --- what makes the rooms rooms: a kitchen run, a sitting group, a bed upstairs.
-  const wood = P.get('vWood'), trim = P.get('vTrim'), soft = P.get('vHedge');
+  // --- 装修: what makes it a home rather than a shell. Detail LOD only - the far model is massing.
+  const wood = P.get('vWood'), trim = P.get('vTrim'), soft = P.get('vFabric');
+  const plank = P.get('vWoodFloor'), lamp = P.get('vLight'), stone = P.get('vStone');
+  /** A pendant on its rod. */
+  const pendant = (px: number, pz: number, y: number) => {
+    box(trim, px, y + 0.45, pz, 0.03, 0.9, 0.03);
+    cyl(lamp, px, y, pz, 0.17, 0.1, 0.15, 10, { bottom: true });
+  };
+  /** Curtain: a gathered fabric panel against the glass. */
+  const curtain = (px: number, pz: number, w: number, d: number, y0c: number, y1c: number) =>
+    box(soft, px, (y0c + y1c) / 2, pz, w, y1c - y0c, d);
+
+  // Oak over the living and dining end; stone stays in the hall and kitchen.
+  flat(plank, poly({ x0: x0 + 8, x1: x1 - 1.2, z0: z0 + 5.5, z1: z1 - 0.8 }), floor0 + 0.012);
+
+  // Kitchen: the run, upper cabinets, a splashback, the hood, and the island with pendants.
   out.push(...wallRun(P, 'vWall', { x0: x0 + 7, x1: x0 + 7.3, z0, z1: z0 + 7 }, floor0, ceil0,
     { along: 'z', at: z0 + 4.2, w: 1.8, top: floor0 + 2.2 }));
-  box(wood, x0 + 3.4, floor0 + 0.45, z0 + 1.2, 6.2, 0.9, 0.7);      // kitchen counter
+  box(wood, x0 + 3.4, floor0 + 0.45, z0 + 1.2, 6.2, 0.9, 0.7);
   box(trim, x0 + 3.4, floor0 + 0.92, z0 + 1.2, 6.2, 0.06, 0.74);
-  box(wood, x0 + 3.4, floor0 + 0.45, z0 + 4.6, 2.6, 0.9, 1.1);      // island
-  // Sitting group: a rug, a sofa with arms and a back, a low table, a screen on the wall.
-  box(trim, x0 + 13, floor0 + 0.01, z1 - 5.6, 6.4, 0.02, 4.6);
-  box(soft, x0 + 13, floor0 + 0.22, z1 - 4.2, 4.2, 0.44, 1.9);
-  box(soft, x0 + 13, floor0 + 0.62, z1 - 5.0, 4.2, 0.44, 0.34);
-  for (const s of [-1, 1]) box(soft, x0 + 13 + s * 2.2, floor0 + 0.46, z1 - 4.3, 0.34, 0.92, 1.9);
-  box(wood, x0 + 13, floor0 + 0.18, z1 - 7.2, 2.2, 0.36, 1.0);
-  box(trim, x0 + 13, floor0 + 1.5, z0 + 7.5, 2.4, 1.36, 0.1);
-  // Bedroom upstairs.
-  box(wood, x0 + 6, floor1 + 0.28, z0 + 3.4, 2.2, 0.56, 2.0);
-  box(soft, x0 + 6, floor1 + 0.62, z0 + 2.5, 2.2, 0.68, 0.24);
-  box(trim, x0 + 15, floor1 + 0.3, z0 + 1.0, 3.2, 0.6, 0.5);
+  box(stone, x0 + 3.4, floor0 + 1.36, z0 + 0.9, 6.2, 0.82, 0.05);
+  box(wood, x0 + 2.1, floor0 + 2.08, z0 + 1.0, 3.4, 0.78, 0.38);
+  box(trim, x0 + 5.7, floor0 + 1.98, z0 + 1.12, 1.0, 0.52, 0.58);
+  box(wood, x0 + 3.4, floor0 + 0.45, z0 + 4.6, 2.6, 0.9, 1.1);
+  box(trim, x0 + 3.4, floor0 + 0.93, z0 + 4.6, 2.72, 0.06, 1.2);
+  for (const px of [x0 + 2.6, x0 + 4.2]) pendant(px, z0 + 4.6, floor0 + 2.0);
+
+  // Dining: a table, six chairs, a pair of pendants over it.
+  const dx = x0 + 12.5, dz = z0 + 4.2;
+  box(wood, dx, floor0 + 0.72, dz, 2.5, 0.08, 1.15);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(trim, dx + sx * 1.1, floor0 + 0.34, dz + sz * 0.45, 0.07, 0.68, 0.07);
+  for (let i = 0; i < 3; i++) for (const sz of [-1, 1]) {
+    const cx2 = dx - 0.8 + i * 0.8, cz2 = dz + sz * 0.88;
+    box(soft, cx2, floor0 + 0.44, cz2, 0.42, 0.07, 0.42);
+    box(soft, cx2, floor0 + 0.72, cz2 + sz * 0.19, 0.42, 0.5, 0.06);
+    for (const lx of [-1, 1]) for (const lz of [-1, 1]) box(trim, cx2 + lx * 0.17, floor0 + 0.22, cz2 + lz * 0.17, 0.04, 0.44, 0.04);
+  }
+  for (const px of [dx - 0.55, dx + 0.55]) pendant(px, dz, floor0 + 1.95);
+
+  // Sitting group on a rug, facing a panelled wall with the screen on it.
+  const sx0 = x0 + 13, sz0 = z1 - 4.6;
+  box(soft, sx0, floor0 + 0.015, sz0 - 0.6, 6.2, 0.03, 4.4);
+  box(soft, sx0, floor0 + 0.24, sz0, 4.2, 0.48, 1.9);
+  box(soft, sx0, floor0 + 0.66, sz0 - 0.8, 4.2, 0.44, 0.32);
+  for (const s2 of [-1, 1]) box(soft, sx0 + s2 * 2.2, floor0 + 0.48, sz0 - 0.1, 0.34, 0.96, 1.9);
+  for (const s2 of [-1, 1]) box(soft, sx0 + s2 * 1.2, floor0 + 0.62, sz0 - 0.55, 0.5, 0.16, 0.5);
+  box(wood, sx0, floor0 + 0.2, sz0 - 2.5, 2.3, 0.4, 1.0);
+  // A full-height media partition dividing living from dining, screen on its south face. This was a
+  // 6 cm board hanging in mid-air: there is no wall at x = sx0, the kitchen partition ends at z0+7.
+  box(P.get('vWall'), sx0 + 0.8, mid(floor0, ceil0), z0 + 7.4, 7.2, ceil0 - floor0, 0.26);
+  out.push(slab({ x0: sx0 - 2.8, x1: sx0 + 4.4, z0: z0 + 7.27, z1: z0 + 7.53 }, floor0, ceil0));
+  box(trim, sx0 - 0.7, floor0 + 1.5, z0 + 7.54, 2.4, 1.36, 0.05);
+  // Bookshelf against the same wall, and a pair of planters by the glass.
+  // An open bookcase: two sides, a back and real shelves. One slab of timber read as a blank board.
+  for (const s2 of [-1, 1]) box(wood, sx0 + 3.4 + s2 * 0.88, floor0 + 1.0, z0 + 7.72, 0.06, 2.0, 0.34);
+  box(wood, sx0 + 3.4, floor0 + 1.0, z0 + 7.56, 1.8, 2.0, 0.05);
+  for (let i = 0; i < 5; i++) box(wood, sx0 + 3.4, floor0 + 0.08 + i * 0.48, z0 + 7.72, 1.72, 0.05, 0.34);
+  // A pair of armchairs by the glass: the floor between the sofa and the window read as empty.
+  for (const s2 of [-1, 1]) {
+    const ax = sx0 + s2 * 3.1, az = z1 - 2.1;
+    box(soft, ax, floor0 + 0.24, az, 0.92, 0.48, 0.88);
+    box(soft, ax, floor0 + 0.62, az - 0.35, 0.92, 0.5, 0.2);
+    for (const s3 of [-1, 1]) box(soft, ax + s3 * 0.41, floor0 + 0.46, az, 0.13, 0.44, 0.88);
+  }
+  for (const px of [x0 + 9.5, x1 - 2.4]) {
+    cyl(stone, px, floor0, z1 - 1.6, 0.26, 0.22, 0.42, 10);
+    blob(P, 'vLeaf', px, z1 - 1.6, 0.34, floor0 + 0.8, 0.92);
+  }
+  // Curtains at the ends of the two glazed walls, and a cove-lit band over the south glass.
+  for (const pz of [z1 - 0.55, z0 + 0.9]) { curtain(x0 + 0.75, pz, 0.6, 0.22, floor0, ceil0 - 0.12); }
+  for (const px of [x0 + 1.1, x1 - 0.9]) curtain(px, z1 - 0.42, 0.55, 0.2, floor0, ceil0 - 0.12);
+  box(P.get('vWall'), mid(x0, x1), ceil0 - 0.22, z1 - 0.75, x1 - x0 - 1.0, 0.34, 0.5);
+  box(lamp, mid(x0, x1), ceil0 - 0.42, z1 - 0.98, x1 - x0 - 1.4, 0.05, 0.1);
+
+  // --- bedroom upstairs: oak floor, a dressed bed, bedsides, wardrobe, desk and a lamp.
+  flat(plank, poly({ x0: UPPER.x0 + 1, x1: VOID.x0 - 1, z0: UPPER.z0 + 1, z1: UPPER.z1 - 1 }), floor1 + 0.012);
+  const bx = x0 + 6, bz = z0 + 3.6;
+  box(wood, bx, floor1 + 0.22, bz, 2.1, 0.44, 2.1);
+  box(soft, bx, floor1 + 0.52, bz + 0.1, 2.0, 0.2, 1.95);
+  box(soft, bx, floor1 + 0.66, bz - 0.78, 1.7, 0.22, 0.42);
+  box(wood, bx, floor1 + 0.75, bz - 1.15, 2.3, 1.0, 0.12);
+  for (const s2 of [-1, 1]) box(wood, bx + s2 * 1.42, floor1 + 0.25, bz - 0.8, 0.5, 0.5, 0.5);
+  for (const s2 of [-1, 1]) box(lamp, bx + s2 * 1.42, floor1 + 0.62, bz - 0.8, 0.16, 0.24, 0.16);
+  box(soft, bx, floor1 + 0.015, bz + 1.8, 3.2, 0.03, 2.0);
+  box(wood, x0 + 1.2, floor1 + 1.15, z0 + 7.5, 0.6, 2.3, 3.0);
+  box(trim, x0 + 1.5, floor1 + 1.15, z0 + 7.5, 0.04, 2.2, 2.9);
+  box(wood, x0 + 15.5, floor1 + 0.72, z0 + 1.2, 2.2, 0.07, 0.7);
+  for (const sx2 of [-1, 1]) for (const sz2 of [-1, 1]) box(trim, x0 + 15.5 + sx2 * 0.95, floor1 + 0.36, z0 + 1.2 + sz2 * 0.25, 0.06, 0.72, 0.06);
+  box(soft, x0 + 15.5, floor1 + 0.45, z0 + 2.1, 0.44, 0.07, 0.44);
+  box(trim, x0 + 18.5, floor1 + 0.8, z0 + 1.4, 0.06, 1.6, 0.06);
+  cyl(lamp, x0 + 18.5, floor1 + 1.6, z0 + 1.4, 0.2, 0.14, 0.26, 10, { bottom: true });
+  for (const px of [UPPER.x0 + 1.4, VOID.x0 - 1.4]) curtain(px, UPPER.z1 - 0.42, 0.55, 0.2, floor1, ceil1 - 0.12);
   return out;
 }
 
