@@ -31,6 +31,16 @@ css(`
 .menu .card .pad{margin-top:12px;font:400 12px/1.5 ${F.ui};color:${C.muted};max-width:36ch}
 .menu .pausehint{font:500 14px/1.4 ${F.ui};color:${C.muted}}
 @media (max-width: 820px){.menu{grid-template-columns:1fr;align-items:end}.menu .card{display:none}}
+/* A phone held sideways is only ~390px tall: compact the title so the start button stays on screen. */
+@media (max-height: 470px){
+  .menu{padding:12px 16px;gap:12px;align-items:center;overflow:auto}
+  .menu .left{gap:7px}
+  .menu h1{font-size:clamp(28px,7.5vh,52px)}
+  .menu h1 .place{font-size:clamp(20px,5.5vh,38px);margin-top:2px}
+  .menu .note{display:none}
+  .menu .sub{font-size:14px}
+  .menu .go{padding:11px 22px;font-size:15px}
+}
 `);
 
 export type MenuState = 'title' | 'playing' | 'paused';

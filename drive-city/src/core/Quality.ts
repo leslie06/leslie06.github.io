@@ -79,7 +79,8 @@ export interface QualitySettings {
   wetRipples: boolean;
 }
 
-const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, coarse ? 1.3 : 4) : 1;
 
 export const QUALITY: Record<QualityTier, QualitySettings> = {
   low: {

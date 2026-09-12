@@ -7,6 +7,7 @@ import { onLangChange, t } from '../core/I18n';
 import { PathPilot, figureEight } from '../vehicle/Autopilot';
 import { FIGURE8 } from '../world/Layout';
 import { Hud } from './Hud';
+import { TOUCH, TouchControls } from './Touch';
 import { Menu, type MenuState } from './Menu';
 import { Minimap } from './Minimap';
 import { MapScreen } from './MapScreen';
@@ -30,6 +31,7 @@ export function attractPilot(): PathPilot {
 
 export async function install(engine: Engine, container: HTMLElement): Promise<void> {
   const hud = new Hud(engine, container);
+  if (TOUCH) engine.add(new TouchControls(engine, container));
   const menu = new Menu(engine, container);
   engine.add(hud);
   // Radar and full-screen map (city only; before `api` so the map's Esc/Tab handling runs first).
@@ -86,7 +88,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       hud.setVisible(true);
       veh.inputEnabled = true;
       engine.paused = false;
-      engine.input.requestLock();
+      if (!TOUCH) engine.input.requestLock();
     },
     pause() {
       if (api.state !== 'playing') return;
@@ -117,7 +119,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   menu.onStart = () => api.start();
   // Losing pointer lock (Esc, alt-tab) while driving pauses, as in any PC game.
   document.addEventListener('pointerlockchange', () => {
-    if (!document.pointerLockElement && api.state === 'playing' && !new URLSearchParams(location.search).has('nolock')) api.pause();
+    if (!TOUCH && !document.pointerLockElement && api.state === 'playing' && !new URLSearchParams(location.search).has('nolock')) api.pause();
   });
   onLangChange(() => { document.title = `${t('title.name')} · ${t('title.place')}`; });
   document.title = `${t('title.name')} · ${t('title.place')}`;

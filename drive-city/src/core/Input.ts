@@ -7,6 +7,13 @@
  * where analogue input changes how the car feels, and the keyboard path has to fake it (see
  * vehicle/ControlFilter).
  */
+/** What the on-screen controls hand over; see `Input.touch`. */
+export interface TouchInput {
+  steer: number; forward: number; back: number; handbrake: boolean; sprint: boolean; analog: boolean;
+  lookDX: number; lookDY: number;
+  jumpPressed: boolean; enterPressed: boolean; punchPressed: boolean; mapPressed: boolean; cameraPressed: boolean; pausePressed: boolean;
+}
+
 export interface InputState {
   /** 0..1 each. Keyboard gives 0 or 1; triggers give anything in between. */
   forward: number; back: number;
@@ -47,6 +54,8 @@ export class Input {
   private dragging = false;
   /** A left click since the last poll (shove on foot). */
   private clicked = false;
+  /** Touch screen: the browser also fires a synthetic mousedown per tap, which must not shove anyone. */
+  private coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   locked = false;
   enabled = true;
   /** Buttons held on the previous poll, to turn gamepad buttons into edges. */
@@ -68,7 +77,7 @@ export class Input {
     // even when the browser refuses the lock (iframes, some Safari builds).
     el.addEventListener('mousedown', (e) => {
       if (e.button === 0 || e.button === 2) this.dragging = true;
-      if (e.button === 0) this.clicked = true;
+      if (e.button === 0 && !this.coarse) this.clicked = true;
     });
     window.addEventListener('mouseup', () => { this.dragging = false; });
     window.addEventListener('mousemove', (e) => {
@@ -85,6 +94,12 @@ export class Input {
     try { const p = this.el.requestPointerLock?.() as unknown as Promise<void> | undefined; p?.catch?.(() => {}); } catch { /* denied */ }
   }
   exitLock(): void { if (document.pointerLockElement) document.exitPointerLock(); }
+
+  /**
+   * Written by the on-screen controls (ui/Touch.ts) and merged in `poll`. Edge flags are cleared
+   * once consumed, so a tap counts exactly once.
+   */
+  touch: TouchInput | null = null;
 
   /** Call once per frame before systems read `state`. */
   poll(): InputState {
@@ -122,7 +137,28 @@ export class Input {
     this.clicked = false;
     this.pressed.clear();
     this.pollPad(s);
+    this.pollTouch(s);
     return s;
+  }
+
+  /** Merge the on-screen controls: analogue axes take the larger magnitude, buttons OR together. */
+  private pollTouch(s: InputState): void {
+    const c = this.touch;
+    if (!c) return;
+    if (Math.abs(c.steer) > Math.abs(s.steer)) { s.steer = c.steer; s.analog = true; }
+    if (c.analog) s.analog = true;
+    s.forward = Math.max(s.forward, c.forward);
+    s.back = Math.max(s.back, c.back);
+    s.handbrake ||= c.handbrake;
+    s.sprint ||= c.sprint;
+    s.lookDX += c.lookDX; s.lookDY += c.lookDY;
+    c.lookDX = 0; c.lookDY = 0;
+    s.jumpPressed ||= c.jumpPressed; c.jumpPressed = false;
+    s.enterPressed ||= c.enterPressed; c.enterPressed = false;
+    s.punchPressed ||= c.punchPressed; c.punchPressed = false;
+    s.mapPressed ||= c.mapPressed; c.mapPressed = false;
+    s.cameraPressed ||= c.cameraPressed; c.cameraPressed = false;
+    s.pausePressed ||= c.pausePressed; c.pausePressed = false;
   }
 
   /** Xbox layout (standard mapping): RT/LT pedals, left stick steers, A/RB handbrake. */
