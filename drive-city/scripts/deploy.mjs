@@ -1,4 +1,4 @@
-// Build and copy the game into the GitHub Pages site next door (ai-games/drivecity).
+// Build and copy the game into the GitHub Pages site next door (ai-games/bcity, served at /bcity/).
 // Photo textures are shrunk for the web: the loader downsizes at runtime anyway, and a visitor
 // should not download 65 MB to drive down Chang'an Avenue. macOS only (uses sips).
 import { execFileSync } from 'node:child_process';
@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 const dist = path.join(root, 'dist');
-const out = path.resolve(root, '..', 'drivecity');
+const out = path.resolve(root, '..', 'bcity');
 const MAX = 1024, QUALITY = 62;
 
 const mb = (p) => {
