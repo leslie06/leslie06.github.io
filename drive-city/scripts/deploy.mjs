@@ -9,6 +9,10 @@ const root = path.resolve(import.meta.dirname, '..');
 const dist = path.join(root, 'dist');
 const out = path.resolve(root, '..', 'bcity');
 const MAX = 1024, QUALITY = 62;
+/** Maps nobody reads on the web build: ao barely shows on tiling ground, disp is never requested. */
+const DROP = ['arm', 'ao', 'disp'];
+/** Only the colour map needs full size; normals and roughness hold up at half. */
+const HALF = ['normal', 'rough'];
 
 const mb = (p) => {
   let n = 0;
@@ -31,13 +35,18 @@ if (fs.existsSync(texDir)) {
     const manifestPath = path.join(dir, 'manifest.json');
     if (fs.existsSync(manifestPath)) {
       const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-      if (m.maps?.arm) { fs.rmSync(path.join(dir, m.maps.arm), { force: true }); delete m.maps.arm; }
+      for (const k of DROP) {
+        if (!m.maps?.[k]) continue;
+        fs.rmSync(path.join(dir, m.maps[k]), { force: true });
+        delete m.maps[k];
+      }
       m.res = `${MAX}`;
       fs.writeFileSync(manifestPath, JSON.stringify(m));
     }
     for (const f of fs.readdirSync(dir)) {
       if (!f.endsWith('.jpg')) continue;
-      execFileSync('sips', ['-Z', String(MAX), '-s', 'formatOptions', String(QUALITY), path.join(dir, f)], { stdio: 'ignore' });
+      const size = HALF.includes(f.replace('.jpg', '')) ? MAX / 2 : MAX;
+      execFileSync('sips', ['-Z', String(size), '-s', 'formatOptions', String(QUALITY), path.join(dir, f)], { stdio: 'ignore' });
     }
   }
 }

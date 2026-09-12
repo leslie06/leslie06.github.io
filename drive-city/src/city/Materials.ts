@@ -67,6 +67,7 @@ float cityN2(vec2 p) {
 function detail(m: THREE.MeshStandardMaterial, mean: THREE.Vector3, amount: number, macro: number): THREE.MeshStandardMaterial {
   const prev = m.onBeforeCompile;
   const u = { uTexMean: { value: mean }, uDetail: { value: amount }, uMacro: { value: macro } };
+  m.userData.detail = u;
   m.onBeforeCompile = (sh, r) => {
     prev.call(m, sh, r);
     Object.assign(sh.uniforms, u);
@@ -362,10 +363,22 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms): Pro
     try { return await a.pbr(name, { repeat: [1 / metres, 1 / metres] }); }
     catch (e) { console.warn('[city] texture', name, e); return {}; }
   };
-  const [asphalt, asphaltOld, paving, plaza, concrete, tiles, brick, plaster, grass, grassDry] = await Promise.all([
-    tex('asphalt_02', 7), tex('asphalt_04', 6), tex('square_brick_paving', 2.4), tex('granite_tile', 3), tex('brushed_concrete', 5),
-    tex('concrete_tiles', 4), tex('dark_brick_wall', 3), tex('grey_plaster', 4), tex('leafy_grass', 4), tex('sparse_grass', 5),
-  ]);
+  // Only the two sets the facade shader needs are waited for. The rest land on their materials as
+  // they arrive: blocking the whole boot on every photo made the first load on GitHub Pages take
+  // three minutes, because the browser had to finish 14 MB of images before the game appeared.
+  const [brick, plaster] = await Promise.all([tex('dark_brick_wall', 3), tex('grey_plaster', 4)]);
+  /** Give `m` its photo maps when they arrive; until then it is a flat colour. */
+  const skin = (m: THREE.MeshStandardMaterial, name: string, metres: number, want: { map?: boolean; normal?: boolean; rough?: boolean }) => {
+    void tex(name, metres).then((p) => {
+      if (want.map && p.map) m.map = p.map;
+      if (want.normal && p.normalMap) m.normalMap = p.normalMap;
+      if (want.rough && p.roughnessMap) m.roughnessMap = p.roughnessMap;
+      const u = m.userData.detail as { uTexMean: { value: THREE.Vector3 } } | undefined;
+      if (u && p.map) u.uTexMean.value.copy(meanColour(p.map));
+      m.needsUpdate = true;
+    });
+    return m;
+  };
   const mean = (t?: THREE.Texture) => meanColour(t);
   const std = (o: THREE.MeshStandardMaterialParameters, t: { map?: THREE.Texture } | undefined, amount: number, macro: number, off = 0, wet: boolean | string = true) => {
     const m = detail(new THREE.MeshStandardMaterial({ ...o, map: t?.map ?? null }), mean(t?.map), amount, macro);
@@ -375,17 +388,16 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms): Pro
   };
   const tier = engine.quality.tier;
   const areas: Record<AreaKind, THREE.MeshStandardMaterial> = {
-    rail: std({ roughness: 1, color: '#9a968e' }, concrete, 0.6, 0.25, 1, true),
-    parking: std({ roughness: 0.9, color: '#8e8d89' }, asphaltOld, 0.6, 0.2, 1.5, 'ground'),
-    grass: std({ normalMap: grass.normalMap ?? null, roughness: 0.95, color: '#7c9460' }, grass, 0.8, 0.35, 2, true),
-    park: std({ normalMap: grass.normalMap ?? null, roughness: 0.95, color: '#6f8c55' }, grass, 0.8, 0.4, 2.5, true),
-    wood: std({ roughness: 1, color: '#6b7a4c' }, grassDry, 0.7, 0.45, 3, true),
-    pitch: std({ roughness: 0.85, color: '#6f9656' }, grass, 0.4, 0.1, 3.5, true),
-    plaza: std({ normalMap: plaza.normalMap ?? null, roughness: 0.7, color: '#c4c1b9' }, plaza, 0.55, 0.12, 4, 'ground'),
+    rail: skin(std({ roughness: 1, color: '#9a968e' }, undefined, 0.6, 0.25, 1, true), 'brushed_concrete', 5, { map: true }),
+    parking: skin(std({ roughness: 0.9, color: '#8e8d89' }, undefined, 0.6, 0.2, 1.5, 'ground'), 'asphalt_04', 6, { map: true }),
+    grass: skin(std({ roughness: 0.95, color: '#7c9460' }, undefined, 0.8, 0.35, 2, true), 'leafy_grass', 4, { map: true, normal: true }),
+    park: skin(std({ roughness: 0.95, color: '#6f8c55' }, undefined, 0.8, 0.4, 2.5, true), 'leafy_grass', 4, { map: true, normal: true }),
+    wood: skin(std({ roughness: 1, color: '#6b7a4c' }, undefined, 0.7, 0.45, 3, true), 'sparse_grass', 5, { map: true }),
+    pitch: skin(std({ roughness: 0.85, color: '#6f9656' }, undefined, 0.4, 0.1, 3.5, true), 'leafy_grass', 4, { map: true, normal: true }),
+    plaza: skin(std({ roughness: 0.7, color: '#c4c1b9' }, undefined, 0.55, 0.12, 4, 'ground'), 'granite_tile', 3, { map: true, normal: true }),
     water: std({ color: '#2a3c40', roughness: 0.05, metalness: 0.1, envMapIntensity: 1.3 }, undefined, 0, 0.1, 4.5, false),
   };
-  const nm = (t: { normalMap?: THREE.Texture }) => t.normalMap ?? null;
-  const ground = std({ normalMap: nm(tiles), roughness: 0.95, color: '#9d9c97' }, tiles, 0.6, 0.35, 0, 'ground');
+  const ground = skin(std({ roughness: 0.95, color: '#9d9c97' }, undefined, 0.6, 0.35, 0, 'ground'), 'concrete_tiles', 4, { map: true, normal: true });
   const rm = await roadMap(tier === 'low' ? 1024 : 2048);
   if (rm) {
     // Fade the map in where the detailed tiles end (radius 2/3/4 tiles by tier).
@@ -409,8 +421,8 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms): Pro
   }
   return {
     facade: facadeMaterial(env, { plaster: plaster.map, brick: brick.map, brickN: brick.normalMap, plasterMean: mean(plaster.map), brickMean: mean(brick.map) }, tier === 'low' ? 1024 : 2048, tier === 'low'),
-    road: std({ normalMap: nm(asphalt), roughnessMap: asphalt.roughnessMap ?? null, roughness: 1, color: '#5c5d5f', vertexColors: true }, asphalt, 0.9, 0.22, 5, 'ground'),
-    sidewalk: std({ normalMap: nm(paving), roughness: 0.85, color: '#aeaaa2', vertexColors: true }, paving, 0.75, 0.18, 1, 'ground'),
+    road: skin(std({ roughness: 1, color: '#5c5d5f', vertexColors: true }, undefined, 0.9, 0.22, 5, 'ground'), 'asphalt_02', 7, { map: true, normal: true, rough: true }),
+    sidewalk: skin(std({ roughness: 0.85, color: '#aeaaa2', vertexColors: true }, undefined, 0.75, 0.18, 1, 'ground'), 'square_brick_paving', 2.4, { map: true, normal: true }),
     paint: std({ roughness: 0.6, color: '#ffffff', vertexColors: true }, undefined, 0, 0.12, 7, 'ground'),
     ground,
     areas,
