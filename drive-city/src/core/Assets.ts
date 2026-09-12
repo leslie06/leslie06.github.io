@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 
+/** Concurrent image downloads. Four keeps a static host responsive without starving the first frame. */
+const MAX_IN_FLIGHT = 4;
+
 export interface PbrMaps { map?: THREE.Texture; normalMap?: THREE.Texture; roughnessMap?: THREE.Texture; aoMap?: THREE.Texture; displacementMap?: THREE.Texture; metalnessMap?: THREE.Texture }
 
 type ImageSource = HTMLImageElement | HTMLCanvasElement | ImageBitmap;
@@ -35,6 +38,12 @@ type ImageSource = HTMLImageElement | HTMLCanvasElement | ImageBitmap;
  */
 export class Assets {
   private texLoader = new THREE.TextureLoader();
+  /**
+   * Image requests in flight. A dev server swallows sixty at once; GitHub Pages queues them on one
+   * HTTP/2 connection, where single textures waited over two minutes and one died outright.
+   */
+  private inFlight = 0;
+  private waiting: (() => void)[] = [];
   private cache = new Map<string, Promise<PbrMaps>>();
   private hdriCache = new Map<string, Promise<THREE.DataTexture>>();
   anisotropy = 8;
@@ -65,13 +74,20 @@ export class Assets {
     });
   }
 
+  /** Run `fn` once fewer than MAX_IN_FLIGHT requests are open. */
+  private async gate<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.inFlight >= MAX_IN_FLIGHT) await new Promise<void>((r) => this.waiting.push(r));
+    this.inFlight++;
+    try { return await fn(); } finally { this.inFlight--; this.waiting.shift()?.(); }
+  }
+
   private async loadPbr(name: string, withDisp: boolean): Promise<PbrMaps> {
     const dir = `${this.base}textures/${name}/`;
     let manifest: { maps: Record<string, string> } | null = null;
     try { manifest = await (await fetch(`${dir}manifest.json`)).json(); } catch { /* missing set -> flat material */ }
     if (!manifest) return {};
     const out: PbrMaps = {};
-    const load = (file: string, srgb: boolean) => new Promise<THREE.Texture>((res, rej) => this.texLoader.load(dir + file, (t) => {
+    const load = (file: string, srgb: boolean) => this.gate(() => new Promise<THREE.Texture>((res, rej) => this.texLoader.load(dir + file, (t) => {
       // Texture<HTMLImageElement> from the loader; a bitmap or downscaled canvas is a valid image source at runtime.
       void this.fit(t.image as HTMLImageElement).then((img) => {
         (t as unknown as { image: ImageSource }).image = img;
@@ -81,7 +97,7 @@ export class Assets {
         t.needsUpdate = true;
         res(t);
       });
-    }, undefined, rej));
+    }, undefined, rej)));
     const m = manifest.maps;
     const jobs: Promise<void>[] = [];
     if (m.diffuse) jobs.push(load(m.diffuse, true).then((t) => { out.map = t; }));

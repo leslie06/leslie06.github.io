@@ -149,7 +149,7 @@ export async function install(engine: Engine): Promise<void> {
     get routeLeft() { return routeLeft; },
     get gps() { return gps; },
     get mapOpen() { return mapOpen; },
-    setMapOpen(open) { mapOpen = open; },
+    setMapOpen(open) { mapOpen = open; if (open) startCrawl(); },
     route(fromX, fromZ, heading, toX, toZ) {
       const r = router.route(fromX, fromZ, heading, toX, toZ);
       return r ? { pts: r.pts, len: r.len } : null;
@@ -195,6 +195,19 @@ export async function install(engine: Engine): Promise<void> {
 
   // Parks, water and buildings for the maps: crawl the tiles in the background once the start-up
   // streaming has settled (at once for screenshots, which wait on map.ready).
-  const startCrawl = () => { if (m) { where(me, false); map.load(m, me.x, me.z); } };
-  if (shot) startCrawl(); else setTimeout(startCrawl, 4000);
+  let crawled = false;
+  const startCrawl = () => {
+    if (crawled || !m) return;
+    crawled = true;
+    where(me, false);
+    // Phones get two lanes, desktops three: the crawl must never starve the streamer or textures.
+    const lanes = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches ? 2 : 3;
+    map.load(m, me.x, me.z, lanes);
+  };
+  if (shot) startCrawl();
+  else {
+    // Not during boot: it used to start 4 s in and queue 718 files against the loading textures.
+    engine.events.on('game:start', () => setTimeout(startCrawl, 20000));
+    setTimeout(startCrawl, 90000);
+  }
 }
