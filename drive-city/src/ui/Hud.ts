@@ -1,6 +1,6 @@
 import type { Engine } from '../core/Engine';
 import { onLangChange, t } from '../core/I18n';
-import type { CameraApi, HudApi, PlayerApi, VehicleApi, WorldApi } from '../game/Contracts';
+import type { CameraApi, HudApi, PlayerApi, VehicleApi, WorldApi, ParkApi } from '../game/Contracts';
 import { C, F, css, el } from './theme';
 import { L } from './lang';
 
@@ -82,6 +82,8 @@ export class Hud implements HudApi {
   private streetT = 0;
   private streetPoll = 0;
   private promptEl!: HTMLDivElement;
+  private rideEl!: HTMLDivElement;
+  private rideOffEl!: HTMLDivElement;
   private speedoEl!: HTMLDivElement;
 
   constructor(private engine: Engine, container: HTMLElement) {
@@ -117,6 +119,12 @@ export class Hud implements HudApi {
     this.promptEl = el('div', 'prompt', root);
     this.promptEl.appendChild(L('hud.enterCar'));
     this.promptEl.hidden = true;
+    this.rideEl = el('div', 'prompt', root);
+    this.rideEl.appendChild(L('hud.ride'));
+    this.rideEl.hidden = true;
+    this.rideOffEl = el('div', 'prompt', root);
+    this.rideOffEl.appendChild(L('hud.rideOff'));
+    this.rideOffEl.hidden = true;
     this.speedoEl = root.querySelector('.speedo') as HTMLDivElement;
     this.flipped = el('div', 'flipped', root); this.flipped.appendChild(L('hud.flipped')); this.flipped.hidden = true;
     this.help = el('div', 'help', root);
@@ -206,7 +214,11 @@ export class Hud implements HudApi {
     const pl = this.engine.get<PlayerApi>('player');
     const onFoot = pl?.mode === 'onfoot';
     this.speedoEl.hidden = onFoot;
-    this.promptEl.hidden = !(onFoot && pl?.nearCar);
+    // A fairground ride in reach takes the prompt over from the get-in-the-car one.
+    const park = this.engine.get<ParkApi>('park');
+    this.rideEl.hidden = park?.prompt !== 'board';
+    this.rideOffEl.hidden = park?.prompt !== 'exit';
+    this.promptEl.hidden = !(onFoot && pl?.nearCar) || !!park?.prompt;
     this.flipped.hidden = onFoot || !(car.flippedTime > 1.2);
     const cam = this.engine.get<CameraApi>('camera');
     if (cam && cam.mode !== this.lastCam) {

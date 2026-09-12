@@ -25,6 +25,8 @@ function query(s, w, n, e) {
   way["natural"]${b}; relation["natural"]${b};
   way["waterway"]${b};
   way["amenity"]${b};
+  way["tourism"]${b}; relation["tourism"]${b}; node["tourism"]${b};
+  way["attraction"]${b}; node["attraction"]${b};
   way["railway"]${b};
   way["barrier"="wall"]${b};
   way["man_made"]${b};
@@ -44,7 +46,7 @@ async function fetchChunk(i, j, s, w, n, e) {
     const url = MIRRORS[attempt % MIRRORS.length];
     try {
       const t0 = Date.now();
-      const res = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query(s, w, n, e) }), signal: AbortSignal.timeout(300000) });
+      const res = await fetch(url, { method: 'POST', headers: { 'User-Agent': 'drive-city-map-build/1.0' }, body: new URLSearchParams({ data: query(s, w, n, e) }), signal: AbortSignal.timeout(300000) });
       const text = await res.text();
       if (!res.ok || !text.startsWith('{')) throw new Error(`${res.status} ${text.slice(0, 160).replace(/\s+/g, ' ')}`);
       const json = JSON.parse(text);

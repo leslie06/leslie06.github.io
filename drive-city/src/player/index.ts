@@ -75,6 +75,8 @@ export async function install(engine: Engine): Promise<void> {
   };
   let jumpLatch = false;
   let nearCar = false;
+  /** Strapped into a fairground ride: physics is off and the seat drives the character. */
+  let rideSeat: { pos: THREE.Vector3; yaw: number } | null = null;
   const position = new THREE.Vector3();
   const prevFeet = new THREE.Vector3(), curFeet = new THREE.Vector3(), drawFeet = new THREE.Vector3();
   const tmp = new THREE.Vector3();
@@ -153,6 +155,12 @@ export async function install(engine: Engine): Promise<void> {
     getOut() { if (mode === 'driving') exitCar(); },
     get health() { return health; },
     hurt,
+    get riding() { return !!rideSeat; },
+    setRiding(seat, at) {
+      rideSeat = seat;
+      if (seat) { foot.disable(); prevFeet.copy(seat.pos); curFeet.copy(seat.pos); }
+      else if (at) { foot.enable(at.x, at.y, at.z, at.yaw); prevFeet.copy(foot.pos); curFeet.copy(foot.pos); cam.snap(); }
+    },
     fixedUpdate(dt) {
       // Health: back up to half on its own after a quiet spell; at zero, wasted.
       hurtT += dt;
@@ -164,6 +172,13 @@ export async function install(engine: Engine): Promise<void> {
       }
       if (wastedT >= 0) { wastedT += dt; if (wastedT > 4.5) wakeUp(); }
       if (mode !== 'onfoot') return;
+      // On a ride: the seat is the only thing that moves the character.
+      if (rideSeat) {
+        prevFeet.copy(curFeet);
+        foot.pos.copy(rideSeat.pos); foot.yaw = rideSeat.yaw; foot.vel.set(0, 0, 0);
+        curFeet.copy(foot.pos);
+        return;
+      }
       const inp = engine.input.state;
       const v = vehicle();
       engine.camera.getWorldDirection(camDir);
@@ -208,7 +223,7 @@ export async function install(engine: Engine): Promise<void> {
       const v = vehicle();
       if (inp.jumpPressed) jumpLatch = true;
       nearCar = false;
-      if (mode === 'onfoot') {
+      if (mode === 'onfoot' && !rideSeat) {
         // Only cars that have (nearly) stopped can be got into.
         const close = traffic()?.nearestCar(foot.pos.x, foot.pos.z, REACH);
         const other = close && close.speed < 4 ? close : null;
@@ -241,7 +256,8 @@ export async function install(engine: Engine): Promise<void> {
         if (pct !== hpShown) { hpShown = pct; hpBar.style.width = `${pct}%`; hpBar.style.background = pct < 30 ? '#e0463a' : '#62cf6b'; }
       }
       crowd.begin();
-      if (mode === 'onfoot') {
+      // A rider is inside the car with the camera on their seat: drawing them fills the view.
+      if (mode === 'onfoot' && !rideSeat) {
         foot.animate(dt);
         drawFeet.lerpVectors(prevFeet, curFeet, alpha);
         crowd.add(drawFeet, foot.yaw, foot.gait, look);

@@ -24,6 +24,7 @@ import { registerVehiclePoses } from './vehicle/Poses';
 import * as missions from './missions';
 import { registerMissionPoses } from './missions/Poses';
 import * as races from './races';
+import * as park from './park';
 import { registerRacePoses } from './races/Poses';
 import { registerTitlePose } from './ui/TitlePose';
 import * as fx from './fx';
@@ -50,7 +51,7 @@ async function boot() {
   await damage.install(engine);
   if (worldName === 'city') { await traffic.install(engine); await people.install(engine); }
   if (worldName === 'city') await nav.install(engine);
-  if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); }
+  if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); }
   await fx.install(engine);
   await audio.install(engine);
   await ui.install(engine, container);

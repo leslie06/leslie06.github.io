@@ -99,6 +99,22 @@ export interface PlayerApi extends System {
   /** 0..100; at 0 the player is wasted and wakes up at hospital. */
   readonly health: number;
   hurt(n: number): void;
+  /** Strapped into a fairground ride: the character is parked in a seat and physics is off. */
+  readonly riding: boolean;
+  /**
+   * Sit the player in a moving seat, or put them back on their feet at `at`. The seat object is
+   * kept and read every step, so the ride writes its own pose into it and the player follows.
+   */
+  setRiding(seat: { pos: THREE.Vector3; yaw: number } | null, at?: { x: number; y: number; z: number; yaw: number }): void;
+}
+
+// --- Amusement park (park/): 北京欢乐谷 and its rides -------------------------------------------
+
+export interface ParkApi extends System {
+  /** What the HUD should offer right now: board the ride in reach, or get off the one running. */
+  readonly prompt: "board" | "exit" | null;
+  /** The ride the player is on, if any. */
+  readonly riding: string | null;
 }
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------
