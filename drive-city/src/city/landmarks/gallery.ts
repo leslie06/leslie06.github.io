@@ -204,7 +204,7 @@ const ui = document.getElementById('ui')!;
 function refreshUi(): void {
   if (shot) return;
   const st = stats();
-  ui.innerHTML = `<h1>DRIVE CITY<em>地标</em></h1>
+  ui.innerHTML = `<h1>b城追车<em>地标</em></h1>
   <div class="list">${LANDMARKS.map((d) => `<button data-id="${d.id}" class="${d.id === current?.def.id ? 'on' : ''}">${d.name.zh}</button>`).join('')}</div>
   <div class="row"><button data-act="night" class="${night ? 'on' : ''}">夜 night (N)</button><button data-act="far" class="${forceFar ? 'on' : ''}">far LOD (L)</button>
   ${(['hero', 'close', 'far', 'top', 'back'] as View[]).map((v) => `<button data-view="${v}">${v}</button>`).join('')}</div>

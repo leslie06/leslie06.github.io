@@ -109,7 +109,7 @@ export class BlackBox {
   /** The crashed record as text for the player to paste back. */
   report(): string {
     const c = this.crashed; if (!c) return '';
-    const head = `DRIVE CITY 上次会话在没有正常关闭的情况下结束（浏览器重载/杀掉了页面）\n开始 ${c.started}  导航 ${c.nav}  档位 ${c.tier}  缓冲 ${c.buffer}\nGPU ${c.gpu}\n${c.ua}\n`;
+    const head = `b城追车 上次会话在没有正常关闭的情况下结束（浏览器重载/杀掉了页面）\n开始 ${c.started}  导航 ${c.nav}  档位 ${c.tier}  缓冲 ${c.buffer}\nGPU ${c.gpu}\n${c.ua}\n`;
     const cols = ['t', 'heap', 'tex', 'geo', 'prog', 'calls', 'ms', 'scale', 'speed', 'dom'] as const;
     const rows = c.samples.map((s) => cols.map((k) => String(s[k]).padStart(8)).join(''));
     return head + cols.map((k) => k.padStart(8)).join('') + '\n' + rows.join('\n');

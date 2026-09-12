@@ -23,7 +23,7 @@ export const LANG_NAME: Record<Lang, string> = { zh: '中文', en: 'EN' };
 const STORE_KEY = 'drivecity.lang.v1';
 
 const EN = {
-  'title.name': 'DRIVE CITY',
+  'title.name': 'B CITY CHASE',
   'title.place': 'BEIJING',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'Central Beijing, from Tiananmen to Guomao',
@@ -155,7 +155,7 @@ export type TKey = keyof typeof EN;
 export type TParams = Record<string, string | number>;
 
 const ZH: Record<TKey, string> = {
-  'title.name': 'DRIVE CITY',
+  'title.name': 'b城追车',
   'title.place': '北京',
   'title.tag': '开放世界',
   'title.sub': '北京城中心 · 从天安门到国贸',

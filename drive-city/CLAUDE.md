@@ -1,4 +1,4 @@
-# DRIVE CITY — GTA-style open world in Beijing (three.js)
+# b城追车 / B CITY CHASE (folder: drive-city) — GTA-style open world in Beijing (three.js)
 
 Design doc: https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6 (milestones M0–M5).
 Milestones: M0 vehicle sandbox done (handling critic 7.0/10). M1–M3 built: central Beijing from OSM (`?world=city`; the yard stays the default until the title/attract moves to the city), tile streaming, traffic, getting out and carjacking, pedestrians. M4 in progress: wanted level and police (`police/`), minimap/map/GPS (`nav/`), then missions.

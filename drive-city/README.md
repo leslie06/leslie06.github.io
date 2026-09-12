@@ -1,4 +1,4 @@
-# DRIVE CITY · 北京
+# b城追车 · 北京
 
 GTA 式的开放世界游戏，场景是北京城中心：从天安门、故宫、前门到国贸 CBD，南到天坛。街道、楼房、树和路灯都来自 OpenStreetMap 真实数据。three.js 渲染，Rapier 做物理，TypeScript + Vite 构建。
 
