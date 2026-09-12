@@ -62,7 +62,10 @@ export async function install(engine: Engine): Promise<void> {
   const rnd = () => rng.next();
   const marker = new Marker(engine.scene);
   const hud = new MissionHud();
-  const places = [...LANDMARKS.map((l) => ({ lat: l.lat, lon: l.lon, zh: l.name.zh, en: l.name.en, road: '' })), ...PLACES].map((p) => {
+  // Every landmark is a fare destination except the player's own house: nobody hails a taxi to be
+  // driven to your garage.
+  const places = [...LANDMARKS.filter((l) => l.id !== 'home')
+    .map((l) => ({ lat: l.lat, lon: l.lon, zh: l.name.zh, en: l.name.en, road: '' })), ...PLACES].map((p) => {
     const [x, z] = project(p.lat, p.lon);
     return { x, z, zh: p.zh, en: p.en, road: p.road, kerb: undefined as Kerb | null | undefined };
   });

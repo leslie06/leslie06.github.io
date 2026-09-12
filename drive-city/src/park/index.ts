@@ -45,6 +45,11 @@ interface Ride {
   seat: THREE.Object3D;
 }
 
+/** The park with the handle poses and probes drive it by (see races/ for the same pattern). */
+export interface ParkSystem extends ParkApi {
+  debug: { start(id: string): boolean; seek(s: number): void; state(): { riding: string | null; s: number; stage: Stage } };
+}
+
 export async function install(engine: Engine): Promise<void> {
   const player = engine.get<PlayerApi>('player');
   if (!player) return;
@@ -79,7 +84,7 @@ export async function install(engine: Engine): Promise<void> {
   // was 27 cm from each and the view was two black walls - and pitches down, the way a flying
   // coaster hangs its riders face to the ground.
   const leadCar = movers.train.children[0];
-  const coasterSeat = seatNode(leadCar, 0, -0.62, 2.1, Math.PI);
+  const coasterSeat = seatNode(leadCar, 0, -0.5, 3.1, Math.PI);
   coasterSeat.rotation.order = 'YXZ';
   coasterSeat.rotation.x = -0.3;
   const discG = movers.disc.getObjectByName('disc')!;
@@ -130,6 +135,19 @@ export async function install(engine: Engine): Promise<void> {
     else { r.curAng = r.prevAng = 0; r.curSpin = r.prevSpin = 0; }
   };
 
+  /**
+   * Anything that resets the car takes the player out of the seat (a respawn, a shot pose). Let go
+   * of the ride rather than leaving the camera bolted to a train nobody is on. Called from update
+   * and before boarding, because a pose can do both inside one fixed step.
+   */
+  const releaseIfEmpty = () => {
+    if (!riding || player.riding) return;
+    const r = riding;
+    riding = null; r.stage = 'idle'; r.ending = false;
+    const c = cam();
+    if (c) { c.override = null; c.snap(); }
+  };
+
   const board = (r: Ride) => {
     start(r);
     riding = r;
@@ -152,10 +170,21 @@ export async function install(engine: Engine): Promise<void> {
     hud()?.toast(t('park.done', { name: nameOf(r) }));
   };
 
-  const api: ParkApi = {
+  const api: ParkSystem = {
     name: 'park',
     get prompt() { return prompt; },
     get riding() { return riding?.spec.id ?? null; },
+    debug: {
+      start(id) {
+        releaseIfEmpty();
+        const r = rides.find((v) => v.spec.id === id);
+        if (!r || riding) return false;
+        board(r);
+        return true;
+      },
+      seek(s) { const r = rides[0]; train.s = s; r.curS = s; r.prevS = s; },
+      state() { return { riding: riding?.spec.id ?? null, s: rides[0].curS, stage: rides[0].stage }; },
+    },
 
     fixedUpdate(dt) {
       for (const r of rides) {
@@ -186,6 +215,7 @@ export async function install(engine: Engine): Promise<void> {
 
     update(dt, alpha) {
       for (const r of rides) r.marker.update(dt);
+      releaseIfEmpty();
       // Pose the movers from the interpolated state.
       const coaster = rides[0];
       const s = coaster.prevS + (coaster.curS - coaster.prevS) * alpha;

@@ -124,6 +124,14 @@ export function frameAt(s: number, out: Frame): Frame {
   return out;
 }
 
+/** Metres along the track where it is most inverted: the top of the vertical loop. */
+export function inversionS(): number {
+  buildFrames();
+  let at = 0, worst = 1;
+  for (let i = 0; i < frames.length; i++) if (frames[i].up.y < worst) { worst = frames[i].up.y; at = i; }
+  return (at / (frames.length - 1)) * arc[arc.length - 1];
+}
+
 export function makeFrame(): Frame {
   return { pos: new THREE.Vector3(), tan: new THREE.Vector3(), up: new THREE.Vector3(), side: new THREE.Vector3() };
 }
@@ -168,6 +176,16 @@ export function parkMaterials(env: EnvUniforms): Record<string, THREE.Material> 
     m.userData.wet = wet;
     return m;
   };
+  /**
+   * Coplanar ground is separated by polygon offset, not by millimetre lifts (city/Materials.ts does
+   * the same). The park's lawn sat 2 cm over the city's 26 km ground plane, which is far below the
+   * depth buffer's resolution a few hundred metres out: from the air the city ground won and the
+   * park went grey. Bigger k = drawn over.
+   */
+  const layer = <T extends THREE.Material>(m: T, k: number): T => {
+    m.polygonOffset = true; m.polygonOffsetFactor = -k; m.polygonOffsetUnits = -k;
+    return m;
+  };
   const m: Record<string, THREE.Material> = {
     ...landmarkMaterials(env),
     // 水晶神翼 is white track on blue supports.
@@ -186,11 +204,11 @@ export function parkMaterials(env: EnvUniforms): Record<string, THREE.Material> 
     platform: std({ color: '#b9b3a6', roughness: 0.85 }, 'flood', '#ffe9c8', true),
     fence: std({ color: '#3f4a53', metalness: 0.4, roughness: 0.6 }),
     rock: std({ color: '#b8ac97', roughness: 0.95 }, 'flood', '#ffe4b8', true),
-    water: std({ color: '#2b4a52', roughness: 0.08, metalness: 0.1 }, null, '#fff', false),
-    lawn: std({ color: '#6f8c55', roughness: 0.95 }, null, '#fff', true),
+    water: layer(std({ color: '#2b4a52', roughness: 0.08, metalness: 0.1 }, null, '#fff', false), 2),
+    lawn: layer(std({ color: '#6f8c55', roughness: 0.95 }, null, '#fff', true), 1.2),
     leaf: std({ color: '#5f7f48', roughness: 0.92 }, null, '#fff', true),
     trunk: std({ color: '#6b5a45', roughness: 0.95 }, null, '#fff', true),
-    path: std({ color: '#c9c2b4', roughness: 0.88 }, 'flood', '#ffe9c8', true),
+    path: layer(std({ color: '#c9c2b4', roughness: 0.88 }, 'flood', '#ffe9c8', true), 2.6),
   };
   cache.set(env, m);
   return m;

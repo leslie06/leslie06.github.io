@@ -99,6 +99,9 @@ export interface PlayerApi extends System {
   /** 0..100; at 0 the player is wasted and wakes up at hospital. */
   readonly health: number;
   hurt(n: number): void;
+  /** Patch the player up, clamped at 100 (a spell at home). `hurt` clamps at 0 but not at 100, so
+   *  healing is not hurt(-n). */
+  heal(n: number): void;
   /** Strapped into a fairground ride: the character is parked in a seat and physics is off. */
   readonly riding: boolean;
   /**
@@ -115,6 +118,17 @@ export interface ParkApi extends System {
   readonly prompt: "board" | "exit" | null;
   /** The ride the player is on, if any. */
   readonly riding: string | null;
+}
+
+// --- Home (home/): the player's villa, its garage door and the save it makes ---------------------
+
+export interface HomeApi extends System {
+  /** The player is inside the plot walls. */
+  readonly atHome: boolean;
+  /** The garage door: 0 shut .. 1 fully open. */
+  readonly doorOpen: number;
+  /** When the last save happened (ms since epoch), 0 if none this session. */
+  readonly savedAt: number;
 }
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------

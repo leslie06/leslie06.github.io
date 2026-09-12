@@ -40,6 +40,8 @@ export async function install(engine: Engine): Promise<void> {
   const banner = new Banner();
   let hpEl: HTMLDivElement | null = null, hpBar: HTMLElement | null = null, hpShown = -1;
   const hurt = (n: number) => { if (wastedT >= 0) return; health = Math.max(0, health - n); hurtT = 0; };
+  /** Patched up at home. Clamped at 100, which hurt(-n) would not be. */
+  const heal = (n: number) => { if (wastedT >= 0) return; health = Math.min(100, health + Math.abs(n)); hurtT = 99; };
   /** A lane on the hospital's street, facing along it; the world spawn outside the city. */
   const hospital = (): { x: number; z: number; yaw: number } => {
     const tr = engine.get<TrafficApi>('traffic');
@@ -137,7 +139,7 @@ export async function install(engine: Engine): Promise<void> {
 
   // A reset (respawn, a new game, a shot pose) puts the player back in the driver's seat.
   engine.events.on('vehicle:reset', () => {
-    foot.dead = false; entering = null;
+    foot.dead = false; entering = null; rideSeat = null;
     if (mode !== 'onfoot') return;
     foot.disable();
     vehicle().occupied = true;
@@ -155,6 +157,7 @@ export async function install(engine: Engine): Promise<void> {
     getOut() { if (mode === 'driving') exitCar(); },
     get health() { return health; },
     hurt,
+    heal,
     get riding() { return !!rideSeat; },
     setRiding(seat, at) {
       rideSeat = seat;
