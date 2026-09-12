@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DRIVE CITY · 地标 Landmarks</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html,body{margin:0;height:100%;background:#0e1113;overflow:hidden;font:13px/1.35 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:#f4f1e8}
+  #app{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  #ui{position:fixed;left:12px;top:12px;max-width:330px;background:rgba(14,17,19,.78);border-radius:8px;padding:10px 12px;backdrop-filter:blur(6px)}
+  #ui h1{margin:0 0 8px;font:900 15px/1 system-ui,sans-serif;letter-spacing:.04em}
+  #ui h1 em{font-style:normal;color:#f3b50f;margin-left:6px}
+  #ui .list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+  #ui button{background:#262b2f;color:#f4f1e8;border:0;border-radius:4px;padding:5px 8px;font:inherit;cursor:pointer}
+  #ui button.on{background:#f3b50f;color:#111}
+  #ui .row{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap}
+  #stats{font:11px/1.4 ui-monospace,Menlo,monospace;color:#c9c5ba;white-space:pre}
+  body.shot #ui{display:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="ui"></div>
+<script type="module" src="/src/city/landmarks/gallery.ts"></script>
+</body>
+</html>

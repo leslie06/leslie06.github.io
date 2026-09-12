@@ -1,0 +1,6 @@
+node_modules
+dist
+shots
+.scratch
+.cache
+public/textures

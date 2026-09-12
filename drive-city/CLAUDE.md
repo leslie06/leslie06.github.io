@@ -1,0 +1,57 @@
+# DRIVE CITY — GTA-style open world in Beijing (three.js)
+
+Design doc: https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6 (milestones M0–M5).
+Milestones: M0 vehicle sandbox done (handling critic 7.0/10). M1–M3 built: central Beijing from OSM (`?world=city`; the yard stays the default until the title/attract moves to the city), tile streaming, traffic, getting out and carjacking, pedestrians. M4 in progress: wanted level and police (`police/`), minimap/map/GPS (`nav/`), then missions.
+
+## Stack
+- Vite 8 + TypeScript (strict), three r185, @dimforge/rapier3d-compat 0.20. Dev server: `npx vite --port 5195`. Typecheck: `npx tsc --noEmit`.
+- `npm install` needs `--legacy-peer-deps` (npm 10's arborist crashes on vitest's optional peers).
+- No runtime network requests: textures are drawn on canvases (`world/Textures.ts`), sound is Web Audio synthesis (`audio/`).
+
+## Architecture (src/)
+- `core/` — copied from gunFight and trimmed: Engine (fixed 60 Hz `fixedUpdate` → `physics.step()` → `postStep`, then per-frame `update(dt, alpha)`), Input (keyboard GTA-V layout + standard gamepad), Physics (Rapier; groups `CG.WORLD/CAR/PROP`), Quality (tiers low/medium/high from the bound GPU), Resolution governor, I18n (zh/en; every on-screen string goes through `t()`), Assets.compact (releases canvas sources after upload).
+- `game/Contracts.ts` — the only cross-module interfaces (VehicleApi, CameraApi, WorldApi, HudApi). Extend additively.
+- Boot order in `main.ts`: render → world (yard or city) → vehicle → player (camera, on foot) → traffic → people → police → nav → fx → audio → ui (city-only modules skip in the yard). `install()` may only `engine.get` earlier modules; later ones are looked up lazily at runtime.
+- `vehicle/` — six body types (sedan/taxi, hatch, SUV, MPV, 12 m bus, box truck) built by a procedural cap-and-wall mesher (`Mesher.ts`, `Shell.ts`, `Bodies.ts`): faces are classified into paint, glass, trim and lamps by grid position, so seams and frames stay crisp. One kit per type, 4 draw calls each; `SPEC_OF` maps a type to its spec, and `CarLook.body` carries it through carjacking (`swapCar` rebuilds the player's model when the type changes). `src/vehicle/lab.html` renders bodies without the city. The handling. `Vehicle.ts` is a ray-cast car on a Rapier body with its own tyre model (not Rapier's DynamicRayCastVehicleController: its friction-slip tyres drop grip in one step, so slides cannot be tuned). `Spec.ts` holds every tuning number with its meaning. `ControlFilter.ts` turns keys into pedal/steer positions. `Autopilot.ts` (PathPilot) drives for tests, shots and the title screen. `CarModel.ts` builds the taxi from extruded side profiles.
+- `world/` — the yard: `Layout.ts` (all positions, shared with poses/tests), paint, props (instanced + small dynamic bodies), structures, skyline.
+- `render/` — sky and time of day (`?tod=17.5`, `?rain=0.8`, `?timescale=N`), CSM shadows, post chain (AO, motion blur, bloom, AgX, SMAA: canvas MSAA is off), rain. Materials opt into the wet look with `userData.wet = 'ground'` (roads: puddles), `'surface'` (paint, glass) or `true` (cloth); `uniforms.uNight` drives lamps, windows and headlights. `RenderSystem.prepare(root)` patches a streamed tile before it is added.
+- `city/` — OSM → tiles (`scripts/city/`), worker meshing and streaming around the camera, landmarks in `city/landmarks/`.
+- `traffic/` — `LaneGraph` (right-hand traffic), `Signals` (two-phase clusters; `greenLeft` lets pedestrians cross with the parallel green), `AiDriver` (pure pursuit + IDM), `CarKit` (all cars of one livery as instances, ~20 draw calls). Also holds parked cars: `takeCar/parkCar` implement carjacking.
+- `player/` — `PlayerApi`: driving or on foot (F gets in/out, taking the nearest car), `OnFoot` (Rapier character controller capsule), on-foot orbit camera in `CameraRig`. Any `vehicle:reset` puts the player back in the car.
+- `character/` — one continuous skinned body (`Sdf.ts`/`BodyMesh.ts`) drawn for the whole crowd by instanced GPU skinning: joint matrices and the packed `Look` live in an RGBA32F texture, skinned in `onBeforeCompile` on a MeshStandardMaterial (8 draw calls including shadows, near/far LOD at 22 m). Everyone shares one `Crowd`: the player adds first, then pedestrians, then a taxi fare, and every `add` leaves the meshes drawable (no end() needed). Set `crowd.cam` so the LOD has a camera. `Gait` is procedural with foot-planted IK. **Trap:** the crowd's skinning lives in a chained `onBeforeCompile`; if `render/Lighting`'s material scan ever overwrites hooks instead of chaining, everyone collapses to their bind pose.
+- `people/` — walking into someone only makes them step aside; `PeopleApi.shove` (mouse, E or gamepad B, via `OnFoot.shove` and the `punch` gait action) is what puts them down. Pedestrians walk pavement lines (widths mirror `SIDEWALK` in `city/Roads.ts`), cross at junctions, flee fast cars and horns, get knocked over (`people:hit`).
+- `police/` — `WantedApi` as system `wanted`: witnessed crimes add heat (stars), police cars (`Pursuit` driver, road routes from `nav`) chase, box in and bust; out of sight they search the last-seen circle. `?wanted=N` starts wanted.
+- `nav/` — A* router over the lane graph (landmark heuristic, one-ways, turn penalties; under 1 ms), the radar in `ui/Minimap.ts`, the full map in `ui/MapScreen.ts` (Tab; pauses the game), and map data prepared in a worker. Two GPS slots: the player's map waypoint wins over a mission target, and each clears on its own (`setTarget` / `clearTarget`).
+- `missions/` — taxi fares (the core job): kerb pickups, landmark or street destinations (`people/Pavement.ts` finds kerbs), Beijing meter (¥13 + ¥2.3/km), time bonus and tips; cash in localStorage.
+- `damage/` — per-car wear from `vehicle:impact`. One collision fires an impact every step while the car scrapes, so only the first of a 0.35 s burst counts; hits under 6 m/s of unexplained Δv are free and no single crash takes more than 30 of 100. Health drives `VehicleApi.power` (1 / 0.8 / 0.55 / 0.3), so a wrecked car still limps. Player health lives in `player/`: cars hurt on foot, regenerates to half, 0 is WASTED and a hospital respawn (协和医院) with a bill.
+- Gameplay probe: `node .scratch/m4probe.mjs` (dev server up) runs a fare, a bust, an evade, a dead engine and a hospital respawn headlessly and prints what happened.
+
+## Handling tests (the M0 acceptance)
+- `npx vitest run` — `vehicle/Handling.test.ts` drives the real Vehicle through the real ControlFilter headlessly (Rapier in Node, <1 s) and writes `.scratch/handling-report.txt` (0-100, braking, skidpad g, handbrake turn, figure-eight drift with gamepad and keyboard-style input, jump, slope hold, self-righting, reverse, burnout).
+- Vitest hides console output of passing tests: read the report file.
+- `TRACE=fig8|fig8key|powerdrift|park|slope|accel|brake|handbrake npx vitest run src/vehicle/Trace.test.ts` writes a time trace to `.scratch/trace-<name>.txt`.
+- Pitfall (landmarks): a landmark's terraces, steps and bridges are geometry with no collider of their own, so anyone standing on one used to stand on the ground *under* it and look buried. `placeLandmarks` (city/index.ts) builds trimesh colliders from the stone meshes (`marble`, `paving`, `granite`, `stone`), preferring the far LOD. `?nostone` skips them, which is how their cost was measured (nil: 15 colliders, no change to the step).
+- Pitfall (on foot): Rapier's `KinematicCharacterController` creeps into very large colliders. The city ground is a 28 km cuboid, so gravity sank the player a few millimetres per step and buried them to the waist after a minute's walk. `OnFoot.step` now resolves the feet against a downward ray (lift only) after `computeColliderMovement`; `.scratch/sink2.mjs` measures feet against the ground collider.
+- Pitfalls: Rapier 0.20 integrates in 4 substeps, so a body held up by per-step impulses reports vy ≈ -0.375·g·dt while stationary (use horizontal speed). Impulses change velocity immediately: gather all wheel forces, then apply (see `Vehicle.step`).
+
+## Handling critic loop
+- M0's bar is a harsh handling critic (a sub-agent) scoring >= 7/10 for GTA-V-style arcade feel. Round 1 (2026-09-11) scored 5.5: rear let go first above ~75 km/h, drifts ignored steering and could not be left with W held, keyboard taps were all-or-nothing, fake wheelspin smoke, no donuts. Report, probes and traces: `.scratch/critic/` (`handling-r1.md`, `probe*.test.ts`, run with `npx vitest run --config .scratch/critic/vitest.config.ts <file>`).
+- Every issue it found now has a regression test in `Handling.test.ts` (held key at 100/120 km/h, drift exit with W held, handbrake-90 overshoot, grip-corner skid, launch rpm, donut, key-tap linearity, 120 km/h tap weave, slalom).
+- Keyboard steering (`ControlFilter`, exported `KEYBOARD`) is a first-order lag, not a rate limiter: a rate limiter clamps at centre, so taps under half duty average ~duty² instead of duty. A held key also gets less lock at speed, which is only safe with the slow high-speed lag (`tauFast` 0.3); with a short lag the lock returned as the car slowed in a long turn and a held key at 120 km/h slid 32-38° late. `.scratch/sweep/keys.test.ts` sweeps these (`npx vitest run --config .scratch/sweep/vitest.config.ts .scratch/sweep/keys.test.ts` -> `keys.txt`).
+- Change one thing, re-run the whole suite: several fixes this round moved a different probe (the drift cap floor trades drift exit against keyboard figure-eight share).
+
+## Screenshots
+- `node scripts/shot.mjs --poses all --out shots/rN [--hud] [--lang zh]` renders every pose in `debug/ShotPoses.ts` (`?shot=1`, deterministic fixed dt). Long drives fast-forward physics and render only the last 1.5 s.
+- `ui_*` poses always show the HUD.
+- City: `--world city`; extra URL params with `--params "tod=22&rain=1"`. All poses run in one page, so each pose must reset shared state (a vehicle reset puts the player back in the car; call `wanted.clear()`).
+
+## Measured (M2 Pro, 1600x900, city)
+- High: 333 draw calls, 2.1M triangles; low: 154 calls, 0.5M. Both hold 60 fps with no resolution drop (`scaleMin 1`).
+- Frame cost measured in-page (300 fixed steps + 120 ticks at 1600x900, `.scratch/phys.mjs`): fixed step 0.4 ms, full frame 8.1 ms on high. The perf script's GPU-synced figure swings from 12 to 24 ms with machine load, so trust it only on a quiet machine and compare runs taken back to back.
+- `node .scratch/render/perf.mjs http://127.0.0.1:5195 high,low run "world=city"` measures it; `node .scratch/soak.mjs 90 high` drives the attract loop and logs geometries, textures and JS heap every 10 s (heap settles near 200 MB, no leak).
+
+## Conventions
+- Physics/gameplay in `fixedUpdate`/`postStep`, visuals in `update` (interpolate with `alpha`; `VehicleApi.renderPos/renderQuat`).
+- Repeated things are instanced; skid marks and smoke are one draw call each. No per-frame allocation in hot paths.
+- macOS filesystem is case-insensitive: never create two files differing only in case (`poses.ts` overwrote `Poses.ts` once).
+- Commit messages Chinese, prefixed `driveCity：`, commit only when asked.

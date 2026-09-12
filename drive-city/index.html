@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DRIVE CITY · 北京</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="A GTA-style open-world driving game set in Beijing, built with three.js. Milestone M0: the vehicle sandbox.">
+<style>
+  html,body{margin:0;height:100%;background:#0e1113;overflow:hidden;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+  #app{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  #loading{position:fixed;inset:0;display:grid;place-items:center;color:#f4f1e8;background:#0e1113;z-index:100}
+  #loading div{text-align:center}
+  #loading span{display:block;font:900 44px/1 system-ui,sans-serif;letter-spacing:-.03em}
+  #loading em{display:block;margin-top:6px;font:900 28px/1 "PingFang SC","Microsoft YaHei",sans-serif;font-style:normal;color:#f3b50f;letter-spacing:.08em}
+  #loading b{display:block;margin-top:18px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.3em;color:rgba(244,241,232,.55)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="loading"><div><span>DRIVE CITY</span><em>北京</em><b>LOADING</b></div></div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
