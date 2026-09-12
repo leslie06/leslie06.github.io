@@ -13,7 +13,14 @@ import { CROWD_CAP } from '../character/Crowd';
 import { SIDEWALK } from './Pavement';
 const GROUND = 0.045;
 /** Longest walk across a junction. Wider roads are not crossed at street level (Beijing has underpasses). */
-const MAX_CROSS = 30;
+const MAX_CROSS = 26;
+/**
+ * How many pedestrians live around the camera. The crowd texture holds more (CROWD_CAP), but a
+ * hundred people inside 100 m reads as a demonstration, not a street; `?peds=N` overrides.
+ */
+const PED_CAP = { low: 12, medium: 22, high: 34 } as const;
+/** A pedestrian steps off the kerb only when nothing would reach the crossing within this long. */
+const GAP = 4.5;
 /** Spawn and despawn distances from the camera: people further than ~100 m are a few pixels tall. */
 const SPAWN_R = 100, DESPAWN_R = 125;
 const RUN = 4.3;
@@ -52,7 +59,9 @@ export async function install(engine: Engine): Promise<void> {
   if (!tr || !pl) return;
   const g = tr.graph, sig = tr.signals;
   // The crowd also draws the player and a taxi fare.
-  const cap = new URLSearchParams(location.search).has('nopeople') ? 0 : CROWD_CAP[engine.quality.tier] - 2;
+  const q = new URLSearchParams(location.search);
+  const room = CROWD_CAP[engine.quality.tier] - 2;   // the player and a taxi fare share the crowd
+  const cap = q.has('nopeople') ? 0 : Math.min(room, q.has('peds') ? Math.max(0, Number(q.get('peds')) || 0) : PED_CAP[engine.quality.tier]);
   const rng = new Rng(9001);
   const rnd = () => rng.next();
   const wallGroups = groups(CG.PED, CG.WORLD);
@@ -116,6 +125,7 @@ export async function install(engine: Engine): Promise<void> {
     const sp = spanOf(l), atJunction = (p.dir > 0 ? sp.kb : sp.ka) > 0;
     g.at(l, p.s, offOf(l, p), at);
     const ex = at.x, ez = at.z, mine = edgeOf(l.id);
+    const hx = at.dx * p.dir, hz = at.dz * p.dir;   // the way they were walking
     let bestScore = -Infinity, bl = -1, bs = 0, bdir = 1, bside = 1, bx = 0, bz = 0, bd = 0;
     const tryLink = (c: number, dir: number) => {
       const o = g.links[c], w = walkW(o);
@@ -126,7 +136,11 @@ export async function install(engine: Engine): Promise<void> {
         g.at(o, s, side * (o.hw + p.frac * w), at2);
         const d = Math.hypot(at2.x - ex, at2.z - ez);
         if (d > MAX_CROSS) continue;
-        const score = -d * 0.1 + rnd() * 1.6;
+        // Walking on around the corner beats crossing, and a short crossing beats a long diagonal
+        // one: with distance barely counted, people used to strike out across the middle of a
+        // junction because the next kerb was picked almost at random.
+        const straight = hx * at2.dx * dir + hz * at2.dz * dir;
+        const score = (d < 1.5 ? 2.4 : 0) - d * 0.45 + straight * 0.9 + rnd() * 0.7;
         if (score > bestScore) { bestScore = score; bl = c; bs = s; bdir = dir; bside = side; bx = at2.x; bz = at2.z; bd = d; }
       }
     };
@@ -138,10 +152,12 @@ export async function install(engine: Engine): Promise<void> {
     p.cross = true; p.road = atJunction;
     p.c0x = ex; p.c0z = ez; p.c1x = bx; p.c1z = bz; p.cl = bd; p.ct = 0;
     if (!atJunction || p.mode !== 'walk') return;
-    // At the kerb: wait for the green of the traffic running alongside, or look both ways.
+    // At the kerb: wait for the green of the traffic running alongside, or for a gap in it. The
+    // hold is the point at which a Beijing pedestrian gives up and goes anyway (drivers brake for
+    // anyone in the road, see `inRoad`).
     const j = sig.junctionOf(node);
-    if (j >= 0) { p.mode = 'wait'; p.t = 0; p.hold = 40; p.waitJ = j; p.waitPhase = sig.phaseAlong(j, bx - ex, bz - ez); }
-    else if (rnd() < 0.35) { p.mode = 'wait'; p.t = 0; p.hold = 0.5 + rnd() * 1.8; p.waitJ = -1; }
+    p.mode = 'wait'; p.t = 0; p.waitJ = j; p.hold = j >= 0 ? 75 : 22;
+    p.waitPhase = j >= 0 ? sig.phaseAlong(j, bx - ex, bz - ez) : 0;
     p.want = Math.atan2(bx - ex, bz - ez);
   };
 
@@ -235,7 +251,7 @@ export async function install(engine: Engine): Promise<void> {
       const sp = spanOf(l);
       p.link = l.id; p.s = sp.a + rnd() * (sp.b - sp.a);
       p.side = l.oneway ? -1 : rnd() < 0.5 ? 1 : -1; p.dir = rnd() < 0.5 ? 1 : -1;
-      p.frac = p.fracT = 0.15 + rnd() * 0.7;
+      p.frac = p.fracT = 0.3 + rnd() * 0.6;
       g.at(l, p.s, offOf(l, p), at);
       const dx = at.x - cam.x, dz = at.z - cam.z, d = Math.hypot(dx, dz);
       if (d < 12 || d > SPAWN_R) continue;
@@ -250,6 +266,47 @@ export async function install(engine: Engine): Promise<void> {
     }
   };
   const despawn = (p: Ped) => { p.on = false; active--; };
+
+  /** Cars near the camera, gathered once a step: x, z, vx, vz, speed. */
+  const threats = new Float32Array(96 * 5);
+  let threatN = 0;
+  const pushThreat = (c: Vehicle) => {
+    if (threatN >= 96 || c.speed < 1.5) return;
+    const cam = engine.camera.position;
+    if (Math.hypot(c.pos.x - cam.x, c.pos.z - cam.z) > 150) return;
+    const i = threatN * 5;
+    threats[i] = c.pos.x; threats[i + 1] = c.pos.z; threats[i + 2] = c.vel.x; threats[i + 3] = c.vel.z; threats[i + 4] = c.speed;
+    threatN++;
+  };
+
+  /** Nothing on the road would reach this crossing within GAP seconds. */
+  const clearToCross = (p: Ped): boolean => {
+    const vx = p.c1x - p.c0x, vz = p.c1z - p.c0z, L2 = vx * vx + vz * vz || 1;
+    for (let i = 0; i < threatN; i++) {
+      const cx = threats[i * 5], cz = threats[i * 5 + 1];
+      const u = Math.max(0, Math.min(1, ((cx - p.c0x) * vx + (cz - p.c0z) * vz) / L2));
+      const dx = p.c0x + vx * u - cx, dz = p.c0z + vz * u - cz, d = Math.hypot(dx, dz);
+      if (d > 70) continue;
+      const closing = (dx * threats[i * 5 + 2] + dz * threats[i * 5 + 3]) / (d || 1);
+      if (closing > 1 && d / closing < GAP) return false;
+    }
+    return true;
+  };
+
+  /** Standing on a carriageway rather than a pavement (diagnostics only: it walks nearby links). */
+  const onCarriageway = (x: number, z: number): boolean => {
+    for (const id of g.near(x, z, 24)) {
+      const l = g.links[id];
+      if (l.rev >= 0 && l.rev < id) continue;
+      for (let k = 1; k < l.cum.length; k++) {
+        const ax = l.pts[k * 2 - 2], az = l.pts[k * 2 - 1], bx = l.pts[k * 2] - ax, bz = l.pts[k * 2 + 1] - az;
+        const L2 = bx * bx + bz * bz || 1;
+        const u = Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / L2));
+        if (Math.hypot(ax + bx * u - x, az + bz * u - z) < l.hw - 0.2) return true;
+      }
+    }
+    return false;
+  };
 
   const stepPed = (p: Ped, dt: number) => {
     p.t += dt;
@@ -271,13 +328,19 @@ export async function install(engine: Engine): Promise<void> {
     if (p.mode === 'lost') { p.moved = 0; return; }
     if (p.mode === 'wait') {
       p.moved = 0; p.cur = 0;
-      const go = p.waitJ >= 0 ? sig.greenLeft(p.waitJ, p.waitPhase, tr.time) > 7 : false;
+      // Only a kerb wait (`cross`) can end early: green with time to walk it, or a gap in traffic.
+      // Crossing a six-lane arterial takes longer than the side street's whole green, so a walk
+      // that cannot fit starts on the change instead and finishes into the amber, as people do.
+      const need = p.cl / Math.max(1, p.pace * 1.35) + 2.5;
+      const go = !p.cross ? false
+        : p.waitJ >= 0 ? sig.greenLeft(p.waitJ, p.waitPhase, tr.time) > Math.min(need, sig.greenSpan(p.waitPhase) - 2)
+        : clearToCross(p);
       if (go || p.t > p.hold) { p.mode = 'walk'; p.t = 0; }
       return;
     }
-    if (p.mode === 'flee') { p.fear -= dt; if (p.fear <= 0) { p.mode = 'walk'; p.t = 0; p.fracT = 0.15 + rnd() * 0.7; } }
+    if (p.mode === 'flee') { p.fear -= dt; if (p.fear <= 0) { p.mode = 'walk'; p.t = 0; p.fracT = 0.3 + rnd() * 0.6; } }
     else if (!p.cross && rnd() < dt * 0.012) { p.mode = 'wait'; p.t = 0; p.hold = 1.5 + rnd() * 3.5; p.waitJ = -1; return; }
-    const target = p.mode === 'flee' ? RUN : p.cross ? p.pace * 1.15 : p.pace;
+    const target = p.mode === 'flee' ? RUN : p.cross ? p.pace * 1.35 : p.pace;
     p.cur += (target - p.cur) * (1 - Math.exp(-dt * 3));
     p.frac += Math.max(-dt * 0.8, Math.min(dt * 0.8, p.fracT - p.frac));
     const adv = p.cur * dt;
@@ -297,12 +360,25 @@ export async function install(engine: Engine): Promise<void> {
     p.moved = (p.mode as Mode) === 'wait' ? 0 : p.cur;
   };
 
-  const api: PeopleApi & { debug: { knocked(): number; nearest(x: number, z: number, r: number): { x: number; z: number } | null } } = {
+  interface Stats { active: number; cap: number; onRoad: number; crossing: number; waiting: number; walking: number; down: number }
+  const api: PeopleApi & { debug: { knocked(): number; stats(): Stats; nearest(x: number, z: number, r: number): { x: number; z: number } | null } } = {
     name: 'people',
     get count() { return active; },
     inRoad: () => road,
     debug: {
       knocked: () => peds.reduce((n, p) => n + (p.on && !calm(p) ? 1 : 0), 0),
+      stats: () => {
+        const st: Stats = { active, cap, onRoad: 0, crossing: 0, waiting: 0, walking: 0, down: 0 };
+        for (const p of peds) {
+          if (!p.on) continue;
+          if (!calm(p)) st.down++;
+          else if (p.cross) st.crossing++;
+          else if (p.mode === 'wait') st.waiting++;
+          else st.walking++;
+          if (onCarriageway(p.pos.x, p.pos.z)) st.onRoad++;
+        }
+        return st;
+      },
       nearest: (x: number, z: number, r: number) => {
         let best: Ped | null = null, bd = r;
         for (const p of peds) { if (!p.on) continue; const d = Math.hypot(p.pos.x - x, p.pos.z - z); if (d < bd) { bd = d; best = p; } }
@@ -347,6 +423,11 @@ export async function install(engine: Engine): Promise<void> {
       const cam = engine.camera.position;
       engine.camera.getWorldDirection(camDir);
       road.length = 0;
+      const cars = tr.cars(), cops = engine.get<WantedApi>('wanted')?.policeCars() ?? [];
+      threatN = 0;
+      pushThreat(pc);
+      for (const c of cars) pushThreat(c);
+      for (const c of cops) pushThreat(c);
       for (let i = 0; i < peds.length; i++) {
         const p = peds[i];
         if (!p.on) continue;
@@ -356,13 +437,20 @@ export async function install(engine: Engine): Promise<void> {
         if (cd > DESPAWN_R || (p.mode === 'lost' && (p.t > p.hold || (cdx * camDir.x + cdz * camDir.z) < 0))) { despawn(p); continue; }
         if ((p.cross && p.road) || p.mode === 'down' || p.mode === 'getup') road.push(p.pos);
         if (!calm(p)) continue;
-        // Threats, a third of the crowd per step.
+        // Threats, a third of the crowd per step: any car bearing down on them, not just the
+        // player's. Someone caught on a crossing sprints the rest of the way (RUN) instead of
+        // strolling into the wing of a traffic car.
         if ((i + frame) % 3 === 0) {
-          const dx = p.pos.x - pc.pos.x, dz = p.pos.z - pc.pos.z, d2 = dx * dx + dz * dz;
-          if (v.occupied && pc.speed > 5 && d2 < 400) {
-            const ahead = (dx * pc.vel.x + dz * pc.vel.z) / pc.speed, lat = Math.abs(dx * pc.vel.z - dz * pc.vel.x) / pc.speed;
-            if (ahead > -2 && ahead < 5 + pc.speed * 0.8 && lat < 3.5) scare(p, pc.pos.x, pc.pos.z, 3 + rnd() * 2);
+          for (let k = 0; k < threatN; k++) {
+            const cx = threats[k * 5], cz = threats[k * 5 + 1], sp = threats[k * 5 + 4];
+            if (sp < 5) continue;
+            const dx = p.pos.x - cx, dz = p.pos.z - cz;
+            if (dx * dx + dz * dz > 400) continue;
+            const ahead = (dx * threats[k * 5 + 2] + dz * threats[k * 5 + 3]) / sp;
+            const lat = Math.abs(dx * threats[k * 5 + 3] - dz * threats[k * 5 + 2]) / sp;
+            if (ahead > -2 && ahead < 5 + sp * 0.8 && lat < 3.5) { scare(p, cx, cz, 3 + rnd() * 2); break; }
           }
+          const dx = p.pos.x - pc.pos.x, dz = p.pos.z - pc.pos.z, d2 = dx * dx + dz * dz;
           if (horn && d2 < 20 * 20) scare(p, pc.pos.x, pc.pos.z, 2 + rnd() * 2);
         }
         // Walking into someone only makes them step aside and stop for a moment; it takes a
@@ -370,14 +458,14 @@ export async function install(engine: Engine): Promise<void> {
         if (foot) {
           const dx = p.pos.x - foot.pos.x, dz = p.pos.z - foot.pos.z;
           if (dx * dx + dz * dz < 0.6 && !p.cross) {
-            p.fracT = p.frac < 0.5 ? 0.92 : 0.08;
+            p.fracT = p.frac < 0.5 ? 0.92 : 0.25;
             if (p.mode === 'walk' && rnd() < dt * 1.5) { p.mode = 'wait'; p.t = 0; p.hold = 0.4 + rnd() * 0.6; p.waitJ = -1; }
           }
         }
       }
       carHits(pc, v.occupied);
-      for (const c of tr.cars()) carHits(c, false);
-      for (const c of engine.get<WantedApi>('wanted')?.policeCars() ?? []) carHits(c, false);
+      for (const c of cars) carHits(c, false);
+      for (const c of cops) carHits(c, false);
     },
     update(dt, alpha) {
       if (!cap) return;

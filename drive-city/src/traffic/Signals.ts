@@ -3,25 +3,55 @@ import type { LaneGraph, Link } from './LaneGraph';
 
 /** 0 green, 1 amber, 2 red. */
 export type Light = 0 | 1 | 2;
-const GREEN = 22, AMBER = 3, ALLRED = 2, CYCLE = 2 * (GREEN + AMBER + ALLRED);
+const AMBER = 3, ALLRED = 2;
+/**
+ * Green for the main road (phase 0) and for the side street (phase 1). The split is what keeps a
+ * city full of lights driveable: doubling the number of junctions with lights cost the arterials a
+ * fifth of their speed (25.1 to 20.1 km/h measured with `.scratch/order.mjs`), and giving the main
+ * road nearly twice the green of the street crossing it wins a quarter of that back (21.2 km/h).
+ * The rest is the price of the lights: most of it is cars queued at a red, not slower driving.
+ */
+const GREEN = [30, 16];
+const START = [0, GREEN[0] + AMBER + ALLRED];
+const CYCLE = START[1] + GREEN[1] + AMBER + ALLRED;
+/** How important a road is. Two roads of SIG_RANK or better crossing get lights. */
+const RANK: Record<string, number> = { motorway: 5, trunk: 5, primary: 4, secondary: 3, tertiary: 2, busway: 2, unclassified: 1, residential: 1 };
+const SIG_RANK = 2;
 
 /**
  * Traffic lights at the signalised junctions of the OSM graph. OSM draws one crossing of two dual
  * carriageways as up to four signalised nodes, so nodes within 45 m are one junction with one
  * clock. Approaches are split into two phases by the axis they arrive along; each junction runs a
  * two-phase cycle from its own offset so the city does not change colour all at once.
+ *
+ * OSM only marks a fifth of the crossings that really have lights (343 nodes in this extract),
+ * which left most of the city with nothing for either drivers or pedestrians to obey. Any junction
+ * of three or more arms where two roads of `SIG_RANK` or better cross on different axes is
+ * signalised too, which takes the city from 143 junctions with lights to 289 - a light where two
+ * through streets meet, and none on the lanes between them (`?lights=osm` restores OSM's own).
  */
 export class Signals {
   private cluster: Int32Array;
   private axis: number[] = [];
   private offset: number[] = [];
   readonly centres: { x: number; z: number }[] = [];
+  /** Junctions signalised by class because OSM did not mark them (diagnostics). */
+  readonly inferred: number = 0;
 
   constructor(private g: LaneGraph) {
     const n = g.nodeX.length;
     this.cluster = new Int32Array(n).fill(-1);
+    // Links at each node whichever way they run: a two-way edge is one link at each end, a one-way
+    // link belongs to both of its ends.
+    const inc: number[][] = Array.from({ length: n }, () => []);
+    for (const l of g.links) { inc[l.from].push(l.id); if (l.rev < 0) inc[l.to].push(l.id); }
+    // `?lights=osm` keeps only the junctions OSM marks, which is how the difference was measured.
+    const osmOnly = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lights') === 'osm';
     const sigNodes: number[] = [];
-    for (let i = 0; i < n; i++) if (g.sig[i]) sigNodes.push(i);
+    for (let i = 0; i < n; i++) {
+      if (g.sig[i]) sigNodes.push(i);
+      else if (!osmOnly && this.mainCrossing(inc[i], i)) { sigNodes.push(i); this.inferred++; }
+    }
     for (const i of sigNodes) {
       if (this.cluster[i] >= 0) continue;
       const id = this.axis.length;
@@ -33,12 +63,34 @@ export class Signals {
         for (const b of sigNodes) if (this.cluster[b] < 0 && Math.hypot(g.nodeX[a] - g.nodeX[b], g.nodeZ[a] - g.nodeZ[b]) < 45) { this.cluster[b] = id; stack.push(b); }
       }
       this.centres.push({ x: sx / cnt, z: sz / cnt });
-      // Axis: direction of the first approach into this junction (mod pi).
-      let ax = 0;
-      for (const l of g.links) if (this.cluster[l.to] === id) { ax = Math.atan2(l.d1z, l.d1x); break; }
-      this.axis.push(ax);
+      this.axis.push(0);
       this.offset.push(((i * 2654435761) >>> 0) / 4294967296 * CYCLE);
     }
+    // Axis: the direction of the junction's most important approach (longest of the top class), so
+    // the main road always runs on phase 0 and the side street waits.
+    const rank = new Float32Array(this.axis.length).fill(-1);
+    for (const l of g.links) {
+      const c = this.cluster[l.to];
+      if (c < 0 || this.cluster[l.from] === c) continue;
+      const r = (RANK[l.cls] ?? 0) + Math.min(0.9, l.len / 400);
+      if (r > rank[c]) { rank[c] = r; this.axis[c] = Math.atan2(l.d1z, l.d1x); }
+    }
+  }
+
+  /** True where three or more arms meet and two main roads cross on different axes. */
+  private mainCrossing(links: number[], node: number): boolean {
+    if (links.length < 3) return false;
+    let first = Infinity;
+    for (const id of links) {
+      const l = this.g.links[id];
+      if ((RANK[l.cls] ?? 0) < SIG_RANK) continue;
+      const a = l.from === node ? Math.atan2(l.d0z, l.d0x) : Math.atan2(l.d1z, l.d1x);
+      if (first === Infinity) { first = a; continue; }
+      let d = Math.abs(a - first) % Math.PI;
+      if (d > Math.PI / 2) d = Math.PI - d;
+      if (d > Math.PI / 6) return true;   // not the same street running through
+    }
+    return false;
   }
 
   junctionOf(node: number): number { return this.cluster[node]; }
@@ -56,11 +108,18 @@ export class Signals {
     return d < Math.PI / 4 ? 0 : 1;
   }
 
+  /** How long `phase` is green for in total. A crossing longer than this has to start on the change. */
+  greenSpan(phase: number): number { return GREEN[phase]; }
+
+  /** Seconds into `phase`'s own window of the cycle at junction `c`. */
+  private local(c: number, phase: number, t: number): number {
+    return (((t + this.offset[c]) % CYCLE) - START[phase] + CYCLE) % CYCLE;
+  }
+
   /** Seconds of green left for `phase` at junction `c` (0 on amber or red). People cross with the parallel green. */
   greenLeft(c: number, phase: number, t: number): number {
-    let u = (t + this.offset[c]) % CYCLE;
-    if (phase === 1) u = (u + CYCLE / 2) % CYCLE;
-    return u < GREEN ? GREEN - u : 0;
+    const u = this.local(c, phase, t);
+    return u < GREEN[phase] ? GREEN[phase] - u : 0;
   }
 
   /** Light facing traffic at the end of link `l` at time `t` (s). Unsignalised ends are green. */
@@ -71,9 +130,8 @@ export class Signals {
     // already past the stop line.
     if (this.cluster[l.from] === c) return 0;
     const phase = this.phaseOf(l);
-    let u = (t + this.offset[c]) % CYCLE;
-    if (phase === 1) u = (u + CYCLE / 2) % CYCLE;
-    return u < GREEN ? 0 : u < GREEN + AMBER ? 1 : 2;
+    const u = this.local(c, phase, t);
+    return u < GREEN[phase] ? 0 : u < GREEN[phase] + AMBER ? 1 : 2;
   }
 }
 
