@@ -343,7 +343,11 @@ export class MapScreen implements System {
       if (tg) {
         this.destTag.textContent = (tg.label ?? t(tg.kind === 'mission' ? 'nav.mission' : 'nav.waypoint')).toUpperCase();
         this.destD.textContent = fmtDist(nav.routeLeft);
-        this.destS.textContent = nav.gps ? (world?.placeName?.(tg.x, tg.z) || t('map.left', { d: fmtDist(nav.routeLeft) })) : t('nav.noRoute');
+        // The big number is already the distance; repeating it as "6.3 km to go" underneath said
+        // nothing. Name the place when we know it, otherwise say what kind of target this is.
+        const place = world?.placeName?.(tg.x, tg.z);
+        this.destS.textContent = !nav.gps ? t('nav.noRoute')
+          : place || t(tg.kind === 'mission' ? 'nav.mission' : 'nav.waypoint');
       }
     }
     if (now - this.placeT > 90) {

@@ -153,7 +153,6 @@ const EN = {
   'map.key.rclick': 'Right-click',
   'map.key.drag': 'Drag',
   'map.key.wheel': 'Wheel',
-  'map.left': '{d} to go',
   'map.loading': 'Loading map detail {n}%',
 };
 
@@ -291,7 +290,6 @@ const ZH: Record<TKey, string> = {
   'map.key.rclick': '右键',
   'map.key.drag': '拖动',
   'map.key.wheel': '滚轮',
-  'map.left': '剩余 {d}',
   'map.loading': '正在加载地图细节 {n}%',
 };
 

@@ -246,7 +246,9 @@ export async function install(engine: Engine): Promise<void> {
         const hud = document.querySelector('.hud');
         if (hud) {
           const style = document.createElement('style');
-          style.textContent = '.hud .health{position:absolute;top:122px;right:28px;width:118px;height:6px;border-radius:3px;background:rgba(0,0,0,.45);overflow:hidden}.hud .health[hidden]{display:none}.hud .health i{display:block;height:100%;background:#62cf6b;transition:width .25s}';
+          // Same right-hand column as the wanted stars and the cash (see ui/Hud.ts --hud-x/y).
+          style.textContent = '.hud .health{position:absolute;top:calc(var(--hud-y) + 100px);right:var(--hud-x);width:118px;height:7px;border-radius:4px;background:rgba(8,10,12,.55);box-shadow:inset 0 0 0 1px rgba(244,241,232,.18);overflow:hidden}'
+            + '.hud .health[hidden]{display:none}.hud .health i{display:block;height:100%;border-radius:4px;background:#62cf6b;transition:width .25s}';
           document.head.appendChild(style);
           hpEl = document.createElement('div'); hpEl.className = 'health';
           hpBar = document.createElement('i'); hpEl.appendChild(hpBar);

@@ -5,11 +5,15 @@ import { C, F, css, el } from './theme';
 import { L } from './lang';
 
 css(`
+/* One margin for every corner of the HUD. The speedo used max(24px,3vw) while the wanted stars,
+   the cash and the health bar each hard-coded right:28px, so on any wide screen the right-hand
+   column sat visibly inboard of the dial it was meant to stack above. */
+:root{--hud-x:max(24px,3vw);--hud-y:max(18px,3vh)}
 .hud{position:fixed;inset:0;pointer-events:none;font-family:${F.ui};color:${C.paper};user-select:none;z-index:10}
 .hud[hidden]{display:none}
-.hud .speedo{position:absolute;right:max(24px,3vw);bottom:max(18px,3vh);width:196px;height:196px}
+.hud .speedo{position:absolute;right:var(--hud-x);bottom:var(--hud-y);width:196px;height:196px}
 .hud .speedo svg{position:absolute;inset:0;overflow:visible;filter:drop-shadow(0 2px 8px rgba(0,0,0,.45))}
-.hud .speedo .dial{position:absolute;inset:26px;border-radius:50%;background:radial-gradient(circle,rgba(10,12,14,.62) 0%,rgba(10,12,14,.38) 70%,rgba(10,12,14,0) 72%)}
+.hud .speedo .dial{position:absolute;inset:26px;border-radius:50%;background:radial-gradient(circle,rgba(10,12,14,.66) 0%,rgba(10,12,14,.4) 68%,rgba(10,12,14,0) 72%);box-shadow:inset 0 0 0 1px rgba(244,241,232,.07)}
 .hud .speedo .num{position:absolute;left:0;right:0;top:62px;text-align:center;font:800 54px/1 ${F.num};font-variant-numeric:tabular-nums;letter-spacing:-.02em;text-shadow:0 2px 12px rgba(0,0,0,.45)}
 .hud .speedo .num .lead{color:rgba(244,241,232,.25)}
 .hud .speedo .unit{position:absolute;left:0;right:0;top:120px;text-align:center;font:700 10px/1 ${F.num};letter-spacing:.24em;color:${C.muted}}
@@ -24,24 +28,34 @@ css(`
 .hud .drift .result{display:inline-block;margin-top:6px;padding:6px 14px;border-radius:6px;background:rgba(10,12,14,.66);font:800 20px/1.2 ${F.num};color:${C.yellow};letter-spacing:.02em}
 .hud .drift .result:empty{display:none}
 .hud .drift .result.bad{color:${C.red}}
-.hud .best{position:absolute;left:max(24px,3vw);top:max(20px,3vh);font:700 12px/1 ${F.num};letter-spacing:.18em;color:${C.muted}}
-.hud .best b{color:${C.paper};font-size:15px;letter-spacing:.04em;margin-left:6px;font-variant-numeric:tabular-nums}
-.hud .hint{position:absolute;left:max(24px,3vw);top:calc(max(20px,3vh) + 26px);font:600 12px/1 ${F.ui};color:${C.muted};letter-spacing:.06em}
-.hud .street{position:absolute;right:max(24px,3vw);bottom:calc(max(18px,3vh) + 206px);text-align:right;font:800 22px/1.2 ${F.ui};letter-spacing:.06em;color:${C.paper};text-shadow:0 2px 10px rgba(0,0,0,.6);opacity:0;transition:opacity .6s}
+.hud .best{position:absolute;left:var(--hud-x);top:var(--hud-y);font:700 12px/1 ${F.num};letter-spacing:.18em;color:${C.muted}}
+.hud .best b{color:${C.paper};font-size:15px;font-weight:800;letter-spacing:.04em;margin-left:6px;font-variant-numeric:tabular-nums}
+.hud .hint{position:absolute;left:var(--hud-x);top:calc(var(--hud-y) + 26px);font:600 12px/1 ${F.ui};color:${C.muted};letter-spacing:.06em;transition:opacity .8s}
+.hud .hint.gone{opacity:0}
+.hud .best[hidden]{display:none}
+.hud .street{position:absolute;right:var(--hud-x);bottom:calc(var(--hud-y) + 206px);text-align:right;font:800 22px/1.2 ${F.ui};letter-spacing:.06em;color:${C.paper};text-shadow:0 2px 10px rgba(0,0,0,.6);opacity:0;transition:opacity .6s}
 .hud .street.on{opacity:1}
 .hud .prompt{position:absolute;left:50%;bottom:17vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:800 15px/1 ${F.ui};letter-spacing:.08em;border-left:3px solid ${C.yellow}}
 .hud .toast{position:absolute;left:50%;bottom:22vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:700 14px/1 ${F.ui};letter-spacing:.08em;opacity:0;transition:opacity .2s}
 .hud .toast.on{opacity:1}
 .hud .flipped{position:absolute;left:50%;top:42%;transform:translateX(-50%);padding:12px 20px;border-radius:8px;background:${C.inkGlass};font:700 18px/1 ${F.ui};border-left:3px solid ${C.yellow}}
-.hud .help{position:absolute;left:max(24px,3vw);top:calc(max(20px,3vh) + 58px);padding:14px 16px;border-radius:8px;background:${C.inkGlass};font:500 13px/1.9 ${F.ui};min-width:260px}
+.hud .help{position:absolute;left:var(--hud-x);top:calc(var(--hud-y) + 58px);padding:14px 16px;border-radius:8px;background:${C.inkGlass};font:500 13px/1.9 ${F.ui};min-width:260px}
 /* The radar sits in the top-left corner (see Minimap.ts), so these stack below it. Only when a
    radar exists: the yard has no nav, and would otherwise leave the corner empty. */
 body.dc-radar .hud .best{top:calc(var(--mm-top) + var(--mm-h) + 14px)}
 body.dc-radar .hud .hint{top:calc(var(--mm-top) + var(--mm-h) + 40px)}
 body.dc-radar .hud .help{top:calc(var(--mm-top) + var(--mm-h) + 72px)}
+/* With no drift banked the BEST line is hidden, which left its slot as a gap above the hint.
+   Scoped per radar state: an unscoped rule would beat the dc-radar offset and drop the hint
+   on top of the minimap. */
+body:not(.dc-radar) .hud .best[hidden] + .hint{top:var(--hud-y)}
+body.dc-radar .hud .best[hidden] + .hint{top:calc(var(--mm-top) + var(--mm-h) + 14px)}
 .hud .help kbd{display:inline-block;min-width:22px;padding:0 6px;margin-right:6px;border-radius:4px;border:1px solid ${C.line};background:rgba(244,241,232,.08);font:700 11px/20px ${F.mono};text-align:center;color:${C.paper}}
 .hud .help .row{display:flex;justify-content:space-between;gap:18px}
 .hud .help .row span:last-child{color:${C.muted}}
+@media (prefers-reduced-motion: reduce){
+  .hud .drift,.hud .toast,.hud .street,.hud .health i{transition:none}
+}
 `);
 
 // 270° dial: from bottom-left, clockwise over the top, to bottom-right (SVG y points down).
@@ -69,6 +83,9 @@ export class Hud implements HudApi {
   private toastEl: HTMLDivElement;
   private flipped: HTMLDivElement;
   private help: HTMLDivElement;
+  private hintEl!: HTMLDivElement;
+  /** Seconds the F1 hint has been on screen. */
+  private hintT = 0;
   private toastT = 0;
   private lastGear = 1;
   private gearFlash = 0;
@@ -113,7 +130,7 @@ export class Hud implements HudApi {
     this.bestEl = el('div', 'best', root);
     this.bestNum = document.createElement('b');
     onLangChange(() => { this.shown.best = ''; });
-    const hint = el('div', 'hint', root); hint.appendChild(L('hud.helpHint'));
+    const hint = this.hintEl = el('div', 'hint', root); hint.appendChild(L('hud.helpHint'));
     this.toastEl = el('div', 'toast', root);
     this.streetEl = el('div', 'street', root);
     this.promptEl = el('div', 'prompt', root);
@@ -193,12 +210,19 @@ export class Hud implements HudApi {
       sh.score = -1; sh.mult = -1; sh.angle = -1;
       this.driftScore.textContent = ''; this.driftMult.style.display = 'none'; this.driftBar.style.width = '0';
     }
-    const best = d.best > 0 ? d.best.toLocaleString() : '—';
-    if (best !== sh.best) {
+    // No drift banked yet means no line: "BEST —" is clutter under the radar, not information.
+    const best = d.best > 0 ? d.best.toLocaleString() : '';
+    this.bestEl.hidden = !best;
+    if (best && best !== sh.best) {
       sh.best = best;
       this.bestEl.textContent = t('hud.best', { n: '' }).trim() + ' ';
       this.bestNum.textContent = best;
       this.bestEl.append(this.bestNum);
+    }
+    // The F1 hint has done its job after the first half-minute, or the moment the panel is opened.
+    if (!this.hintEl.classList.contains('gone')) {
+      this.hintT += dt;
+      if (this.hintT > 25 || !this.help.hidden) this.hintEl.classList.add('gone');
     }
 
     // GTA-style street name: shown for a few seconds whenever the road under the car changes.

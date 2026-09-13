@@ -2,7 +2,7 @@ import { t } from '../core/I18n';
 import { C, F } from '../ui/theme';
 
 const CSS = `
-.hud .wanted{position:absolute;top:22px;right:28px;display:flex;gap:3px;font:900 30px/1 ${F.ui};opacity:0}
+.hud .wanted{position:absolute;top:var(--hud-y);right:var(--hud-x);display:flex;gap:3px;font:900 30px/1 ${F.ui};opacity:0}
 .hud .wanted.active{opacity:1}
 .hud .wanted span{color:rgba(255,255,255,.16);text-shadow:0 1px 0 rgba(0,0,0,.7),0 0 10px rgba(0,0,0,.45)}
 .hud .wanted span.on{color:#fbfbf8}
