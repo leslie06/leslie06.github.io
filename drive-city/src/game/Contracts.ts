@@ -241,10 +241,16 @@ export interface RenderApi extends System {
 // --- Landmarks (city/landmarks/) -------------------------------------------------------------------
 
 /** Static collision shapes in a landmark's local frame (metres, +X east, +Y up, +Z south). */
+/**
+ * `walkOnly` keeps vehicles out of a collider that exists so a person can climb. The villa's entry
+ * ramp is the case: a wedge shallow enough to walk up is also shallow enough to drive a taxi up
+ * onto the terrace, and a ramp narrow enough to exclude a car (track 1.54 m) is too narrow to
+ * read as a stair. The physics layer turns this into a group mask; nothing here imports Rapier.
+ */
 export type ColliderSpec =
-  | { kind: 'box'; center: [number, number, number]; half: [number, number, number]; yaw?: number }
-  | { kind: 'cylinder'; center: [number, number, number]; radius: number; halfHeight: number }
-  | { kind: 'hull'; points: number[] };
+  | { kind: 'box'; center: [number, number, number]; half: [number, number, number]; yaw?: number; walkOnly?: boolean }
+  | { kind: 'cylinder'; center: [number, number, number]; radius: number; halfHeight: number; walkOnly?: boolean }
+  | { kind: 'hull'; points: number[]; walkOnly?: boolean };
 
 export interface LandmarkModel {
   group: THREE.Group;

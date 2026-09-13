@@ -36,6 +36,22 @@ const mid = (a: number, b: number) => (a + b) / 2;
 const hash = (n: number): number => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
 const slab = (r: Rect, y0: number, y1: number): ColliderSpec =>
   ({ kind: 'box', center: [mid(r.x0, r.x1), mid(y0, y1), mid(r.z0, r.z1)], half: [(r.x1 - r.x0) / 2, (y1 - y0) / 2, (r.z1 - r.z0) / 2] });
+/**
+ * A ramp you can walk up, low at `x0` and full height at `x1`. Steps built as stacked boxes are
+ * standable (a drop test lands on every tread) but the character controller will not autostep them
+ * however small the risers are on paper - it just slides along the face. Boxes carry yaw but no
+ * pitch, so every climb here is a convex hull, the same trick the curved stair uses.
+ */
+const wedge = (x0: number, x1: number, z0: number, z1: number, yLow: number, yHigh: number): ColliderSpec => ({
+  kind: 'hull',
+  // Walk-only: a ramp gentle enough for a person is gentle enough for a taxi, and the car drove
+  // straight up onto the terrace. Cars now pass through it and stop against the plinth face.
+  walkOnly: true,
+  points: [
+    x0, yLow - 0.12, z0, x0, yLow, z0, x0, yLow - 0.12, z1, x0, yLow, z1,
+    x1, yLow - 0.12, z0, x1, yHigh, z0, x1, yLow - 0.12, z1, x1, yHigh, z1,
+  ],
+});
 const grow = (r: Rect, d: number): Rect => ({ x0: r.x0 - d, x1: r.x1 + d, z0: r.z0 - d, z1: r.z1 + d });
 const real = (r: Rect): boolean => r.x1 - r.x0 > 0.05 && r.z1 - r.z0 > 0.05;
 
@@ -95,7 +111,10 @@ export function villaMaterials(env: EnvUniforms): Record<string, THREE.Material>
   };
   const own: Record<VillaKey, THREE.Material> = {
     /** Board-formed concrete: the entry wall, the garden walls, the garage. */
-    vConcrete: std({ color: '#b8b3a8', map: rep(grimeTex(), 6), roughness: 0.78 }, 'flood', '#ffe3b8', true),
+    /** The drive and motor court sit 4 mm above the lawn, and the lawn carries a 1.6 depth bias:
+     *  without a bigger one of its own the paving loses at eye level and the court reads as grass
+     *  (visible from the air, gone from the driver's seat). Under the water at 2.2. */
+    vConcrete: layer(std({ color: '#b8b3a8', map: rep(grimeTex(), 6), roughness: 0.78 }, 'flood', '#ffe3b8', true), 2),
     /** Rough-cut travertine block: the stair wall and the great room's fireplace wall. */
     vStoneWall: std({ color: '#c6b291', map: rep(marbleTex(), 2.2), roughness: 0.88 }, 'flood', '#ffe8c8', true),
     /** Pale stone floors, terrace and steps. */
@@ -298,17 +317,20 @@ function plinthAndGround(P: Parts): ColliderSpec[] {
   for (const c of tileAround(PLINTH, [POOL, REFLECT])) flat(stone, poly(c), Y.plinth);
   out.push(slab(PLINTH, 0, Y.plinth));
 
-  // Three broad steps up to the pivot door, with an uplight in each tread.
+  // Three broad steps from the motor court up onto the plinth. They must climb to the plinth's
+  // OUTER face: built against the door they sat 2.7 m inside its solid 1.05 m collider, so the
+  // whole approach was one sheer unclimbable wall and you stuck fast on the court at x = -14.3.
   for (let i = 0; i < ENTRY.steps; i++) {
     const r = {
-      x0: ENTRY.x - (ENTRY.steps - i) * ENTRY.tread, x1: ENTRY.x,
-      z0: ENTRY.z - 4.2, z1: ENTRY.z + 4.2,
+      x0: PLINTH.x0 - (ENTRY.steps - i) * ENTRY.tread, x1: PLINTH.x0,
+      z0: ENTRY.z - ENTRY.flight / 2, z1: ENTRY.z + ENTRY.flight / 2,
     };
     const y = ENTRY.riser * (i + 1);
     prism(stone, poly(r), Y.court, y);
-    out.push(slab(r, Y.court, y));
-    for (const s of [-1, 1]) box(P.get('vLight'), r.x0 + 0.3, y - 0.02, ENTRY.z + s * 2.6, 0.16, 0.04, 0.16);
+    for (const s of [-1, 1]) box(P.get('vLight'), r.x0 + 0.3, y - 0.02, ENTRY.z + s * (ENTRY.flight / 2 - 0.25), 0.16, 0.04, 0.16);
   }
+  out.push(wedge(PLINTH.x0 - ENTRY.steps * ENTRY.tread, PLINTH.x0,
+    ENTRY.z - ENTRY.flight / 2, ENTRY.z + ENTRY.flight / 2, Y.court, Y.plinth));
 
   // The black reflecting pool beside the steps, and the infinity pool along the terrace.
   for (const r of [REFLECT, POOL]) {
@@ -942,19 +964,23 @@ function garage(P: Parts): ColliderSpec[] {
   out.push(...wallRun(P, 'vConcrete', { x0: g.x0 - t, x1: g.x0, z0: g.z0, z1: g.z1 }, 0, g.roof,
     { along: 'z', at: DOOR.z, w: DOOR.w, top: DOOR.h }));
   out.push(...wallRun(P, 'vConcrete', { x0: g.x1, x1: g.x1 + t, z0: g.z0, z1: g.z1 }, 0, g.roof,
-    { along: 'z', at: GARAGE_DOOR.z, w: GARAGE_DOOR.w, top: 2.4 }));
+    { along: 'z', at: GARAGE_DOOR.z, w: GARAGE_DOOR.w, top: Y.plinth + 2.1 }));
   flat(P.get('vConcrete'), poly({ x0: g.x0, x1: g.x1, z0: g.z0, z1: g.z1 }), Y.court + 0.004);
   const up = grow(g, t);
   flat(P.get('vRoof'), poly(up), g.roof);
   fascia(P, up, g.roof + 0.1, 0.36, 0.2);
   box(P.get('vConcrete'), g.x0 - t / 2, DOOR.h + 0.3, DOOR.z, t, 0.6, DOOR.w + 0.8);
   box(P.get('vLight'), g.x0 - t - 0.04, DOOR.h + 0.66, DOOR.z, 0.08, 0.14, 1.2);
+  // The step up into the hall happens at the plinth's face, which cuts through the garage 2 m
+  // west of its east wall. Built east of that wall these were buried in the plinth, and the
+  // doorway with them.
   for (let i = 0; i < 3; i++) {
-    const r = { x0: g.x1 + t + i * 0.34, x1: g.x1 + t + 1.02, z0: GARAGE_DOOR.z - 1.2, z1: GARAGE_DOOR.z + 1.2 };
+    const r = { x0: PLINTH.x0 - (3 - i) * 0.6, x1: PLINTH.x0, z0: GARAGE_DOOR.z - GARAGE_DOOR.w / 2, z1: GARAGE_DOOR.z + GARAGE_DOOR.w / 2 };
     const y = (Y.plinth / 3) * (i + 1);
     prism(P.get('vTravertine'), poly(r), Y.court, y);
-    out.push(slab(r, Y.court, y));
   }
+  out.push(wedge(PLINTH.x0 - 1.8, PLINTH.x0,
+    GARAGE_DOOR.z - GARAGE_DOOR.w / 2, GARAGE_DOOR.z + GARAGE_DOOR.w / 2, Y.court, Y.plinth));
   return out;
 }
 

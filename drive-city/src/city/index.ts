@@ -35,6 +35,8 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
   const footprints: number[][] = [];
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
+  /** Same world geometry, but invisible to cars: see ColliderSpec.walkOnly. */
+  const gWalk = groups(CG.WORLD, CG.ALL & ~CG.CAR);
   for (const def of defs) {
     let model;
     try { model = def.build(env); } catch (e) { console.warn('[city] landmark', def.id, e); continue; }
@@ -87,7 +89,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
         for (let i = 0; i < sp.points.length; i += 3) { const [wx, wz] = toWorld(sp.points[i], sp.points[i + 2]); pts[i] = wx; pts[i + 1] = sp.points[i + 1]; pts[i + 2] = wz; }
         desc = R.ColliderDesc.convexHull(pts);
       }
-      if (desc) engine.physics.tag(world.createCollider(desc.setCollisionGroups(g).setFriction(0.6), body), { surface: 'concrete', tag: `landmark:${def.id}` });
+      if (desc) engine.physics.tag(world.createCollider(desc.setCollisionGroups(sp.walkOnly ? gWalk : g).setFriction(0.6), body), { surface: 'concrete', tag: `landmark:${def.id}` });
     }
   }
   return footprints;

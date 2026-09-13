@@ -167,6 +167,12 @@ export const ENTRY = {
   x: -8, z: 1, w: 1.5, h: 3.0,
   /** Three broad steps from the motor court up to the plinth. */
   steps: 3, tread: 1.1, riser: Y.plinth / 3,
+  /**
+   * How wide the flight is. Narrower than a car (2.0 m) on purpose: the climb is a ramp collider,
+   * and a ramp wide enough to walk up abreast is also a ramp you can drive a taxi up onto the
+   * terrace. The stone face of the plinth does the blocking either side.
+   */
+  flight: 1.8,
 };
 
 /** Black reflecting pool beside the entry steps, as in the night shot. */

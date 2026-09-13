@@ -2,8 +2,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ColliderSpec } from '../game/Contracts';
 import {
-  BAR, BEDROOMS, DOOR, ENTRY, GARAGE, GATE, HOUSE, LANDING, PLINTH, PLOT, POOL, ROOM, STAIR,
-  UPPER_ROOM, UPPER_WALL, VOID, Y,
+  BAR, BEDROOMS, DOOR, ENTRY, GARAGE, GARAGE_DOOR, GATE, HOUSE, LANDING, PLINTH, PLOT, POOL, ROOM,
+  SLIDER, STAIR, UPPER_ROOM, UPPER_WALL, VOID, Y,
 } from './Layout';
 import { buildVillaExtras, buildVillaFar, buildVillaStatic, VILLA_KEYS } from './Villa';
 
@@ -103,7 +103,11 @@ describe('我家 the villa', () => {
   });
 
   it('carries the stair on convex hulls, since a helix is not convex', () => {
-    const hulls = built.colliders.filter((c): c is Extract<ColliderSpec, { kind: 'hull' }> => c.kind === 'hull');
+    const nearStair = (h: Extract<ColliderSpec, { kind: 'hull' }>): boolean =>
+      h.points.some((_, i) => i % 3 === 0 && Math.abs(h.points[i]) < 4.5);
+    const hulls = built.colliders
+      .filter((c): c is Extract<ColliderSpec, { kind: 'hull' }> => c.kind === 'hull')
+      .filter(nearStair);
     expect(hulls.length).toBeGreaterThanOrEqual(4);
     const ys: number[] = [];
     for (const h of hulls) for (let i = 1; i < h.points.length; i += 3) ys.push(h.points[i]);
@@ -202,6 +206,80 @@ describe('我家 the villa', () => {
     for (const name of Object.keys(UPPER_ROOM)) expect([...seen]).toContain(name);
   });
 
+  it('leaves every ground-floor opening walkable', () => {
+    // The upper doors are checked above; the ground floor never was - and the front door is where
+    // the house is actually entered. Each opening is sampled at head height in its middle.
+    const t = HOUSE.wall, F0 = HOUSE.floor0;
+    const doors: [string, number, number, number][] = [
+      ['entry pivot door', HOUSE.x0 - t / 2, ENTRY.z, F0 + 0.9],
+      ['garage roller door', GARAGE.x0 - t / 2, DOOR.z, Y.court + 0.9],
+      ['garage into the hall', GARAGE.x1 + t / 2, GARAGE_DOOR.z, Y.plinth + 0.9],
+      ['great room slider', SLIDER.great.x, ROOM.great.z1 + t / 2, F0 + 0.9],
+      ['pavilion slider', SLIDER.pavilion.x, ROOM.pavilion.z1 + t / 2, F0 + 0.9],
+      ['study door', ROOM.study.x0 - t / 2, -9, F0 + 0.9],
+      ['pavilion door', 33, ROOM.pavilion.z0 - t / 2, F0 + 0.9],
+    ];
+    const blocked: string[] = [];
+    for (const [name, x, z, y] of doors) {
+      for (const c of built.colliders) {
+        if (c.kind !== 'box') continue;
+        const [cx, cy, cz] = c.center, [hx, hy, hz] = c.half;
+        if (Math.abs(x - cx) < hx - 0.01 && Math.abs(z - cz) < hz - 0.01 && Math.abs(y - cy) < hy - 0.01) {
+          blocked.push(name); break;
+        }
+      }
+    }
+    expect(blocked).toEqual([]);
+  });
+
+
+  it('can be walked onto: the court climbs to the plinth in autostep-sized rises', () => {
+    // The bug this exists for: both flights of steps were built inside the plinth's solid box, so
+    // the approach was a sheer 1.05 m face and the player stopped dead on the court in front of it.
+    // Checking riser arithmetic did not catch it - only asking what you can actually stand on does.
+    const standOn = (x: number, z: number, feet: number): number => {
+      let top = 0;
+      for (const c of built.colliders) {
+        if (c.kind === 'box') {
+          const [cx, cy, cz] = c.center, [hx, hy, hz] = c.half;
+          if (Math.abs(x - cx) > hx || Math.abs(z - cz) > hz) continue;
+          // Things you walk under (a door head, a soffit) are not floors.
+          if (cy - hy > feet + STEP) continue;
+          top = Math.max(top, cy + hy);
+        } else if (c.kind === 'hull') {
+          // A wedge: flat in z, ramping along x. Interpolate its top between the two ends, or a
+          // ramp would read as no surface at all and this test would pass an unclimbable house.
+          const p = c.points;
+          let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+          for (let i = 0; i < p.length; i += 3) {
+            x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]);
+            z0 = Math.min(z0, p[i + 2]); z1 = Math.max(z1, p[i + 2]);
+          }
+          if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+          let topAtX0 = -Infinity, topAtX1 = -Infinity;
+          for (let i = 0; i < p.length; i += 3) {
+            if (Math.abs(p[i] - x0) < 0.01) topAtX0 = Math.max(topAtX0, p[i + 1]);
+            if (Math.abs(p[i] - x1) < 0.01) topAtX1 = Math.max(topAtX1, p[i + 1]);
+          }
+          const k = x1 - x0 < 1e-6 ? 1 : (x - x0) / (x1 - x0);
+          top = Math.max(top, topAtX0 + (topAtX1 - topAtX0) * k);
+        }
+      }
+      return top;
+    };
+    const walkIn = (z: number, from: number, to: number, what: string) => {
+      let feet = 0;
+      for (let x = from; x <= to; x += 0.1) {
+        const top = standOn(x, z, feet);
+        expect(top - feet, `${what}: a ${(top - feet).toFixed(2)} m rise at x=${x.toFixed(1)}`).toBeLessThanOrEqual(STEP);
+        feet = top;
+      }
+      expect(feet, `${what}: you end up on the plinth`).toBeCloseTo(Y.plinth, 2);
+    };
+    walkIn(ENTRY.z, -20, -9, 'up the front steps');
+    walkIn(DOOR.z, -24, -12.2, 'in through the garage');
+  });
+
   it('cantilevers the bar south of the ground-floor glass, and pools below it', () => {
     // The deep shaded soffit over the terrace is the reference's signature.
     expect(BAR.z1).toBeGreaterThan(ROOM.great.z1 + 2);
@@ -218,10 +296,16 @@ describe('我家 the villa', () => {
     if (!process.env.PROFILE) return;
     const far = buildVillaFar();
     const n = (k: string) => built.colliders.filter((c) => c.kind === k).length;
+    // How long the model takes to build: the landmark is assembled on the main thread when the
+    // player streams into range, so this is a frame hitch you feel walking up to the house.
+    const t0 = performance.now();
+    for (let i = 0; i < 5; i++) buildVillaStatic();
+    const buildMs = (performance.now() - t0) / 5;
     const out = [
       `detail    ${built.parts.triangles()} tris, ${built.parts.bufs.size} draw calls`,
       `far LOD   ${far.triangles()} tris, ${far.bufs.size} draw calls`,
       `colliders ${built.colliders.length} (${n('box')} box, ${n('hull')} hull)`,
+      `build     ${buildMs.toFixed(1)} ms per buildVillaStatic()`,
     ].join('\n');
     mkdirSync('.scratch/home', { recursive: true });
     writeFileSync('.scratch/home/stats.txt', out + '\n');
