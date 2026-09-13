@@ -1,98 +1,252 @@
 /**
  * 我家 · the player's villa, as plain data.
  *
+ * Rebuilt 2026-09-12 from reference photographs of a Californian hillside modernist house: a long
+ * two-storey bar whose upper floor is clad in pale vertical timber behind dark horizontal louvre
+ * screens and cantilevers over a glass ground floor; a projecting glass pavilion at the east end;
+ * an infinity pool along a stone terrace; a board-formed concrete entry wall with a tall pivot door
+ * above three broad steps and a black reflecting pool beside it; inside, a curved timber stair
+ * against a rough stone wall, a great room under a timber plank ceiling with a stone fireplace
+ * wall, and bedrooms upstairs under sloping timber ceilings behind louvred glass.
+ *
  * One file for every position and dimension, like world/Layout.ts for the yard and park/Layout.ts
- * for 欢乐谷, so the model (Villa.ts), the garage door and save point (index.ts), the shot poses
- * and the tests all read the same numbers.
+ * for 欢乐谷, so the model (Villa.ts), the garage door and save point (index.ts), the shot poses and
+ * the tests all read the same numbers.
  *
  * Local frame: +X east, +Z south, +Y up, origin at the centre of the plot, which is also the
  * landmark anchor. The plot is a real gap in the city: 96 x 50 m of open ground east of 恒惠路,
- * surveyed off the OSM tiles as holding no buildings, no street trees and no lamps (the nearest
- * tree is 1.8 m outside the south wall, and hangs over it). 恒惠路 runs north-south 18 m off the
- * west edge, so the gate and the drive face west onto it.
+ * surveyed off the OSM tiles as holding no buildings, no street trees and no lamps. 恒惠路 runs
+ * north-south 18 m off the west edge, so the drive and the garage face west onto it, and the house
+ * faces its view south over the open ground.
  *
- * Heights are chosen around what the player can physically do: the character controller autosteps
- * 0.4 m and climbs 50°, so the ground floor sits 0.45 m up behind two 0.15 m steps, and the stair
- * is a 29° flight rather than anything the capsule would refuse.
+ * The reference house stands on a hillside. There is no terrain here, so it stands on a stone
+ * plinth instead, with the lawn stepping down from it behind curved retaining walls. Everything the
+ * player climbs is sized for the character controller: it autosteps 0.4 m and climbs 50°, so the
+ * plinth is 1.05 m behind three 0.35 m steps and the stair is a 30° flight.
  */
 
 /** WGS84 anchor of the plot centre, and the heading of local -Z (degrees clockwise from north). */
 export const ANCHOR = { lat: 39.904455, lon: 116.450504, headingDeg: 0 };
 
-/** Half-extent of the plot: the landmark footprint, and where the boundary wall runs. */
+/** Half-extent of the plot: the landmark footprint, and where the hedge runs. */
 export const PLOT = { hw: 48, hd: 25 };
 
-/** Ground heights. All below the city ground collider's 0.03 top, so everyone walks on that one
- *  surface and no paving edge becomes a kerb to trip on; polygon offset decides what draws over
- *  what (see villaMaterials). */
-export const Y = { lawn: 0.02, drive: 0.024, pave: 0.028, water: 0.30, basin: -0.25 };
-
-export const WALL = { h: 2.4, t: 0.35, inset: 0.6, cap: 0.16 };
-
-/** The gate on the west wall, facing 恒惠路. Left standing open: this is the way the car gets in. */
-export const GATE = { z: 0, w: 7.6, pierW: 1.5, pierH: 3.3 };
-
-/** Single-storey garage wing on the north-west, its door facing the drive. */
-export const GARAGE = { x0: -6, x1: 6, z0: -13, z1: -3, roof: 3.6 };
-
-/** The up-and-over garage door: the one thing here that moves. */
-export const DOOR = { z: -8, w: 5.0, h: 2.7, t: 0.22, open: 16, shut: 22, time: 1.6 };
-
-/** Main block: two storeys, stone to the north and east, glass to the south and west. */
-export const HOUSE = {
-  x0: 6, x1: 30, z0: -13, z1: 5,
-  wall: 0.3,
-  /** Walkable ground floor, its ceiling, the walkable first floor, its ceiling, the roof top. */
-  floor0: 0.45, ceil0: 3.9, floor1: 4.1, ceil1: 7.2, roof: 7.55,
+/**
+ * Ground heights. The motor court and lawn sit just under the city ground collider's 0.03 top, so
+ * everyone walks on that one surface out there and no paving edge becomes a kerb; polygon offset
+ * decides what draws over what (see villaMaterials). The plinth is a real step up with real
+ * colliders.
+ */
+export const Y = {
+  lawn: 0.02, court: 0.024, path: 0.028,
+  /** Top of the stone plinth the house and terrace stand on: the ground floor. */
+  plinth: 1.05,
+  /** Infinity pool and the entry reflecting pool, a hair under the coping. */
+  water: 0.98,
+  /** Bottom of the pool basins (geometry only, no collider: the city ground stops you). */
+  basin: 0.15,
+  /** The two lawn terraces below the plinth. */
+  terraceA: 0.62, terraceB: 0.3,
 };
 
-/** The first-floor volume, pulled back east and south and cantilevered 2 m west over the entrance. */
-export const UPPER = { x0: 4, x1: 28, z0: -13, z1: 3 };
+/** House levels. The ground floor is the plinth top; the bar sits above it. */
+export const LEVEL = {
+  floor0: Y.plinth, ceil0: Y.plinth + 3.6,
+  floor1: Y.plinth + 3.8, ceil1: Y.plinth + 6.9,
+  roof: Y.plinth + 7.25,
+};
 
-/** Front door, on the west face of the main block. */
-export const ENTRY = { z: 2, w: 2.8, step: 0.15 };
+/** Wall thickness, shared by every run. `index.ts` reads HOUSE.wall for the garage door. */
+export const HOUSE = {
+  wall: 0.3,
+  floor0: LEVEL.floor0, ceil0: LEVEL.ceil0,
+  floor1: LEVEL.floor1, ceil1: LEVEL.ceil1, roof: LEVEL.roof,
+  /** Extent of the whole ground floor, hall to pavilion. */
+  x0: -8, x1: 42, z0: -15, z1: 7,
+};
 
-/** Opening in the south glazing onto the terrace (no collider: you walk straight out). */
-export const TERRACE_DOOR = { x: 14, w: 3.4 };
-
-/** Door between the garage and the hall, with three steps up to the house floor. */
-export const GARAGE_DOOR = { z: -6.4, w: 1.6 };
+/** The stone plinth: the house, the terrace and the pool stand on it. */
+export const PLINTH = { x0: -14, x1: 44, z0: -18, z1: 20 };
 
 /**
- * Straight flight up the east side, climbing north. `stairFlight` lays its steps from local +Z
- * (bottom) towards 0 (top), so it is placed at the top and runs back 6 m to z = 4.
+ * The upper bar: pale timber and dark louvres, cantilevered 3 m south beyond the ground-floor
+ * glass (the deep shaded soffit over the terrace) and 4 m west over the entry.
  */
-export const STAIR = { x: 26, w: 1.5, zTop: -2, rise: 0.18, tread: 0.3 };
+export const BAR = { x0: -4, x1: 32, z0: -8, z1: 10 };
 
-/** The void the stair comes up through, and so where the first-floor slab is not. */
-export const VOID = { x0: 24.5, x1: UPPER.x1, z0: -2, z1: UPPER.z1 };
-
-/** Pool on the south terrace: a raised coping you step over, water just under its lip. */
-export const POOL = { x0: 10, x1: 26, z0: 11, z1: 18.5, coping: 0.35, rim: 0.9 };
-
-/** The drive, as the rectangles it is paved from: in from the gate, the corner, the garage apron. */
-export const DRIVE = {
-  in: { x0: -PLOT.hw, x1: -14, z0: -3.2, z1: 3.2 },
-  corner: { x0: -18, x1: -14, z0: -11.2, z1: 3.2 },
-  apron: { x0: -18, x1: GARAGE.x0, z0: -11.2, z1: -4.8 },
-  /** Outside the wall, across the verge to 恒惠路's kerb: the landmark's `extras`. */
-  kerb: { x0: -66.2, x1: -PLOT.hw, z0: -3.2, z1: 3.2 },
+/** Ground-floor rooms, west to east. Each is a rectangle in plan. */
+export const ROOM = {
+  hall: { x0: -8, x1: 4, z0: -15, z1: -3 },
+  dining: { x0: -8, x1: 4, z0: -3, z1: 7 },
+  great: { x0: 4, x1: 28, z0: -15, z1: 7 },
+  study: { x0: 28, x1: 40, z0: -15, z1: -3 },
+  /** The glass pavilion: formal living, glazed on three sides, projecting east and south. */
+  pavilion: { x0: 28, x1: 42, z0: -3, z1: 7 },
 };
 
-export const FORECOURT = { x0: 0, x1: HOUSE.x0, z0: -1, z1: 6 };
-export const TERRACE = { x0: HOUSE.x0, x1: HOUSE.x1, z0: HOUSE.z1, z1: POOL.z0 };
+/**
+ * First-floor rooms inside the bar, as a plan that tiles it exactly (36 x 18 m, no gaps).
+ *
+ * Three bedrooms, as a house this size should have: a master suite at the east end with its own
+ * dressing room and ensuite, and two more bedrooms sharing a bathroom off the gallery. Every
+ * bedroom takes the south glass and the balcony behind it - the view is the whole point of the
+ * plan - and the rooms with nothing to look at (baths, dressing, the media room) take the north.
+ *
+ * The gallery is what makes it read as a floor of rooms rather than one loft: you come off the
+ * stair into `hall`, and every room opens off it. `UPPER_WALL` below is the wall between each
+ * pair, with the doorway in it; `Villa.test.ts` walks those doors to prove every room is
+ * reachable from the stair, which is the regression the old plan failed - it declared three
+ * bedrooms but built the dividing walls only where two rooms happened to share an x edge, so the
+ * whole floor was one open space with beds standing about in it.
+ */
+export const UPPER_ROOM = {
+  /** The stair hall: the void, the landing, and the gallery wall facing them. */
+  landing: { x0: -4, x1: 4, z0: -8, z1: 10 },
+  /** The gallery, and its east leg in front of the master suite. */
+  hall: { x0: 4, x1: 20, z0: -3, z1: 1 },
+  hallE: { x0: 20, x1: 32, z0: -2, z1: 1 },
+  /** Two bedrooms on the south glass, sharing the bathroom behind them. */
+  bed2: { x0: 4, x1: 12, z0: 1, z1: 10 },
+  bed3: { x0: 12, x1: 20, z0: 1, z1: 10 },
+  bath2: { x0: 4, x1: 11, z0: -8, z1: -3 },
+  /** Media room: north, no view to lose, so it is the one room that wants to be dark. */
+  lounge: { x0: 11, x1: 20, z0: -8, z1: -3 },
+  /** The master suite: bedroom on the corner glass, dressing and ensuite behind it. */
+  master: { x0: 20, x1: 32, z0: 1, z1: 10 },
+  dress: { x0: 20, x1: 25, z0: -8, z1: -2 },
+  bath1: { x0: 25, x1: 32, z0: -8, z1: -2 },
+};
 
-/** Where the car is meant to end up, and where the corona marks it: the middle of the garage. */
-export const PARK_AT = { x: (GARAGE.x0 + GARAGE.x1) / 2, z: DOOR.z, yaw: Math.PI / 2 };
+export type UpperRoomName = keyof typeof UPPER_ROOM;
 
-/** Feature trees in the lawn, and the row screening the north wall (x, z, height). */
-export const TREES: [number, number, number][] = [
-  [-34, 14, 7.5], [-24, -16, 8.2], [-38, -12, 7], [36, -18, 8], [40, 12, 7.5], [34, 20, 6.5],
-  [-10, 18, 6], [18, -19, 7.2], [4, -19, 6.8], [-16, -19, 7], [30, -19, 7.4], [-30, 19, 6.6],
+/** The three bedrooms, so the model and the tests agree on which rooms get a bed. */
+export const BEDROOMS: readonly UpperRoomName[] = ['master', 'bed2', 'bed3'];
+
+/**
+ * An interior wall of the upper floor: it stands on a constant `x` (axis 'x') or a constant `z`,
+ * spans `from`..`to` on the other axis, and carries an optional opening. `head` is the height of
+ * the door head above the floor; a head at or above the room height means no beam over it, which
+ * is how the two gallery portals are left fully open.
+ */
+export interface UpperWall {
+  axis: 'x' | 'z';
+  at: number;
+  from: number; to: number;
+  door?: { w: number; at?: number; head?: number };
+}
+
+/** Height of a normal internal door head above the first floor. */
+export const DOOR_HEAD = 2.3;
+
+/** Every wall between two upper rooms, with the doorway that connects them. */
+export const UPPER_WALL: readonly UpperWall[] = [
+  // The gallery wall: open to the stair, solid behind the bedroom and the bathroom.
+  { axis: 'x', at: 4, from: -3, to: 1, door: { w: 2.6, head: 3.2 } },
+  { axis: 'x', at: 4, from: 1, to: 10 },
+  { axis: 'x', at: 4, from: -8, to: -3 },
+  // Off the gallery: two bedrooms south, the bathroom and the media room north.
+  { axis: 'z', at: 1, from: 4, to: 12, door: { w: 1.4 } },
+  { axis: 'z', at: 1, from: 12, to: 20, door: { w: 1.4 } },
+  { axis: 'z', at: -3, from: 4, to: 11, door: { w: 1.2 } },
+  { axis: 'z', at: -3, from: 11, to: 20, door: { w: 1.6 } },
+  { axis: 'x', at: 11, from: -8, to: -3 },
+  { axis: 'x', at: 12, from: 1, to: 10 },
+  // The master suite: a double door to the bedroom, the dressing room through to the ensuite.
+  { axis: 'x', at: 20, from: -2, to: 1, door: { w: 3.0, head: 3.2 } },
+  { axis: 'x', at: 20, from: 1, to: 10 },
+  { axis: 'x', at: 20, from: -8, to: -2 },
+  { axis: 'z', at: 1, from: 20, to: 32, door: { w: 1.8 } },
+  { axis: 'z', at: -2, from: 20, to: 25, door: { w: 1.4 } },
+  { axis: 'z', at: -2, from: 25, to: 32, door: { w: 1.4 } },
+  { axis: 'x', at: 25, from: -8, to: -2, door: { w: 1.2 } },
 ];
 
-/** Bollard lights down the drive and round the terrace. */
+/** Board-formed concrete entry wall, the pivot door in it, and the steps up to the plinth. */
+export const ENTRY = {
+  /** The wall runs north-south; the door is a tall narrow pivot leaf. */
+  x: -8, z: 1, w: 1.5, h: 3.0,
+  /** Three broad steps from the motor court up to the plinth. */
+  steps: 3, tread: 1.1, riser: Y.plinth / 3,
+};
+
+/** Black reflecting pool beside the entry steps, as in the night shot. */
+export const REFLECT = { x0: -13.5, x1: -8.6, z0: -6, z1: 0 };
+
+/** Single-storey garage at ground level on the west, its door facing the drive. */
+export const GARAGE = { x0: -26, x1: -12, z0: -16, z1: -4, roof: 3.4 };
+
+/** The roller garage door: the one thing here that moves (home/index.ts). */
+export const DOOR = { z: -10, w: 5.0, h: 2.7, t: 0.22, open: 16, shut: 22, time: 1.6 };
+
+/** Where the car is meant to stop: the middle of the garage. */
+export const PARK_AT = { x: (GARAGE.x0 + GARAGE.x1) / 2, z: DOOR.z, yaw: Math.PI / 2 };
+
+/** Door from the garage into the hall, and the steps up to the plinth inside it. */
+export const GARAGE_DOOR = { z: -10, w: 1.6 };
+
+/** Sliding glass openings you can walk through (no collider). */
+export const SLIDER = { great: { x: 16, w: 7.0 }, pavilion: { x: 35, w: 3.2 } };
+
+/**
+ * The curved timber stair in the hall, helical around a solid spine wall against rough stone.
+ * Centre, radius to the middle of the tread, the arc it turns through, and the step sizing.
+ */
+export const STAIR = {
+  cx: 0, cz: -2, r: 2.6, w: 1.5,
+  /** Start and end angle (radians): a half turn, climbing anticlockwise seen from above. */
+  a0: -Math.PI * 0.55, a1: Math.PI * 0.55,
+  rise: 0.19, treads: 20,
+};
+
+/** The void the stair rises through, and so where the first-floor slab is not. */
+export const VOID = { x0: -4, x1: 4, z0: -6, z1: 0.9 };
+
+/** The landing the stair steps off onto, bridging the void's south edge to the slab. */
+export const LANDING = { x0: -3.2, x1: 2.4, z0: -0.6, z1: 0.9 };
+
+/** Infinity pool along the terrace, dark water, coping flush with the plinth. */
+export const POOL = { x0: 2, x1: 26, z0: 12.5, z1: 18.5 };
+
+/** Stone terrace between the ground-floor glass and the pool, under the bar's cantilever. */
+export const TERRACE = { x0: -4, x1: 30, z0: 7, z1: 12.5 };
+
+/** Timber deck running along the pool's east side and round to the lawn. */
+export const DECK = { x0: 2, x1: 36, z0: 18.5, z1: 20 };
+
+/** Curved steps from the terrace down to the lawn, and the two curved lawn terraces below. */
+export const CURVES = {
+  /** Centre of the arcs, south-east of the terrace. */
+  cx: 30, cz: 6,
+  steps: { r: 7.2, n: 3, w: 5.2 },
+  terraceA: { r: 17, wall: 0.5 },
+  terraceB: { r: 27, wall: 0.5 },
+};
+
+/** The drive in from 恒惠路, as the rectangles it is paved from. */
+export const DRIVE = {
+  in: { x0: -PLOT.hw, x1: -30, z0: -13.2, z1: -6.8 },
+  court: { x0: -30, x1: -9, z0: -16, z1: 2 },
+  /** Outside the plot, across the verge to 恒惠路's kerb: the landmark's `extras`. */
+  kerb: { x0: -66.2, x1: -PLOT.hw, z0: -13.2, z1: -6.8 },
+};
+
+/** Low stone wall and hedge on the plot line, with the gate left open on the west. */
+export const EDGE = { wall: 0.7, t: 0.4, inset: 0.6, hedge: 1.1 };
+export const GATE = { z: -10, w: 7.6, pierW: 1.2, pierH: 2.6 };
+
+/**
+ * The feature tree the house is built around (the cork oak of the reference), and the rest of the
+ * planting: (x, z, height).
+ */
+export const HERO_TREE = { x: 43, z: 9, h: 9 };
+export const TREES: [number, number, number][] = [
+  [-36, 14, 8], [-30, -20, 8.5], [-42, -4, 7.5], [44, -18, 8.5], [45, 14, 8], [38, 21, 7],
+  [-20, 20, 7], [8, -20, 7.5], [-4, -21, 7], [20, -20, 7.5], [30, -20, 7.2], [-14, 21, 6.8],
+  [12, 22, 7.4], [-26, 8, 6.6],
+];
+
+/** In-ground uplights: the entry treads, the terrace edge, the drive. */
 export const LIGHTS: [number, number][] = [
-  [-40, -4.4], [-40, 4.4], [-30, -4.4], [-30, 4.4], [-20, -4.4], [-20, 4.4],
-  [-16, -12.6], [-8, -12.6], [2, 7], [2, -2.4], [8, 12.4], [28, 12.4], [8, 19.8], [28, 19.8],
+  [-36, -12.4], [-36, -7.6], [-24, -2], [-18, -2], [-12, -2],
+  [0, 11.6], [8, 11.6], [16, 11.6], [24, 11.6], [29, 14], [29, 18],
 ];

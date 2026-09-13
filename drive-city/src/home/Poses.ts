@@ -4,7 +4,7 @@ import type { CameraApi, HudApi, PlayerApi, VehicleApi, WantedApi, WorldApi } fr
 import { registerPose } from '../debug/PoseRegistry';
 import type { UiApi } from '../ui';
 import type { HomeSystem } from '.';
-import { ANCHOR, DOOR, ENTRY, GARAGE, HOUSE, PARK_AT, POOL, STAIR } from './Layout';
+import { ANCHOR, DOOR, ENTRY, GARAGE, HOUSE, PARK_AT, ROOM, STAIR, TERRACE, UPPER_ROOM } from './Layout';
 
 /**
  * 我家 screenshot poses (`node scripts/shot.mjs --world city --poses home_...`).
@@ -13,18 +13,18 @@ import { ANCHOR, DOOR, ENTRY, GARAGE, HOUSE, PARK_AT, POOL, STAIR } from './Layo
  * page, so each resets what the last one left set (a vehicle reset also takes the player out of any
  * seat, and the wanted level has to be cleared by hand).
  *
- * The car is always put on the drive, never at the point the camera looks at: `reset` teleports the
- * player's car, so aiming a pose at the living room used to park a taxi in it. To stand the player
- * indoors, the car stays outside and `setRiding(null, at)` enables the foot capsule where we want
- * it. Parking on the drive also keeps the car outside the garage door's 16 m trigger, so the door
- * is shut in the exterior shots.
+ * The car always goes on the drive, never at the point the camera looks at: `reset` teleports it, so
+ * aiming a pose at the living room once parked a taxi in it. To stand the player indoors the car
+ * stays outside and `setRiding(null, at)` enables the foot capsule where we want it. Parking out
+ * there also keeps the car clear of the garage door's 16 m trigger, so the door is shut in the
+ * exterior shots.
  */
 
 const [AX, AZ] = project(ANCHOR.lat, ANCHOR.lon);
 /** Villa-local metres to world (the villa's heading is 0, so this is a translation). */
 const W = (x: number, z: number) => ({ x: AX + x, z: AZ + z });
-/** On the entrance drive, 25 m from the garage door: clear of the house and of the door trigger. */
-const CAR_SPOT = { x: -30, z: 0 };
+/** On the drive, 20 m from the garage door: clear of the house and of the door trigger. */
+const CAR_SPOT = { x: -40, z: -10 };
 
 async function base(e: Engine) {
   const v = e.get<VehicleApi>('vehicle')!, cam = e.get<CameraApi>('camera')!;
@@ -67,68 +67,149 @@ function standAt(e: Engine, x: number, z: number, y: number, yaw: number): void 
   pl.setRiding(null, { x: at.x, y, z: at.z, yaw });
 }
 
+const F0 = HOUSE.floor0, F1 = HOUSE.floor1;
+
 export function registerHomePoses(): void {
   registerPose({
     name: 'home_aerial',
-    description: '我家 from 150 m: the walled plot off 恒惠路, the drive, the house, the pool and the lawn.',
+    description: '我家 from 170 m: the long louvred bar on its plinth, the infinity pool, the curved lawn terraces.',
     async apply(e) {
       await base(e);
-      await shot(e, [-70, 150, 80], [6, 4, 0], 50);
+      await shot(e, [-40, 170, 90], [14, 4, 2], 50);
       run(e, 0.6, 0.6);
     },
   });
 
   registerPose({
-    name: 'home_gate',
-    description: 'The approach: in at the open gate off 恒惠路, the drive running to the garage, door shut.',
+    name: 'home_terrace',
+    description: 'The south front: the upper bar cantilevered over the terrace, the dark infinity pool below it.',
     async apply(e) {
       await base(e);
-      await shot(e, [-62, 5.5, 6], [-4, 4.5, -3], 58);
+      await shot(e, [30, 4.4, 30], [4, 5.5, 8], 58);
       run(e, 0.6, 0.6);
     },
   });
 
   registerPose({
-    name: 'home_front',
-    description: 'The entrance front: travertine and glass, the upper volume cantilevered over the door.',
+    name: 'home_entry',
+    description: 'The board-formed concrete entry wall, the tall pivot door over three broad steps, the black reflecting pool.',
     async apply(e) {
       await base(e);
-      await shot(e, [-16, 6, 14], [HOUSE.x0 + 2, 4.5, ENTRY.z], 52);
+      await shot(e, [-22, 3.0, 8], [ENTRY.x, F0 + 1.5, ENTRY.z], 56);
       run(e, 0.6, 0.6);
     },
   });
 
   registerPose({
-    name: 'home_pool',
-    description: 'The terrace and pool on the south side, the full-height glazing behind it.',
+    name: 'home_great',
+    description: 'The great room under its timber plank ceiling: stone fireplace wall, the long table, the glass open to the terrace.',
     async apply(e) {
       await base(e);
-      await shot(e, [34, 4.4, 26], [18, 4, POOL.z0 - 3], 58);
-      run(e, 0.6, 0.6);
-    },
-  });
-
-  registerPose({
-    name: 'home_inside',
-    description: 'Standing in the living room on foot: the stair up the east wall, the garden through the glass.',
-    async apply(e) {
-      await base(e);
-      standAt(e, HOUSE.x0 + 13, HOUSE.z1 - 8, HOUSE.floor0 + 0.1, Math.PI);
+      standAt(e, ROOM.great.x0 + 3, ROOM.great.z1 - 3, F0 + 0.1, 0);
       run(e, 0.4, 0);
-      await shot(e, [HOUSE.x0 + 3, HOUSE.floor0 + 1.75, HOUSE.z1 - 1.6], [HOUSE.x0 + 21, HOUSE.floor0 + 1.15, HOUSE.z0 + 7], 70);
+      await shot(e, [ROOM.great.x0 + 1.5, F0 + 1.75, ROOM.great.z1 - 2.5],
+        [ROOM.great.x1 - 4, F0 + 1.2, ROOM.great.z0 + 2], 72);
       run(e, 0.6, 0.6);
     },
   });
 
   registerPose({
     name: 'home_stair',
-    description: 'The open-riser stair and the void it comes up through: where the first floor is.',
+    description: 'The curved timber stair turning against the rough stone wall, up through the void to the bar.',
     async apply(e) {
       await base(e);
-      standAt(e, HOUSE.x0 + 16, HOUSE.z1 - 3, HOUSE.floor0 + 0.1, 0);
+      standAt(e, STAIR.cx + 5.5, STAIR.cz + 4, F0 + 0.1, Math.PI);
       run(e, 0.4, 0);
-      await shot(e, [HOUSE.x0 + 15, HOUSE.floor0 + 1.7, HOUSE.z1 - 1.5],
-        [STAIR.x, HOUSE.floor0 + 2.6, STAIR.zTop + 2], 68);
+      await shot(e, [STAIR.cx + 6.0, F0 + 1.7, STAIR.cz + 4.5], [STAIR.cx, F0 + 2.6, STAIR.cz], 70);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_master',
+    description: 'The master bedroom: the dressed bed on its rug, the corner glass and the balcony beyond.',
+    async apply(e) {
+      const M = UPPER_ROOM.master;
+      await base(e);
+      standAt(e, M.x0 + 2.4, M.z1 - 2.4, F1 + 0.1, 0);
+      run(e, 0.4, 0);
+      await shot(e, [M.x0 + 1.4, F1 + 1.72, M.z1 - 1.6], [M.x1 - 3.0, F1 + 1.0, M.z0 + 2.4], 74);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_bed2',
+    description: 'A guest bedroom: bed, nightstands and sconces, the wardrobe, the curtains on the south glass.',
+    async apply(e) {
+      const B = UPPER_ROOM.bed2;
+      await base(e);
+      standAt(e, B.x0 + 2.0, B.z1 - 2.2, F1 + 0.1, 0);
+      run(e, 0.4, 0);
+      await shot(e, [B.x0 + 1.2, F1 + 1.72, B.z1 - 1.4], [B.x1 - 2.0, F1 + 1.0, B.z0 + 1.6], 74);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_gallery',
+    description: 'The upper gallery: the doors into the two bedrooms and the bathroom, the pictures along it.',
+    async apply(e) {
+      const G = UPPER_ROOM.hall;
+      await base(e);
+      standAt(e, G.x0 + 1.6, G.z1 - 2.0, F1 + 0.1, Math.PI / 2);
+      run(e, 0.4, 0);
+      await shot(e, [G.x0 + 0.6, F1 + 1.68, (G.z0 + G.z1) / 2], [G.x1 + 4, F1 + 1.3, (G.z0 + G.z1) / 2], 76);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_dress',
+    description: 'The master dressing room: the hanging runs, the island of drawers and the long mirror.',
+    async apply(e) {
+      const D = UPPER_ROOM.dress;
+      await base(e);
+      standAt(e, D.x1 - 1.4, D.z1 - 1.6, F1 + 0.1, Math.PI);
+      run(e, 0.4, 0);
+      await shot(e, [D.x1 - 1.0, F1 + 1.68, D.z1 - 0.9], [D.x0 + 1.0, F1 + 1.1, D.z0 + 1.6], 78);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_lounge',
+    description: 'The upstairs media room: the joinery wall, the sofa and the reading light.',
+    async apply(e) {
+      const G = UPPER_ROOM.lounge;
+      await base(e);
+      standAt(e, G.x1 - 1.6, G.z1 - 1.2, F1 + 0.1, Math.PI);
+      run(e, 0.4, 0);
+      await shot(e, [G.x1 - 1.2, F1 + 1.68, G.z1 - 0.8], [G.x0 + 2.4, F1 + 1.2, G.z0 + 1.0], 76);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_poolside',
+    description: 'The terrace dressed: the outdoor lounge under the cantilever, the loungers and parasols along the pool.',
+    async apply(e) {
+      await base(e);
+      await shot(e, [-8, 3.2, 24], [20, 2.0, TERRACE.z0 + 2], 62);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_bath',
+    description: 'The master bathroom: the boat tub at the louvred window, the lit vanity, the droplet chandelier.',
+    async apply(e) {
+      const B = UPPER_ROOM.bath1;
+      await base(e);
+      standAt(e, B.x0 + 1.5, B.z1 - 1.6, F1 + 0.1, 0);
+      run(e, 0.4, 0);
+      // From the door end, across the vanity to the tub at the louvred east glass.
+      await shot(e, [B.x0 + 1.2, F1 + 1.68, B.z1 - 1.2], [B.x1 - 1.5, F1 + 0.8, (B.z0 + B.z1) / 2 + 0.6], 76);
       run(e, 0.6, 0.6);
     },
   });
@@ -142,7 +223,7 @@ export function registerHomePoses(): void {
       e.get<VehicleApi>('vehicle')!.reset({ x: spot.x, y: 1.0, z: spot.z }, PARK_AT.yaw);
       home?.debug.setDoor(1);
       run(e, 0.6, 0);
-      await shot(e, [GARAGE.x0 - 16, 4.2, DOOR.z + 7], [PARK_AT.x, 1.6, PARK_AT.z], 56);
+      await shot(e, [GARAGE.x0 - 15, 4.0, DOOR.z + 7], [PARK_AT.x, 1.6, PARK_AT.z], 56);
       run(e, 0.6, 0.6);
     },
   });
