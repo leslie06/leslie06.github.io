@@ -598,48 +598,78 @@ function groundFloor(P: Parts): ColliderSpec[] {
   return out;
 }
 
-/** The curved timber stair, and the hulls that carry the player up it. */
+/**
+ * The curved timber stair, and the colliders that carry the player up it.
+ *
+ * Four things here are load-bearing, and every one of them is a bug the player walked into while
+ * the whole test suite was green:
+ *   - The flight rises in open air. LANDING is paving laid on the slab, not a slab of its own: as
+ *     a 0.25 m slab at floor level it sat directly over treads 13-18, so the climb ended at 3.5 m
+ *     against the underside of a floor and the last six treads were sealed inside it.
+ *   - One hull per tread. A hull is convex and an arc is not: chunking three treads into one hull
+ *     made its outer edge a chord, and the arc bulges 0.22 m outside that chord at mid span. The
+ *     outer quarter of every third tread was a hole, and you fell up to 2.3 m through it. At one
+ *     tread the chord error is 1.4 cm, which the +0.03 on the radii covers.
+ *   - The hulls are slabs under the treads, not wedges down to the floor, so the space under the
+ *     flight stays as open as it looks.
+ *   - Risers, and a wall each side. Open treads read as twenty floating planks, and a drawn
+ *     balustrade stops nobody: the drop off the outer edge is the height of the stair.
+ */
 function curvedStair(P: Parts): ColliderSpec[] {
   const out: ColliderSpec[] = [];
   const tread = P.get('vWoodDark'), rail = P.get('vLouvre');
   const { cx, cz, r, w, a0, a1, treads } = STAIR;
   const y0 = HOUSE.floor0, y1 = HOUSE.floor1;
   const rr = (y1 - y0) / treads;
+  const inner = r - w / 2, outer = r + w / 2;
+  /** Angle between treads. Tread depth follows the arc at the outer edge, or they gap apart. */
+  const step = (a1 - a0) / (treads - 1);
+  const depth = outer * Math.abs(step) * 1.06;
+  /** Tread thickness, and the riser that closes the rest of the rise behind it. */
+  const T = 0.1;
+  const pt = (a: number, rad: number, y: number): [number, number, number] =>
+    [cx + Math.cos(a) * rad, y, cz + Math.sin(a) * rad];
   const railPts: V3[] = [];
-  // Tread depth follows the arc: a fixed 0.32 m box left a 0.15 m gap at mid radius and 0.29 m at
-  // the outer edge, so you could only walk up hugging the inside and fell through further out.
-  const depth = ((r + w / 2) * Math.abs(a1 - a0)) / (treads - 1) * 1.06;
   for (let i = 0; i < treads; i++) {
-    const a = a0 + (a1 - a0) * (i / (treads - 1));
+    const a = a0 + step * i;
     const y = y0 + (i + 1) * rr;
     const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
-    P.at(tx, y - 0.04, tz, -a, () => box(tread, 0, 0, 0, w, 0.08, depth));
-    const bx = cx + Math.cos(a) * (r + w / 2 - 0.08), bz = cz + Math.sin(a) * (r + w / 2 - 0.08);
+    P.at(tx, y - T / 2, tz, -a, () => box(tread, 0, 0, 0, w, T, depth));
+    if (i > 0) P.at(tx, y - T - (rr - T) / 2, tz, -a, () => box(tread, 0, 0, -depth / 2 + 0.04, w, rr - T, 0.07));
+    const bx = cx + Math.cos(a) * (outer - 0.08), bz = cz + Math.sin(a) * (outer - 0.08);
     railPts.push([bx, y + 0.95, bz]);
     if (i % 2 === 0) box(rail, bx, y + 0.47, bz, 0.035, 0.9, 0.035);
   }
-  flat(P.get('vTravertine'), poly(LANDING), y1);
-  out.push(slab(LANDING, y1 - 0.25, y1));
-  const inner = r - w / 2;
-  prism(tread, ringSeg(inner - 0.22, inner, cx, cz, a0 - 0.06, a1 + 0.06, 20), y0, y1 - 0.3);
+  // Stone paving at the arrival, laid over the boards like the bathrooms - not a slab.
+  flat(P.get('vTravertine'), poly(LANDING), y1 + 0.006);
+  // The spine carries on past the first floor as the stairwell's inner parapet. Stopping it 0.3 m
+  // short of the floor left the top four treads with an open inner edge over a 3.6 m drop into the
+  // hollow middle of the helix - the same fall as walking off the outer side.
+  const spineTop = y1 + 0.95;
+  prism(tread, ringSeg(inner - 0.22, inner, cx, cz, a0 - 0.06, a1 + 0.06, 20), y0, spineTop);
   tube(rail, railPts, 0.03, 6);
-  // A helix is not convex, so one wedge hull per chunk of the arc.
-  const chunk = 3;
-  for (let i = 0; i < treads; i += chunk) {
-    // Overlap one tread into the next chunk so the chord-cut hulls cannot leave a notch between.
-    const j = Math.min(treads - 1, i + chunk + 1);
-    const aA = a0 + (a1 - a0) * (i / (treads - 1)), aB = a0 + (a1 - a0) * (j / (treads - 1));
-    const yA = y0 + i * rr, yB = y0 + (j + 1) * rr;
+
+  /** The walking surface at angle `a`: the tread tops, read as a ramp between their centres. */
+  const ramp = (a: number): number => Math.min(y1, Math.max(y0, y0 + ((a - a0) / step + 1) * rr));
+  for (let i = 0; i < treads; i++) {
+    const aLo = a0 + step * (i - 0.5), aHi = a0 + step * (i + 0.5);
     const pts: number[] = [];
-    // The +0.1 used to be added to the *start* of each chunk, which put every chunk 0.10 m below
-    // the one before it at the shared angle: a run of backward lips. Tops now only ever rise.
-    for (const [a, yLo, yHi] of [[aA, y0, yA], [aB, y0, yB + 0.02]] as [number, number, number][]) {
-      for (const rad of [r - w / 2, r + w / 2]) {
-        pts.push(cx + Math.cos(a) * rad, yLo, cz + Math.sin(a) * rad);
-        pts.push(cx + Math.cos(a) * rad, yHi, cz + Math.sin(a) * rad);
+    for (const [a, top] of [[aLo, ramp(aLo)], [aHi, ramp(aHi)]] as [number, number][]) {
+      for (const rad of [inner - 0.03, outer + 0.03]) {
+        pts.push(...pt(a, rad, top), ...pt(a, rad, top - 0.3));
       }
     }
     out.push({ kind: 'hull', points: pts });
+  }
+  // The two walls: the spine on the inside (drawn, and until now walk-through), a guard on the
+  // outside. One box per two treads keeps each chord within 3 cm of its arc.
+  for (let i = 0; i < treads; i += 2) {
+    const a = a0 + step * (i + 0.5);
+    const chord = (rad: number) => 2 * rad * Math.sin(step);
+    const guard = outer + 0.05, y = ramp(a);
+    out.push({ kind: 'box', yaw: -a, center: pt(a, guard, y + 0.3), half: [0.05, 0.7, chord(guard) / 2] });
+    const spine = inner - 0.11;
+    out.push({ kind: 'box', yaw: -a, center: pt(a, spine, mid(y0, spineTop)), half: [0.11, (spineTop - y0) / 2, chord(spine) / 2] });
   }
   return out;
 }
@@ -756,10 +786,22 @@ function upperBar(P: Parts): ColliderSpec[] {
   // --- the landing: a rail round the void, and a reading corner in the light off the south glass.
   {
     const L = R.landing, rail = P.get('vLouvre');
-    const runs: [number, number, number][] = [[VOID.x0, VOID.x1, VOID.z0], [VOID.x1 - 1.6, VOID.x1, VOID.z1], [VOID.x0, VOID.x0 + 0.8, VOID.z1]];
-    for (const [x0, x1, z] of runs) {
-      for (let x = x0; x <= x1 + 0.01; x += 0.9) box(rail, x, floor1 + 0.5, z, 0.04, 1.0, 0.04);
-      box(rail, mid(x0, x1), floor1 + 1.0, z, x1 - x0, 0.05, 0.05);
+    // A rail right round the void, open only on the west where the flight arrives. It carries a
+    // collider: a drawn rail you can walk through is a 3.8 m fall onto the stair below.
+    const runs: { axis: 'x' | 'z'; at: number; from: number; to: number }[] = [
+      { axis: 'x', at: VOID.z0, from: VOID.x0, to: VOID.x1 },
+      { axis: 'x', at: VOID.z1, from: VOID.x0, to: VOID.x1 },
+      { axis: 'z', at: VOID.x1, from: VOID.z0, to: VOID.z1 },
+      { axis: 'z', at: VOID.x0, from: VOID.z0, to: -0.4 },
+    ];
+    for (const rn of runs) {
+      const len = rn.to - rn.from, alongX = rn.axis === 'x';
+      for (let u = rn.from; u <= rn.to + 0.01; u += 0.9) {
+        box(rail, alongX ? u : rn.at, floor1 + 0.5, alongX ? rn.at : u, 0.04, 1.0, 0.04);
+      }
+      const mx = alongX ? mid(rn.from, rn.to) : rn.at, mz = alongX ? rn.at : mid(rn.from, rn.to);
+      box(rail, mx, floor1 + 1.0, mz, alongX ? len : 0.05, 0.05, alongX ? 0.05 : len);
+      out.push({ kind: 'box', center: [mx, floor1 + 0.55, mz], half: alongX ? [len / 2, 0.55, 0.06] : [0.06, 0.55, len / 2] });
     }
     P.at(mid(L.x0, L.x1), floor1, L.z1 - 3.0, 0, () => rug(P, 4.2, 3.4));
     P.at(L.x0 + 1.5, floor1, L.z1 - 3.4, 0.9, () => armchair(P));

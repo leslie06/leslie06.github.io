@@ -93,40 +93,55 @@ describe('我家 the villa', () => {
     const spacing = (outer * Math.abs(STAIR.a1 - STAIR.a0)) / (STAIR.treads - 1);
     const depth = spacing * 1.06;
     expect(depth).toBeGreaterThanOrEqual(spacing);
-    // And the top tread has to arrive on the landing, not 1.43 m short of any floor.
-    const aTop = STAIR.a1;
-    const tx = STAIR.cx + Math.cos(aTop) * STAIR.r, tz = STAIR.cz + Math.sin(aTop) * STAIR.r;
-    expect(tx).toBeGreaterThan(LANDING.x0);
-    expect(tx).toBeLessThan(LANDING.x1);
-    expect(tz).toBeGreaterThan(LANDING.z0);
-    expect(tz).toBeLessThan(LANDING.z1);
+    // And the whole flight has to fit the hole it rises through, which is the fit that was never
+    // checked: the sweep reached z 1.36 against a void that stopped at 0.9, so the top treads ran
+    // under the slab, and the landing was a slab of its own over the six treads below it.
+    const rad: [number, number] = [Math.cos(STAIR.a1), Math.sin(STAIR.a1)];
+    const tan: [number, number] = [-Math.sin(STAIR.a1), Math.cos(STAIR.a1)];
+    const tx = STAIR.cx + rad[0] * STAIR.r, tz = STAIR.cz + rad[1] * STAIR.r;
+    let minX = Infinity, maxZ = -Infinity;
+    for (const sw of [-1, 1]) for (const sd of [-1, 1]) {
+      minX = Math.min(minX, tx + sw * (STAIR.w / 2) * rad[0] + sd * (depth / 2) * tan[0]);
+      maxZ = Math.max(maxZ, tz + sw * (STAIR.w / 2) * rad[1] + sd * (depth / 2) * tan[1]);
+    }
+    // The top tread laps west onto the paving, which is slab, not a bridge over the flight...
+    expect(minX).toBeLessThan(VOID.x0);
+    expect(minX).toBeGreaterThan(LANDING.x0);
+    // ...and nothing else in the sweep reaches the slab south of the void.
+    expect(maxZ).toBeLessThan(VOID.z1);
   });
 
-  it('carries the stair on convex hulls, since a helix is not convex', () => {
+  it('carries the stair on one convex hull per tread, since a helix is not convex', () => {
+    // Three treads to a hull made each hull's outer edge a chord, and the arc bulges 0.22 m
+    // outside it at mid span: a hole with the whole drop below it. One tread to a hull is 1.4 cm.
     const nearStair = (h: Extract<ColliderSpec, { kind: 'hull' }>): boolean =>
       h.points.some((_, i) => i % 3 === 0 && Math.abs(h.points[i]) < 4.5);
     const hulls = built.colliders
       .filter((c): c is Extract<ColliderSpec, { kind: 'hull' }> => c.kind === 'hull')
       .filter(nearStair);
-    expect(hulls.length).toBeGreaterThanOrEqual(4);
-    const ys: number[] = [];
-    for (const h of hulls) for (let i = 1; i < h.points.length; i += 3) ys.push(h.points[i]);
-    expect(Math.min(...ys)).toBeCloseTo(HOUSE.floor0, 1);
-    expect(Math.max(...ys)).toBeGreaterThan(HOUSE.floor1 - 0.3);
+    expect(hulls.length).toBeGreaterThanOrEqual(STAIR.treads);
+    // Their tops climb the whole storey, floor to floor.
+    const tops = hulls.map((h) => {
+      let top = -Infinity;
+      for (let i = 1; i < h.points.length; i += 3) top = Math.max(top, h.points[i]);
+      return top;
+    });
+    expect(Math.min(...tops)).toBeLessThan(HOUSE.floor0 + 0.4);
+    expect(Math.max(...tops)).toBeCloseTo(HOUSE.floor1, 1);
   });
 
   it('floors the whole bar except the open part of the stairwell', () => {
     const floor = built.colliders.filter((c) =>
       c.kind === 'box' && Math.abs(c.center[1] + c.half[1] - HOUSE.floor1) < 0.01) as Extract<ColliderSpec, { kind: 'box' }>[];
-    // Three pieces: the void reaches the bar's west wall, so the strip west of it is degenerate.
-    expect(floor.length).toBeGreaterThanOrEqual(3);
+    // Four pieces: the void is the stairwell now, not the whole west end of the bar.
+    expect(floor.length).toBeGreaterThanOrEqual(4);
     const covered = (x: number, z: number) => floor.some((c) =>
       Math.abs(x - c.center[0]) <= c.half[0] + 1e-6 && Math.abs(z - c.center[2]) <= c.half[2] + 1e-6);
     for (let x = BAR.x0 + 0.5; x < BAR.x1; x += 1.5) {
       for (let z = BAR.z0 + 0.5; z < BAR.z1; z += 1.5) {
-        // The landing sits inside the void on purpose: it is what the stair steps off onto.
-        const onLanding = x > LANDING.x0 && x < LANDING.x1 && z > LANDING.z0 && z < LANDING.z1;
-        const inVoid = x > VOID.x0 && x < VOID.x1 && z > VOID.z0 && z < VOID.z1 && !onLanding;
+        // The landing is paving laid on the slab now, not a slab bridging the void, so the hole
+        // is simply the hole - and the flight has to fit inside it (Stair.test.ts).
+        const inVoid = x > VOID.x0 && x < VOID.x1 && z > VOID.z0 && z < VOID.z1;
         expect(covered(x, z)).toBe(!inVoid);
       }
     }

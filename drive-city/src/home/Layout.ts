@@ -204,11 +204,26 @@ export const STAIR = {
   rise: 0.19, treads: 20,
 };
 
-/** The void the stair rises through, and so where the first-floor slab is not. */
-export const VOID = { x0: -4, x1: 4, z0: -6, z1: 0.9 };
+/**
+ * The void the stair rises through, and so where the first-floor slab is not.
+ *
+ * It must contain the flight's whole swept footprint with clearance over every tread, or the slab
+ * caps the stair. Both numbers here were hand-typed against a helix that does not fit them: the
+ * void stopped at z 0.9 while the sweep reaches 1.36, and the landing was a separate slab sitting
+ * 0.25 m above tread 13 - so you climbed to 3.5 m and met the underside of a floor at chest
+ * height, with six more treads walled up inside it. The flight sweeps x -0.52..3.37, z -5.36..1.36
+ * (centre + outer radius, plus the tread's tangential half depth), so the hole clears it all round
+ * except on the west, where the last tread is meant to lap onto the floor. `Stair.test.ts` asserts
+ * the headroom over every tread rather than trusting these numbers again.
+ */
+export const VOID = { x0: -0.5, x1: 3.5, z0: -5.6, z1: 1.5 };
 
-/** The landing the stair steps off onto, bridging the void's south edge to the slab. */
-export const LANDING = { x0: -3.2, x1: 2.4, z0: -0.6, z1: 0.9 };
+/**
+ * Where the flight arrives: stone paving let into the boards west of the void, flush with them.
+ * Not a slab of its own - it is part of the first floor, which is exactly why the last tread can
+ * be flush with it while the treads below it stay in open air.
+ */
+export const LANDING = { x0: -4, x1: VOID.x0, z0: -0.6, z1: VOID.z1 };
 
 /** Infinity pool along the terrace, dark water, coping flush with the plinth. */
 export const POOL = { x0: 2, x1: 26, z0: 12.5, z1: 18.5 };

@@ -4,7 +4,7 @@ import type { CameraApi, HudApi, PlayerApi, VehicleApi, WantedApi, WorldApi } fr
 import { registerPose } from '../debug/PoseRegistry';
 import type { UiApi } from '../ui';
 import type { HomeSystem } from '.';
-import { ANCHOR, DOOR, ENTRY, GARAGE, HOUSE, PARK_AT, ROOM, STAIR, TERRACE, UPPER_ROOM } from './Layout';
+import { ANCHOR, DOOR, ENTRY, GARAGE, HOUSE, LANDING, PARK_AT, ROOM, STAIR, TERRACE, UPPER_ROOM, VOID } from './Layout';
 
 /**
  * 我家 screenshot poses (`node scripts/shot.mjs --world city --poses home_...`).
@@ -121,6 +121,59 @@ export function registerHomePoses(): void {
       standAt(e, STAIR.cx + 5.5, STAIR.cz + 4, F0 + 0.1, Math.PI);
       run(e, 0.4, 0);
       await shot(e, [STAIR.cx + 6.0, F0 + 1.7, STAIR.cz + 4.5], [STAIR.cx, F0 + 2.6, STAIR.cz], 70);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  /**
+   * The stair, from the four angles the bug reports came from: at the foot looking up it, in
+   * elevation with a person beside it for scale, from the landing looking back down, and standing
+   * on the first floor at the edge of the void. A flight that reads wrong reads wrong here.
+   */
+  registerPose({
+    name: 'home_stair_foot',
+    description: 'At the foot of the curved stair looking up the flight: tread spacing and the climb ahead.',
+    async apply(e) {
+      await base(e);
+      standAt(e, STAIR.cx - 0.4, STAIR.cz - 4.2, F0 + 0.1, 0);
+      run(e, 0.4, 0);
+      await shot(e, [STAIR.cx - 1.4, F0 + 1.65, STAIR.cz - 4.6], [STAIR.cx + 2.2, F0 + 1.9, STAIR.cz - 0.6], 74);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_stair_scale',
+    description: 'The whole flight in elevation with a person standing at its foot: riser height against a human.',
+    async apply(e) {
+      await base(e);
+      standAt(e, STAIR.cx - 0.4, STAIR.cz - 3.9, F0 + 0.1, Math.PI / 2);
+      run(e, 0.4, 0);
+      await shot(e, [STAIR.cx + 15, F0 + 2.2, STAIR.cz - 1.0], [STAIR.cx, F0 + 2.2, STAIR.cz - 1.0], 42);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_stair_top',
+    description: 'From the landing looking back down the flight: does the stair arrive, and is the top tread flush?',
+    async apply(e) {
+      await base(e);
+      standAt(e, (LANDING.x0 + LANDING.x1) / 2, LANDING.z1 - 0.5, F1 + 0.1, Math.PI);
+      run(e, 0.4, 0);
+      await shot(e, [STAIR.cx - 0.6, F1 + 1.6, LANDING.z1 + 0.4], [STAIR.cx + 2.4, F0 + 1.2, STAIR.cz - 1.5], 76);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_void',
+    description: 'Standing on the first floor at the edge of the stairwell: the slab edge, the rail and the landing.',
+    async apply(e) {
+      await base(e);
+      standAt(e, VOID.x0 - 1.4, VOID.z0 + 2.0, F1 + 0.1, Math.PI / 2);
+      run(e, 0.4, 0);
+      await shot(e, [VOID.x0 - 2.4, F1 + 1.65, VOID.z0 + 1.6], [VOID.x1 - 1.0, F1 - 0.8, VOID.z1 - 1.5], 80);
       run(e, 0.6, 0.6);
     },
   });
