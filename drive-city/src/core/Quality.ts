@@ -79,20 +79,38 @@ export interface QualitySettings {
   wetRipples: boolean;
 }
 
-const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, coarse ? 1.3 : 4) : 1;
+/**
+ * Device pixels per CSS pixel in the drawing buffer, before `maxPixels` trims it.
+ *
+ * The budget that matters is the *number* of pixels (`maxPixels`, applied by `Engine.baseRatio`),
+ * not the ratio: a 2 MP buffer costs the same whether it came from a big window at 1x or a small
+ * one at 2x. Capping the ratio as well double-counts the same budget, and it double-counts hardest
+ * exactly where it hurts - a phone, where CSS pixels are few and device pixels are many. A 3x
+ * iPhone in landscape is 750x342 CSS, so `pixelRatio: 1` drew 0.26 MP and let the browser blow it
+ * up 3x onto a 2250x1026 screen - one rendered pixel per nine physical ones, and six times *under*
+ * the low tier's own 1.6 MP budget. That was the whole of "it looks terrible on my phone"; the old
+ * `coarse ? 1.3` clamp was the same mistake made twice.
+ *
+ * So: one cap, at 2, where further device pixels stop being visible, and `maxPixels` does the
+ * budgeting. Where the window is big enough for that budget to bind, the buffer is unchanged -
+ * 1920x1080 at low is ratio 0.879 either way, because the cap is on pixels, not on the ratio.
+ */
+const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
 
 export const QUALITY: Record<QualityTier, QualitySettings> = {
   low: {
-    tier: 'low', pixelRatio: 1, antialias: true, shadowMapSize: 1024, shadowExtent: 40, anisotropy: 2,
+    tier: 'low', pixelRatio: dpr, antialias: true, shadowMapSize: 1024, shadowExtent: 40, anisotropy: 4,
     textureRes: 512, canvasTextureRes: 1024, smokeParticles: 160, skidSegments: 1500, propDensity: 0.5,
-    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.6, maxRenderScale: 1, maxPixels: 1.6, frameCap: 60,
+    // Floor at 0.75, not 0.6: at this tier the frame is dominated by fixed per-frame cost (~180 draw
+    // calls), not fill - measured on one phone-sized buffer, 4x the pixels cost +32% of a frame - so
+    // shedding pixels buys the governor little and it would otherwise park a phone at 0.09 MP for it.
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.75, maxRenderScale: 1, maxPixels: 1.6, frameCap: 60,
     shadowCascades: 1, csmMapSize: 1024, shadowDistance: 40, shadowPcfTaps: 5, ao: 0, aoSamples: 8, aoRadius: 1.2,
     bloomLevels: 4, smaaPreset: 0, motionBlurSamples: 0, cloudSteps: 0, sunShafts: false, filmGrain: 0.012, sharpen: 0,
     skyLutSize: 128, skySteps: 14, envSize: 64, rainStreaks: 2500, wetRipples: false,
   },
   medium: {
-    tier: 'medium', pixelRatio: Math.min(1.5, dpr), antialias: true, shadowMapSize: 2048, shadowExtent: 55, anisotropy: 4,
+    tier: 'medium', pixelRatio: dpr, antialias: true, shadowMapSize: 2048, shadowExtent: 55, anisotropy: 4,
     textureRes: 1024, canvasTextureRes: 2048, smokeParticles: 320, skidSegments: 3000, propDensity: 0.8,
     adaptiveResolution: true, targetFps: 60, minRenderScale: 0.6, maxRenderScale: 1, maxPixels: 2.4, frameCap: 60,
     shadowCascades: 2, csmMapSize: 2048, shadowDistance: 120, shadowPcfTaps: 8, ao: 1, aoSamples: 12, aoRadius: 1.4,
@@ -100,7 +118,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     skyLutSize: 192, skySteps: 20, envSize: 128, rainStreaks: 5000, wetRipples: true,
   },
   high: {
-    tier: 'high', pixelRatio: Math.min(2, dpr), antialias: true, shadowMapSize: 4096, shadowExtent: 70, anisotropy: 8,
+    tier: 'high', pixelRatio: dpr, antialias: true, shadowMapSize: 4096, shadowExtent: 70, anisotropy: 8,
     textureRes: 2048, canvasTextureRes: 2048, smokeParticles: 600, skidSegments: 5000, propDensity: 1,
     adaptiveResolution: true, targetFps: 60, minRenderScale: 0.6, maxRenderScale: 1, maxPixels: 3.6, frameCap: 60,
     shadowCascades: 3, csmMapSize: 2048, shadowDistance: 200, shadowPcfTaps: 12, ao: 2, aoSamples: 16, aoRadius: 1.5,
