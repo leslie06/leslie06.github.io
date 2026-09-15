@@ -50,6 +50,8 @@ const EXPORTS = [
   'SEG_LEN','ROAD_W','UNITS_PER_KM','DRAW_DIST','PLAYER_Z','showShop','showTitle','buyBike',
   'fireNitro','saveGame','loadSave','hasProgress','togglePause','finishRace',
   'PRIZE','FINISH_FEE','KO_PAY','RIVAL_TOP','NITRO_COST','BOOST_T','WIND_RIVAL',
+  'TRACK_N','TRACK_KEYS','DIFFS','BOSSES','HAZ','WALL_GAP','WALL_SLAM','newCareer','racePay','Weather',
+  'showDiffPick','bestOf','showResults','GUARD_T',
 ];
 /* 这些会被重新赋值，只能用取值器读，直接抄一份会拿到旧的。 */
 const GETTERS = ['Cop','PlayerWreck','W','H','frameCount','freezeT','flash','horizonY'];

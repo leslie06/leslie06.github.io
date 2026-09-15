@@ -8,5 +8,5 @@ for (const f of ['fuzz.js', 'playtest.js']) {
   try { execFileSync(process.execPath, [path.join(__dirname, f)], { stdio: 'inherit' }); }
   catch (e) { bad++; }
 }
-console.log('\n（想看画面：node tools/shot.js，会把五条街各画一帧存进 shots/）');
+console.log('\n（想看画面：node tools/shot.js，会把八条街各画一帧存进 shots/）');
 process.exit(bad ? 1 : 0);

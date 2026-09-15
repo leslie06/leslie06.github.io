@@ -22,7 +22,8 @@ const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
 let bad = 0;
 const say = (ok, msg) => { console.log((ok ? '  ✓ ' : '  ✗ ') + msg); if (!ok) bad++; };
 
-for (let t = 0; t < 5; t++) {
+for (let t = 0; t < G.TRACK_N; t++) {
+  G.Game.diff = t % G.DIFFS.length;              // 顺带把四档难度都跑一遍
   G.startRace(t);
   while (G.Game.state === 'pre') step(G, { hold: ['arrowup'] });   // 先把倒计时走完
   const frames = SECS * 60;
@@ -106,15 +107,22 @@ try {
   step(G, { hold: ['arrowup'] });
   say(G.Game.state === 'results', '冲线后结算页画得出来');
 
-  // 7. 每条赛道的几何都是连续的
+  // 7. 选难度页、换难度、结算页（没过关 / 过关 / 通关）都画得出来
+  G.Game.unlocked = 3;
+  G.showDiffPick(true); G.showDiffPick(false);
+  for (let d = 0; d < G.DIFFS.length; d++) { G.Game.diff = d; G.showShop(); G.startRace(G.TRACK_N - 1); while (G.Game.state === 'pre') step(G, {}); G.Player.z = G.Road.finishZ + 10; step(G, {}); }
+  say(G.Game.state === 'results', '四档难度的车行和最后一场的结算页都画得出来');
+  G.Game.diff = 1; G.Game.unlocked = 2;
+
+  // 8. 每条赛道的几何都是连续的
   let gaps = 0;
-  for (let t = 0; t < 5; t++) {
+  for (let t = 0; t < G.TRACK_N; t++) {
     G.buildTrack(t);
     const sg = G.Road.segs;
     for (let i = 1; i < sg.length; i++) if (Math.abs(sg[i].p1.y - sg[i - 1].p2.y) > 1e-6) gaps++;
     for (const s of sg) if (!isFinite(s.p1.y) || !isFinite(s.curve)) gaps++;
   }
-  say(gaps === 0, '五条赛道的路面接得上、没有 NaN');
+  say(gaps === 0, G.TRACK_N + ' 条赛道的路面接得上、没有 NaN');
 } catch (e) {
   console.log('  ✗ 边角用例抛异常：' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 3).join('\n'));
   process.exit(1);

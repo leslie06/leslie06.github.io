@@ -65,7 +65,7 @@ function load() {
   (0, eval)(src +
     '\n;globalThis.__G__={Player,Rivals,Traffic,Game,Road,Input,update,render,startRace,segAt,' +
     'UNITS_PER_KM,doAttack,wipeout,Pickups,PLAYER_PAL,RIDER_PAL,COP_PAL,CAR_SPECS,Cam,' +
-    'DRAW_DIST,SEG_LEN,BIKES,roadY,' +
+    'DRAW_DIST,SEG_LEN,BIKES,roadY,BOSSES,RIG_SPECS,' +
     'drawRider,drawCar,drawTumble,drawRunner,drawWreck,drawPickup,' +
     'get Cop(){return Cop},get W(){return W},get H(){return H},get PX(){return PX}};');
   return { G: globalThis.__G__, els };
@@ -118,12 +118,12 @@ if (process.argv.includes('--cost')) {
   cx.lineTo = (...a) => { n.pt++; return ol(...a); };
   cx.moveTo = (...a) => { n.pt++; return om(...a); };
   cx.fillRect = (...a) => { n.rect++; return orr(...a); };
-  for (const t of [0, 3]) {
+  for (const t of [0, 3, 5, 7]) {                  // 后两条带护墙
     G.startRace(t);
     while (G.Game.state === 'pre') G.update(1 / 60);
     drive(60 * 20);
     for (const sg of G.Road.segs) sg.sprites.length = 0;
-    G.Rivals.length = 0; G.Traffic.length = 0;    // 只留路面
+    G.Rivals.length = 0; G.Traffic.length = 0;    // 只留路面（和护墙）
     n.fill = n.pt = n.rect = 0;
     const F = 30;
     for (let f = 0; f < F; f++) { G.Player.speed = G.Player.maxSpeed; drive(1); G.render(); }
@@ -221,6 +221,16 @@ if (process.argv.includes('--vec')) {
     cell(g => G.drawCar(g, G.CAR_SPECS[4], false, 0)),
     cell(g => G.drawCar(g, G.CAR_SPECS[6], true, 0)),
     cell(g => G.drawCar(g, G.CAR_SPECS[8], false, 0)),
+    cell(g => G.drawRider(g, P, { tilt: .4, atk: 1, wep: 3 }, 0)),
+    cell(g => G.drawRider(g, P, { tilt: -.2, wind: -1, wep: 3 }, 0)),
+    cell(g => G.drawRider(g, P, { tilt: .4, atk: 1, wep: 4 }, 0)),
+    cell(g => G.drawRider(g, P, { tilt: .2, wind: 1, wep: 4 }, 0)),
+    cell(g => G.drawRider(g, G.BOSSES[7].pal, { tilt: 0, wep: 2 }, 0)),
+    cell(g => G.drawPickup(g, 3, 0)),
+    cell(g => G.drawPickup(g, 4, 0)),
+    cell(g => G.drawCar(g, G.RIG_SPECS[0], false, 0)),
+    cell(g => G.drawCar(g, G.RIG_SPECS[3], true, 0)),
+    cell(g => G.drawRider(g, G.BOSSES[4].pal, { tilt: .3, wind: 1, wep: 4 }, 0)),
   ];
   const COLS = 5, CW = 150, CH = 150;
   const rows = Math.ceil(big.length / COLS);
@@ -251,7 +261,7 @@ if (process.argv.includes('--vec')) {
 /* --corner：把玩家钉在每条街最弯的地方、钉在顶速，画一帧。
    这正是「转弯看不见对面车」的现场：看得见多少路、车被相机推开多远，一张图见分晓。 */
 if (process.argv.includes('--corner')) {
-  for (let t = 0; t < 5; t++) {
+  for (let t = 0; t < 8; t++) {
     G.startRace(t);
     while (G.Game.state === 'pre') G.update(1 / 60);
     const sg = G.Road.segs;
@@ -299,8 +309,13 @@ const SHOTS = [
   { t: 2, sec: 30, nm: '3-滨江' },
   { t: 3, sec: 18, nm: '4-工业区' },
   { t: 4, sec: 26, nm: '5-夜战' },
+  { t: 5, sec: 20, nm: '6-盘山' },
+  { t: 6, sec: 24, nm: '7-港口' },
+  { t: 7, sec: 22, nm: '8-暴雨高架' },
 ];
+const ONLY = (process.argv.find(a => a.startsWith('--only=')) || '').slice(7);
 for (const s of SHOTS) {
+  if (ONLY && !ONLY.split(',').includes(String(s.t))) continue;
   G.startRace(s.t);
   while (G.Game.state === 'pre') G.update(1 / 60);
   drive(Math.round(s.sec * 60));
@@ -325,6 +340,7 @@ for (const s of SHOTS) {
               ' 地平线上方' + smp(px._r.w >> 1, Math.round(G.H * .48)));
 }
 
+if (ONLY) process.exit(0);
 // 打斗特写：把一个对手按在身边，出手那一帧
 G.startRace(0);
 while (G.Game.state === 'pre') G.update(1 / 60);

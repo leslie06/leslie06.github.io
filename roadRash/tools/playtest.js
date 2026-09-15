@@ -75,12 +75,8 @@ function shop() {
   }
 }
 
-const board = [];
-for (let run = 0; run < RUNS; run++) {
-  // 一整个生涯：从零开始，跑一场买一次车
-  G.Game.money = 0; G.Game.owned = [true, false, false, false]; G.Game.bike = 0;
-  for (let t = 0; t < 5; t++) {
-    shop();
+/* 跑一场：返回这一场的成绩单 */
+function race(t) {
     const bike = G.BIKES[G.Game.bike], purse = G.Game.money;
     G.startRace(t);
     let f = 0;
@@ -103,20 +99,24 @@ for (let run = 0; run < RUNS; run++) {
       crashes: G.Game.crashes, hits: G.Game.hits, kills: G.Game.takedowns,
       maxKmh: Math.round(maxSpd / 60), offPct: Math.round(offroad / n * 100),
       airPct: Math.round(air / n * 100), money: G.Game.money, paid: G.Game.money - purse, rivalDown,
-      km: (G.Road.finishZ / G.UNITS_PER_KM).toFixed(2),
+      km: (G.Road.finishZ / G.UNITS_PER_KM).toFixed(2), diff: G.Game.diff,
     };
-    board.push(line);
-    console.log(
-      (done ? '\u2713' : '\u2717') + ' ' + line.track.padEnd(5, '\u3000') +
+    return line;
+}
+const board = [];
+const show = line => console.log(
+      (line.ok ? '\u2713' : '\u2717') + ' ' + line.track.padEnd(5, '\u3000') +
       ' [' + line.bike.padEnd(6, '\u3000') + ']' +
       ' 第' + line.rank + '名' +
       '  ' + line.time.toFixed(1) + 's / ' + line.km + 'km' +
       '  极速 ' + line.maxKmh +
       '  命中 ' + line.hits + ' 撂倒 ' + line.kills + ' 摔 ' + line.crashes +
       '  出界 ' + line.offPct + '%  腾空 ' + line.airPct + '%  对手翻 ' + line.rivalDown +
-      '  +$' + line.paid + ' → $' + line.money);
-    if (!done) console.log('   \u2191 没跑完，state=' + G.Game.state);
-  }
+      '  +$' + line.paid + ' → $' + line.money + (line.ok ? '' : '\n   \u2191 没跑完'));
+for (let run = 0; run < RUNS; run++) {
+  // 一整个生涯（老手）：从零开始，跑一场买一次车
+  G.Game.unlocked = 2; G.newCareer(1);
+  for (let t = 0; t < G.TRACK_N; t++) { shop(); const l = race(t); board.push(l); show(l); }
 }
 
 
@@ -128,6 +128,8 @@ function bench() {
   let bad = 0;
   const say = (ok, msg) => { console.log((ok ? '  \u2713 ' : '  \u2717 ') + msg); if (!ok) bad++; };
 
+  // 台架不吃生涯的车：跑完生涯手上是哪台车，会改变后面每一条的现场（车快了会一头扎进对手堆里）
+  G.Game.owned = G.BIKES.map((_, i) => i === 0); G.Game.bike = 0; G.Game.diff = 1;
   // 1. 徒手能不能把人踹下车，几下
   G.startRace(0);
   while (G.Game.state === 'pre') step(G, {});
@@ -158,6 +160,10 @@ function bench() {
   const dmg = G.WEPS.map(w => w.dmg / w.cd);
   say(dmg[0] < dmg[1] && dmg[1] < dmg[2], '徒手 < 木棍 < 铁链（每秒伤害 ' + dmg.map(d => d.toFixed(0)).join(' / ') + '）');
   say(G.WEPS[0].reach < G.WEPS[2].reach, '武器越好够得越远');
+  const W = G.WEPS;
+  say(W[3].cd === Math.min(...W.map(w => w.cd)), '双节棍出手最快（' + W[3].cd + 's）');
+  say(W[4].dmg === Math.max(...W.map(w => w.dmg)) && W[4].shove === Math.max(...W.map(w => w.shove)), '撬棍一下最疼、顶得最远');
+  say(W.every(w => w.dmg / w.cd < 80), '没有哪件家伙每秒伤害离谱（最高 ' + Math.max(...W.map(w => w.dmg / w.cd)).toFixed(0) + '）');
 
   // 4. 摔了必须能重新骑上，而且不能卡在路上
   G.startRace(0);
@@ -181,8 +187,9 @@ function bench() {
   say(!!G.Cop, '够条件时警察会出现');
   if (G.Cop) {
     const cop = G.Cop;
-    G.Traffic.length = 0;                                // 单独量抓捕，别让路上的车和路障来搅局
+    G.Traffic.length = 0;                                // 单独量抓捕，别让路上的车、路障和对手来搅局
     for (const sg of G.Road.segs) for (const it of sg.sprites) it.hazard = false;
+    for (const o of G.Rivals) o.z = P.z + 40000;
     let busted = 0;
     for (let i = 0; i < 60 * 16; i++) {
       cop.z = P.z - 400; cop.x = P.x;                     // 死死贴住，不还手
@@ -206,8 +213,9 @@ function bench() {
   /* 13. 躲得掉吗：对向车第一次出现在屏幕上时，离撞上还剩多少时间。
      急弯会把路面横着推出画面，车是从画面外冒出来的；如果剩余时间比一次变道
      还短，那不是难，是没法躲。两个数一起卡：最险的一次，和"来不及"的次数。 */
+  const FAST = G.BIKES.length - 1;              // 最快也最难拐的那台
   const laneT = (() => {                        // 满速拨过一条道要多久（.42 是相邻车道间距）
-    G.Game.owned = [true,true,true,true]; G.Game.bike = 3;
+    G.Game.owned = G.BIKES.map(() => true); G.Game.bike = FAST;
     G.startRace(0);
     while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
     const sg = G.Road.segs;
@@ -223,7 +231,7 @@ function bench() {
      车 0.03s 就往回走了，画面却要 0.22s，手感上就是打了方向没反应。前馈修掉之后
      应该是一帧的事；这条卡住，免得以后动相机跟随时又把它带回来。 */
   const flipT = (() => {
-    G.Game.owned = [true,true,true,true]; G.Game.bike = 3;
+    G.Game.owned = G.BIKES.map(() => true); G.Game.bike = FAST;
     G.startRace(0);
     while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
     const sg = G.Road.segs;
@@ -243,8 +251,8 @@ function bench() {
   say(flipT < .06, '反打之后画面立刻跟着反（' + flipT.toFixed(3) + 's）');
 
   const warn = [];
-  for (let t = 0; t < 5; t++) {
-    G.Game.bike = 3; G.startRace(t);
+  for (let t = 0; t < G.TRACK_N; t++) {
+    G.Game.bike = FAST; G.startRace(t);
     while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
     const seen = new Set();
     for (let f = 0; f < 30 * 60; f++) {
@@ -265,7 +273,7 @@ function bench() {
   const tight = warn.filter(v => v < laneT * 1.5).length;
   say(warn[0] > laneT, '最险的一次也还够变一次道（' + warn[0].toFixed(2) + 's vs 变道 ' + laneT.toFixed(2) + 's）');
   say(tight / warn.length < .06, '来不及躲的不到 6%（' + tight + '/' + warn.length + '）');
-  G.Game.owned = [true, false, false, false]; G.Game.bike = 0;
+  G.Game.owned = G.BIKES.map((_, i) => i === 0); G.Game.bike = 0;
 
   /* ---- 14. 对手出手有前摇：看得见、躲得开、打得断 ----
      原来对手出脚当帧就扣血，只能跟他比手速。这几条卡住，免得以后又改回"瞬发" */
@@ -383,41 +391,199 @@ function bench() {
   {
     const store = {};
     global.window.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
-    G.Game.money = 4321; G.Game.owned = [true, true, false, false]; G.Game.bike = 1; G.Game.track = 3;
-    G.Game.best = [90.5, null, 101.2, null, null];
+    const clean = () => { G.Game.money = 0; G.Game.owned = G.BIKES.map((_, i) => i === 0); G.Game.bike = 0; G.Game.track = 0;
+                          G.Game.diff = 1; G.Game.unlocked = 2; G.Game.careerMin = 1; G.Game.best = G.DIFFS.map(() => new Array(G.TRACK_N).fill(null)); };
+    G.Game.money = 4321; G.Game.owned = [true, true, false, false, true]; G.Game.bike = 4; G.Game.track = 6;
+    G.Game.unlocked = 3; G.Game.diff = 3; G.Game.careerMin = 2;
+    G.Game.best[3][6] = 101.2;
     G.saveGame();
-    G.Game.money = 0; G.Game.owned = [true, false, false, false]; G.Game.bike = 0; G.Game.track = 0; G.Game.best = [null, null, null, null, null];
+    clean();
     const ok = G.loadSave();
-    say(ok && G.Game.money === 4321 && G.Game.owned[1] && G.Game.bike === 1 && G.Game.track === 3 && G.Game.best[2] === 101.2, '存档存得进、读得回');
-    store['roadRash.save.v1'] = '{"v":1,"money":-5,"bike":3,"owned":[false,false,false,false],"track":99}';
+    say(ok && G.Game.money === 4321 && G.Game.owned[4] && G.Game.bike === 4 && G.Game.track === 6 && G.Game.diff === 3 &&
+        G.Game.unlocked === 3 && G.Game.careerMin === 2 && G.Game.best[3][6] === 101.2, '存档存得进、读得回（难度、解锁、第五台车、分难度的最佳成绩）');
+    store['roadRash.save.v2'] = '{"v":2,"money":-5,"bike":4,"owned":[false,false,false,false,false],"track":99,"diff":3,"unlocked":1}';
     G.loadSave();
-    say(G.Game.money === 0 && G.Game.bike === 0 && G.Game.owned[0] && G.Game.track === 4, '坏档读进来会被纠正，不会卡死');
-    store['roadRash.save.v1'] = 'not json';
+    say(G.Game.money === 0 && G.Game.bike === 0 && G.Game.owned[0] && G.Game.track === G.TRACK_N - 1 && G.Game.unlocked === 2 && G.Game.diff === 2,
+        '坏档读进来会被纠正（没解锁的难度退回去），不会卡死');
+    store['roadRash.save.v2'] = 'not json';
     say(G.loadSave() === false, '存档损坏就当新游戏');
+    delete store['roadRash.save.v2']; clean();
+    store['roadRash.save.v1'] = JSON.stringify({ v: 1, money: 2500, bike: 2, owned: [true, true, true, false], track: 4, best: [90.5, null, 101.2, null, null], muted: true });
+    say(G.loadSave() && G.Game.money === 2500 && G.Game.bike === 2 && G.Game.track === 4 && G.Game.diff === 1 && G.Game.owned.length === G.BIKES.length &&
+        G.Game.best[1][2] === 101.2 && G.Game.best[1][7] === null && G.Game.best[2][0] === null, '老版本存档读进来接着玩（当老手，最佳成绩挂在老手下面）');
     delete global.window.localStorage;
-    G.Game.money = 0; G.Game.owned = [true, false, false, false]; G.Game.bike = 0; G.Game.track = 0;
+    clean();
   }
 
   /* ---- 18. 经济：按"每场都进前二、买得起就换车"的进度，没有一场的车比多数对手慢 ----
-     原来就算场场第一，第三场和第五场也只买得起比一半以上对手慢的车 */
-  {
+     原来就算场场第一，第三场和第五场也只买得起比一半以上对手慢的车。
+     难一点的档允许多一个：对手本来就该更快，奖金倍率是拿来追的，不是拿来抹平的 */
+  for (let d = 0; d < G.DIFFS.length; d++) {
     const worst = [];
+    const cap = d <= 1 ? 2 : 3;
     for (const place of [1, 2]) {
-      let money = 0, owned = [true, false, false, false], bike = 0;
-      for (let t = 0; t < 5; t++) {
-        for (let i = 3; i >= 0; i--) if (!owned[i] && money >= G.BIKES[i].price) { money -= G.BIKES[i].price; owned[i] = true; bike = i; break; }
-        G.startRace(t);
+      let money = 0, owned = G.BIKES.map((_, i) => i === 0), bike = 0;
+      for (let t = 0; t < G.TRACK_N; t++) {
+        for (let i = G.BIKES.length - 1; i >= 0; i--) if (!owned[i] && money >= G.BIKES[i].price) { money -= G.BIKES[i].price; owned[i] = true; bike = i; break; }
+        G.Game.diff = d; G.startRace(t);
         const faster = G.Rivals.filter(r => r.maxSpeed > G.BIKES[bike].top).length;
         worst.push({ place, t, faster, bike: G.BIKES[bike].nm });
-        money += G.FINISH_FEE[t] + G.PRIZE[t][place - 1] + 2 * G.KO_PAY;
+        G.Game.takedowns = 2; G.Game.bounty = 0;
+        money += G.racePay(place);
       }
     }
     const w = worst.reduce((a, b) => (b.faster > a.faster ? b : a));
-    say(w.faster <= 2, '场场进前二的进度下，比你车快的对手每场最多 2 个（最多：第' + (w.t + 1) + '场 ' + w.bike + ' ' + w.faster + ' 个）');
-    G.Game.owned = [true, false, false, false]; G.Game.bike = 0;
+    say(w.faster <= cap, G.DIFFS[d].nm + '：场场进前二的进度下，比你车快的对手每场最多 ' + cap + ' 个（最多：第' + (w.t + 1) + '场 第' + w.place + '名进度 ' + w.bike + ' ' + w.faster + ' 个）');
+  }
+  G.Game.diff = 1; G.Game.owned = G.BIKES.map((_, i) => i === 0); G.Game.bike = 0;
+
+  /* ---- 19. 护墙：盘山和高架出不了路，贴墙掉速掉血；把人踹到墙上额外疼 ---- */
+  const wallTrack = G.TRACK_KEYS.indexOf('mount');
+  const clearRoad = () => {
+    G.Traffic.length = 0;
+    for (const sg of G.Road.segs) for (const it of sg.sprites) it.hazard = false;
+    for (const o of G.Rivals) { o.z = P.z + 40000; o.aggr = 0; }
+  };
+  {
+    G.startRace(wallTrack);
+    while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
+    clearRoad();
+    const lim = G.Road.theme.wall.x - G.WALL_GAP;
+    let maxX = 0, crashed = false;
+    const hp0 = P.hp, sp0 = [];
+    for (let f = 0; f < 60 * 6; f++) {
+      step(G, { hold:['arrowup', 'arrowright'] });
+      maxX = Math.max(maxX, P.x); if (P.state !== 'ride') crashed = true;
+      if (f === 60 * 2) sp0.push(P.speed);
+    }
+    say(maxX <= lim + 1e-6 && !crashed, '有护墙的街死命往外压也冲不出去（最远 x=' + maxX.toFixed(2) + '，墙 ' + lim.toFixed(2) + '）');
+    say(P.hp < hp0 && P.speed < P.maxSpeed * .5, '但贴着墙蹭要掉血掉速（血 ' + P.hp.toFixed(0) + '，速度 ' + (P.speed / P.maxSpeed * 100).toFixed(0) + '%）');
+  }
+  const slamTest = (x0) => {
+    G.startRace(wallTrack);
+    while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
+    for (let f = 0; f < 60 * 4; f++) step(G, { hold:['arrowup'] });
+    clearRoad(); P.hp = P.maxHp;
+    const r = G.Rivals[0]; r.hp = r.maxHp = 500; r.guardT = 0; r.armorT = 0; r.windT = 0; r.stun = 0;
+    r.z = P.z + 150; r.x = x0; r.speed = P.speed; P.x = x0 - .22; P.atkCd = 0; P.wep = 0;
+    const hp = r.hp;
+    step(G, { hold:['arrowup'], atkR: true });
+    return { lost: hp - r.hp, stun: r.stun };
+  };
+  {
+    const mid = slamTest(.1), edge = slamTest(1.02);
+    say(edge.lost >= mid.lost + G.WALL_SLAM - .01 && edge.stun > mid.stun,
+        '把人一脚踹到护墙上：比路中间多掉 ' + (edge.lost - mid.lost).toFixed(0) + ' 血、僵直 ' + edge.stun.toFixed(2) + 's（路中间 ' + mid.stun.toFixed(2) + 's）');
   }
 
+  /* ---- 20. 油污 / 积水：不摔，但会横着溜、方向打不回来 ---- */
+  for (const tag of ['oil', 'puddle']) {
+    const t = G.TRACK_KEYS.indexOf(tag === 'oil' ? 'port' : 'storm');
+    G.startRace(t);
+    while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
+    for (let f = 0; f < 60 * 4; f++) step(G, { hold:['arrowup'] });
+    clearRoad(); P.hp = P.maxHp; P.x = 0; P.steer = 0;
+    const sp = G.Road.segs.flatMap(sg => sg.sprites).find(it => it.sp && it.sp.tag === tag);
+    const i = Math.floor((P.z + P.speed * .3) / G.SEG_LEN);
+    G.Road.segs[i].sprites.push({ sp: sp.sp, off: 0, hazard: true });
+    let slid = false, drift = 0, x0 = 0;
+    for (let f = 0; f < 60 * 1.5; f++) {
+      step(G, { hold:['arrowup'] });                    // 手不动，看车自己往哪溜
+      if (!slid && P.slideT > 0) { slid = true; x0 = P.x; }
+      if (slid) drift = Math.max(drift, Math.abs(P.x - x0));
+    }
+    say(slid && P.state === 'ride', (tag === 'oil' ? '油污' : '积水') + '：压上去会打滑，但不摔');
+    say(drift > .1, (tag === 'oil' ? '油污' : '积水') + '：手不动车也会横着溜出去（' + drift.toFixed(2) + ' 路宽）');
+  }
+  {
+    const r = G.Rivals[1];
+    r.state = 'ride'; r.slideT = 0; r.z = P.z + 3000; r.x = 0; r.steer = 0; r.speed = r.maxSpeed;
+    const i = Math.floor((r.z + 400) / G.SEG_LEN);
+    const sp = G.Road.segs.flatMap(sg => sg.sprites).find(it => it.sp && it.sp.tag === 'puddle');
+    G.Road.segs[i].sprites.push({ sp: sp.sp, off: 0, hazard: true });
+    let slid = false;
+    for (let f = 0; f < 30 && !slid; f++) { r.x = 0; r.wantX = 0; step(G, { hold:['arrowup'] }); slid = r.slideT > 0; }
+    say(slid, '对手压上积水也一样打滑');
+  }
+
+  /* ---- 21. 悬赏头目 ---- */
+  {
+    const bossTracks = Object.keys(G.BOSSES).map(Number);
+    say(bossTracks.length >= 2 && bossTracks.includes(G.TRACK_N - 1), '最后一场有悬赏头目（共 ' + bossTracks.length + ' 个）');
+    for (const t of bossTracks) {
+      G.startRace(t);
+      const boss = G.Rivals.find(r => r.boss);
+      const others = G.Rivals.filter(r => !r.boss);
+      say(boss && boss.maxHp > Math.max(...others.map(r => r.maxHp)) && boss.maxSpeed > Math.max(...others.map(r => r.maxSpeed)) && boss.wep > 0,
+          '第' + (t + 1) + '场 ★' + (boss ? boss.pal.nm : '?') + '：比同场所有人都耐打、都快，手里有家伙');
+    }
+    const t = bossTracks[0];
+    G.startRace(t);
+    while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
+    clearRoad();
+    const boss = G.Rivals.find(r => r.boss);
+    boss.aggr = 0; boss.hp = 1;
+    for (let f = 0; f < 60 && boss.state === 'ride'; f++) { boss.z = P.z + 150; boss.x = P.x + .2; boss.speed = P.speed; step(G, { hold:['arrowup'], atkR: true }); }
+    const paid = G.Game.bounty;
+    say(boss.state === 'down' && paid === G.BOSSES[t].bounty, '亲手撂倒头目拿到悬赏（$' + paid + '）');
+    G.Game.takedowns = 1;
+    const withB = G.racePay(1); G.Game.bounty = 0; const without = G.racePay(1);
+    say(withB - without === Math.round(paid * G.DIFFS[G.Game.diff].pay / 10) * 10, '悬赏算进这一场的奖金');
+  }
+
+  /* ---- 22. 难度档：一档比一档难，而且难在该难的地方 ---- */
+  {
+    const stat = d => {
+      G.Game.diff = d; G.startRace(3);
+      const rv = G.Rivals.filter(r => !r.boss);
+      const avg = k => rv.reduce((a, r) => a + r[k], 0) / rv.length;
+      return { spd: avg('maxSpeed'), hp: avg('maxHp'), aggr: avg('aggr'), cars: G.Traffic.length, D: G.DIFFS[d] };
+    };
+    const S = G.DIFFS.map((_, d) => stat(d));
+    const up = k => S.every((s, i) => i === 0 || s[k] >= S[i - 1][k]);
+    say(up('spd') && up('hp') && up('aggr') && up('cars'), '对手极速、血量、出手意愿、车流一档比一档高');
+    say(S.every((s, i) => i === 0 || (s.D.wind < S[i - 1].D.wind && s.D.pay > S[i - 1].D.pay && s.D.pass <= S[i - 1].D.pass)),
+        '蓄力一档比一档短、奖金一档比一档高、过关名次不会变宽');
+    say(S[1].D.spd === 1 && S[1].D.aggr === 1 && S[1].D.wind === 1 && S[1].D.pay === 1 && S[1].D.pass === 3, '老手就是原来那套数值');
+    // 过关名次按难度走，亡命要疯子通关才解锁
+    G.Game.unlocked = 2; G.Game.diff = 2; G.Game.careerMin = 2;
+    G.startRace(G.TRACK_N - 1);
+    while (G.Game.state === 'pre') step(G, {});
+    P.z = G.Road.finishZ + 10;
+    for (const r of G.Rivals) r.z = P.z - 50000;
+    step(G, {});
+    say(G.Game.state === 'results' && G.Game.unlocked === 3, '疯子全程通关解锁亡命');
+    G.Game.unlocked = 2; G.Game.diff = 1; G.Game.careerMin = 0;
+    G.startRace(G.TRACK_N - 1);
+    while (G.Game.state === 'pre') step(G, {});
+    P.z = G.Road.finishZ + 10;
+    for (const r of G.Rivals) r.z = P.z - 50000;
+    step(G, {});
+    say(G.Game.unlocked === 2, '中途用过低难度的生涯通关，不解锁亡命');
+    G.Game.diff = 1; G.Game.careerMin = 1;
+  }
+  G.Game.diff = 1;
+
   return bad;
+}
+
+/* ---- 难度档：同一个机器人、同样的车，新手和亡命各跑一遍全部街道，名次要拉得开 ----
+   机器人同一条街能从第一跑到第八，中间两档挨得近，几场的样本分不出先后；
+   各档数值是不是一档比一档狠，由台架里的"难度档"那几条直接钉住 */
+const diffRank = [];
+{
+  const bikeFor = t => (t < 1 ? 0 : t < 3 ? 1 : t < 5 ? 2 : 3);
+  const saved = { money: G.Game.money, owned: G.Game.owned.slice(), bike: G.Game.bike, diff: G.Game.diff };
+  for (const d of [0, G.DIFFS.length - 1]) {
+    let sum = 0, pass = 0, n = 0;
+    for (let t = 0; t < G.TRACK_N; t++) {
+      G.Game.diff = d; G.Game.owned = G.BIKES.map(() => true); G.Game.bike = bikeFor(t);
+      const l = race(t);
+      sum += l.rank; n++; if (l.rank <= G.DIFFS[d].pass) pass++;
+    }
+    diffRank.push({ nm: G.DIFFS[d].nm, avg: sum / n, pass, n });
+  }
+  Object.assign(G.Game, saved);
 }
 
 /* ---- 难度曲线体检 ---- */
@@ -441,6 +607,9 @@ const air = board.map(b => b.airPct);
 say(Math.max(...air) >= 2, '路上有能飞起来的地方（最高腾空 ' + Math.max(...air) + '%）');
 say(Math.max(...air) <= 14, '但不能半程都在天上（最高腾空 ' + Math.max(...air) + '%）');
 say(board.every(b => +b.km > 3.2), '每条街都不短于 3.2km（最短 ' + Math.min(...board.map(b => +b.km)).toFixed(2) + 'km）');
+console.log('  （难度档，机器人平均名次：' + diffRank.map(r => r.nm + ' ' + r.avg.toFixed(1) + ' 过关 ' + r.pass + '/' + r.n).join('　') + '）');
+say(diffRank[1].avg - diffRank[0].avg >= 1, '同一个机器人，亡命比新手平均差出一个名次以上');
+say(diffRank[0].pass >= diffRank[1].pass + 2, '新手过关的场数比亡命多出两场以上');
 
 bad += bench();
 process.exit(bad ? 1 : 0);
