@@ -218,8 +218,9 @@
   /* 变向：左下一个圆形摇杆。按住圆的哪一侧就往哪边转，手指左右推就能换向，不用抬手。
      原来是一条横着的细滑块，只有六十来像素高，拇指很容易压到上下沿外面去。
      #steerZone 是比圆大得多的隐形触控区：落在圆外稍远的地方，摇杆会挪到拇指底下
-     （见 steerGrab），所以左下这一大块按哪儿都算数。 */
-  #steerZone{left:0;bottom:0;width:27vw;height:72vh;border:0;border-radius:0;background:none;}
+     （见 steerGrab），所以左下这一大块按哪儿都算数。触控区是透明的，放宽到 42vw
+     不挡画面；拇指玩久了落点往右漂也照样接得住，画出来的圆仍然不越过 27vw。 */
+  #steerZone{left:0;bottom:0;width:42vw;height:82vh;border:0;border-radius:0;background:none;}
   #kSteer{--d:34vmin;position:absolute;left:3vw;bottom:5vh;width:var(--d);height:var(--d);border-radius:50%;
     background:rgba(27,27,44,.5);border:2px solid rgba(244,240,228,.3);pointer-events:none;}
   #kSteer .arr{position:absolute;top:50%;transform:translateY(-50%);font-size:calc(var(--d) * .15);font-weight:900;
@@ -456,15 +457,47 @@ const touchState = { steer:0, brk:false };   // steer 是模拟量 -1..1
    有触屏的笔记本也会被判成 TOUCH，不能让键盘玩家的车自己往前冲。 */
 let touchMode = TOUCH;
 window.addEventListener('touchstart', () => { touchMode = true; }, { passive:true });
+/* 按键记住是哪几根手指按着的，全抬起来才算松开（刹车这种按住式的键靠它） */
+const holds = [];
 function bindPad(id, on, off) {
-  const el = document.getElementById(id);
-  const down = e => { e.preventDefault(); el.classList.add('dn'); on(); audioUnlock(); };
-  const up   = e => { e.preventDefault(); el.classList.remove('dn'); if (off) off(); };
-  el.addEventListener('touchstart', down, { passive:false });
-  el.addEventListener('touchend', up, { passive:false });
-  el.addEventListener('touchcancel', up, { passive:false });
-  el.addEventListener('mousedown', down);
-  window.addEventListener('mouseup', up);
+  const el = document.getElementById(id), h = { ids: new Set(), mouse: false };
+  h.release = () => { el.classList.remove('dn'); if (off) off(); };
+  holds.push(h);
+  el.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) h.ids.add(t.identifier);
+    el.classList.add('dn'); on(); audioUnlock();
+  }, { passive:false });
+  const end = e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) h.ids.delete(t.identifier);
+    if (!h.ids.size && !h.mouse) h.release();
+  };
+  el.addEventListener('touchend', end, { passive:false });
+  el.addEventListener('touchcancel', end, { passive:false });
+  el.addEventListener('mousedown', e => { e.preventDefault(); h.mouse = true; el.classList.add('dn'); on(); audioUnlock(); });
+  window.addEventListener('mouseup', () => { if (h.mouse) { h.mouse = false; if (!h.ids.size) h.release(); } });
+}
+
+/* 手指的抬起可能被系统吞掉：划出屏幕边、iOS 的三指手势和底部横条、来电、通知栏……
+   原来摇杆只认「按下时记住的那根手指」，它的 touchend 没来，steerId 就一直占着 ——
+   之后怎么按都被挡在外面，舵量还停在最后那个值；刹车键同理，会一直踩着。
+   现在每来一次触摸事件（捕获阶段，比按键自己的处理先跑）都拿 e.touches —— 屏幕上
+   真实还按着的手指 —— 对一遍账，对不上的就当它已经抬起了。 */
+const touchAlive = (e, id) => { for (const t of e.touches) if (t.identifier === id) return true; return false; };
+function pruneTouches(e) {
+  if (typeof steerId === 'number' && !touchAlive(e, steerId)) steerRelease();
+  for (const h of holds) {
+    if (!h.ids.size) continue;
+    for (const id of h.ids) if (!touchAlive(e, id)) h.ids.delete(id);
+    if (!h.ids.size && !h.mouse) h.release();
+  }
+}
+for (const type of ['touchstart', 'touchend', 'touchcancel'])
+  document.addEventListener(type, pruneTouches, { capture:true, passive:true });
+function releaseAllTouch() {
+  steerRelease();
+  for (const h of holds) { h.ids.clear(); h.mouse = false; h.release(); }
 }
 
 /* 变向摇杆：一根手指按住，横向偏离圆心多少就转多少，左右推动连续变化；上下不管。
@@ -472,25 +505,32 @@ function bindPad(id, on, off) {
    只在中间留一点比例区做微调。用 touch identifier 认手指，右手按别的键不会串。 */
 const STEER_DEAD = .1, STEER_FULL = .6;
 const STEER_FLOAT = 1.2;         // 拇指落点离圆心超过这么多个半径，就把摇杆挪过去
+const STEER_VIS = .27;           // 横屏时画出来的圆不越过屏宽的这个比例：再往右就压到够得着的对手了
 const steerZone = document.getElementById('steerZone'), steerEl = document.getElementById('kSteer');
 const steerKnob = steerEl.querySelector('.knob');
 const steerArrL = steerEl.querySelector('.arr.l'), steerArrR = steerEl.querySelector('.arr.r');
 let steerId = null;
+let steerCx = 0;                 // 算舵量用的圆心（屏幕横坐标）
 /* 按下的那一下：落在圆里（或者圆边附近）就按落点算，按右半边立刻往右转；
-   落在圆外更远的地方，说明拇指没对准 —— 把摇杆挪到拇指底下，从回中开始推 */
+   落在圆外更远的地方，说明拇指没对准 —— 把摇杆挪到拇指底下，从回中开始推。
+   触控区比圆能去的地方宽：拇指落得太靠右时，圆只挪到 STEER_VIS 为止，
+   舵量照样按拇指落点当圆心算，画出来的旋钮只表示往哪边、推了多少 */
 function steerGrab(x, y) {
   const r = steerEl.getBoundingClientRect(), R = r.width / 2;
-  if (Math.hypot(x - (r.left + R), y - (r.top + R)) > R * STEER_FLOAT) {
+  steerCx = r.left + R;
+  if (Math.hypot(x - steerCx, y - (r.top + R)) > R * STEER_FLOAT) {
     const z = steerZone.getBoundingClientRect();
-    steerEl.style.left = clamp(x - z.left - R, 0, Math.max(0, z.width - 2 * R)).toFixed(0) + 'px';
+    const right = portrait ? z.width : Math.min(z.width, window.innerWidth * STEER_VIS - z.left);
+    steerEl.style.left = clamp(x - z.left - R, 0, Math.max(0, right - 2 * R)).toFixed(0) + 'px';
     steerEl.style.top = clamp(y - z.top - R, 0, Math.max(0, z.height - 2 * R)).toFixed(0) + 'px';
     steerEl.style.bottom = 'auto';
+    steerCx = x;
   }
   steerAt(x, y);
 }
 function steerAt(x, y) {
   const r = steerEl.getBoundingClientRect(), R = Math.max(1, r.width / 2);
-  const dx = x - (r.left + R), dy = y - (r.top + R);
+  const dx = x - steerCx, dy = y - (r.top + R);
   const v = clamp(dx / R, -1, 1), a = Math.abs(v);
   touchState.steer = a < STEER_DEAD ? 0 : sign(v) * Math.min(1, (a - STEER_DEAD) / (STEER_FULL - STEER_DEAD));
   if (steerKnob) {                                   // 旋钮跟着拇指走，但不出圆
@@ -510,6 +550,8 @@ function steerRelease() {
 }
 steerZone.addEventListener('touchstart', e => {
   e.preventDefault();
+  // 安卓会复用手指编号：记着的那个编号又「按下」了一次，说明上一次的抬起丢了
+  for (const c of e.changedTouches) if (c.identifier === steerId) steerRelease();
   if (steerId !== null) return;                       // 已经有一根手指在上面了
   const t = e.changedTouches[0];
   steerId = t.identifier; steerZone.classList.add('dn'); steerGrab(t.clientX, t.clientY); audioUnlock();
@@ -527,7 +569,8 @@ steerZone.addEventListener('touchcancel', steerEnd, { passive:false });
 steerZone.addEventListener('mousedown', e => { e.preventDefault(); steerId = 'mouse'; steerZone.classList.add('dn'); steerGrab(e.clientX, e.clientY); audioUnlock(); });
 window.addEventListener('mousemove', e => { if (steerId === 'mouse') steerAt(e.clientX, e.clientY); });
 window.addEventListener('mouseup', () => { if (steerId === 'mouse') steerRelease(); });
-window.addEventListener('blur', steerRelease);
+window.addEventListener('blur', releaseAllTouch);
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAllTouch(); });
 bindPad('kBrk', () => touchState.brk = true, () => touchState.brk = false);
 bindPad('kAtkL',() => Input.atkL = true);
 bindPad('kAtkR',() => Input.atkR = true);

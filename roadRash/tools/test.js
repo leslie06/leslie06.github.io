@@ -3,7 +3,7 @@
 const { execFileSync } = require('child_process');
 const path = require('path');
 let bad = 0;
-for (const f of ['fuzz.js', 'playtest.js']) {
+for (const f of ['fuzz.js', 'playtest.js', 'touch.js']) {
   console.log('\n──── ' + f + ' ────');
   try { execFileSync(process.execPath, [path.join(__dirname, f)], { stdio: 'inherit' }); }
   catch (e) { bad++; }
