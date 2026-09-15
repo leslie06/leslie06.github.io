@@ -187,19 +187,19 @@
      1. 手机上油门是自动的。左手只管方向，右手管踹人、刹车、氮气 —— 原来油门要一直按着，
         右踹得松油门、左踹得松方向，两根拇指永远在抢键。
      2. 按键不能压在「够得着踹的对手」身上。横屏时贴身对手画在屏宽约 29%~39% 和
-        61%~71% 的位置，所以滑块收在左边 27% 以内，右手一簇收在右边 25% 以内。 */
-  /* 变向：左下一条滑块。按哪边往哪边转，手指左右滑就能换向，不用抬手。
-     #steerZone 是比滑块大一圈的隐形触控区 —— 拇指压偏了也算数。 */
-  #steerZone{left:0;bottom:0;width:calc(max(24vw,150px) + 5vw);height:calc(5vh + 16vmin + 10vmin);
-    border:0;border-radius:0;background:none;}
-  #kSteer{position:absolute;left:2.5vw;bottom:5vh;width:max(24vw,150px);height:16vmin;border-radius:8vmin;
-    background:rgba(27,27,44,.5);border:2px solid rgba(244,240,228,.3);overflow:hidden;pointer-events:none;}
-  #kSteer .arr{position:absolute;top:50%;transform:translateY(-50%);font-size:6vmin;font-weight:900;
-    color:var(--white);opacity:.5;text-shadow:1px 1px 0 #000;}
-  #kSteer .arr.l{left:3.2vmin;}  #kSteer .arr.r{right:3.2vmin;}
-  #kSteer .mid{position:absolute;left:50%;top:22%;bottom:22%;width:2px;margin-left:-1px;background:rgba(244,240,228,.25);}
-  #kSteer .knob{position:absolute;top:1.4vmin;left:50%;width:calc(16vmin - 2.8vmin - 4px);height:calc(16vmin - 2.8vmin - 4px);
-    margin-left:calc(-8vmin + 1.4vmin + 2px);border-radius:50%;
+        61%~71% 的位置，所以摇杆收在左边 27% 以内，右手一簇收在右边 25% 以内。 */
+  /* 变向：左下一个圆形摇杆。按住圆的哪一侧就往哪边转，手指左右推就能换向，不用抬手。
+     原来是一条横着的细滑块，只有六十来像素高，拇指很容易压到上下沿外面去。
+     #steerZone 是比圆大得多的隐形触控区：落在圆外稍远的地方，摇杆会挪到拇指底下
+     （见 steerGrab），所以左下这一大块按哪儿都算数。 */
+  #steerZone{left:0;bottom:0;width:27vw;height:72vh;border:0;border-radius:0;background:none;}
+  #kSteer{--d:34vmin;position:absolute;left:3vw;bottom:5vh;width:var(--d);height:var(--d);border-radius:50%;
+    background:rgba(27,27,44,.5);border:2px solid rgba(244,240,228,.3);pointer-events:none;}
+  #kSteer .arr{position:absolute;top:50%;transform:translateY(-50%);font-size:calc(var(--d) * .15);font-weight:900;
+    color:var(--white);opacity:.5;text-shadow:1px 1px 0 #000;line-height:1;}
+  #kSteer .arr.l{left:calc(var(--d) * .07);}  #kSteer .arr.r{right:calc(var(--d) * .07);}
+  #kSteer .knob{position:absolute;left:50%;top:50%;width:calc(var(--d) * .42);height:calc(var(--d) * .42);
+    margin:calc(var(--d) * -.21) 0 0 calc(var(--d) * -.21);border-radius:50%;
     background:rgba(244,240,228,.22);border:2px solid rgba(244,240,228,.55);}
   #steerZone.dn #kSteer{background:rgba(27,27,44,.7);border-color:rgba(244,240,228,.6);}
   #steerZone.dn .knob{background:rgba(240,136,32,.85);border-color:#fff;}
@@ -214,8 +214,8 @@
 
   /* 竖屏：画面在上、手柄在下。按键尺寸改按屏宽算 */
   body.portrait #pad .k{background:rgba(27,27,44,.85);}
-  body.portrait #pad #steerZone{background:none;width:54vw;height:calc(6vh + 16vw + 12vw);}
-  body.portrait #pad #kSteer{background:rgba(27,27,44,.85);left:4vw;bottom:6vh;width:46vw;}
+  body.portrait #pad #steerZone{background:none;width:52vw;height:calc(6vh + 38vw + 16vw);}
+  body.portrait #pad #kSteer{--d:38vw;background:rgba(27,27,44,.85);left:6vw;bottom:6vh;}
   body.portrait #pad #kAtkR{right:4vw;bottom:6vh;width:19vw;height:19vw;font-size:4.4vw;background:rgba(224,60,40,.8);}
   body.portrait #pad #kAtkL{right:calc(4vw + 21vw);bottom:6vh;width:19vw;height:19vw;font-size:4.4vw;background:rgba(224,60,40,.8);}
   body.portrait #pad #kBrk{right:4vw;bottom:calc(6vh + 22vw);width:15vw;height:12vw;font-size:3.6vw;}
@@ -223,7 +223,7 @@
   body.portrait #pad #kNitro.ready{background:rgba(40,140,255,.85);}
   /* 触屏：右上角让给暂停键；左下、右下两个 HUD 框挪到按键上方 */
   body.touch #trackBox{right:calc(2.2vw + 12vmin);}
-  body.touch:not(.portrait) #dmgBox{bottom:calc(5vh + 16vmin + 4vmin);}
+  body.touch:not(.portrait) #dmgBox{bottom:calc(5vh + 34vmin + 4vmin);}
   body.touch:not(.portrait) #spdBox{bottom:calc(5vh + 36vmin + 5vmin);}
   body.portrait #stage{margin-top:env(safe-area-inset-top,0px);}
   /* 竖屏画面左右被裁窄了，底部两角正好是贴身对手的位置，HUD 框挪到上方两侧 */
@@ -251,7 +251,7 @@
 
 <div id="pad">
   <div class="k" id="steerZone"><div id="kSteer">
-    <span class="arr l">◀</span><span class="mid"></span><span class="arr r">▶</span><span class="knob"></span>
+    <span class="arr l">◀</span><span class="arr r">▶</span><span class="knob"></span>
   </div></div>
   <div class="k sq" id="kBrk">刹车</div>
   <div class="k" id="kNitro">氮气</div>
@@ -433,27 +433,43 @@ function bindPad(id, on, off) {
   window.addEventListener('mouseup', up);
 }
 
-/* 变向滑块：一根手指按住整条区域，按在哪就往哪边转，左右滑动连续变化。
-   中间 STEER_DEAD 以内不转，到 STEER_FULL 就是满舵 —— 滑块大半长度都是满舵，
-   只在中段留一点比例区做微调。用 touch identifier 认手指，右手按油门不会串。 */
-const STEER_DEAD = .08, STEER_FULL = .55;
+/* 变向摇杆：一根手指按住，横向偏离圆心多少就转多少，左右推动连续变化；上下不管。
+   中间 STEER_DEAD 以内不转，推到半径的 STEER_FULL 就是满舵 —— 不用推到圆边上，
+   只在中间留一点比例区做微调。用 touch identifier 认手指，右手按别的键不会串。 */
+const STEER_DEAD = .1, STEER_FULL = .6;
+const STEER_FLOAT = 1.2;         // 拇指落点离圆心超过这么多个半径，就把摇杆挪过去
 const steerZone = document.getElementById('steerZone'), steerEl = document.getElementById('kSteer');
 const steerKnob = steerEl.querySelector('.knob');
 const steerArrL = steerEl.querySelector('.arr.l'), steerArrR = steerEl.querySelector('.arr.r');
 let steerId = null;
-function steerAt(clientX) {
-  const r = steerEl.getBoundingClientRect();
-  const half = Math.max(1, r.width / 2 - r.height / 2);       // 旋钮中心能走到的半程
-  const v = clamp((clientX - (r.left + r.width / 2)) / half, -1, 1);
-  const a = Math.abs(v);
+/* 按下的那一下：落在圆里（或者圆边附近）就按落点算，按右半边立刻往右转；
+   落在圆外更远的地方，说明拇指没对准 —— 把摇杆挪到拇指底下，从回中开始推 */
+function steerGrab(x, y) {
+  const r = steerEl.getBoundingClientRect(), R = r.width / 2;
+  if (Math.hypot(x - (r.left + R), y - (r.top + R)) > R * STEER_FLOAT) {
+    const z = steerZone.getBoundingClientRect();
+    steerEl.style.left = clamp(x - z.left - R, 0, Math.max(0, z.width - 2 * R)).toFixed(0) + 'px';
+    steerEl.style.top = clamp(y - z.top - R, 0, Math.max(0, z.height - 2 * R)).toFixed(0) + 'px';
+    steerEl.style.bottom = 'auto';
+  }
+  steerAt(x, y);
+}
+function steerAt(x, y) {
+  const r = steerEl.getBoundingClientRect(), R = Math.max(1, r.width / 2);
+  const dx = x - (r.left + R), dy = y - (r.top + R);
+  const v = clamp(dx / R, -1, 1), a = Math.abs(v);
   touchState.steer = a < STEER_DEAD ? 0 : sign(v) * Math.min(1, (a - STEER_DEAD) / (STEER_FULL - STEER_DEAD));
-  if (steerKnob) steerKnob.style.transform = 'translateX(' + (v * half).toFixed(1) + 'px)';
+  if (steerKnob) {                                   // 旋钮跟着拇指走，但不出圆
+    const lim = Math.max(0, R - steerKnob.offsetWidth / 2 - 2), d = Math.hypot(dx, dy), k = d > lim ? lim / d : 1;
+    steerKnob.style.transform = 'translate(' + (dx * k).toFixed(1) + 'px,' + (dy * k).toFixed(1) + 'px)';
+  }
   if (steerArrL) steerArrL.classList.toggle('on', touchState.steer < 0);
   if (steerArrR) steerArrR.classList.toggle('on', touchState.steer > 0);
 }
 function steerRelease() {
   steerId = null; touchState.steer = 0;
   steerZone.classList.remove('dn');
+  steerEl.style.left = steerEl.style.top = steerEl.style.bottom = '';   // 摇杆回到原位
   if (steerKnob) steerKnob.style.transform = '';
   if (steerArrL) steerArrL.classList.remove('on');
   if (steerArrR) steerArrR.classList.remove('on');
@@ -462,11 +478,11 @@ steerZone.addEventListener('touchstart', e => {
   e.preventDefault();
   if (steerId !== null) return;                       // 已经有一根手指在上面了
   const t = e.changedTouches[0];
-  steerId = t.identifier; steerZone.classList.add('dn'); steerAt(t.clientX); audioUnlock();
+  steerId = t.identifier; steerZone.classList.add('dn'); steerGrab(t.clientX, t.clientY); audioUnlock();
 }, { passive:false });
 steerZone.addEventListener('touchmove', e => {
   e.preventDefault();
-  for (const t of e.changedTouches) if (t.identifier === steerId) steerAt(t.clientX);
+  for (const t of e.changedTouches) if (t.identifier === steerId) steerAt(t.clientX, t.clientY);
 }, { passive:false });
 const steerEnd = e => {
   e.preventDefault();
@@ -474,8 +490,8 @@ const steerEnd = e => {
 };
 steerZone.addEventListener('touchend', steerEnd, { passive:false });
 steerZone.addEventListener('touchcancel', steerEnd, { passive:false });
-steerZone.addEventListener('mousedown', e => { e.preventDefault(); steerId = 'mouse'; steerZone.classList.add('dn'); steerAt(e.clientX); audioUnlock(); });
-window.addEventListener('mousemove', e => { if (steerId === 'mouse') steerAt(e.clientX); });
+steerZone.addEventListener('mousedown', e => { e.preventDefault(); steerId = 'mouse'; steerZone.classList.add('dn'); steerGrab(e.clientX, e.clientY); audioUnlock(); });
+window.addEventListener('mousemove', e => { if (steerId === 'mouse') steerAt(e.clientX, e.clientY); });
 window.addEventListener('mouseup', () => { if (steerId === 'mouse') steerRelease(); });
 window.addEventListener('blur', steerRelease);
 bindPad('kBrk', () => touchState.brk = true, () => touchState.brk = false);
@@ -1972,7 +1988,7 @@ function updatePlayer(dt) {
        满速一次变道 0.42s → 0.28s，横穿整条路 0.88s → 0.61s。 */
     const grip = P.airTime > 0 ? .12 : 1;
     const steerPow = P.hand * (1.85 - sp * .12) * grip;
-    const dir = Input.right - Input.left;            // 键盘 ±1，触屏滑块是 -1..1 的模拟量
+    const dir = Input.right - Input.left;            // 键盘 ±1，触屏摇杆是 -1..1 的模拟量
     // 反打远快于同向起舵：躲车基本都是"正往左走，突然要往右"，慢在这一下最难受
     P.steer = approach(P.steer, dir, dir * P.steer < 0 ? 60 : 26, dt);
     // vx 单独存一份给相机做前馈（见 update() 末尾）。只算"我想往哪打"的那部分，
@@ -2673,7 +2689,7 @@ function showTitle() {
   hudEl.classList.add('off');
   musicSet('menu');
   const kb = TOUCH
-    ? '<div>左下滑块：按住哪边往哪边转</div><div>油门自动给，按刹车才松</div>' +
+    ? '<div>左下圆形摇杆：往哪边推就往哪边转</div><div>油门自动给，按刹车才松</div>' +
       '<div>◀踹 / 踹▶：打左边 / 右边</div><div>氮气：撂倒、打断、擦车、贴尾流来充</div>'
     : '<div><kbd>↑</kbd>油门　<kbd>↓</kbd>刹车</div><div><kbd>←</kbd><kbd>→</kbd>变向</div>' +
       '<div><kbd>A</kbd>打左边　<kbd>D</kbd>打右边</div><div><kbd>空格</kbd>氮气</div>' +
