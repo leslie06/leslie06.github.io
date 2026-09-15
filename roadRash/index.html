@@ -158,8 +158,22 @@
   .k.sq{border-radius:10px;}
   .k.hit{background:rgba(224,60,40,.62);border-color:rgba(255,180,160,.7);}
   .k:active,.k.dn{background:rgba(240,136,32,.75);border-color:#fff;}
-  #kL{left:3%;bottom:8%;width:16vmin;height:16vmin;font-size:6vmin;}
-  #kR{left:21%;bottom:8%;width:16vmin;height:16vmin;font-size:6vmin;}
+  /* 变向：左下一条大滑块。按哪边往哪边转，手指左右滑就能换向，不用抬手。
+     #steerZone 是比滑块大一圈的隐形触控区 —— 拇指压偏了也算数。 */
+  #steerZone{left:0;bottom:0;width:calc(47vw + 6vmin);height:calc(8vh + 16vmin + 5vmin);
+    border:0;border-radius:0;background:none;}
+  #kSteer{position:absolute;left:3vw;bottom:8vh;width:44vw;height:16vmin;border-radius:8vmin;
+    background:rgba(27,27,44,.5);border:2px solid rgba(244,240,228,.3);overflow:hidden;pointer-events:none;}
+  #kSteer .arr{position:absolute;top:50%;transform:translateY(-50%);font-size:6vmin;font-weight:900;
+    color:var(--white);opacity:.5;text-shadow:1px 1px 0 #000;}
+  #kSteer .arr.l{left:3.2vmin;}  #kSteer .arr.r{right:3.2vmin;}
+  #kSteer .mid{position:absolute;left:50%;top:22%;bottom:22%;width:2px;margin-left:-1px;background:rgba(244,240,228,.25);}
+  #kSteer .knob{position:absolute;top:1.4vmin;left:50%;width:calc(16vmin - 2.8vmin - 4px);height:calc(16vmin - 2.8vmin - 4px);
+    margin-left:calc(-8vmin + 1.4vmin + 2px);border-radius:50%;
+    background:rgba(244,240,228,.22);border:2px solid rgba(244,240,228,.55);}
+  #steerZone.dn #kSteer{background:rgba(27,27,44,.7);border-color:rgba(244,240,228,.6);}
+  #steerZone.dn .knob{background:rgba(240,136,32,.85);border-color:#fff;}
+  #steerZone.dn .arr.on{opacity:1;color:var(--yellow);}
   #kGas{right:3%;bottom:7%;width:20vmin;height:20vmin;font-size:4.6vmin;}
   #kBrk{right:25%;bottom:6%;width:13vmin;height:13vmin;font-size:3.6vmin;}
   #kAtkL{left:3%;bottom:30%;width:14vmin;height:14vmin;font-size:3.8vmin;}
@@ -167,6 +181,11 @@
 
   /* 竖屏：手柄放画布下方，横屏：压在画布上 */
   body.portrait #pad .k{background:rgba(27,27,44,.85);}
+  body.portrait #pad #steerZone{background:none;}
+  body.portrait #pad #kSteer{background:rgba(27,27,44,.85);}
+  /* 横屏触屏：滑块和油门把左下、右下两个 HUD 框盖住了，挪到踹人键上方的空档 */
+  body.touch:not(.portrait) #dmgBox{bottom:calc(30vh + 14vmin + 2.5vmin);}
+  body.touch:not(.portrait) #spdBox{bottom:calc(31vh + 14vmin + 2.5vmin);}
 </style>
 
 <div id="stage">
@@ -186,8 +205,9 @@
 </div>
 
 <div id="pad">
-  <div class="k" id="kL">◀</div>
-  <div class="k" id="kR">▶</div>
+  <div class="k" id="steerZone"><div id="kSteer">
+    <span class="arr l">◀</span><span class="mid"></span><span class="arr r">▶</span><span class="knob"></span>
+  </div></div>
   <div class="k sq" id="kGas">油门</div>
   <div class="k sq" id="kBrk">刹车</div>
   <div class="k hit" id="kAtkL">左踹</div>
@@ -343,7 +363,7 @@ const K = k => !!Input._keys[k];
 
 /* 触屏按钮：按住式 */
 const padEl = document.getElementById('pad');
-const touchState = { l:false, r:false, gas:false, brk:false };
+const touchState = { steer:0, gas:false, brk:false };   // steer 是模拟量 -1..1
 function bindPad(id, on, off) {
   const el = document.getElementById(id);
   const down = e => { e.preventDefault(); el.classList.add('dn'); on(); audioUnlock(); };
@@ -354,16 +374,60 @@ function bindPad(id, on, off) {
   el.addEventListener('mousedown', down);
   window.addEventListener('mouseup', up);
 }
-bindPad('kL',   () => touchState.l = true,   () => touchState.l = false);
-bindPad('kR',   () => touchState.r = true,   () => touchState.r = false);
+
+/* 变向滑块：一根手指按住整条区域，按在哪就往哪边转，左右滑动连续变化。
+   中间 STEER_DEAD 以内不转，到 STEER_FULL 就是满舵 —— 滑块大半长度都是满舵，
+   只在中段留一点比例区做微调。用 touch identifier 认手指，右手按油门不会串。 */
+const STEER_DEAD = .08, STEER_FULL = .55;
+const steerZone = document.getElementById('steerZone'), steerEl = document.getElementById('kSteer');
+const steerKnob = steerEl.querySelector('.knob');
+const steerArrL = steerEl.querySelector('.arr.l'), steerArrR = steerEl.querySelector('.arr.r');
+let steerId = null;
+function steerAt(clientX) {
+  const r = steerEl.getBoundingClientRect();
+  const half = Math.max(1, r.width / 2 - r.height / 2);       // 旋钮中心能走到的半程
+  const v = clamp((clientX - (r.left + r.width / 2)) / half, -1, 1);
+  const a = Math.abs(v);
+  touchState.steer = a < STEER_DEAD ? 0 : sign(v) * Math.min(1, (a - STEER_DEAD) / (STEER_FULL - STEER_DEAD));
+  if (steerKnob) steerKnob.style.transform = 'translateX(' + (v * half).toFixed(1) + 'px)';
+  if (steerArrL) steerArrL.classList.toggle('on', touchState.steer < 0);
+  if (steerArrR) steerArrR.classList.toggle('on', touchState.steer > 0);
+}
+function steerRelease() {
+  steerId = null; touchState.steer = 0;
+  steerZone.classList.remove('dn');
+  if (steerKnob) steerKnob.style.transform = '';
+  if (steerArrL) steerArrL.classList.remove('on');
+  if (steerArrR) steerArrR.classList.remove('on');
+}
+steerZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (steerId !== null) return;                       // 已经有一根手指在上面了
+  const t = e.changedTouches[0];
+  steerId = t.identifier; steerZone.classList.add('dn'); steerAt(t.clientX); audioUnlock();
+}, { passive:false });
+steerZone.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) if (t.identifier === steerId) steerAt(t.clientX);
+}, { passive:false });
+const steerEnd = e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) if (t.identifier === steerId) steerRelease();
+};
+steerZone.addEventListener('touchend', steerEnd, { passive:false });
+steerZone.addEventListener('touchcancel', steerEnd, { passive:false });
+steerZone.addEventListener('mousedown', e => { e.preventDefault(); steerId = 'mouse'; steerZone.classList.add('dn'); steerAt(e.clientX); audioUnlock(); });
+window.addEventListener('mousemove', e => { if (steerId === 'mouse') steerAt(e.clientX); });
+window.addEventListener('mouseup', () => { if (steerId === 'mouse') steerRelease(); });
+window.addEventListener('blur', steerRelease);
 bindPad('kGas', () => touchState.gas = true, () => touchState.gas = false);
 bindPad('kBrk', () => touchState.brk = true, () => touchState.brk = false);
 bindPad('kAtkL',() => Input.atkL = true);
 bindPad('kAtkR',() => Input.atkR = true);
 
 function readInput() {
-  Input.left  = (K('arrowleft')  || touchState.l)   ? 1 : 0;
-  Input.right = (K('arrowright') || touchState.r)   ? 1 : 0;
+  Input.left  = K('arrowleft')  ? 1 : Math.max(0, -touchState.steer);
+  Input.right = K('arrowright') ? 1 : Math.max(0,  touchState.steer);
   Input.gas   = (K('arrowup')    || K('w') || touchState.gas) ? 1 : 0;
   Input.brake = (K('arrowdown')  || K('s') || touchState.brk) ? 1 : 0;
   Input.atkLHeld = K('a') || K('j') || K('z');
@@ -1723,7 +1787,7 @@ function updatePlayer(dt) {
        满速一次变道 0.42s → 0.28s，横穿整条路 0.88s → 0.61s。 */
     const grip = P.airTime > 0 ? .12 : 1;
     const steerPow = P.hand * (1.85 - sp * .12) * grip;
-    const dir = (Input.right ? 1 : 0) - (Input.left ? 1 : 0);
+    const dir = Input.right - Input.left;            // 键盘 ±1，触屏滑块是 -1..1 的模拟量
     // 反打远快于同向起舵：躲车基本都是"正往左走，突然要往右"，慢在这一下最难受
     P.steer = approach(P.steer, dir, dir * P.steer < 0 ? 60 : 26, dt);
     // vx 单独存一份给相机做前馈（见 update() 末尾）。只算"我想往哪打"的那部分，
@@ -1753,7 +1817,7 @@ function updatePlayer(dt) {
     // 徒步追车：车在前面停着，跑过去骑上。
     // 人会自己朝车跑（谁会朝反方向找自己的车），按键只是微调左右躲来车。
     P.speed = 1500; P.runT += dt;
-    const dir = (Input.right ? 1 : 0) - (Input.left ? 1 : 0);
+    const dir = Input.right - Input.left;
     if (PlayerWreck) P.x = approach(P.x, PlayerWreck.x, 2.2, dt);
     P.x = clamp(P.x + dir * .7 * dt, -1.4, 1.4);
     P.runFrame += dt * 9;
@@ -2247,7 +2311,7 @@ function showTitle() {
   hudEl.classList.add('off');
   musicSet('menu');
   const kb = TOUCH
-    ? '<div>◀ ▶ 变向</div><div>油门 / 刹车</div><div>左踹 / 右踹</div>'
+    ? '<div>◀ ▶ 滑块：按住哪边往哪边转，左右滑换向</div><div>油门 / 刹车</div><div>左踹 / 右踹</div>'
     : '<div><kbd>↑</kbd>油门　<kbd>↓</kbd>刹车</div><div><kbd>←</kbd><kbd>→</kbd>变向</div>' +
       '<div><kbd>A</kbd>打左边　<kbd>D</kbd>打右边</div><div><kbd>P</kbd>暂停　<kbd>R</kbd>重来　<kbd>M</kbd>静音</div>';
   showSheet(
@@ -2670,7 +2734,7 @@ function boot() {
   resetPlayerForRace();
   spawnRivals(0); spawnTraffic(0);
   Player.speed = 6200;
-  if (TOUCH) padEl.classList.add('on');
+  if (TOUCH) { padEl.classList.add('on'); document.body.classList.add('touch'); }
   showTitle();
   requestAnimationFrame(frame);
 }
