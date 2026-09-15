@@ -48,6 +48,8 @@ const EXPORTS = [
   'update','render','startRace','buildTrack','prepFog','segAt','roadY','computeRank',
   'doAttack','wipeout','BIKES','WEPS','THEMES','RIDER_PAL','CAR_SPECS',
   'SEG_LEN','ROAD_W','UNITS_PER_KM','DRAW_DIST','PLAYER_Z','showShop','showTitle','buyBike',
+  'fireNitro','saveGame','loadSave','hasProgress','togglePause','finishRace',
+  'PRIZE','FINISH_FEE','KO_PAY','RIVAL_TOP','NITRO_COST','BOOST_T','WIND_RIVAL',
 ];
 /* 这些会被重新赋值，只能用取值器读，直接抄一份会拿到旧的。 */
 const GETTERS = ['Cop','PlayerWreck','W','H','frameCount','freezeT','flash','horizonY'];
@@ -85,8 +87,9 @@ function step(G, keys, dt) {
   for (const k of (keys.hold || [])) K[k] = true;
   if (keys.atkL) G.Input.atkL = true;
   if (keys.atkR) G.Input.atkR = true;
+  if (keys.nitro) G.Input.nitro = true;
   G.update(dt == null ? 1 / 60 : dt);
-  G.Input.atkL = false; G.Input.atkR = false;
+  G.Input.atkL = false; G.Input.atkR = false; G.Input.nitro = false;
 }
 
 /** 数值体检：NaN、跑到赛道外面去、对象堆积。 */

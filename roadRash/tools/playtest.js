@@ -59,7 +59,13 @@ function think() {
   want = Math.max(-1, Math.min(1, want + dodge - P.x * .8));
   if (want < -.12) hold.push('arrowleft');
   if (want >  .12) hold.push('arrowright');
-  return { hold, atkL, atkR };
+
+  // 氮气：有一格、前面一段路没车就放。机器人不会挑时机，这只是"会用"的下限
+  let nitro = false;
+  if (P.nitro >= 33 && P.speed > P.maxSpeed * .7 && Math.abs(dodge) < .2) {
+    nitro = !G.Traffic.some(c => { const dz = c.z - P.z; return dz > 0 && dz < 16000 && Math.abs(c.x - P.x) < .32; });
+  }
+  return { hold, atkL, atkR, nitro };
 }
 
 /* 车行策略：每次都买当下买得起的最好那台 —— 跟真人一样，钱都花在车上 */
@@ -260,6 +266,156 @@ function bench() {
   say(warn[0] > laneT, '最险的一次也还够变一次道（' + warn[0].toFixed(2) + 's vs 变道 ' + laneT.toFixed(2) + 's）');
   say(tight / warn.length < .06, '来不及躲的不到 6%（' + tight + '/' + warn.length + '）');
   G.Game.owned = [true, false, false, false]; G.Game.bike = 0;
+
+  /* ---- 14. 对手出手有前摇：看得见、躲得开、打得断 ----
+     原来对手出脚当帧就扣血，只能跟他比手速。这几条卡住，免得以后又改回"瞬发" */
+  const fightSetup = () => {
+    G.startRace(1);
+    while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
+    G.Traffic.length = 0;
+    for (const sg of G.Road.segs) for (const it of sg.sprites) it.hazard = false;
+    for (const o of G.Rivals) { o.z = P.z + 40000; o.aggr = 0; }
+    const r = G.Rivals[0]; r.aggr = 5; r.wep = 0; r.atkCd = 0; r.windT = 0;
+    return r;
+  };
+  {
+    const r = fightSetup();
+    let windAt = -1, hitAt = -1;
+    for (let f = 0; f < 60 * 4 && hitAt < 0; f++) {
+      r.z = P.z + 150; r.x = P.x + .2; r.speed = P.speed;
+      const hp = P.hp;
+      step(G, { hold:['arrowup'] });
+      if (windAt < 0 && r.windT > 0) windAt = f;
+      if (P.hp < hp) hitAt = f;
+    }
+    const lead = (hitAt - windAt) / 60;
+    say(windAt >= 0 && hitAt > windAt, '对手出手之前先蓄力（前摇 ' + (hitAt > windAt ? lead.toFixed(2) + 's' : '没打到') + '）');
+    say(lead >= .3, '前摇够一次反应加一次闪躲（≥0.30s）');
+  }
+  {
+    const r = fightSetup();
+    let dodged = false, took = false;
+    for (let f = 0; f < 60 * 3; f++) {
+      if (r.windT <= 0) { r.z = P.z + 150; r.x = P.x + .2; r.speed = P.speed; }
+      const hp = P.hp;
+      // 看见他蓄力就往反方向闪
+      const cmd = r.windT > 0 ? { hold:['arrowup','arrowleft'] } : { hold:['arrowup'] };
+      if (r.windT > 0) { r.z = P.z + 150; r.speed = P.speed; }
+      step(G, cmd);
+      if (P.hp < hp) took = true;
+      if (r.windT > 0) dodged = true;
+      if (dodged && r.windT <= 0) break;
+    }
+    say(dodged && !took, '看见蓄力就闪开，他会打空');
+  }
+  {
+    const r = fightSetup();
+    let broke = false;
+    for (let f = 0; f < 60 * 3 && !broke; f++) {
+      r.z = P.z + 150; r.x = P.x + .2; r.speed = P.speed;
+      const winding = r.windT > 0;
+      const before = r.hp;
+      step(G, { hold:['arrowup'], atkR: winding });
+      if (winding && r.hp < before && r.windT <= 0) broke = true;
+    }
+    say(broke, '蓄力的时候先踹他，能把他打断');
+  }
+
+  /* ---- 15. 氮气：打人、擦车、贴尾流都能充，放了能冲过极速 ---- */
+  {
+    G.startRace(0);
+    while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
+    G.Traffic.length = 0;
+    for (const sg of G.Road.segs) for (const it of sg.sprites) it.hazard = false;
+    for (const o of G.Rivals) o.z = P.z + 40000;
+    for (let f = 0; f < 60 * 8; f++) step(G, { hold:['arrowup'] });
+    P.nitro = 0;
+    const r = G.Rivals[0]; r.aggr = 0; r.hp = 1;
+    for (let f = 0; f < 60 && r.state === 'ride'; f++) { r.z = P.z + 150; r.x = P.x + .2; r.speed = P.speed; step(G, { hold:['arrowup'], atkR: true }); }
+    const afterKo = P.nitro;
+    say(afterKo >= 30, '撂倒一个人充氮气（+' + afterKo.toFixed(0) + '）');
+
+    P.nitro = 0;
+    const r2 = G.Rivals[1]; r2.aggr = 0; r2.state = 'ride';
+    for (let f = 0; f < 60 * 2; f++) { r2.z = P.z + 900; r2.x = P.x; r2.speed = P.speed; step(G, { hold:['arrowup'] }); }
+    say(P.nitro > 15, '贴着对手尾流会慢慢充（2 秒 +' + P.nitro.toFixed(0) + '）');
+    r2.z = P.z + 40000;
+
+    P.nitro = 0;
+    const car = G.Traffic[0] || null;
+    const G2 = G;                       // 造一辆同向慢车，从它身边擦过去
+    const spec = G2.CAR_SPECS[0];
+    const c = { kind:'car', z: P.z + 1500, oncoming:false, spec, x: P.x + .30, speed: 3000, ww: spec.ww,
+                half: spec.ww / (G2.ROAD_W * 2) * .8, air:0, bob:0, honk:0, drawVec(){} };
+    G2.Traffic.push(c);
+    for (let f = 0; f < 60; f++) { P.x = c.x - c.half - .075 - .05; step(G, { hold:['arrowup'] }); }
+    say(P.nitro >= 10, '贴着车身擦过去充氮气（+' + P.nitro.toFixed(0) + '）');
+    G2.Traffic.length = 0;
+
+    P.nitro = G.NITRO_COST; P.boostT = 0; P.speed = P.maxSpeed;
+    let peak = 0;
+    step(G, { hold:['arrowup'], nitro: true });
+    for (let f = 0; f < 60 * G.BOOST_T; f++) { step(G, { hold:['arrowup'] }); peak = Math.max(peak, P.speed); }
+    say(peak > P.maxSpeed * 1.12, '放氮气能冲过车的极速（峰值 ' + (peak / P.maxSpeed * 100).toFixed(0) + '%）');
+    for (let f = 0; f < 60 * 4; f++) step(G, { hold:['arrowup'] });
+    say(P.speed <= P.maxSpeed * 1.01, '烧完之后回落到极速（' + (P.speed / P.maxSpeed * 100).toFixed(0) + '%）');
+    P.nitro = 5;
+    const b0 = P.boostT;
+    step(G, { hold:['arrowup'], nitro: true });
+    say(P.boostT <= b0, '氮气不够一格放不出来');
+  }
+
+  /* ---- 16. 路障对对手也生效 ---- */
+  {
+    G.startRace(3);
+    while (G.Game.state === 'pre') step(G, { hold:['arrowup'] });
+    const r = G.Rivals[2]; r.skill = 0; r.aggr = 0;
+    const i = Math.floor((r.z + 3000) / G.SEG_LEN);
+    const sg = G.Road.segs[i];
+    const bar = G.Road.segs.flatMap(s => s.sprites).find(it => it.sp && it.sp.tag === 'barrier');
+    sg.sprites.push({ sp: bar.sp, off: 0, hazard: true });
+    let crashed = false;
+    for (let f = 0; f < 60 * 3 && !crashed; f++) { r.x = 0; r.wantX = 0; r.speed = r.maxSpeed; step(G, { hold:['arrowup'] }); if (r.state === 'down') crashed = true; }
+    say(crashed, '对手高速撞上路障也会翻（原来直接穿过去）');
+  }
+
+  /* ---- 17. 存档读得回来 ---- */
+  {
+    const store = {};
+    global.window.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
+    G.Game.money = 4321; G.Game.owned = [true, true, false, false]; G.Game.bike = 1; G.Game.track = 3;
+    G.Game.best = [90.5, null, 101.2, null, null];
+    G.saveGame();
+    G.Game.money = 0; G.Game.owned = [true, false, false, false]; G.Game.bike = 0; G.Game.track = 0; G.Game.best = [null, null, null, null, null];
+    const ok = G.loadSave();
+    say(ok && G.Game.money === 4321 && G.Game.owned[1] && G.Game.bike === 1 && G.Game.track === 3 && G.Game.best[2] === 101.2, '存档存得进、读得回');
+    store['roadRash.save.v1'] = '{"v":1,"money":-5,"bike":3,"owned":[false,false,false,false],"track":99}';
+    G.loadSave();
+    say(G.Game.money === 0 && G.Game.bike === 0 && G.Game.owned[0] && G.Game.track === 4, '坏档读进来会被纠正，不会卡死');
+    store['roadRash.save.v1'] = 'not json';
+    say(G.loadSave() === false, '存档损坏就当新游戏');
+    delete global.window.localStorage;
+    G.Game.money = 0; G.Game.owned = [true, false, false, false]; G.Game.bike = 0; G.Game.track = 0;
+  }
+
+  /* ---- 18. 经济：按"每场都进前二、买得起就换车"的进度，没有一场的车比多数对手慢 ----
+     原来就算场场第一，第三场和第五场也只买得起比一半以上对手慢的车 */
+  {
+    const worst = [];
+    for (const place of [1, 2]) {
+      let money = 0, owned = [true, false, false, false], bike = 0;
+      for (let t = 0; t < 5; t++) {
+        for (let i = 3; i >= 0; i--) if (!owned[i] && money >= G.BIKES[i].price) { money -= G.BIKES[i].price; owned[i] = true; bike = i; break; }
+        G.startRace(t);
+        const faster = G.Rivals.filter(r => r.maxSpeed > G.BIKES[bike].top).length;
+        worst.push({ place, t, faster, bike: G.BIKES[bike].nm });
+        money += G.FINISH_FEE[t] + G.PRIZE[t][place - 1] + 2 * G.KO_PAY;
+      }
+    }
+    const w = worst.reduce((a, b) => (b.faster > a.faster ? b : a));
+    say(w.faster <= 2, '场场进前二的进度下，比你车快的对手每场最多 2 个（最多：第' + (w.t + 1) + '场 ' + w.bike + ' ' + w.faster + ' 个）');
+    G.Game.owned = [true, false, false, false]; G.Game.bike = 0;
+  }
 
   return bad;
 }
