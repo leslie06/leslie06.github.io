@@ -2,7 +2,13 @@
 
 每个游戏的 `index.html` 里有一段二十几行的打点代码（由 `apply.mjs` 生成），把三个数发给一个 Cloudflare Worker：游戏名、一个随机会话号、活跃秒数。不用 Cookie，不存 IP，网址后面加 `?nostat=1` 就关掉。
 
-**现在是关着的**：片段里的地址还是占位符 `https://STATS-ENDPOINT/e`，代码第一行就 return，一个请求都不发。按下面走完才会开始收数据。
+**已经在收数据了**（2026-09-16 起）：
+
+- 接口：`https://ai-games-stats.kangyu034.workers.dev`
+- 看板：`https://ai-games-stats.kangyu034.workers.dev/?k=看板密钥`（密钥在本机 `stats/.dash-key`，不在仓库里）
+- 数据库：D1 的 `ai-games-stats`
+
+要关掉就跑 `node stats/apply.mjs --off` 再推送。
 
 ## 能看到什么
 

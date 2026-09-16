@@ -6,7 +6,7 @@ compatibility_date = "2026-09-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "ai-games-stats"
-database_id = "部署前先填这里"
+database_id = "6ae98352-528f-4c97-8c22-ba0dc12c3c47"
 
 # DASH_KEY（看板密钥）和 SALT（哈希盐）用 `npx wrangler secret put` 设置，不要写进这个文件
 [observability]
