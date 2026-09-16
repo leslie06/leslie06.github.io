@@ -1,0 +1,13 @@
+name = "ai-games-stats"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# 数据库 id 由 `npx wrangler d1 create ai-games-stats` 生成后填在这里
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-games-stats"
+database_id = "部署前先填这里"
+
+# DASH_KEY（看板密钥）和 SALT（哈希盐）用 `npx wrangler secret put` 设置，不要写进这个文件
+[observability]
+enabled = true

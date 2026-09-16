@@ -133,6 +133,33 @@
   }
   @media (prefers-reduced-motion:reduce){ .hud > *, #loading{transition:none;} }
 </style>
+<!-- STATS_START 匿名统计，由 stats/apply.mjs 生成，不要手改 -->
+<script>
+(() => {
+  const API = 'https://STATS-ENDPOINT/e', GAME = 'pelican';
+  if (API.indexOf('STATS-ENDPOINT') >= 0 || !navigator.sendBeacon) return;
+  try { if (/[?&]nostat/.test(location.search) || localStorage.getItem('nostat')) return; } catch (e) {}
+  const sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  let active = 0, last = Date.now();
+  for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel'])
+    addEventListener(ev, () => (last = Date.now()), { passive: true, capture: true });
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && Date.now() - last < 30000) active++;
+  }, 1000);
+  const send = () => {
+    try {
+      navigator.sendBeacon(API, new Blob(
+        [JSON.stringify({ g: GAME, s: sid, a: active, w: innerWidth, r: document.referrer })],
+        { type: 'text/plain' }));   // text/plain 不触发跨域预检
+    } catch (e) {}
+  };
+  send();
+  setInterval(send, 15000);
+  addEventListener('pagehide', send);
+  addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && send());
+})();
+</script>
+<!-- STATS_END -->
 </head>
 <body>
 <canvas id="scene" tabindex="0" aria-label="3D 场景：鹈鹕骑着单车沿海岸公路行驶，可拖动旋转视角、滚轮缩放、点击鹈鹕让它叫一声"></canvas>
@@ -269,7 +296,6 @@ const CopyShader = {
 
 			vec4 texel = texture2D( tDiffuse, vUv );
 			gl_FragColor = opacity * texel;
-
 
 		}`
 
@@ -2709,7 +2735,6 @@ function mergeGroups( geometry ) {
 	return geometry;
 
 }
-
 
 /**
  * Modifies the supplied geometry if it is non-indexed, otherwise creates a new,
