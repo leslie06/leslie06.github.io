@@ -1,4 +1,4 @@
-# Kart Prototype
+# 旷野杯 · OPEN ROAD CUP
 
 马里奥赛车那种街机手感的卡丁车原型。Three.js + Vite + TypeScript，风格是明亮卡通低多边形。
 现在有：**四条**风格不同的赛道（程序化生成，各自带天空配色和装饰物）、一辆贴地形跑的车、

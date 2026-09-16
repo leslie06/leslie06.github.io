@@ -6,7 +6,7 @@
 //
 // 部署见 stats/README.md。本地可以 `node stats/test.mjs` 跑一遍，不需要 Cloudflare 账号。
 
-const GAMES = new Set(['index', 'bcity', 'pelican', 'kart', 'roadRash', 'gun-fight', 'zombie', 'wuxia', 'contra', 'mario']);
+const GAMES = new Set(['index', 'bcity', 'pelican', 'kart', 'kart-new', 'roadRash', 'gun-fight', 'zombie', 'wuxia', 'contra', 'mario']);
 const REAL_PLAY = 60;      // 活跃满 60 秒才算「真玩了一局」
 const SITE = 'leslie06.github.io';
 

@@ -1,4 +1,4 @@
-# kart-new/（构建产物，别手改）
+# kart-new/（旷野杯的构建产物，别手改）
 
 这个目录里的 `index.html` 和 `assets/` 是 `kart_new/` 用 Vite 构建出来的，
 提交进仓库只是为了让 GitHub Pages 能直接服务 —— Pages 服务 main 根目录，不跑构建。

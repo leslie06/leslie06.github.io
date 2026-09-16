@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const GAMES = ['index', 'bcity', 'pelican', 'kart', 'roadRash', 'gun-fight', 'zombie', 'wuxia', 'contra', 'mario'];
+const GAMES = ['index', 'bcity', 'pelican', 'kart', 'kart-new', 'roadRash', 'gun-fight', 'zombie', 'wuxia', 'contra', 'mario'];
 const START = '<!-- STATS_START 匿名统计，由 stats/apply.mjs 生成，不要手改 -->';
 const END = '<!-- STATS_END -->';
 const PLACEHOLDER = 'https://STATS-ENDPOINT/e';
