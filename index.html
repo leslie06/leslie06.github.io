@@ -53,7 +53,8 @@
   header code{font-family:var(--arcade);color:#9fb0d8;}
 
   ul{width:min(880px,100%);margin:0;padding:0;list-style:none;
-     display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));}
+     /* auto-fill 而不是 auto-fit：只有两张卡的那一组也保持和上面一样的宽度，不会被拉长 */
+     display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));}
   a.card{display:block;height:100%;padding:20px 22px 18px;text-decoration:none;color:inherit;
     background:var(--panel);border:1px solid var(--line);border-radius:10px;
     transition:border-color .16s,transform .16s,background .16s;}
@@ -90,17 +91,11 @@
 
 <header>
   <h1>小 游 戏 合 集</h1>
-  <p>都是单文件、零依赖、不加载任何第三方资源：一个 <code>index.html</code> 打开就能玩，画面是 Canvas、three.js 或自己写的 WebGL 现场画的，音乐音效由 Web Audio 实时合成，仓库里没有任何图片、模型或音频素材。<br>手机可以直接玩，横屏更好。<br>唯一的对外请求是一行匿名统计打点（记游戏名、玩了多久，以及打码到网段的 IP 和省份；不存完整 IP、不用 Cookie），网址后面加 <code>?nostat=1</code> 就关掉。</p>
+  <p>都是单文件、零依赖、不加载任何第三方资源：一个 <code>index.html</code> 打开就能玩，画面是 Canvas、three.js 或自己写的 WebGL 现场画的，音乐音效由 Web Audio 实时合成，仓库里没有任何图片、模型或音频素材。<br>上面一组手机上直接能玩，横屏更好；下面两个是第一人称和开放世界，键鼠操作更顺手，也更吃显卡。<br>唯一的对外请求是一行匿名统计打点（记游戏名、玩了多久，以及打码到网段的 IP 和省份；不存完整 IP、不用 Cookie），网址后面加 <code>?nostat=1</code> 就关掉。</p>
 </header>
 
+<h3 class="sec">手机 · 电脑都能玩</h3>
 <ul>
-  <li><a class="card" data-g="bcity" href="bcity/" style="--accent:#f3b50f">
-    <h2>b城追车</h2>
-    <p class="en">B CITY CHASE</p>
-    <p>一座城的开放世界。开出租车拉活、随手抢一辆车、被警察追着满城跑，也能随时下车走路。长安街、天安门、故宫、国贸、天坛都在地图上，街道楼房树木取自真实地图数据。</p>
-    <p class="tags">开放世界 · 驾驶 · three.js<span class="plays"></span></p>
-  </a></li>
-
   <li><a class="card" data-g="pelican" href="pelican/" style="--accent:#f5a33a">
     <h2>鹈鹕骑单车</h2>
     <p class="en">PELICAN RIDE</p>
@@ -120,13 +115,6 @@
     <p class="en">ROAD RASH</p>
     <p>伪 3D 街头摩托竞速，五条街。贴上去踹翻对手、抢他手里的棍子和铁链，把他挤进对向车道。血打光了人会被甩出车外，得徒步跑回去重新骑上；后两条街还有警察从背后撵上来拷人。</p>
     <p class="tags">伪 3D 竞速 · 贴身肉搏 · 五关 · 赏金买车<span class="plays"></span></p>
-  </a></li>
-
-  <li><a class="card" data-g="gun-fight" href="gun-fight/" style="--accent:#e08a3c">
-    <h2>枪火防线</h2>
-    <p class="en">GUNFIGHT</p>
-    <p>第一人称波次生存。战损街区里五把枪、可进入的楼房和天台，敌人小队会找掩体、探头点射、绕后包抄。爆头分更高，连杀有倍率，打完一波补给箱重新充能。</p>
-    <p class="tags">第一人称射击 · 波次生存 · three.js<span class="plays"></span></p>
   </a></li>
 
   <li><a class="card" data-g="zombie" href="zombie/" style="--accent:#8fdc4a">
@@ -155,6 +143,23 @@
     <p class="en">SUPER RUNNER BROS</p>
     <p>横版跳跃，踩怪、顶砖、吃蘑菇，一路跑到旗杆。</p>
     <p class="tags">横版跳跃 · 像素手绘<span class="plays"></span></p>
+  </a></li>
+</ul>
+
+<h3 class="sec">更适合电脑 · 键鼠操作、画面吃配置</h3>
+<ul>
+  <li><a class="card" data-g="bcity" href="bcity/" style="--accent:#f3b50f">
+    <h2>b城追车</h2>
+    <p class="en">B CITY CHASE</p>
+    <p>一座城的开放世界。开出租车拉活、随手抢一辆车、被警察追着满城跑，也能随时下车走路。长安街、天安门、故宫、国贸、天坛都在地图上，街道楼房树木取自真实地图数据。</p>
+    <p class="tags">开放世界 · 驾驶 · three.js<span class="plays"></span></p>
+  </a></li>
+
+  <li><a class="card" data-g="gun-fight" href="gun-fight/" style="--accent:#e08a3c">
+    <h2>枪火防线</h2>
+    <p class="en">GUNFIGHT</p>
+    <p>第一人称波次生存。战损街区里五把枪、可进入的楼房和天台，敌人小队会找掩体、探头点射、绕后包抄。爆头分更高，连杀有倍率，打完一波补给箱重新充能。</p>
+    <p class="tags">第一人称射击 · 波次生存 · three.js<span class="plays"></span></p>
   </a></li>
 </ul>
 
