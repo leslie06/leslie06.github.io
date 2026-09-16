@@ -33,10 +33,23 @@ ssh root@47.95.248.104 'systemctl restart ai-games-stats && systemctl is-active 
 
 ### 数据怎么备份 / 查
 
+服务器上没装 `sqlite3` 命令行，用服务自带的那个 node 就行。WAL 模式下别直接 `cp` 主文件（有一部分数据还在 `-wal` 里），要用 `VACUUM INTO`：
+
 ```sh
-ssh root@47.95.248.104 'sqlite3 /var/lib/ai-games-stats/stats.sqlite ".backup /tmp/stats.bak"' \
+# 备份到本地
+ssh root@47.95.248.104 'cd /opt/ai-games-stats && ./node/bin/node -e "
+const {DatabaseSync}=require(\"node:sqlite\");
+new DatabaseSync(\"/var/lib/ai-games-stats/stats.sqlite\").exec(\"VACUUM INTO \x27/tmp/stats.bak\x27\");"' \
   && scp root@47.95.248.104:/tmp/stats.bak ./stats-$(date +%F).sqlite
+
+# 随手查最近十条
+ssh root@47.95.248.104 'cd /opt/ai-games-stats && ./node/bin/node -e "
+const {DatabaseSync}=require(\"node:sqlite\");
+const db=new DatabaseSync(\"/var/lib/ai-games-stats/stats.sqlite\");
+console.table(db.prepare(\"SELECT day,game,active,ip_masked FROM ev ORDER BY ts DESC LIMIT 10\").all());"'
 ```
+
+拉回来的备份可以本地打开看：`DB_FILE=./stats-2026-09-16.sqlite node stats/server.mjs`，然后开 `http://127.0.0.1:8787/?k=dev`。
 
 要关掉统计就跑 `node stats/apply.mjs --off` 再推送。
 

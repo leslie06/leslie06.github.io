@@ -242,7 +242,8 @@ async function load(d) {
   const when = (ts) => new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   document.querySelector('#st tbody').innerHTML = data.recent.map(r =>
     '<tr><td class="n">' + when(r.ts) + '</td><td>' + r.game + '</td>' +
-    '<td>' + ((r.province || '未知') + (r.city ? ' · ' + r.city : '')) + '</td>' +
+    '<td>' + (r.province ? r.province + (r.city ? ' · ' + r.city : '')
+      : (Date.now() - r.ts < 180000 ? '<span style="color:#8d94ae">查询中…</span>' : '未知')) + '</td>' +
     '<td>' + (r.isp || '–') + '</td><td class="n">' + (r.ip_masked || '–') + '</td>' +
     '<td class="n' + (r.active >= data.realPlay ? ' big' : '') + '">' + fmt(r.active) + '</td>' +
     '<td>' + (r.mobile ? '手机' : '电脑') + '</td><td>' + (r.from_index ? '目录页' : '直接进') + '</td></tr>').join('');

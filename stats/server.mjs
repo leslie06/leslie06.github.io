@@ -9,7 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import worker from './worker.js';
+import worker, { maskIp } from './worker.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const db = new DatabaseSync(process.env.DB_FILE ?? join(HERE, '.dev.sqlite'));
@@ -88,7 +88,14 @@ async function resolveGeo() {
   }
 }
 setTimeout(resolveGeo, 5000);
-setInterval(resolveGeo, 60000);
+setInterval(resolveGeo, 60000);          // 兜底心跳
+// 来了没见过的网段就马上查，别让看板上挂着一分钟的「未知」
+let geoSoon = null;
+const hasGeo = db.prepare('SELECT 1 FROM geo WHERE prefix = ?');
+function geoHint(masked) {
+  if (!masked || geoSoon || hasGeo.get(masked)) return;
+  geoSoon = setTimeout(() => { geoSoon = null; resolveGeo(); }, 1500);
+}
 
 createServer(async (req, res) => {
   try {
@@ -104,7 +111,10 @@ createServer(async (req, res) => {
     const out = await worker.fetch(request, env);
     res.writeHead(out.status, Object.fromEntries(out.headers));
     res.end(Buffer.from(await out.arrayBuffer()));
-    if (verbose && new URL(request.url).pathname === '/e') process.stdout.write('·');
+    if (new URL(request.url).pathname === '/e') {
+      geoHint(maskIp(request.headers.get('cf-connecting-ip') ?? ''));
+      if (verbose) process.stdout.write('·');
+    }
   } catch (e) {
     console.error('请求出错', e);
     if (!res.headersSent) res.writeHead(500);
