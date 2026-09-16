@@ -1,0 +1,23 @@
+[Unit]
+Description=ai-games 游戏统计服务（打点接收 + 看板）
+After=network.target
+
+[Service]
+Type=simple
+User=aistats
+Group=aistats
+WorkingDirectory=/opt/ai-games-stats
+EnvironmentFile=/etc/ai-games-stats/env
+ExecStart=/opt/ai-games-stats/node/bin/node /opt/ai-games-stats/server.mjs
+Restart=always
+RestartSec=3
+# 只往自己的数据目录写，其余全是只读
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ai-games-stats
+MemoryMax=300M
+
+[Install]
+WantedBy=multi-user.target

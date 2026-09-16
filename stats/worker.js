@@ -96,6 +96,21 @@ export default {
       return new Response(null, { status: 204, headers: CORS });
     }
     if (url.pathname === '/health') return new Response('ok');
+    // 自助排查：手机上打开这个地址，一眼看出这台设备是从哪个国家的出口连过来的
+    if (url.pathname === '/me') {
+      const c = request.cf ?? {};
+      // 自建服务器上没有 cf 那套地理信息，就把来源 IP 回显给本人看（只显示给他自己，不入库）
+      const ip = request.headers.get('cf-connecting-ip') ?? '';
+      const big = c.country ?? (ip ? ip.replace(/\.\d+$/, '.x').replace(/:[0-9a-f]*$/i, ':x') : '?');
+      const sub = c.country ? `接入节点 ${c.colo ?? '?'} · ${c.city ?? ''} ${c.timezone ?? ''}` : '这是服务器看到的你的 IP';
+      return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <body style="margin:0;display:grid;place-items:center;height:100vh;background:#07090f;color:#e6e8f0;
+          font:16px/1.8 -apple-system,'PingFang SC',sans-serif;text-align:center">
+        <div><div style="font-size:12px;letter-spacing:2px;color:#8d94ae">能打开这一页，就说明你连得上统计服务</div>
+        <div style="font-size:${c.country ? 64 : 34}px;font-weight:800;color:#f5a33a;letter-spacing:2px;margin:6px 0">${big}</div>
+        <div style="font-size:12px;color:#535a72">${sub}</div></div>`,
+        { headers: { 'content-type': 'text/html;charset=utf-8', 'cache-control': 'no-store' } });
+    }
 
     const ok = env.DASH_KEY && url.searchParams.get('k') === env.DASH_KEY;
     if (url.pathname === '/api') {
