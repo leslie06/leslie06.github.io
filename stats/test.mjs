@@ -80,6 +80,17 @@ ok('手机数正确', kart.mobile === 1);
 ok('每日明细有 kart 也有 pelican', new Set(data.daily.map(d => d.game)).size === 2);
 ok('日期是北京时间的今天', data.daily.every(d => d.day === cnDay()));
 
+// —— IP 打码与地域
+ok('只存网段，最后一段抹掉', rows().every(r => /\.x$/.test(r.ip_masked) || r.ip_masked === ''), `(${rows()[0].ip_masked})`);
+ok('库里没有完整 IP', !JSON.stringify(rows()).includes('1.2.3.4') && !JSON.stringify(rows()).includes('9.9.9.9'));
+db.prepare("INSERT INTO geo (prefix, province, city, isp, ts) VALUES ('1.2.3.x','北京市','北京','中国移动',0)").run();
+const geoData = await (await worker.fetch(new Request('https://s/api?k=secret&days=14'), env)).json();
+const bj = geoData.regions.find(r => r.province === '北京市');
+ok('地域表按省份汇总', !!bj && bj.sessions > 0, `(北京 ${bj?.sessions} 次)`);
+ok('查不到归属地的算「未知」', geoData.regions.some(r => r.province === '未知'));
+ok('最近会话列表带省份和网段', geoData.recent.length > 0 && geoData.recent.some(r => r.province === '北京市' && /\.x$/.test(r.ip_masked)));
+ok('最近会话按时间倒序', geoData.recent.every((r, i, a) => i === 0 || a[i - 1].ts >= r.ts));
+
 ok('没密钥取不到数', (await worker.fetch(new Request('https://s/api'), env)).status === 401);
 ok('密钥不对取不到数', (await worker.fetch(new Request('https://s/api?k=nope'), env)).status === 401);
 ok('看板页能打开', (await worker.fetch(new Request('https://s/?k=secret'), env)).status === 200);

@@ -12,9 +12,22 @@ const SITE = 'leslie06.github.io';
 
 export const SQL = {
   // 同一会话只占一行；心跳到达顺序不保证，所以取较大的 active
-  upsert: `INSERT INTO ev (day, game, sid, active, mobile, from_index, country, ip_hash, ts)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  upsert: `INSERT INTO ev (day, game, sid, active, mobile, from_index, country, ip_hash, ip_masked, ts)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(day, game, sid) DO UPDATE SET active = max(ev.active, excluded.active)`,
+  // Cloudflare 上能直接拿到地域，顺手写进缓存表；自建服务器由 server.mjs 的后台任务补
+  geoPut: `INSERT INTO geo (prefix, province, city, isp, ts) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(prefix) DO NOTHING`,
+  regions: `SELECT COALESCE(NULLIF(g.province, ''), '未知') AS province,
+              COUNT(*) AS sessions, COUNT(DISTINCT e.ip_hash) AS devices,
+              SUM(CASE WHEN e.active >= ? THEN 1 ELSE 0 END) AS real_plays,
+              CAST(ROUND(AVG(e.active)) AS INTEGER) AS avg_active
+            FROM ev e LEFT JOIN geo g ON g.prefix = e.ip_masked
+            WHERE e.day >= ? GROUP BY province ORDER BY sessions DESC LIMIT 20`,
+  recent: `SELECT e.ts, e.game, e.active, e.mobile, e.from_index, e.ip_masked,
+             g.province, g.city, g.isp
+           FROM ev e LEFT JOIN geo g ON g.prefix = e.ip_masked
+           WHERE e.day >= ? ORDER BY e.ts DESC LIMIT 60`,
   summary: `SELECT game,
               COUNT(*)                                        AS sessions,
               COUNT(DISTINCT ip_hash)                         AS devices,
@@ -42,6 +55,14 @@ export const SQL = {
 export const cnDay = (now = Date.now()) => new Date(now + 8 * 3600e3).toISOString().slice(0, 10);
 export const daysAgo = (n, now = Date.now()) => cnDay(now - n * 86400e3);
 
+// 只保留网段：223.104.5.77 -> 223.104.5.x；IPv6 留前四组
+export function maskIp(ip) {
+  if (!ip) return '';
+  if (ip.includes(':')) return ip.split(':').slice(0, 4).join(':') + '::x';
+  const p = ip.split('.');
+  return p.length === 4 ? `${p[0]}.${p[1]}.${p[2]}.x` : '';
+}
+
 async function hash(...parts) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(parts.join('|')));
   return [...new Uint8Array(buf, 0, 8)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -63,26 +84,32 @@ async function ingest(request, env) {
     try { const u = new URL(b.r); fromIndex = u.host === SITE && u.pathname === '/' ? 1 : 0; } catch { }
     const ip = request.headers.get('cf-connecting-ip') ?? '';
     const ua = request.headers.get('user-agent') ?? '';
-    const day = cnDay();
+    const day = cnDay(), masked = maskIp(ip);
     await env.DB.prepare(SQL.upsert).bind(
       day, b.g, sid, active, width && width <= 820 ? 1 : 0, fromIndex,
-      request.cf?.country ?? 'XX', await hash(ip, ua, day, env.SALT ?? 'salt'), Date.now(),
+      request.cf?.country ?? 'XX', await hash(ip, ua, day, env.SALT ?? 'salt'), masked, Date.now(),
     ).run();
+    // Cloudflare 自带地域信息；自建服务器上这里没有，交给后台任务去查
+    if (masked && request.cf?.region) {
+      await env.DB.prepare(SQL.geoPut).bind(masked, request.cf.region, request.cf.city ?? '', '', Date.now()).run();
+    }
   } catch { /* 静默丢弃 */ }
 }
 
 async function api(env, days) {
   const since = daysAgo(days);
-  const [summary, median, daily] = await Promise.all([
+  const [summary, median, daily, regions, recent] = await Promise.all([
     env.DB.prepare(SQL.summary).bind(REAL_PLAY, since).all(),
     env.DB.prepare(SQL.median).bind(since).all(),
     env.DB.prepare(SQL.daily).bind(REAL_PLAY, since).all(),
+    env.DB.prepare(SQL.regions).bind(REAL_PLAY, since).all(),
+    env.DB.prepare(SQL.recent).bind(since).all(),
   ]);
   const med = Object.fromEntries(median.results.map(r => [r.game, r.median]));
   return {
     since, days, realPlay: REAL_PLAY,
     games: summary.results.map(r => ({ ...r, median: med[r.game] ?? 0 })),
-    daily: daily.results,
+    daily: daily.results, regions: regions.results, recent: recent.results,
   };
 }
 
@@ -131,6 +158,7 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 var(--ui);padding:clamp(18px,4vw,42px);}
   h1{margin:0 0 4px;font-size:22px;letter-spacing:3px;}
+  h2{margin:30px 0 8px;font-size:14px;letter-spacing:2px;color:var(--muted);font-weight:600;}
   .sub{color:var(--muted);font:11px/1.8 var(--mono);letter-spacing:1px;margin-bottom:20px;}
   .bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;}
   button{font:12px var(--ui);color:var(--text);background:var(--panel);border:1px solid var(--line);
@@ -158,8 +186,20 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
   <th>平均时长</th><th>中位时长</th><th>手机</th><th>从目录进</th><th>每日打开</th>
 </tr></thead><tbody></tbody></table></div>
 <div class="empty" id="empty" hidden>还没有数据。打开一个游戏玩十几秒，刷新这一页。</div>
+
+<h2>来自哪里</h2>
+<div class="wrap"><table id="rt"><thead><tr>
+  <th>省份</th><th>打开</th><th>设备</th><th>有效游玩</th><th>平均时长</th><th>占比</th>
+</tr></thead><tbody></tbody></table></div>
+
+<h2>最近的会话</h2>
+<div class="wrap"><table id="st"><thead><tr>
+  <th>时间</th><th>游戏</th><th>省份 · 城市</th><th>运营商</th><th>IP 网段</th><th>时长</th><th>设备</th><th>入口</th>
+</tr></thead><tbody></tbody></table></div>
+
 <p class="note">时间按北京时间。「有效游玩」= 活跃满 60 秒的会话；活跃只统计页面可见、且最近 30 秒内有过操作的时间，
-挂在后台不计。「设备」按当天的 IP+UA 哈希去重，跨天会重复计。</p>
+挂在后台不计。「设备」按当天的 IP+UA 哈希去重，跨天会重复计。<br>
+IP 只存到网段（最后一段抹成 x），完整地址不落库；省份是拿网段查一次归属地缓存下来的，同一网段不会重复查。</p>
 <script>
 const key = new URLSearchParams(location.search).get('k') || '';
 const fmt = (s) => s >= 60 ? Math.floor(s / 60) + '分' + String(s % 60).padStart(2, '0') + '秒' : s + '秒';
@@ -190,6 +230,22 @@ async function load(d) {
   }).join('');
   document.getElementById('t').hidden = !data.games.length;
   document.getElementById('empty').hidden = !!data.games.length;
+
+  const total = data.regions.reduce((s, r) => s + r.sessions, 0);
+  document.querySelector('#rt tbody').innerHTML = data.regions.map(r =>
+    '<tr><td>' + r.province + '</td><td class="n big">' + r.sessions + '</td><td class="n">' + r.devices + '</td>' +
+    '<td class="n">' + r.real_plays + '</td><td class="n">' + fmt(r.avg_active) + '</td>' +
+    '<td class="n">' + pct(r.sessions, total) +
+    '<span style="display:inline-block;height:8px;margin-left:8px;vertical-align:middle;background:#f5a33a;border-radius:2px;width:' +
+    (total ? Math.max(2, r.sessions / total * 90) : 0).toFixed(0) + 'px"></span></td></tr>').join('');
+
+  const when = (ts) => new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  document.querySelector('#st tbody').innerHTML = data.recent.map(r =>
+    '<tr><td class="n">' + when(r.ts) + '</td><td>' + r.game + '</td>' +
+    '<td>' + ((r.province || '未知') + (r.city ? ' · ' + r.city : '')) + '</td>' +
+    '<td>' + (r.isp || '–') + '</td><td class="n">' + (r.ip_masked || '–') + '</td>' +
+    '<td class="n' + (r.active >= data.realPlay ? ' big' : '') + '">' + fmt(r.active) + '</td>' +
+    '<td>' + (r.mobile ? '手机' : '电脑') + '</td><td>' + (r.from_index ? '目录页' : '直接进') + '</td></tr>').join('');
 }
 document.getElementById('days').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
