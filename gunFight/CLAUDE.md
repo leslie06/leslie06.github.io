@@ -5,7 +5,8 @@ Target: visual and gameplay quality that holds up next to a current Call of Duty
 ## Stack
 - Vite 8 + TypeScript (strict), three r185, @dimforge/rapier3d-compat 0.20 (physics), pmndrs `postprocessing` 6.39.
 - Dev server: `npx vite --port 5180` (usually already running at http://127.0.0.1:5180). Typecheck: `npx tsc --noEmit`.
-- Assets: CC0 Polyhaven PBR sets in `public/textures/<name>/` (diffuse/normal/rough/ao/disp/arm, some metal) and HDRIs in `public/hdri/`. Fetch more with `node scripts/fetch-assets.mjs` (edit the list). Load via `engine.assets.pbr(name, {repeat})` / `engine.assets.hdri(name)`.
+- Assets: CC0 Polyhaven PBR sets. Originals (JPEG) live in `assets-src/textures/<name>/`; `scripts/optimize-textures.mjs` turns them into what ships: `public/textures/<name>/<map>_<2048|1024|512>.webp` + `public/textures/index.json` (byte sizes, drives the loading bar). Each quality tier downloads only its own resolution (~6 / 23 / 34 MB), so never point the game at the originals. HDRIs in `public/hdri/`. Fetch more with `npm run assets:fetch` (edit the list in `scripts/fetch-assets.mjs`; it runs the optimizer after). Load via `engine.assets.pbr(name, {repeat})` / `engine.assets.hdri(name)`.
+- Boot/loading: the loading screen's DOM+CSS is inline in `index.html` (visible before any JS arrives); `core/BootProgress.ts` holds the stages `main.ts` walks; `window.gunfightBoot` has per-stage/per-module ms. Install-time CPU work blocks the loading screen - keep procedural texture generation cheap (it was 9 s before bucketing/early-outs).
 - No external CDN/script loads at runtime. npm packages are fine (`npm install --no-audit --no-fund <pkg>`).
 
 ## Architecture (src/)

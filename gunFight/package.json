@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "shot": "node scripts/shot.mjs",
-    "assets:fetch": "node scripts/fetch-assets.mjs",
+    "assets:fetch": "node scripts/fetch-assets.mjs && node scripts/optimize-textures.mjs",
+    "assets:optimize": "node scripts/optimize-textures.mjs",
     "deploy": "npm run build && rm -rf ../gun-fight && mkdir -p ../gun-fight && cp -R dist/. ../gun-fight/"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "@types/node": "^26.4.1",
     "@types/three": "^0.185.4",
     "playwright": "^1.62.1",
+    "sharp": "^0.35.4",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"

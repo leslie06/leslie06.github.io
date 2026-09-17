@@ -8,4 +8,5 @@ ref/
 # ~145MB of textures and HDRIs: reproducible input, so it does not belong in git.
 # The deployed copy under ../gun-fight/ carries them for GitHub Pages.
 public/textures
+assets-src
 public/hdri

@@ -1,9 +1,12 @@
-// Downloads CC0 assets from Polyhaven (https://polyhaven.com/license) into public/.
-// Idempotent: skips files that already exist. Run: npm run assets:fetch
+// Downloads CC0 assets from Polyhaven (https://polyhaven.com/license): texture originals into
+// assets-src/textures/ (scripts/optimize-textures.mjs turns those into the WebP variants the game
+// ships in public/textures/), HDRIs straight into public/hdri/.
+// Idempotent: skips files that already exist. Run: npm run assets:fetch (runs the optimizer after).
 import fs from 'node:fs';
 import path from 'node:path';
 
 const OUT = path.resolve('public');
+const SRC = path.resolve('assets-src');
 const API = 'https://api.polyhaven.com';
 
 // PBR texture sets. Resolution 1k keeps the whole set well under 40MB; hero surfaces use 2k.
@@ -86,7 +89,7 @@ const MAP_KEYS = { Diffuse: 'diffuse', nor_gl: 'normal', Rough: 'rough', AO: 'ao
 async function fetchTexture(name, res) {
   let files;
   try { files = await json(`${API}/files/${name}`); } catch (e) { console.warn('skip', name, e.message); return; }
-  const dir = path.join(OUT, 'textures', name);
+  const dir = path.join(SRC, 'textures', name);
   const manifest = {};
   for (const [key, out] of Object.entries(MAP_KEYS)) {
     const entry = files[key]?.[res]?.jpg ?? files[key]?.[res]?.png;

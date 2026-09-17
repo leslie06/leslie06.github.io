@@ -311,22 +311,13 @@ input[type=range].sl:hover::-webkit-slider-thumb{background:var(--c-hit)}
 .screen.controls .row:nth-last-child(-n+2){border-bottom:1px solid var(--c-line)}
 .screen.controls .row .ctl{min-width:0}
 
-/* ---------------------------------------------------------------- loading */
-#loading{position:fixed;inset:0;z-index:30;background:#07090c;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1.4em;
-  font-family:var(--font-display);font-stretch:condensed;color:#f2f4f7;font-size:clamp(11px,1.45vh,32px);transition:opacity .45s;pointer-events:auto}
-#loading.out{opacity:0;pointer-events:none}
-#loading .n{font-size:5.4em;font-weight:800;letter-spacing:.02em;line-height:1}
-#loading .n i{font-style:normal;display:inline-block;width:.1em;height:.58em;background:#ff8a1f;margin-left:.12em}
-#loading .l{font-size:.85em;letter-spacing:3px;opacity:.55;font-weight:600}
-#loading .bar{width:16em;height:2px;background:rgba(255,255,255,.14);overflow:hidden;position:relative}
-#loading .bar i{position:absolute;top:0;bottom:0;left:0;width:35%;background:#f2f4f7;animation:loadsweep 1.1s cubic-bezier(.4,0,.6,1) infinite}
-#loading .ft{position:absolute;bottom:2.4em;font-size:.72em;letter-spacing:2px;opacity:.32;font-family:var(--font-mono);font-stretch:normal}
+/* The boot screen (#loading) is styled inline in index.html: it has to render before this
+   stylesheet - or any script - has been downloaded. */
 
 /* -------------------------------------------------------------- keyframes */
 @keyframes heartbeat{0%,100%{transform:scale(1)}14%{transform:scale(1.08)}28%{transform:scale(1)}42%{transform:scale(1.06)}60%{transform:scale(1)}}
 @keyframes vigbeat{0%,100%{opacity:var(--o)}50%{opacity:calc(var(--o)*.55)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 @keyframes ammoflash{0%{opacity:1}100%{opacity:.62}}
-@keyframes loadsweep{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
 @keyframes drift{0%{transform:scale(1.02) translate(0,0)}100%{transform:scale(1.09) translate(-1.4%,-1%)}}
 `;

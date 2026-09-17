@@ -91,8 +91,10 @@ class Noise {
     const xi = Math.floor(x), yi = Math.floor(y);
     const fx = x - xi, fy = y - yi;
     const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-    const w = (a: number, b: number) => this.hash(((a % per) + per) % per, ((b % per) + per) % per);
-    const a = w(xi, yi), b = w(xi + 1, yi), c = w(xi, yi + 1), d = w(xi + 1, yi + 1);
+    // Wrap each lattice coordinate once rather than per corner: this runs ~10^7 times at boot.
+    const xa = ((xi % per) + per) % per, ya = ((yi % per) + per) % per;
+    const xb = (xa + 1) % per, yb = (ya + 1) % per;
+    const a = this.hash(xa, ya), b = this.hash(xb, ya), c = this.hash(xa, yb), d = this.hash(xb, yb);
     return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
   }
   fbm(x: number, y: number, octaves: number, per: number): number {
@@ -159,19 +161,38 @@ const srgb8 = (v: number) => clamp01(v) * 255;
 
 interface MapSet { map: THREE.CanvasTexture; roughnessMap: THREE.CanvasTexture; normalMap: THREE.CanvasTexture; metalnessMap?: THREE.CanvasTexture }
 
-type Scratches = [number, number, number, number, number][];
+type Scratch = [number, number, number, number, number];
+/**
+ * Scratch segments, bucketed on a coarse UV grid by bounding box. `scratchAt` runs once per texel
+ * of every 1k map; testing all ~100 segments each time was two thirds of the weapon module's
+ * install. A texel only looks at the segments whose box (grown by the widest stroke) covers its cell.
+ */
+interface Scratches { grid: Scratch[][]; n: number; pad: number }
+const SCRATCH_GRID = 48, SCRATCH_PAD = 0.004;
 function makeScratches(r: Rng, n: number, minLen: number, maxLen: number): Scratches {
-  const out: Scratches = [];
-  for (let i = 0; i < n; i++) { const x = r.next(), y = r.next(), a = r.range(-0.6, 0.6) + (r.next() < 0.3 ? Math.PI / 2 : 0), l = r.range(minLen, maxLen); out.push([x, y, Math.cos(a), Math.sin(a), l]); }
-  return out;
+  const N = SCRATCH_GRID, pad = SCRATCH_PAD;
+  const grid: Scratch[][] = Array.from({ length: N * N }, () => []);
+  for (let i = 0; i < n; i++) {
+    const x = r.next(), y = r.next(), a = r.range(-0.6, 0.6) + (r.next() < 0.3 ? Math.PI / 2 : 0), l = r.range(minLen, maxLen);
+    const s: Scratch = [x, y, Math.cos(a), Math.sin(a), l];
+    const x1 = x + s[2] * l, y1 = y + s[3] * l;
+    const cx0 = Math.max(0, Math.floor((Math.min(x, x1) - pad) * N)), cx1 = Math.min(N - 1, Math.floor((Math.max(x, x1) + pad) * N));
+    const cy0 = Math.max(0, Math.floor((Math.min(y, y1) - pad) * N)), cy1 = Math.min(N - 1, Math.floor((Math.max(y, y1) + pad) * N));
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) grid[cy * N + cx].push(s);
+  }
+  return { grid, n: N, pad };
 }
 function scratchAt(s: Scratches, u: number, v: number, w = 0.0011): number {
+  if (w > s.pad) throw new Error('[weapons] scratch width exceeds SCRATCH_PAD');
+  const cx = Math.min(s.n - 1, Math.max(0, Math.floor(u * s.n))), cy = Math.min(s.n - 1, Math.max(0, Math.floor(v * s.n)));
+  const cell = s.grid[cy * s.n + cx];
   let m = 0;
-  for (const [x, y, cx, cy, l] of s) {
-    const dx = u - x, dy = v - y; const t = dx * cx + dy * cy;
-    if (t < 0 || t > l) continue;
-    const px = dx - cx * t, py = dy - cy * t; const dist = Math.hypot(px, py);
-    if (dist < w) m = Math.max(m, (1 - dist / w) * (0.5 + 0.5 * Math.sin((t / l) * Math.PI)));
+  for (let i = 0; i < cell.length; i++) {
+    const c = cell[i];
+    const dx = u - c[0], dy = v - c[1]; const t = dx * c[2] + dy * c[3];
+    if (t < 0 || t > c[4]) continue;
+    const px = dx - c[2] * t, py = dy - c[3] * t; const dist = Math.hypot(px, py);
+    if (dist < w) m = Math.max(m, (1 - dist / w) * (0.5 + 0.5 * Math.sin((t / c[4]) * Math.PI)));
   }
   return m;
 }

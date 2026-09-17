@@ -5,21 +5,31 @@ export interface PbrMaps { map?: THREE.Texture; normalMap?: THREE.Texture; rough
 
 type ImageSource = HTMLImageElement | HTMLCanvasElement | ImageBitmap;
 
+/** public/textures/index.json, written by scripts/optimize-textures.mjs: bytes per set/map/resolution. */
+interface TextureIndex { version: number; sets: Record<string, { maps: Record<string, Record<string, number>> }> }
+
 /**
- * Texture sets live in public/textures/<name>/{diffuse,normal,rough,ao,disp,metal}.(jpg|png)
- * (fetched by scripts/fetch-assets.mjs).
+ * Texture sets live in public/textures/<name>/<map>_<res>.webp, one file per resolution, listed with
+ * their byte sizes in public/textures/index.json (scripts/optimize-textures.mjs builds both from the
+ * Polyhaven originals in assets-src/).
  *
  * Every set is decoded and uploaded once. A caller that wants a different `repeat` gets a
  * `Texture.clone()`: clones share the `Source`, and the renderer keys its GL textures by source, so
  * ten materials tiling the same brick at ten scales cost one upload (world/Materials does its own
  * per-tile clones the same way). The cache is therefore keyed on the set alone, never on `repeat`.
  *
- * `maxTextureSize` caps the decoded size: images larger than it are resized while decoding
- * (`createImageBitmap` with `resizeWidth/Height`, falling back to canvas halving), so the full-size
- * image is never uploaded. The Polyhaven sets are a mix of 1k and 2k files, and the level uses ~130
- * of their maps; at 2k a map with mips is 22 MB and at 1k 5.6 MB, so this cap - not `pixelRatio` or
- * shadow size - is what decides whether the scene needs 1.4 GB of GPU memory or a third of that.
- * Quality tiers set it via `quality.textureRes` (see Engine).
+ * `maxTextureSize` picks which file is downloaded: the largest variant that fits. The level uses
+ * ~130 maps; at 2k a map with mips is 22 MB of GPU memory and at 1k 5.6 MB, so this cap - not
+ * `pixelRatio` or shadow size - is what decides whether the scene needs 1.4 GB or a third of that,
+ * and since the variants are separate files it decides the download too (~6 MB at 512 against
+ * ~35 MB at 2k; it used to be 125 MB of JPEG for every tier, downscaled after the fact). Quality
+ * tiers set it via `quality.textureRes` (see Engine). `fit` still guards the odd image with no
+ * small enough variant.
+ *
+ * Files are fetched and decoded with `createImageBitmap`, which runs off the main thread - an
+ * <img> is decoded synchronously at first upload, which is where the first-frame stall came from.
+ * `progress` counts the bytes of everything requested so far, from the index, so the loading
+ * screen can show a real number (core/BootProgress).
  *
  * Memory is held twice for every texture the page builds from a bitmap: once by WebGL, and once by
  * the source the texture object keeps pointing at. For a canvas that second copy is not a JS
@@ -37,8 +47,9 @@ export class Assets {
   private texLoader = new THREE.TextureLoader();
   private cache = new Map<string, Promise<PbrMaps>>();
   private hdriCache = new Map<string, Promise<THREE.DataTexture>>();
+  private index: Promise<TextureIndex | null> | null = null;
   anisotropy = 8;
-  /** Largest edge a loaded texture keeps; larger images are downscaled before upload. */
+  /** Largest edge a loaded texture keeps: picks the file variant, and caps anything larger. */
   maxTextureSize = Infinity;
   /** Largest edge a procedural canvas texture keeps; bigger canvases are shrunk by `compact()`. */
   maxCanvasSize = Infinity;
@@ -47,6 +58,15 @@ export class Assets {
   private released = new WeakSet<object>();
   /** What `compact()` has done so far, for the diagnostics panel. */
   readonly stats = { released: 0, shrunk: 0, releasedPixels: 0 };
+  /** Download progress over everything requested so far. `totalBytes` grows as sets are asked for. */
+  readonly progress = { loadedBytes: 0, totalBytes: 0, files: 0 };
+  /** Called whenever `progress` changes. */
+  onProgress: (() => void) | null = null;
+
+  private bump(loaded: number, total: number): void {
+    this.progress.loadedBytes += loaded; this.progress.totalBytes += total;
+    this.onProgress?.();
+  }
 
   pbr(name: string, opts: { repeat?: [number, number]; withDisp?: boolean } = {}): Promise<PbrMaps> {
     const key = `${name}|${opts.withDisp ? 'd' : ''}`;
@@ -65,33 +85,70 @@ export class Assets {
     });
   }
 
+  private loadIndex(): Promise<TextureIndex | null> {
+    this.index ??= fetch(`${this.base}textures/index.json`)
+      .then((r) => (r.ok ? (r.json() as Promise<TextureIndex>) : null))
+      .catch(() => null);
+    return this.index;
+  }
+
+  /** Largest variant within `maxTextureSize`, else the smallest there is (`fit` shrinks that one). */
+  private pickVariant(variants: Record<string, number>): { res: number; bytes: number } | null {
+    const sizes = Object.keys(variants).map(Number).filter((n) => n > 0).sort((a, b) => a - b);
+    if (!sizes.length) return null;
+    const fits = sizes.filter((s) => s <= this.maxTextureSize);
+    const res = fits.length ? fits[fits.length - 1] : sizes[0];
+    return { res, bytes: variants[String(res)] };
+  }
+
   private async loadPbr(name: string, withDisp: boolean): Promise<PbrMaps> {
+    const set = (await this.loadIndex())?.sets[name];
+    if (!set) return {}; // missing set -> flat material
     const dir = `${this.base}textures/${name}/`;
-    let manifest: { maps: Record<string, string> } | null = null;
-    try { manifest = await (await fetch(`${dir}manifest.json`)).json(); } catch { /* missing set -> flat material */ }
-    if (!manifest) return {};
     const out: PbrMaps = {};
-    const load = (file: string, srgb: boolean) => new Promise<THREE.Texture>((res, rej) => this.texLoader.load(dir + file, (t) => {
-      // Texture<HTMLImageElement> from the loader; a bitmap or downscaled canvas is a valid image source at runtime.
-      void this.fit(t.image as HTMLImageElement).then((img) => {
-        (t as unknown as { image: ImageSource }).image = img;
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.anisotropy = this.anisotropy;
-        if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-        t.needsUpdate = true;
-        res(t);
-      });
-    }, undefined, rej));
-    const m = manifest.maps;
+    const wanted: [string, keyof PbrMaps, boolean][] = [
+      ['diffuse', 'map', true], ['normal', 'normalMap', false], ['rough', 'roughnessMap', false],
+      ['ao', 'aoMap', false], ['metal', 'metalnessMap', false],
+    ];
+    if (withDisp) wanted.push(['disp', 'displacementMap', false]);
     const jobs: Promise<void>[] = [];
-    if (m.diffuse) jobs.push(load(m.diffuse, true).then((t) => { out.map = t; }));
-    if (m.normal) jobs.push(load(m.normal, false).then((t) => { out.normalMap = t; }));
-    if (m.rough) jobs.push(load(m.rough, false).then((t) => { out.roughnessMap = t; }));
-    if (m.ao) jobs.push(load(m.ao, false).then((t) => { out.aoMap = t; }));
-    if (m.metal) jobs.push(load(m.metal, false).then((t) => { out.metalnessMap = t; }));
-    if (withDisp && m.disp) jobs.push(load(m.disp, false).then((t) => { out.displacementMap = t; }));
+    for (const [map, slot, srgb] of wanted) {
+      const v = set.maps[map] ? this.pickVariant(set.maps[map]) : null;
+      if (!v) continue;
+      this.bump(0, v.bytes);
+      jobs.push(this.loadTexture(`${dir}${map}_${v.res}.webp`, srgb)
+        .then((t) => { out[slot] = t; })
+        // A failed file still counts as done, or the bar would stall short of the end.
+        .finally(() => { this.progress.files++; this.bump(v.bytes, 0); }));
+    }
     await Promise.allSettled(jobs);
     return out;
+  }
+
+  private async loadTexture(url: string, srgb: boolean): Promise<THREE.Texture> {
+    const finish = (t: THREE.Texture): THREE.Texture => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = this.anisotropy;
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      t.needsUpdate = true;
+      return t;
+    };
+    if (typeof createImageBitmap === 'function') {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`${r.status} ${url}`);
+        // flipY here because the renderer cannot flip an ImageBitmap at upload (UNPACK_FLIP_Y is
+        // ignored for bitmaps), and Texture.flipY defaults to true for every other image source.
+        const bmp = await createImageBitmap(await r.blob(), { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+        const fitted = await this.fit(bmp);
+        if (fitted !== bmp) bmp.close();
+        return finish(new THREE.Texture(fitted as unknown as HTMLImageElement));
+      } catch { /* a browser that refuses the bitmap options: fall through to <img> */ }
+    }
+    const t = await new Promise<THREE.Texture>((res, rej) => this.texLoader.load(url, res, undefined, rej));
+    // Texture<HTMLImageElement> from the loader; a bitmap or downscaled canvas is a valid image source at runtime.
+    (t as unknown as { image: ImageSource }).image = await this.fit(t.image as HTMLImageElement);
+    return finish(t);
   }
 
   /**
@@ -101,10 +158,11 @@ export class Assets {
    * fits, so nothing is copied on the high tiers; falls back to canvas halving where
    * `createImageBitmap` is missing or refuses the options.
    */
-  private async fit(img: HTMLImageElement): Promise<ImageSource> {
+  private async fit(img: HTMLImageElement | ImageBitmap): Promise<ImageSource> {
     const max = this.maxTextureSize;
     if (!(max > 0) || !Number.isFinite(max)) return img;
-    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+    const isBitmap = typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap;
+    const w0 = (img as HTMLImageElement).naturalWidth || img.width, h0 = (img as HTMLImageElement).naturalHeight || img.height;
     if (w0 <= max && h0 <= max) return img;
     let w = w0, h = h0;
     while (w > max || h > max) { w = Math.max(1, Math.round(w / 2)); h = Math.max(1, Math.round(h / 2)); }
@@ -112,10 +170,13 @@ export class Assets {
       try {
         // flipY here because the renderer cannot flip an ImageBitmap at upload (UNPACK_FLIP_Y is
         // ignored for bitmaps), and Texture.flipY defaults to true for every other image source.
-        return await createImageBitmap(img, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high', imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+        // A bitmap handed in was already flipped when it was decoded; flipping again would undo it.
+        return await createImageBitmap(img, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high', imageOrientation: isBitmap ? 'from-image' : 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
       } catch { /* fall through to the canvas path */ }
     }
-    return shrinkCanvas(img, w0, h0, max) ?? img;
+    // The canvas path relies on the renderer's upload flip, which a pre-flipped bitmap must not get.
+    if (isBitmap) return img;
+    return shrinkCanvas(img as HTMLImageElement, w0, h0, max) ?? img;
   }
 
   /**
@@ -173,7 +234,20 @@ export class Assets {
   hdri(name: string): Promise<THREE.DataTexture> {
     let p = this.hdriCache.get(name);
     if (!p) {
-      p = new Promise((res, rej) => new HDRLoader().load(`${this.base}hdri/${name}.hdr`, (t) => { t.mapping = THREE.EquirectangularReflectionMapping; res(t); }, undefined, rej));
+      // No index entry for HDRIs: the size comes from the response, or a typical 2k figure when the
+      // server does not send one. `seen`/`total` are this file's contribution to `progress` so far.
+      let seen = 0, total = 0;
+      const track = (loaded: number, size: number) => {
+        const t = Math.max(size, loaded, total || 5e6);
+        this.bump(loaded - seen, t - total);
+        seen = loaded; total = t;
+      };
+      track(0, 0);
+      p = new Promise((res, rej) => new HDRLoader().load(`${this.base}hdri/${name}.hdr`, (t) => {
+        t.mapping = THREE.EquirectangularReflectionMapping;
+        track(total, total); this.progress.files++;
+        res(t);
+      }, (e) => track(e.loaded, e.lengthComputable ? e.total : 0), (e) => { track(total, total); rej(e); }));
       this.hdriCache.set(name, p);
     }
     return p;

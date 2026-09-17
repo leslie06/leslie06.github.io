@@ -32,8 +32,11 @@ function makeNoise(size: number, cells: number, rng: Rng): (x: number, y: number
     const x0 = Math.floor(fx), y0 = Math.floor(fy);
     const tx = fx - x0, ty = fy - y0;
     const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
-    const i = (xx: number, yy: number) => g[((yy % cells + cells) % cells) * cells + ((xx % cells + cells) % cells)];
-    const a = i(x0, y0), b = i(x0 + 1, y0), c = i(x0, y0 + 1), d = i(x0 + 1, y0 + 1);
+    // Wrap each lattice coordinate once (this closure runs ~10^7 times at boot: a per-corner
+    // double modulo was a third of the enemy module's install time).
+    const xa = ((x0 % cells) + cells) % cells, ya = ((y0 % cells) + cells) % cells;
+    const xb = xa + 1 === cells ? 0 : xa + 1, yb = ya + 1 === cells ? 0 : ya + 1;
+    const a = g[ya * cells + xa], b = g[ya * cells + xb], c = g[yb * cells + xa], d = g[yb * cells + xb];
     return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
   };
 }
@@ -343,22 +346,27 @@ export function clothNormal(size: number, aniso: number, seed = 5, foldCount = 2
   for (let i = 0; i < foldCount; i++) {
     folds.push({ x: rng.range(0, size), y: rng.range(0, size), a: rng.range(0, Math.PI), len: rng.range(0.2, 0.6) * size, w: rng.range(0.035, 0.11) * size, amp: rng.range(0.6, 1.6) * (rng.next() < 0.35 ? -1 : 1) });
   }
-  const wraps = [[0, 0], [size, 0], [-size, 0], [0, size], [0, -size], [size, size], [-size, -size], [size, -size], [-size, size]];
+  // Nine wrapped copies of every fold so the map tiles. Flat arrays and an early-out on the
+  // gaussian keep this off the boot profile: past 30 in the exponent the term is below 1e-13, far
+  // under what survives into an 8-bit normal, and it spares an exp() for most of the texture.
+  const wrapX = [0, size, -size, 0, 0, size, -size, size, -size];
+  const wrapY = [0, 0, 0, size, -size, size, -size, -size, size];
   for (const f of folds) {
     const dx = Math.cos(f.a), dy = Math.sin(f.a);
+    const half = f.len * 0.5, inv2s = 1 / (2 * f.w * f.w * 0.25), gain = f.amp * 6;
     for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
       let best = 0;
-      for (const [wx, wy] of wraps) {
-        const px = x - (f.x + wx), py = y - (f.y + wy);
-        const along = px * dx + py * dy;
-        if (Math.abs(along) > f.len * 0.5) continue;
+      for (let k = 0; k < 9; k++) {
+        const px = x - (f.x + wrapX[k]), py = y - (f.y + wrapY[k]);
+        const along = Math.abs(px * dx + py * dy);
+        if (along > half) continue;
         const across = -px * dy + py * dx;
-        const taper = 1 - (Math.abs(along) / (f.len * 0.5)) ** 2;
-        const g = Math.exp(-(across * across) / (2 * f.w * f.w * 0.25));
-        const v = g * taper;
-        if (Math.abs(v) > Math.abs(best)) best = v;
+        const e = across * across * inv2s;
+        if (e > 30) continue;
+        const v = Math.exp(-e) * (1 - (along / half) ** 2);
+        if (v > best) best = v;
       }
-      h[y * size + x] += best * f.amp * 6;
+      if (best !== 0) h[y * size + x] += best * gain;
     }
   }
   const t = heightToNormal(h, size, 2.0, aniso);

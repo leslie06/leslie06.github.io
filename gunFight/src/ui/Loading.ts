@@ -1,47 +1,38 @@
 /**
- * Boot screen. Shown the instant this module is evaluated (before main.ts's boot() runs), so the
- * player never sees the raw black canvas while physics/textures load. Removed by ui.install once
- * the engine is about to start, but never sooner than MIN_MS so it doesn't strobe on fast machines.
+ * Boot screen. The element, its styles and the bar itself live in index.html, because they have to
+ * be on screen before this bundle has even been downloaded; index.html also moves the bar (it is
+ * handed every progress update through `window.__gfBoot`). This module takes over the text once it
+ * is evaluated: which stage boot is in, and how many MB of the level have arrived, so a slow first
+ * download reads as a download and not as a hang.
+ *
+ * main.ts removes the screen with `hideLoading` after the first frames have been drawn, so the
+ * shader-compile stall happens behind it rather than on a frozen view of the level.
  */
-import { cssVars } from './theme';
 import { t } from '../core/I18n';
+import { onBootProgress } from '../core/BootProgress';
 
-const MIN_MS = 2000;
-const shownAt = performance.now();
-let root: HTMLDivElement | null = null;
+let root: HTMLElement | null = typeof document === 'undefined' ? null : document.getElementById('loading');
 
-function show(): void {
-  if (root || typeof document === 'undefined') return;
-  root = document.createElement('div');
-  root.id = 'loading';
-  root.setAttribute('style', cssVars());
-  // Minimal inline style so it renders before the HUD stylesheet exists.
-  root.innerHTML = `<style>
-    #loading{position:fixed;inset:0;z-index:30;background:#07090c;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1.4em;font-family:var(--font-display);font-stretch:condensed;color:#f4f5f7;font-size:clamp(11px,1.45vh,32px);transition:opacity .45s;-webkit-font-smoothing:antialiased}
-    #loading.out{opacity:0;pointer-events:none}
-    #loading .n{font-size:6em;font-weight:800;letter-spacing:.08em;line-height:1}
-    #loading .n i{font-style:normal;display:inline-block;width:.12em;height:.6em;background:#ff8a1f;margin-left:.1em}
-    #loading .l{font-size:.9em;letter-spacing:.6em;padding-left:.6em;opacity:.6;font-weight:600}
-    #loading .bar{width:18em;height:2px;background:rgba(255,255,255,.14);overflow:hidden;position:relative}
-    #loading .bar i{position:absolute;top:0;bottom:0;left:0;width:35%;background:#f4f5f7;animation:loadsweep 1.1s cubic-bezier(.4,0,.6,1) infinite}
-    #loading .ft{position:absolute;bottom:2.4em;font-size:.75em;letter-spacing:.3em;opacity:.35;font-family:var(--font-mono);font-stretch:normal}
-    @keyframes loadsweep{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
-  </style>
-  <div class="n">GUNFIGHT<i></i></div>
-  <div class="bar"><i></i></div>
-  <div class="l">${t('loading.label')}</div>
-  <div class="ft">${t('loading.detail')}</div>`;
-  document.body.appendChild(root);
+if (root) {
+  const label = root.querySelector<HTMLElement>('.l');
+  const bytes = root.querySelector<HTMLElement>('.by');
+  const hint = root.querySelector<HTMLElement>('.ft');
+  if (hint) hint.textContent = t('loading.hint');
+  let lastLabel = '', lastBytes = '';
+  const mb = (n: number) => (n / 1e6).toFixed(1);
+  onBootProgress((s) => {
+    const l = t(`loading.stage.${s.stage}`);
+    if (label && l !== lastLabel) label.textContent = lastLabel = l;
+    const b = s.totalBytes > 0 && s.stage !== 'done' ? t('loading.bytes', { loaded: mb(s.loadedBytes), total: mb(s.totalBytes) }) : '';
+    if (bytes && b !== lastBytes) bytes.textContent = lastBytes = b;
+  });
 }
 
 /** Fade out (or remove instantly for screenshot mode) once the game is ready. */
 export function hideLoading(instant = false): void {
   if (!root) return;
   const r = root; root = null;
-  const remove = () => r.remove();
-  if (instant) { remove(); return; }
-  const wait = Math.max(0, MIN_MS - (performance.now() - shownAt));
-  setTimeout(() => { r.classList.add('out'); setTimeout(remove, 500); }, wait);
+  if (instant) { r.remove(); return; }
+  r.classList.add('out');
+  setTimeout(() => r.remove(), 500);
 }
-
-show();

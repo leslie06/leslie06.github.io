@@ -25,6 +25,15 @@ const STORE_KEY = 'gunfight.lang.v1';
 const EN = {
   'loading.label': 'LOADING',
   'loading.detail': 'INITIALIZING RENDERER · PHYSICS · ASSETS',
+  'loading.stage.physics': 'STARTING PHYSICS',
+  'loading.stage.sky': 'LOADING SKY & LIGHTING',
+  'loading.stage.world': 'DOWNLOADING LEVEL TEXTURES',
+  'loading.stage.actors': 'BUILDING WEAPONS & SOLDIERS',
+  'loading.stage.systems': 'STARTING EFFECTS · AUDIO · HUD',
+  'loading.stage.shaders': 'COMPILING SHADERS',
+  'loading.stage.done': 'READY',
+  'loading.bytes': '{loaded} / {total} MB',
+  'loading.hint': 'THE FIRST VISIT DOWNLOADS THE LEVEL · LATER VISITS START IN SECONDS',
 
   // screen corners
   'frame.ops': 'GUNFIGHT // OPERATIONS',
@@ -204,6 +213,15 @@ export type TParams = Record<string, string | number>;
 const ZH: Record<TKey, string> = {
   'loading.label': '加载中',
   'loading.detail': '正在初始化 渲染器 · 物理 · 资源',
+  'loading.stage.physics': '启动物理引擎',
+  'loading.stage.sky': '加载天空与光照',
+  'loading.stage.world': '下载关卡贴图',
+  'loading.stage.actors': '构建武器与士兵',
+  'loading.stage.systems': '启动特效 · 音频 · 界面',
+  'loading.stage.shaders': '编译着色器',
+  'loading.stage.done': '准备就绪',
+  'loading.bytes': '{loaded} / {total} MB',
+  'loading.hint': '首次进入需要下载关卡资源，请稍候 · 之后再进几秒就能开始',
 
   'frame.ops': 'GUNFIGHT // 作战行动',
   'frame.afterAction': 'GUNFIGHT // 战后报告',
