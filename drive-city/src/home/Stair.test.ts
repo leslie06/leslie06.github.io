@@ -18,7 +18,7 @@
  * is over my head, and can I get from the hall to the first floor without falling?
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { HOUSE, LANDING, STAIR, VOID } from './Layout';
+import { HOUSE, LANDING, STAIR, UPPER_WALL, VOID, stairAngle, stairPoint } from './Layout';
 import { buildVillaStatic } from './Villa';
 
 /** What player/OnFoot.ts will do for us: autostep 0.4 m. Anything taller stops the player dead. */
@@ -26,7 +26,7 @@ const STEP = 0.4;
 /** Standing height of the character capsule, plus a hat. */
 const HEAD = 1.9;
 
-const { cx, cz, r, w, a0, a1, treads } = STAIR;
+const { r, w, a0, a1, treads } = STAIR;
 const inner = r - w / 2, outer = r + w / 2;
 const angleStep = (a1 - a0) / (treads - 1);
 const rise = (HOUSE.floor1 - HOUSE.floor0) / treads;
@@ -62,7 +62,7 @@ const reach = (x: number, y: number, z: number, d: { x: number; y: number; z: nu
 /** A point on the flight: `t` is the tread index (fractional walks between them), `k` across it. */
 const spot = (t: number, k: number): { x: number; z: number } => {
   const a = a0 + angleStep * t, rad = inner + (outer - inner) * k;
-  return { x: cx + Math.cos(a) * rad, z: cz + Math.sin(a) * rad };
+  return stairPoint(a, rad);
 };
 
 beforeAll(async () => {
@@ -143,14 +143,43 @@ describe('我家 the stair', () => {
   });
 
   it('arrives on the first floor, and the paving there is floor you can stand on', () => {
-    // The top tread has to lap onto the slab west of the void, not stop in mid-air above it.
+    // The top tread has to lap onto the slab east of the void, not stop in mid-air above it.
     const top = HOUSE.floor1 + 1;
-    for (const z of [LANDING.z0 + 0.4, 0.4, LANDING.z1 - 0.4]) {
-      expect(under(LANDING.x1 - 0.4, z, top), `landing at z=${z}`).toBeCloseTo(HOUSE.floor1, 2);
+    for (const z of [LANDING.z0 + 0.4, (LANDING.z0 + LANDING.z1) / 2, LANDING.z1 - 0.4]) {
+      expect(under(LANDING.x0 + 0.4, z, top), `landing at z=${z}`).toBeCloseTo(HOUSE.floor1, 2);
     }
     // And from the arrival you can walk south onto the boards and east along the gallery.
     expect(under(LANDING.x0 + 1.5, VOID.z1 + 2, top)).toBeCloseTo(HOUSE.floor1, 2);
-    expect(under(VOID.x1 + 2, 0, top)).toBeCloseTo(HOUSE.floor1, 2);
+    expect(under(LANDING.x1 + 2, -1, top)).toBeCloseTo(HOUSE.floor1, 2);
+  });
+
+  it('can be walked from the top tread into the gallery', () => {
+    // 「楼梯和去房间的路是断的」: the flight came off on the far side of the stairwell from the
+    // gallery, and the way round was 0.35 m between the void rail and the wall. The door graph in
+    // Villa.test.ts cannot see that - it only knows the landing and the gallery share a doorway.
+    // So sweep the character's own capsule (0.28 m) from the top tread to the gallery portal,
+    // and on into the gallery: nothing solid in the way, and floor under every metre of it.
+    const portal = UPPER_WALL.find((u) => u.axis === 'x' && u.at === LANDING.x1 && u.door)!;
+    const pz = portal.door!.at ?? (portal.from + portal.to) / 2;
+    const from = spot(treads - 1, 0.5), y = HOUSE.floor1 + 0.95;
+    const legs: [number, number][] = [[from.x, from.z], [LANDING.x0 + 0.8, pz], [LANDING.x1 + 3, pz]];
+    const ball = new R.Ball(0.28);
+    // A control, so a sweep that can never hit anything does not pass for an open path: the same
+    // capsule pushed west off the landing north of the arrival has to stop at the void rail.
+    const ctl = world.castShape({ x: LANDING.x0 + 1.5, y, z: VOID.z0 + 1 }, { x: 0, y: 0, z: 0, w: 1 },
+      { x: -1, y: 0, z: 0 }, ball, 0, 4, true);
+    expect(ctl, 'the sweep sees the void rail').not.toBeNull();
+    for (let i = 0; i + 1 < legs.length; i++) {
+      const [x0, z0] = legs[i], [x1, z1] = legs[i + 1];
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const hit = world.castShape({ x: x0, y, z: z0 }, { x: 0, y: 0, z: 0, w: 1 },
+        { x: (x1 - x0) / len, y: 0, z: (z1 - z0) / len }, ball, 0, len, true);
+      expect(hit, `leg ${i} of the walk off the stair is blocked`).toBeNull();
+      for (let d = 0.5; d < len; d += 0.5) {
+        const x = x0 + ((x1 - x0) * d) / len, z = z0 + ((z1 - z0) * d) / len;
+        expect(under(x, z, HOUSE.floor1 + 0.5), `no floor at ${x.toFixed(1)}, ${z.toFixed(1)}`).toBeCloseTo(HOUSE.floor1, 1);
+      }
+    }
   });
 
   it('walls both edges of the flight, so you cannot walk off it', () => {
@@ -159,7 +188,7 @@ describe('我家 the stair', () => {
     for (let i = 0; i < treads - 1; i++) {
       const a = a0 + angleStep * i, y = treadTop(i) + 0.45;
       const mid = spot(i, 0.5);
-      const out = { x: Math.cos(a), y: 0, z: Math.sin(a) };
+      const out = { x: Math.cos(stairAngle(a)), y: 0, z: Math.sin(stairAngle(a)) };
       expect(reach(mid.x, y, mid.z, out, w), `tread ${i} has no guard outside it`).toBeLessThan(w / 2 + 0.12);
       expect(reach(mid.x, y, mid.z, { x: -out.x, y: 0, z: -out.z }, w), `tread ${i} has no spine inside it`)
         .toBeLessThan(w / 2 + 0.12);
@@ -173,6 +202,7 @@ describe('我家 the stair', () => {
       [(VOID.x0 + VOID.x1) / 2, VOID.z1 - 0.8, { x: 0, y: 0, z: 1 }],
       [VOID.x1 - 0.8, (VOID.z0 + VOID.z1) / 2, { x: 1, y: 0, z: 0 }],
       [VOID.x0 + 0.8, VOID.z0 + 1.0, { x: -1, y: 0, z: 0 }],
+      [VOID.x1 - 0.8, VOID.z0 + 1.0, { x: 1, y: 0, z: 0 }],
     ];
     for (const [x, z, d] of edges) {
       expect(reach(x, HOUSE.floor1 + 0.5, z, d, 2), `the void's ${d.x || d.z} edge has no rail`).toBeLessThan(1.2);

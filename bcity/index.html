@@ -6,35 +6,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="b城追车: a GTA-style open world city, built with three.js.">
 <style>html,body{background:#0e1113;height:100%;margin:0;font-family:PingFang SC,Microsoft YaHei,system-ui,sans-serif;overflow:hidden}#app{position:fixed;inset:0}canvas{width:100%;height:100%;display:block}#loading{color:#f4f1e8;z-index:100;background:#0e1113;place-items:center;display:grid;position:fixed;inset:0}#loading div{text-align:center}#loading span{letter-spacing:-.03em;font:900 44px/1 system-ui,sans-serif;display:block}#loading b{letter-spacing:.3em;color:#f4f1e88c;margin-top:18px;font:700 11px/1 system-ui,sans-serif;display:block}</style>
-  <script type="module" crossorigin src="./assets/index-DqT2YSx3.js"></script>
+  <script type="module" crossorigin src="./assets/index-C5CZHjzn.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/three-irhRVBKL.js">
-<!-- STATS_START 匿名统计，由 stats/apply.mjs 生成，不要手改 -->
-<script>
-(() => {
-  const API = 'https://stats.fishai.asia/e', GAME = 'bcity';
-  if (API.indexOf('STATS-ENDPOINT') >= 0 || !navigator.sendBeacon) return;
-  try { if (/[?&]nostat/.test(location.search) || localStorage.getItem('nostat')) return; } catch (e) {}
-  const sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
-  let active = 0, last = Date.now();
-  for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel'])
-    addEventListener(ev, () => (last = Date.now()), { passive: true, capture: true });
-  setInterval(() => {
-    if (document.visibilityState === 'visible' && Date.now() - last < 30000) active++;
-  }, 1000);
-  const send = () => {
-    try {
-      navigator.sendBeacon(API, new Blob(
-        [JSON.stringify({ g: GAME, s: sid, a: active, w: innerWidth, r: document.referrer })],
-        { type: 'text/plain' }));   // text/plain 不触发跨域预检
-    } catch (e) {}
-  };
-  send();
-  setInterval(send, 15000);
-  addEventListener('pagehide', send);
-  addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && send());
-})();
-</script>
-<!-- STATS_END -->
 </head>
 <body>
 <div id="app"></div>

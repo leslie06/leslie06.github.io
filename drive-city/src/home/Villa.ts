@@ -4,9 +4,9 @@ import { Parts, box, circlePoly, cyl, flat, hexa, lathe, prism, rectPoly, tube, 
 import { landmarkMaterials, nightGlow } from '../city/landmarks/kit/mats';
 import { grimeTex, marbleTex, pavingTex } from '../city/landmarks/kit/tex';
 import {
-  BAR, BEDROOMS, CURVES, DECK, DOOR, DOOR_HEAD, DRIVE, EDGE, ENTRY, GARAGE, GARAGE_DOOR, GATE,
+  BAR, BED, BEDROOMS, CURVES, DECK, DOOR, DOOR_HEAD, DRIVE, EDGE, ENTRY, GARAGE, GARAGE_DOOR, GATE,
   HERO_TREE, HOUSE, LANDING, LIGHTS, PARK_AT, PLINTH, PLOT, POOL, REFLECT, ROOM, SLIDER, STAIR,
-  TERRACE, TREES, UPPER_ROOM, UPPER_WALL, VOID, Y,
+  TERRACE, TREES, UPPER_ROOM, UPPER_WALL, VOID, Y, stairAngle, stairPoint,
 } from './Layout';
 import {
   armchair, art, basin, bed, bench, bookRow, bookStack, bowl, chair, curtains, dressingRun,
@@ -453,7 +453,11 @@ function groundFloor(P: Parts): ColliderSpec[] {
 
   // Ceilings: timber planks over the great room, plaster with a cove elsewhere.
   planks(P, { x0: G.x0, x1: G.x1, z0: G.z0, z1: G.z1 }, ceil0 - 0.02);
-  for (const r of [H, D, S, V]) { flat(plaster, poly(r), ceil0 - 0.02, true); cove(P, r, ceil0); }
+  // Tiled round the stairwell: one quad over the hall caps the void from below.
+  for (const r of [H, D, S, V]) {
+    for (const c of tileAround(r, [VOID])) flat(plaster, poly(c), ceil0 - 0.02, true);
+    cove(P, r, ceil0);
+  }
 
   // --- great room. 24 x 22 m is a hall, not a room, so it is furnished as three zones with rugs
   // under each: the hearth at the north end, the kitchen down the west wall, dining to the south.
@@ -627,16 +631,21 @@ function curvedStair(P: Parts): ColliderSpec[] {
   const depth = outer * Math.abs(step) * 1.06;
   /** Tread thickness, and the riser that closes the rest of the rise behind it. */
   const T = 0.1;
-  const pt = (a: number, rad: number, y: number): [number, number, number] =>
-    [cx + Math.cos(a) * rad, y, cz + Math.sin(a) * rad];
+  const { hand } = STAIR;
+  const pt = (a: number, rad: number, y: number): [number, number, number] => {
+    const p = stairPoint(a, rad);
+    return [p.x, y, p.z];
+  };
   const railPts: V3[] = [];
   for (let i = 0; i < treads; i++) {
     const a = a0 + step * i;
     const y = y0 + (i + 1) * rr;
-    const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
-    P.at(tx, y - T / 2, tz, -a, () => box(tread, 0, 0, 0, w, T, depth));
-    if (i > 0) P.at(tx, y - T - (rr - T) / 2, tz, -a, () => box(tread, 0, 0, -depth / 2 + 0.04, w, rr - T, 0.07));
-    const bx = cx + Math.cos(a) * (outer - 0.08), bz = cz + Math.sin(a) * (outer - 0.08);
+    // Local +Z of a tread is the way the plan angle grows, which is up the flight only when the
+    // stair swings east: the riser closes the *downhill* edge, so it follows `hand`.
+    const { x: tx, z: tz } = stairPoint(a, r), yaw = -stairAngle(a);
+    P.at(tx, y - T / 2, tz, yaw, () => box(tread, 0, 0, 0, w, T, depth));
+    if (i > 0) P.at(tx, y - T - (rr - T) / 2, tz, yaw, () => box(tread, 0, 0, hand * (-depth / 2 + 0.04), w, rr - T, 0.07));
+    const { x: bx, z: bz } = stairPoint(a, outer - 0.08);
     railPts.push([bx, y + 0.95, bz]);
     if (i % 2 === 0) box(rail, bx, y + 0.47, bz, 0.035, 0.9, 0.035);
   }
@@ -646,7 +655,8 @@ function curvedStair(P: Parts): ColliderSpec[] {
   // short of the floor left the top four treads with an open inner edge over a 3.6 m drop into the
   // hollow middle of the helix - the same fall as walking off the outer side.
   const spineTop = y1 + 0.95;
-  prism(tread, ringSeg(inner - 0.22, inner, cx, cz, a0 - 0.06, a1 + 0.06, 20), y0, spineTop);
+  const sA = stairAngle(a0 - 0.06), sB = stairAngle(a1 + 0.06);
+  prism(tread, ringSeg(inner - 0.22, inner, cx, cz, Math.min(sA, sB), Math.max(sA, sB), 20), y0, spineTop);
   tube(rail, railPts, 0.03, 6);
 
   /** The walking surface at angle `a`: the tread tops, read as a ramp between their centres. */
@@ -667,9 +677,9 @@ function curvedStair(P: Parts): ColliderSpec[] {
     const a = a0 + step * (i + 0.5);
     const chord = (rad: number) => 2 * rad * Math.sin(step);
     const guard = outer + 0.05, y = ramp(a);
-    out.push({ kind: 'box', yaw: -a, center: pt(a, guard, y + 0.3), half: [0.05, 0.7, chord(guard) / 2] });
+    out.push({ kind: 'box', yaw: -stairAngle(a), center: pt(a, guard, y + 0.3), half: [0.05, 0.7, chord(guard) / 2] });
     const spine = inner - 0.11;
-    out.push({ kind: 'box', yaw: -a, center: pt(a, spine, mid(y0, spineTop)), half: [0.11, (spineTop - y0) / 2, chord(spine) / 2] });
+    out.push({ kind: 'box', yaw: -stairAngle(a), center: pt(a, spine, mid(y0, spineTop)), half: [0.11, (spineTop - y0) / 2, chord(spine) / 2] });
   }
   return out;
 }
@@ -786,13 +796,13 @@ function upperBar(P: Parts): ColliderSpec[] {
   // --- the landing: a rail round the void, and a reading corner in the light off the south glass.
   {
     const L = R.landing, rail = P.get('vLouvre');
-    // A rail right round the void, open only on the west where the flight arrives. It carries a
+    // A rail round the void, open only on the east where the flight arrives (the spine's parapet
+    // closes the gap up to the tread). The west edge is the bar's own wall. It carries a
     // collider: a drawn rail you can walk through is a 3.8 m fall onto the stair below.
     const runs: { axis: 'x' | 'z'; at: number; from: number; to: number }[] = [
       { axis: 'x', at: VOID.z0, from: VOID.x0, to: VOID.x1 },
       { axis: 'x', at: VOID.z1, from: VOID.x0, to: VOID.x1 },
-      { axis: 'z', at: VOID.x1, from: VOID.z0, to: VOID.z1 },
-      { axis: 'z', at: VOID.x0, from: VOID.z0, to: -0.4 },
+      { axis: 'z', at: VOID.x1, from: VOID.z0, to: STAIR.cz + STAIR.r - STAIR.w / 2 - 0.25 },
     ];
     for (const rn of runs) {
       const len = rn.to - rn.from, alongX = rn.axis === 'x';
@@ -809,11 +819,13 @@ function upperBar(P: Parts): ColliderSpec[] {
     P.at(L.x1 - 1.4, floor1, L.z1 - 2.2, -0.7, () => armchair(P, { key: 'vFabricTan' }));
     P.at(mid(L.x0, L.x1), floor1, L.z1 - 0.35, 0, () => curtains(P, 6.4, H - 0.1));
     P.at(L.x0 + face, floor1 + 1.75, L.z1 - 3.4, Math.PI / 2, () => art(P, 1.3, 1.7));
-    P.at(L.x1 - 1.0, floor1, L.z0 + 1.2, 0, () => plant(P, 2.0));
-    box(wood, mid(L.x0, L.x1), floor1 + 0.42, L.z0 + face + 0.26, 2.0, 0.84, 0.5);
-    P.at(mid(L.x0, L.x1) - 0.5, floor1 + 0.84, L.z0 + face + 0.26, 0, () => vase(P, 0.15, 0.3));
-    P.at(mid(L.x0, L.x1) + 0.55, floor1 + 0.84, L.z0 + face + 0.26, 0.3, () => bookStack(P, 3));
-    P.at(mid(L.x0, L.x1), floor1 + 1.9, L.z0 + face, 0, () => art(P, 2.0, 1.1));
+    // The console stands on the floor east of the void, not on the ledge north of it.
+    const nx = mid(VOID.x1, L.x1) - 0.3;
+    P.at(L.x1 - 0.8, floor1, L.z0 + 3.4, 0, () => plant(P, 2.0));
+    box(wood, nx, floor1 + 0.42, L.z0 + face + 0.26, 2.0, 0.84, 0.5);
+    P.at(nx - 0.5, floor1 + 0.84, L.z0 + face + 0.26, 0, () => vase(P, 0.15, 0.3));
+    P.at(nx + 0.55, floor1 + 0.84, L.z0 + face + 0.26, 0.3, () => bookStack(P, 3));
+    P.at(nx, floor1 + 1.9, L.z0 + face, 0, () => art(P, 2.0, 1.1));
   }
 
   // --- the gallery: a runner, a console, and the pictures you pass on the way to bed.
@@ -824,7 +836,7 @@ function upperBar(P: Parts): ColliderSpec[] {
     P.at(5.4, floor1 + 0.84, G.z0 + face + 0.25, 0, () => vase(P, 0.14, 0.26));
     P.at(11.4, floor1 + 1.75, G.z0 + face, 0, () => gallery(P, 6.0));
     P.at(19.2, floor1, G.z0 + 0.9, 0, () => plant(P, 1.9));
-    for (const x of [8.6, 17.2]) P.at(x, floor1 + 2.0, G.z1 - face, Math.PI, () => art(P, 1.1, 0.8));
+    for (const x of [9.4, 14.6]) P.at(x, floor1 + 2.0, G.z1 - face, Math.PI, () => art(P, 1.1, 0.8));
   }
 
   // --- the gallery's east leg, in front of the master's doors.
@@ -838,21 +850,39 @@ function upperBar(P: Parts): ColliderSpec[] {
     P.at(21.4, floor1, mid(G.z0, G.z1), 0, () => bench(P, 1.4));
   }
 
-  // --- master suite: the bed on the blind wall, the corner glass left clear for the view.
+  /**
+   * A bed with its head on a side wall (Layout's BED), built in a frame whose origin is the wall's
+   * inner face behind the pillows and whose +Z runs down the bed to its foot. The bedroom doors
+   * are at the foot end, so this is what you see from the doorway - not the back of a headboard.
+   */
+  const bedOn = (name: keyof typeof BED, o: { head: string; accent: string; h: number }, extra: () => void): void => {
+    const b = BED[name], x0 = b.wallX + b.dir * t / 2;
+    P.at(x0 + b.dir * 0.03, floor1, b.z, b.dir * Math.PI / 2, () => {
+      P.at(0, 0, b.len / 2 + 1.3, 0, () => rug(P, b.w + 2.8, b.len + 2.2));
+      P.at(0, 0, b.len / 2 + 0.2, 0, () => bed(P, b.w, b.len, o));
+      P.at(0, 0, b.len + 0.65, 0, () => bench(P, b.w - 0.1));
+      extra();
+    });
+    out.push({
+      kind: 'box', center: [x0 + b.dir * (b.len / 2 + 0.15), floor1 + o.h / 2, b.z],
+      half: [b.len / 2 + 0.15, o.h / 2, b.w / 2 + 0.05],
+    });
+  };
+
+  // --- master suite: the bed on the blind west wall, looking out through the corner glass.
   {
-    const M = R.master, mx = mid(M.x0, M.x1) - 0.8, bz = M.z0 + 1.45 + 1.1;
-    P.at(mx, floor1, bz + 1.2, 0, () => rug(P, 6.0, 5.0));
-    P.at(mx, floor1, bz, 0, () => bed(P, 2.0, 2.2, { head: 'vVelvet', accent: 'vFabricTan' }));
-    solid(mx, bz, 1.05, 1.2, 0.62);
-    for (const s of [-1, 1]) {
-      P.at(mx + s * 1.55, floor1, M.z0 + 1.0, 0, () => nightstand(P));
-      P.at(mx + s * 1.55, floor1 + 1.66, M.z0 + face, 0, () => sconce(P));
-      P.at(mx + s * 2.95, floor1 + 1.8, M.z0 + face, 0, () => art(P, 0.8, 1.1));
-    }
-    P.at(mx, floor1, bz + 1.65, 0, () => bench(P, 2.0));
-    box(wood, M.x0 + face + 0.3, floor1 + 0.3, 6.6, 0.6, 0.6, 2.6);
-    P.at(M.x0 + face, floor1 + 1.5, 6.6, Math.PI / 2, () => tv(P, 1.5));
-    P.at(M.x0 + face + 0.3, floor1 + 0.6, 5.6, 0.4, () => bookStack(P, 3));
+    const M = R.master, B = BED.master;
+    bedOn('master', { head: 'vVelvet', accent: 'vFabricTan', h: 0.62 }, () => {
+      for (const s of [-1, 1]) {
+        P.at(s * (B.w / 2 + 0.55), 0, 0.3, 0, () => nightstand(P));
+        P.at(s * (B.w / 2 + 0.55), 1.66, 0, 0, () => sconce(P));
+        P.at(s * (B.w / 2 + 1.9), 1.8, 0, 0, () => art(P, 0.8, 1.1));
+      }
+    });
+    // The television on the north wall, clear of the door at the room's east end.
+    box(wood, 24.6, floor1 + 0.3, M.z0 + face + 0.3, 2.6, 0.6, 0.6);
+    P.at(24.6, floor1 + 1.5, M.z0 + face, 0, () => tv(P, 1.5));
+    P.at(23.7, floor1 + 0.6, M.z0 + face + 0.3, 0.4, () => bookStack(P, 3));
     P.at(M.x1 - 1.6, floor1, M.z1 - 2.0, -2.3, () => armchair(P));
     P.at(M.x1 - 2.4, floor1, M.z1 - 2.8, 0, () => floorLamp(P));
     P.at(M.x1 - 1.5, floor1, M.z1 - 1.1, 0, () => lowTable(P, 0.7, 0.7, 0.4));
@@ -861,29 +891,29 @@ function upperBar(P: Parts): ColliderSpec[] {
     P.at(M.x0 + 1.1, floor1, M.z1 - 1.2, 0, () => plant(P, 2.1));
   }
 
-  // --- the two other bedrooms: the same room, mirrored, so neither reads as the spare.
+  // --- the two other bedrooms: the same room, mirrored, their beds back to back on the shared
+  // wall, so neither reads as the spare.
   for (const name of ['bed2', 'bed3'] as const) {
-    const r = R[name], bx = mid(r.x0, r.x1), bz = r.z0 + 1.3 + 1.05;
-    const flip = name === 'bed3' ? -1 : 1;
-    P.at(bx, floor1, bz + 1.1, 0, () => rug(P, 4.6, 4.2));
-    P.at(bx, floor1, bz, 0, () => bed(P, 1.6, 2.1, { head: 'vFabricTan', accent: 'vVelvet' }));
-    solid(bx, bz, 0.85, 1.15, 0.6);
-    for (const s of [-1, 1]) {
-      P.at(bx + s * 1.3, floor1, r.z0 + 0.95, 0, () => nightstand(P, { lamp: s > 0 }));
-      P.at(bx + s * 1.3, floor1 + 1.6, r.z0 + face, 0, () => sconce(P));
-    }
-    P.at(bx, floor1 + 1.95, r.z0 + face, 0, () => art(P, 1.5, 0.9));
-    P.at(bx, floor1, bz + 1.5, 0, () => bench(P, 1.5));
-    const wx = flip > 0 ? r.x1 - 0.62 : r.x0 + 0.62;
-    P.at(wx, floor1, r.z0 + 2.0, -flip * Math.PI / 2, () => wardrobe(P, 2.6));
-    solid(wx, r.z0 + 2.0, 0.36, 1.3, 2.4);
-    P.at(r.x0 + 1.2 * flip + (flip > 0 ? 0 : r.x1 - r.x0), floor1, r.z1 - 2.2, flip * 0.8, () => armchair(P, { key: 'vFabricTan' }));
-    // The wall opposite the wardrobe is the one you face from the bed: hang it.
-    const freeX = flip > 0 ? r.x0 + face : r.x1 - face, freeRy = flip > 0 ? Math.PI / 2 : -Math.PI / 2;
-    P.at(freeX, floor1 + 1.8, r.z0 + 3.4, freeRy, () => art(P, 1.1, 1.5));
-    P.at(freeX, floor1 + 1.65, r.z1 - 2.8, freeRy, () => mirror(P, 0.8, 1.6));
+    const r = R[name], B = BED[name], bx = mid(r.x0, r.x1);
+    /** +1 towards the wall the bed stands on, -1 towards the door's end of the room. */
+    const farX = B.dir > 0 ? r.x1 : r.x0, far = -B.dir;
+    bedOn(name, { head: 'vFabricTan', accent: 'vVelvet', h: 0.6 }, () => {
+      for (const s of [-1, 1]) {
+        P.at(s * (B.w / 2 + 0.5), 0, 0.3, 0, () => nightstand(P, { lamp: s > 0 }));
+        P.at(s * (B.w / 2 + 0.5), 1.6, 0, 0, () => sconce(P));
+      }
+      P.at(0, 1.95, 0, 0, () => art(P, 1.5, 0.9));
+    });
+    // The wardrobe faces the foot of the bed from the far wall, south of the door's swing.
+    const wx = farX + far * 0.62;
+    P.at(wx, floor1, r.z0 + 4.2, far * Math.PI / 2, () => wardrobe(P, 2.6));
+    solid(wx, r.z0 + 4.2, 0.36, 1.3, 2.4);
+    P.at(farX + far * face, floor1 + 1.65, r.z1 - 2.3, far * Math.PI / 2, () => mirror(P, 0.8, 1.6));
+    // The north wall beside the door is the one you face from the armchair: hang it.
+    P.at(bx - far * 0.6, floor1 + 1.8, r.z0 + face, 0, () => art(P, 1.5, 1.1));
+    P.at(B.wallX + B.dir * 1.5, floor1, r.z1 - 1.9, B.dir * 2.2, () => armchair(P, { key: 'vFabricTan' }));
     P.at(bx, floor1, glassIn, 0, () => curtains(P, r.x1 - r.x0 - 1.4, H - 0.1));
-    P.at(bx + flip * 2.6, floor1, r.z1 - 1.1, 0, () => plant(P, 1.7));
+    P.at(farX + far * 1.0, floor1, r.z1 - 1.1, 0, () => plant(P, 1.7));
   }
 
   // --- the media room: the one room with nothing to look at, so it looks at a screen.

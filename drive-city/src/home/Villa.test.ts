@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ColliderSpec } from '../game/Contracts';
 import {
   BAR, BEDROOMS, DOOR, ENTRY, GARAGE, GARAGE_DOOR, GATE, HOUSE, LANDING, PLINTH, PLOT, POOL, ROOM,
-  SLIDER, STAIR, UPPER_ROOM, UPPER_WALL, VOID, Y,
+  SLIDER, STAIR, UPPER_ROOM, UPPER_WALL, VOID, Y, BED, stairAngle,
 } from './Layout';
 import { buildVillaExtras, buildVillaFar, buildVillaStatic, VILLA_KEYS } from './Villa';
 
@@ -81,7 +81,7 @@ describe('我家 the villa', () => {
     expect(Math.atan2(rise, going) * 180 / Math.PI).toBeLessThan(SLOPE);
     // It has to stand inside the hall and rise through the void.
     expect(STAIR.cx - STAIR.r - STAIR.w / 2).toBeGreaterThan(ROOM.hall.x0);
-    expect(STAIR.cx + STAIR.r + STAIR.w / 2).toBeLessThan(VOID.x1 + 1.5);
+    expect(STAIR.cx + STAIR.r + STAIR.w / 2).toBeLessThan(ROOM.hall.x1);
     expect(STAIR.cz).toBeGreaterThan(VOID.z0);
     expect(STAIR.cz).toBeLessThan(VOID.z1);
   });
@@ -96,17 +96,22 @@ describe('我家 the villa', () => {
     // And the whole flight has to fit the hole it rises through, which is the fit that was never
     // checked: the sweep reached z 1.36 against a void that stopped at 0.9, so the top treads ran
     // under the slab, and the landing was a slab of its own over the six treads below it.
-    const rad: [number, number] = [Math.cos(STAIR.a1), Math.sin(STAIR.a1)];
-    const tan: [number, number] = [-Math.sin(STAIR.a1), Math.cos(STAIR.a1)];
+    const A = stairAngle(STAIR.a1);
+    const rad: [number, number] = [Math.cos(A), Math.sin(A)];
+    const tan: [number, number] = [-Math.sin(A), Math.cos(A)];
     const tx = STAIR.cx + rad[0] * STAIR.r, tz = STAIR.cz + rad[1] * STAIR.r;
-    let minX = Infinity, maxZ = -Infinity;
+    let maxX = -Infinity, maxZ = -Infinity;
     for (const sw of [-1, 1]) for (const sd of [-1, 1]) {
-      minX = Math.min(minX, tx + sw * (STAIR.w / 2) * rad[0] + sd * (depth / 2) * tan[0]);
+      maxX = Math.max(maxX, tx + sw * (STAIR.w / 2) * rad[0] + sd * (depth / 2) * tan[0]);
       maxZ = Math.max(maxZ, tz + sw * (STAIR.w / 2) * rad[1] + sd * (depth / 2) * tan[1]);
     }
-    // The top tread laps west onto the paving, which is slab, not a bridge over the flight...
-    expect(minX).toBeLessThan(VOID.x0);
-    expect(minX).toBeGreaterThan(LANDING.x0);
+    // The top tread laps east onto the paving, which is slab, not a bridge over the flight...
+    expect(maxX).toBeGreaterThan(VOID.x1);
+    expect(maxX).toBeLessThan(LANDING.x1);
+    // ...and that paving lies between the stairwell and the gallery portal, not across the void
+    // from it: the landing the flight arrives on has to be the one the rooms open off.
+    expect(LANDING.x0).toBeGreaterThanOrEqual(VOID.x1);
+    expect(LANDING.x1).toBe(UPPER_ROOM.hall.x0);
     // ...and nothing else in the sweep reaches the slab south of the void.
     expect(maxZ).toBeLessThan(VOID.z1);
   });
@@ -219,6 +224,21 @@ describe('我家 the villa', () => {
       }
     }
     for (const name of Object.keys(UPPER_ROOM)) expect([...seen]).toContain(name);
+  });
+
+  it('enters every bedroom at the foot of the bed, not behind its headboard', () => {
+    // 「一进门就是面对的床背面」: bed and door were both dead centre on the same wall.
+    for (const name of BEDROOMS) {
+      const r = UPPER_ROOM[name], b = BED[name as keyof typeof BED];
+      // The head is on a side wall of this room...
+      expect([r.x0, r.x1]).toContain(b.wallX);
+      const door = UPPER_WALL.find((w) => w.door && w.axis === 'z' && w.at === r.z0 && w.from === r.x0)!;
+      expect(door, `${name} has a door off the gallery`).toBeTruthy();
+      const at = door.door!.at ?? (door.from + door.to) / 2;
+      // ...and the whole doorway is past the foot of the bed, so you walk in facing its front.
+      const foot = b.wallX + b.dir * (b.len + 0.3);
+      expect((at - b.dir * door.door!.w / 2 - foot) * b.dir, `${name}'s door is past the bed's foot`).toBeGreaterThan(0.5);
+    }
   });
 
   it('leaves every ground-floor opening walkable', () => {

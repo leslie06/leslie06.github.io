@@ -145,8 +145,9 @@ export const UPPER_WALL: readonly UpperWall[] = [
   { axis: 'x', at: 4, from: 1, to: 10 },
   { axis: 'x', at: 4, from: -8, to: -3 },
   // Off the gallery: two bedrooms south, the bathroom and the media room north.
-  { axis: 'z', at: 1, from: 4, to: 12, door: { w: 1.4 } },
-  { axis: 'z', at: 1, from: 12, to: 20, door: { w: 1.4 } },
+  // The bedroom doors stand at the far end of the wall from the bed (see BED), never behind it.
+  { axis: 'z', at: 1, from: 4, to: 12, door: { w: 1.4, at: 5.6 } },
+  { axis: 'z', at: 1, from: 12, to: 20, door: { w: 1.4, at: 18.4 } },
   { axis: 'z', at: -3, from: 4, to: 11, door: { w: 1.2 } },
   { axis: 'z', at: -3, from: 11, to: 20, door: { w: 1.6 } },
   { axis: 'x', at: 11, from: -8, to: -3 },
@@ -155,11 +156,27 @@ export const UPPER_WALL: readonly UpperWall[] = [
   { axis: 'x', at: 20, from: -2, to: 1, door: { w: 3.0, head: 3.2 } },
   { axis: 'x', at: 20, from: 1, to: 10 },
   { axis: 'x', at: 20, from: -8, to: -2 },
-  { axis: 'z', at: 1, from: 20, to: 32, door: { w: 1.8 } },
+  { axis: 'z', at: 1, from: 20, to: 32, door: { w: 1.8, at: 29.5 } },
   { axis: 'z', at: -2, from: 20, to: 25, door: { w: 1.4 } },
   { axis: 'z', at: -2, from: 25, to: 32, door: { w: 1.4 } },
   { axis: 'x', at: 25, from: -8, to: -2, door: { w: 1.2 } },
 ];
+
+/**
+ * Where each bed stands: its head against the side wall on `wallX`, its foot pointing along `dir`
+ * (+1 east), centred on `z`.
+ *
+ * Every bed used to stand with its head on the north wall, dead centre - and every bedroom door
+ * was dead centre in that same wall, so you walked in 1.2 m behind the headboard and met the back
+ * of it (「一进门就是面对的床背面」). A bedroom is entered from the foot: the head goes on a side
+ * wall, the door at the other end of the room, and what you see from the doorway is the front of
+ * the bed with the glass beyond it. bed2 and bed3 stand back to back on the wall they share.
+ */
+export const BED: Record<'master' | 'bed2' | 'bed3', { wallX: number; dir: 1 | -1; z: number; w: number; len: number }> = {
+  master: { wallX: 20, dir: 1, z: 5.4, w: 2.0, len: 2.2 },
+  bed2: { wallX: 12, dir: -1, z: 4.8, w: 1.6, len: 2.1 },
+  bed3: { wallX: 12, dir: 1, z: 4.8, w: 1.6, len: 2.1 },
+};
 
 /** Board-formed concrete entry wall, the pivot door in it, and the steps up to the plinth. */
 export const ENTRY = {
@@ -196,34 +213,53 @@ export const SLIDER = { great: { x: 16, w: 7.0 }, pavilion: { x: 35, w: 3.2 } };
 /**
  * The curved timber stair in the hall, helical around a solid spine wall against rough stone.
  * Centre, radius to the middle of the tread, the arc it turns through, and the step sizing.
+ *
+ * `hand` is which side of the centre the flight swings round: +1 east, -1 west. It is -1, and that
+ * is the whole fix for 「楼梯和去房间的路是断的」 (2026-09-17). Swinging east, the flight came off
+ * heading west onto a landing on the *far* side of the stairwell from the gallery, and the only way
+ * round was the 0.35 m left between the void rail and the gallery wall - narrower than the
+ * character, so every room upstairs was unreachable while the door-graph test stayed green.
+ * Swinging west, it starts at the north heading west, and comes off at the south heading east with
+ * the landing, the gallery portal and the bedrooms straight ahead.
  */
 export const STAIR = {
-  cx: 0, cz: -2, r: 2.6, w: 1.5,
-  /** Start and end angle (radians): a half turn, climbing anticlockwise seen from above. */
+  cx: -0.2, cz: -2.8, r: 2.6, w: 1.5, hand: -1 as 1 | -1,
+  /** Start and end of the climb (radians, before `hand`): a half turn, north round to south. */
   a0: -Math.PI * 0.55, a1: Math.PI * 0.55,
   rise: 0.19, treads: 20,
+};
+
+/** The plan angle (from +X towards +Z) of the flight at climb parameter `a`. */
+export const stairAngle = (a: number): number => (STAIR.hand > 0 ? a : Math.PI - a);
+
+/** A point of the flight in plan: climb parameter `a`, radius `rad` from the stair's centre. */
+export const stairPoint = (a: number, rad: number): { x: number; z: number } => {
+  const A = stairAngle(a);
+  return { x: STAIR.cx + Math.cos(A) * rad, z: STAIR.cz + Math.sin(A) * rad };
 };
 
 /**
  * The void the stair rises through, and so where the first-floor slab is not.
  *
  * It must contain the flight's whole swept footprint with clearance over every tread, or the slab
- * caps the stair. Both numbers here were hand-typed against a helix that does not fit them: the
- * void stopped at z 0.9 while the sweep reaches 1.36, and the landing was a separate slab sitting
- * 0.25 m above tread 13 - so you climbed to 3.5 m and met the underside of a floor at chest
- * height, with six more treads walled up inside it. The flight sweeps x -0.52..3.37, z -5.36..1.36
- * (centre + outer radius, plus the tread's tangential half depth), so the hole clears it all round
- * except on the west, where the last tread is meant to lap onto the floor. `Stair.test.ts` asserts
- * the headroom over every tread rather than trusting these numbers again.
+ * caps the stair (it once stopped at z 0.9 against a sweep that reached 1.36, under a landing that
+ * was a slab of its own: you climbed to 3.5 m and met the underside of a floor). The flight sweeps
+ * cx-3.37..cx+0.52 by cz-3.36..cz+3.36 (outer radius plus the tread's tangential half depth), so
+ * the hole clears it all round except on the east, where the last tread laps onto the floor. Its
+ * west edge is the bar's own west wall. `Stair.test.ts` asserts the headroom over every tread
+ * rather than trusting these numbers again.
  */
-export const VOID = { x0: -0.5, x1: 3.5, z0: -5.6, z1: 1.5 };
+export const VOID = { x0: BAR.x0 + HOUSE.wall, x1: STAIR.cx + 0.5, z0: STAIR.cz - 3.6, z1: STAIR.cz + 3.5 };
 
 /**
- * Where the flight arrives: stone paving let into the boards west of the void, flush with them.
- * Not a slab of its own - it is part of the first floor, which is exactly why the last tread can
- * be flush with it while the treads below it stay in open air.
+ * Where the flight arrives: stone paving let into the boards between the void and the gallery
+ * portal, flush with them. Not a slab of its own - it is part of the first floor, which is exactly
+ * why the last tread can be flush with it while the treads below it stay in open air.
  */
-export const LANDING = { x0: -4, x1: VOID.x0, z0: -0.6, z1: VOID.z1 };
+export const LANDING = {
+  x0: VOID.x1, x1: UPPER_ROOM.landing.x1,
+  z0: STAIR.cz + STAIR.r - STAIR.w / 2 - 0.45, z1: VOID.z1,
+};
 
 /** Infinity pool along the terrace, dark water, coping flush with the plinth. */
 export const POOL = { x0: 2, x1: 26, z0: 12.5, z1: 18.5 };

@@ -4,7 +4,7 @@ import type { CameraApi, HudApi, PlayerApi, VehicleApi, WantedApi, WorldApi } fr
 import { registerPose } from '../debug/PoseRegistry';
 import type { UiApi } from '../ui';
 import type { HomeSystem } from '.';
-import { ANCHOR, DOOR, ENTRY, GARAGE, HOUSE, LANDING, PARK_AT, ROOM, STAIR, TERRACE, UPPER_ROOM, VOID } from './Layout';
+import { ANCHOR, BED, DOOR, ENTRY, GARAGE, HOUSE, LANDING, PARK_AT, ROOM, STAIR, TERRACE, UPPER_ROOM, VOID, stairPoint } from './Layout';
 
 /**
  * 我家 screenshot poses (`node scripts/shot.mjs --world city --poses home_...`).
@@ -135,9 +135,10 @@ export function registerHomePoses(): void {
     description: 'At the foot of the curved stair looking up the flight: tread spacing and the climb ahead.',
     async apply(e) {
       await base(e);
-      standAt(e, STAIR.cx - 0.4, STAIR.cz - 4.2, F0 + 0.1, 0);
+      const h = STAIR.hand;
+      standAt(e, STAIR.cx - h * 0.4, STAIR.cz - 4.2, F0 + 0.1, 0);
       run(e, 0.4, 0);
-      await shot(e, [STAIR.cx - 1.4, F0 + 1.65, STAIR.cz - 4.6], [STAIR.cx + 2.2, F0 + 1.9, STAIR.cz - 0.6], 74);
+      await shot(e, [STAIR.cx - h * 1.4, F0 + 1.65, STAIR.cz - 4.6], [STAIR.cx + h * 2.2, F0 + 1.9, STAIR.cz - 0.6], 74);
       run(e, 0.6, 0.6);
     },
   });
@@ -147,7 +148,7 @@ export function registerHomePoses(): void {
     description: 'The whole flight in elevation with a person standing at its foot: riser height against a human.',
     async apply(e) {
       await base(e);
-      standAt(e, STAIR.cx - 0.4, STAIR.cz - 3.9, F0 + 0.1, Math.PI / 2);
+      standAt(e, STAIR.cx - STAIR.hand * 0.4, STAIR.cz - 3.9, F0 + 0.1, Math.PI / 2);
       run(e, 0.4, 0);
       await shot(e, [STAIR.cx + 15, F0 + 2.2, STAIR.cz - 1.0], [STAIR.cx, F0 + 2.2, STAIR.cz - 1.0], 42);
       run(e, 0.6, 0.6);
@@ -161,7 +162,7 @@ export function registerHomePoses(): void {
       await base(e);
       standAt(e, (LANDING.x0 + LANDING.x1) / 2, LANDING.z1 - 0.5, F1 + 0.1, Math.PI);
       run(e, 0.4, 0);
-      await shot(e, [STAIR.cx - 0.6, F1 + 1.6, LANDING.z1 + 0.4], [STAIR.cx + 2.4, F0 + 1.2, STAIR.cz - 1.5], 76);
+      await shot(e, [STAIR.cx - STAIR.hand * 0.6, F1 + 1.6, LANDING.z1 + 0.4], [STAIR.cx + STAIR.hand * 2.4, F0 + 1.2, STAIR.cz - 1.5], 76);
       run(e, 0.6, 0.6);
     },
   });
@@ -171,9 +172,22 @@ export function registerHomePoses(): void {
     description: 'Standing on the first floor at the edge of the stairwell: the slab edge, the rail and the landing.',
     async apply(e) {
       await base(e);
-      standAt(e, VOID.x0 - 1.4, VOID.z0 + 2.0, F1 + 0.1, Math.PI / 2);
+      standAt(e, VOID.x1 + 1.4, VOID.z0 + 2.0, F1 + 0.1, -Math.PI / 2);
       run(e, 0.4, 0);
-      await shot(e, [VOID.x0 - 2.4, F1 + 1.65, VOID.z0 + 1.6], [VOID.x1 - 1.0, F1 - 0.8, VOID.z1 - 1.5], 80);
+      await shot(e, [VOID.x1 + 2.4, F1 + 1.65, VOID.z0 + 1.6], [VOID.x0 + 1.0, F1 - 0.8, VOID.z1 - 1.5], 80);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_arrival',
+    description: 'Stepping off the top tread: the landing underfoot and the gallery portal straight ahead, no void between.',
+    async apply(e) {
+      const top = stairPoint(STAIR.a1, STAIR.r);
+      await base(e);
+      standAt(e, top.x + 0.6, top.z, F1 + 0.1, Math.PI / 2);
+      run(e, 0.4, 0);
+      await shot(e, [top.x - 1.6, F1 + 1.9, top.z + 0.5], [UPPER_ROOM.hall.x0 + 4, F1 + 0.9, -1], 76);
       run(e, 0.6, 0.6);
     },
   });
@@ -184,9 +198,10 @@ export function registerHomePoses(): void {
     async apply(e) {
       const M = UPPER_ROOM.master;
       await base(e);
-      standAt(e, M.x0 + 2.4, M.z1 - 2.4, F1 + 0.1, 0);
+      // From the doorway, as you walk in: the foot of the bed, not the back of its headboard.
+      standAt(e, 29.5, M.z0 + 1.2, F1 + 0.1, 0);
       run(e, 0.4, 0);
-      await shot(e, [M.x0 + 1.4, F1 + 1.72, M.z1 - 1.6], [M.x1 - 3.0, F1 + 1.0, M.z0 + 2.4], 74);
+      await shot(e, [29.9, F1 + 1.72, M.z0 + 0.2], [BED.master.wallX + 1.2, F1 + 0.7, BED.master.z + 0.4], 78);
       run(e, 0.6, 0.6);
     },
   });
@@ -197,9 +212,9 @@ export function registerHomePoses(): void {
     async apply(e) {
       const B = UPPER_ROOM.bed2;
       await base(e);
-      standAt(e, B.x0 + 2.0, B.z1 - 2.2, F1 + 0.1, 0);
+      standAt(e, 5.6, B.z0 + 1.3, F1 + 0.1, 0);
       run(e, 0.4, 0);
-      await shot(e, [B.x0 + 1.2, F1 + 1.72, B.z1 - 1.4], [B.x1 - 2.0, F1 + 1.0, B.z0 + 1.6], 74);
+      await shot(e, [5.3, F1 + 1.72, B.z0 + 0.2], [BED.bed2.wallX - 1.2, F1 + 0.7, BED.bed2.z + 0.6], 78);
       run(e, 0.6, 0.6);
     },
   });
