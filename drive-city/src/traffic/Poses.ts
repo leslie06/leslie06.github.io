@@ -41,6 +41,37 @@ export function registerTrafficPoses(): void {
     },
   });
   registerPose({
+    name: 'traffic_lane_junction',
+    description: 'A lane junction in 金鱼池 (on the short cycle), at eye height: side streets have lights too.',
+    async apply(e) {
+      const { cam, world } = await prepare(e);
+      const tr = e.get<TrafficApi>('traffic');
+      if (!tr) return;
+      // The short-cycle junction nearest a grid of lanes south of 天坛's north gate.
+      const g = tr.graph, sig = tr.signals;
+      const want = { x: 330, z: 2257 };
+      let node = -1, bd = Infinity;
+      for (let i = 0; i < g.nodeX.length; i++) {
+        const c = sig.junctionOf(i);
+        if (c < 0 || sig.cycleOf(c) >= 50) continue;
+        const d = Math.hypot(g.nodeX[i] - want.x, g.nodeZ[i] - want.z);
+        if (d < bd) { bd = d; node = i; }
+      }
+      if (node < 0) return;
+      // Stand back along the longest approach, looking into the junction.
+      let best = -1, bl = 0;
+      for (const l of g.links) if (l.to === node && l.len > bl && sig.junctionOf(l.from) !== sig.junctionOf(node)) { bl = l.len; best = l.id; }
+      const at = g.at(g.links[best], Math.max(0, g.links[best].len - 22), 0, { x: 0, z: 0, dx: 0, dz: 0 });
+      const x = g.nodeX[node], z = g.nodeZ[node];
+      e.get<VehicleApi>('vehicle')!.reset({ x: at.x - at.dx * 30, y: 1.2, z: at.z - at.dz * 30 }, Math.atan2(at.dx, at.dz));
+      cam.override = (c) => { c.position.set(at.x, 1.7, at.z); c.lookAt(x, 2.6, z); c.fov = 60; c.updateProjectionMatrix(); };
+      e.tick(1 / 60);
+      await world.preload?.(x, z);
+      simulate(e, 20);
+      for (let i = 0; i < 30; i++) e.tick(1 / 60);
+    },
+  });
+  registerPose({
     name: 'traffic_street', description: 'Chang\'an Avenue behind the parked taxi after 20 s of traffic.',
     async apply(e) {
       const { cam } = await prepare(e);

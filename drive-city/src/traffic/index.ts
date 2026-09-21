@@ -11,7 +11,7 @@ import { ControlFilter } from '../vehicle/ControlFilter';
 import { LaneGraph } from './LaneGraph';
 import { Signals, SignalHeads } from './Signals';
 import { CarKit } from './CarKit';
-import { AiDriver, type Leader } from './AiDriver';
+import { AiDriver, lineStats, type Leader } from './AiDriver';
 
 interface Npc {
   car: Vehicle;
@@ -33,6 +33,8 @@ export interface TrafficApi extends TrafficCars {
   cars(): Vehicle[];
   /** Signal clock, seconds (for `signals.state`). */
   readonly time: number;
+  /** Stop lines traffic has crossed, and how many on red (diagnostics: `.scratch/order.mjs`). */
+  readonly lineStats: { crossed: number; onRed: number };
 }
 
 // Beijing traffic: white, black and silver dominate, then grey, dark blue, red, champagne.
@@ -189,7 +191,7 @@ export async function install(engine: Engine): Promise<void> {
 
   const api: TrafficApi = {
     name: 'traffic',
-    graph: g, signals: sig,
+    graph: g, signals: sig, lineStats,
     get time() { return t; },
     cars: () => pool.filter((n) => n.active).map((n) => n.car),
     nearestCar(x, z, r) {

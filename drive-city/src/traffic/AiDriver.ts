@@ -6,6 +6,15 @@ import type { Light, Signals } from './Signals';
 export interface Leader { gap: number; speed: number }
 
 const A_MAX = 2.2, B_COMF = 3.2, S0 = 3, HEADWAY = 1.25, CAR_LEN = 4.6;
+/** Where a driver stops for a red: this far short of the junction node. */
+const STOP_LINE = 7;
+
+/**
+ * Stop lines crossed by every AiDriver since boot, and how many of them on red: the probe's proof
+ * that traffic obeys the lights (`.scratch/order.mjs`). A line crossed on amber is legal - that is
+ * a driver too close to stop when it changed.
+ */
+export const lineStats = { crossed: 0, onRed: 0 };
 
 /**
  * Drives one traffic car along the lane graph: pure-pursuit steering at a lane-offset point ahead,
@@ -25,6 +34,8 @@ export class AiDriver {
   readonly input: DriveInput = { forward: 0, back: 0, steer: 0, analog: true, handbrake: false };
   private p = { x: 0, z: 0, dx: 0, dz: 0 };
   private q = { x: 0, z: 0, dx: 0, dz: 0 };
+  /** Where the car was last step, for counting stop lines crossed (`lineStats`). */
+  private lineLink = -1; private lineToEnd = 0;
 
   constructor(private g: LaneGraph, private sig: Signals, link: number, s: number, lane: number, private rnd: () => number) {
     this.link = link; this.s = s; this.lane = lane;
@@ -88,7 +99,12 @@ export class AiDriver {
     if (turn > 0.12) vt = Math.min(vt, Math.sqrt(2.6 * 28 / turn));
     const toEnd = l.len - this.s;
     const light: Light = this.sig.state(l, t);
-    const stopAt = toEnd - 7;
+    const stopAt = toEnd - STOP_LINE;
+    if (this.lineLink === this.link && this.lineToEnd > STOP_LINE && toEnd <= STOP_LINE && this.sig.junctionOf(l.to) >= 0) {
+      lineStats.crossed++;
+      if (light === 2) lineStats.onRed++;
+    }
+    this.lineLink = this.link; this.lineToEnd = toEnd;
     if (light !== 0 && stopAt > -0.5) {
       const canStop = v * v / (2 * 4.5) < stopAt + 0.5;
       if (light === 2 || canStop) vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 2.6 * Math.max(0, stopAt - 0.8))));

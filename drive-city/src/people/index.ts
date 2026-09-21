@@ -39,6 +39,8 @@ interface Ped {
   cross: boolean; road: boolean; c0x: number; c0z: number; c1x: number; c1z: number; cl: number; ct: number;
   /** Signalised junction and phase this crossing waits for (-1: just looking both ways). */
   waitJ: number; waitPhase: number;
+  /** The pavement they stood on before a kerb wait, to step back onto if a car scares them there. */
+  backLink: number; backS: number; backDir: number; backSide: number;
   pos: THREE.Vector3; prev: THREE.Vector3; vel: THREE.Vector3; vy: number;
   yaw: number; want: number; pace: number; cur: number; moved: number;
   gait: Gait; look: Look; seed: number;
@@ -100,7 +102,7 @@ export async function install(engine: Engine): Promise<void> {
     on: false, mode: 'walk' as Mode, t: 0, hold: 0, fear: 0,
     link: 0, s: 0, side: 1, frac: 0.5, fracT: 0.5, dir: 1,
     cross: false, road: false, c0x: 0, c0z: 0, c1x: 0, c1z: 0, cl: 1, ct: 0,
-    waitJ: -1, waitPhase: 0,
+    waitJ: -1, waitPhase: 0, backLink: 0, backS: 0, backDir: 1, backSide: 1,
     pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0,
     yaw: 0, want: 0, pace: 1.3, cur: 1.3, moved: 0,
     gait: new Gait(), look: randomLook(rnd), seed: rnd(),
@@ -147,22 +149,36 @@ export async function install(engine: Engine): Promise<void> {
     for (const c of g.out[node]) tryLink(c, 1);
     for (const c of inn[node]) tryLink(c, -1);
     if (bl < 0) { p.dir = -p.dir; return; }   // dead end, or only roads too wide to cross: turn back
+    p.backLink = p.link; p.backS = p.s; p.backDir = p.dir; p.backSide = p.side;
     p.link = bl; p.s = bs; p.dir = bdir; p.side = bside;
     if (bd < 1) return;
     p.cross = true; p.road = atJunction;
     p.c0x = ex; p.c0z = ez; p.c1x = bx; p.c1z = bz; p.cl = bd; p.ct = 0;
-    if (!atJunction || p.mode !== 'walk') return;
-    // At the kerb: wait for the green of the traffic running alongside, or for a gap in it. The
-    // hold is the point at which a Beijing pedestrian gives up and goes anyway (drivers brake for
-    // anyone in the road, see `inRoad`).
+    if (!atJunction) return;
     const j = sig.junctionOf(node);
-    p.mode = 'wait'; p.t = 0; p.waitJ = j; p.hold = j >= 0 ? 75 : 22;
+    // Someone running from a car still stops at a red: before, a fleeing pedestrian sprinted
+    // straight over any kerb they reached. Only an unlit corner is run across.
+    if (p.mode !== 'walk' && !(p.mode === 'flee' && j >= 0)) return;
+    // At the kerb: wait for the green of the traffic running alongside, or (unlit) for a gap in it.
+    // Where there is no light, `hold` is the point at which a Beijing pedestrian gives up and goes
+    // anyway (drivers brake for anyone in the road, see `inRoad`). At a light it is a full cycle
+    // and more, which every phase's green comes round inside: nobody crosses on red.
+    p.mode = 'wait'; p.t = 0; p.fear = 0; p.waitJ = j; p.hold = j >= 0 ? sig.cycleOf(j) + 10 : 22;
     p.waitPhase = j >= 0 ? sig.phaseAlong(j, bx - ex, bz - ez) : 0;
     p.want = Math.atan2(bx - ex, bz - ez);
   };
 
+  /** Give up a crossing they are waiting at the kerb for, and stand back on the pavement they came along. */
+  const stepBack = (p: Ped) => {
+    p.link = p.backLink; p.s = p.backS; p.side = p.backSide;
+    p.dir = -p.backDir;   // away from the junction, or they would be straight back at the kerb
+    p.cross = false; p.road = false;
+    p.fracT = 0.92;
+  };
+
   /** Back to the nearest pavement after a fall; `lost` if there is none nearby. */
   const reattach = (p: Ped) => {
+    p.waitJ = -1;
     let bd = 40, bl = -1, bs = 0, bside = 1;
     for (const id of g.near(p.pos.x, p.pos.z, 40)) {
       const l = g.links[id], w = walkW(l);
@@ -194,7 +210,11 @@ export async function install(engine: Engine): Promise<void> {
   /** Run from a threat at (fx, fz): along the pavement away from it (or on across the road). */
   const scare = (p: Ped, fx: number, fz: number, secs: number) => {
     if (!calm(p)) return;
-    if (p.mode !== 'flee' && !p.cross) {
+    // Waiting at the kerb they are already on the crossing's line, so fleeing used to mean
+    // sprinting over it - on red, in front of the car that scared them, and every car passing in
+    // the near lane is inside the scare zone. Jump back from the kerb instead.
+    if (p.mode === 'wait' && p.cross) stepBack(p);
+    else if (p.mode !== 'flee' && !p.cross) {
       g.at(g.links[p.link], p.s, 0, at2);
       p.dir = (p.pos.x - fx) * at2.dx + (p.pos.z - fz) * at2.dz >= 0 ? 1 : -1;
       p.fracT = 0.92;   // away from the kerb
@@ -332,10 +352,14 @@ export async function install(engine: Engine): Promise<void> {
       // Crossing a six-lane arterial takes longer than the side street's whole green, so a walk
       // that cannot fit starts on the change instead and finishes into the amber, as people do.
       const need = p.cl / Math.max(1, p.pace * 1.35) + 2.5;
+      const green = p.cross && p.waitJ >= 0 ? sig.greenLeft(p.waitJ, p.waitPhase, tr.time) : 0;
       const go = !p.cross ? false
-        : p.waitJ >= 0 ? sig.greenLeft(p.waitJ, p.waitPhase, tr.time) > Math.min(need, sig.greenSpan(p.waitPhase) - 2)
+        : p.waitJ >= 0 ? green > Math.min(need, sig.greenSpan(p.waitJ, p.waitPhase) - 2)
         : clearToCross(p);
-      if (go || p.t > p.hold) { p.mode = 'walk'; p.t = 0; }
+      if (go || p.t > p.hold) {
+        if (p.cross && p.waitJ >= 0) { lights.crossed++; if (green <= 0) lights.onRed++; }
+        p.mode = 'walk'; p.t = 0;
+      }
       return;
     }
     if (p.mode === 'flee') { p.fear -= dt; if (p.fear <= 0) { p.mode = 'walk'; p.t = 0; p.fracT = 0.3 + rnd() * 0.6; } }
@@ -360,7 +384,9 @@ export async function install(engine: Engine): Promise<void> {
     p.moved = (p.mode as Mode) === 'wait' ? 0 : p.cur;
   };
 
-  interface Stats { active: number; cap: number; onRoad: number; crossing: number; waiting: number; walking: number; down: number }
+  /** Crossings started at a light since boot, and how many of them against it (`.scratch/order.mjs`). */
+  const lights = { crossed: 0, onRed: 0 };
+  interface Stats { active: number; cap: number; onRoad: number; crossing: number; waiting: number; walking: number; down: number; lightCrossings: number; crossedOnRed: number }
   const api: PeopleApi & { debug: { knocked(): number; stats(): Stats; nearest(x: number, z: number, r: number): { x: number; z: number } | null } } = {
     name: 'people',
     get count() { return active; },
@@ -368,7 +394,7 @@ export async function install(engine: Engine): Promise<void> {
     debug: {
       knocked: () => peds.reduce((n, p) => n + (p.on && !calm(p) ? 1 : 0), 0),
       stats: () => {
-        const st: Stats = { active, cap, onRoad: 0, crossing: 0, waiting: 0, walking: 0, down: 0 };
+        const st: Stats = { active, cap, onRoad: 0, crossing: 0, waiting: 0, walking: 0, down: 0, lightCrossings: lights.crossed, crossedOnRed: lights.onRed };
         for (const p of peds) {
           if (!p.on) continue;
           if (!calm(p)) st.down++;
