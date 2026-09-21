@@ -287,6 +287,24 @@ export const DRIVE = {
   kerb: { x0: -66.2, x1: -PLOT.hw, z0: -13.2, z1: -6.8 },
 };
 
+/**
+ * What the city has to keep off the drive where it leaves the plot and crosses 恒惠路's pavement:
+ * street trees, lamps and kerbside furniture (the landmark's `clear` zone).
+ *
+ * The plot was surveyed clear of trees and lamps, but the drive runs 18 m beyond it, across a
+ * pavement OSM lines with a tree every 9 m. One stood 0.6 m off the drive's centre line with a lamp
+ * 0.4 m off its north edge, 2.6 m apart: a car turning in from the north was wedged between them
+ * with the throttle wide open (「每次把车开到别墅门口就卡住」, 2026-09-21), and nothing caught it
+ * because every home probe *teleported* the car to x -52 or further in, east of the tree line.
+ * Wider than the paving by `FLARE` each side, because a car turning in off the road cuts the corner:
+ * the next trees along stand 5 m and 6.4 m beyond the paving and stay.
+ */
+const FLARE = 3;
+export const DRIVE_CLEAR = {
+  x0: DRIVE.kerb.x0 - 1, x1: DRIVE.kerb.x1,
+  z0: DRIVE.kerb.z0 - FLARE, z1: DRIVE.kerb.z1 + FLARE,
+};
+
 /** Low stone wall and hedge on the plot line, with the gate left open on the west. */
 export const EDGE = { wall: 0.7, t: 0.4, inset: 0.6, hedge: 1.1 };
 export const GATE = { z: -10, w: 7.6, pierW: 1.2, pierH: 2.6 };

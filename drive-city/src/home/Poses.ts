@@ -4,7 +4,7 @@ import type { CameraApi, HudApi, PlayerApi, VehicleApi, WantedApi, WorldApi } fr
 import { registerPose } from '../debug/PoseRegistry';
 import type { UiApi } from '../ui';
 import type { HomeSystem } from '.';
-import { ANCHOR, BED, DOOR, ENTRY, GARAGE, HOUSE, LANDING, PARK_AT, ROOM, STAIR, TERRACE, UPPER_ROOM, VOID, stairPoint } from './Layout';
+import { ANCHOR, BED, DOOR, DRIVE, ENTRY, GARAGE, GATE, HOUSE, LANDING, PARK_AT, ROOM, STAIR, TERRACE, UPPER_ROOM, VOID, stairPoint } from './Layout';
 
 /**
  * 我家 screenshot poses (`node scripts/shot.mjs --world city --poses home_...`).
@@ -292,6 +292,16 @@ export function registerHomePoses(): void {
       home?.debug.setDoor(1);
       run(e, 0.6, 0);
       await shot(e, [GARAGE.x0 - 15, 4.0, DOOR.z + 7], [PARK_AT.x, 1.6, PARK_AT.z], 56);
+      run(e, 0.6, 0.6);
+    },
+  });
+
+  registerPose({
+    name: 'home_drive',
+    description: 'The mouth of the drive from 恒惠路, as you turn in: nothing of the street may stand in it.',
+    async apply(e) {
+      await base(e);
+      await shot(e, [DRIVE.kerb.x0 - 11, 3.4, GATE.z - 15], [DRIVE.kerb.x1 - 6, 0.8, GATE.z], 58);
       run(e, 0.6, 0.6);
     },
   });

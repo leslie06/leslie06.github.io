@@ -1,8 +1,12 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { dropInside } from '../city/Clear';
+import type { TileData } from '../city/Data';
+import { project } from '../city/Geo';
 import type { ColliderSpec } from '../game/Contracts';
 import {
-  BAR, BEDROOMS, DOOR, ENTRY, GARAGE, GARAGE_DOOR, GATE, HOUSE, LANDING, PLINTH, PLOT, POOL, ROOM,
+  ANCHOR, BAR, BEDROOMS, DOOR, DRIVE, ENTRY, GARAGE, GARAGE_DOOR, GATE, HOUSE, LANDING, PLINTH, PLOT, POOL, ROOM,
   SLIDER, STAIR, UPPER_ROOM, UPPER_WALL, VOID, Y, BED, stairAngle,
 } from './Layout';
 import { buildVillaExtras, buildVillaFar, buildVillaStatic, VILLA_KEYS } from './Villa';
@@ -324,6 +328,40 @@ describe('我家 the villa', () => {
     expect(POOL.x1).toBeLessThan(PLINTH.x1);
     expect(POOL.z1).toBeLessThan(PLINTH.z1);
     expect(Y.water).toBeLessThan(Y.plinth);
+  });
+
+  it('keeps the street off its drive: no tree or lamp where a car turns in', () => {
+    // The plot is surveyed clear, but the drive runs on across 恒惠路's pavement, and a footprint
+    // only removes buildings. Read the real tiles, as the worker does, and look for anything with a
+    // collider (Streamer.addBody: trees r 0.24, lamps r 0.14) within a car's half width of the
+    // paving. The villa's heading is 0, so local -> world is a translation.
+    const [ax, az] = project(ANCHOR.lat, ANCHOR.lon);
+    const zones = (built.clear ?? []).map((zone) => zone.flatMap(([x, z]) => [ax + x, az + z]));
+    const TILE = 256, reach = CAR_W / 2 + 0.24 + 0.3;
+    const paving = [DRIVE.kerb, DRIVE.in];
+    const keys = new Set<string>();
+    for (const r of paving) for (const x of [r.x0, r.x1]) for (const z of [r.z0, r.z1]) keys.add(`${Math.floor((ax + x) / TILE)}_${Math.floor((az + z) / TILE)}`);
+    const inTheWay = (list: number[], stride: number): string[] => {
+      const out: string[] = [];
+      for (let i = 0; i < list.length; i += stride) {
+        const x = list[i] - ax, z = list[i + 1] - az;
+        if (paving.some((r) => x > r.x0 - reach && x < r.x1 + reach && z > r.z0 - reach && z < r.z1 + reach)) out.push(`(${x.toFixed(1)}, ${z.toFixed(1)})`);
+      }
+      return out;
+    };
+    let raw = 0;
+    for (const k of keys) {
+      const file = fileURLToPath(new URL(`../../public/city/t_${k}.json`, import.meta.url));
+      if (!existsSync(file)) continue;
+      const tile = JSON.parse(readFileSync(file, 'utf8')) as TileData;
+      raw += inTheWay(tile.trees, 4).length + inTheWay(tile.lamps, 3).length;
+      expect(inTheWay(dropInside(tile.trees, 4, zones), 4), `street trees on the drive, tile ${k}`).toEqual([]);
+      expect(inTheWay(dropInside(tile.lamps, 3, zones), 3), `street lamps on the drive, tile ${k}`).toEqual([]);
+    }
+    // The control: OSM does plant this pavement, so an empty result above is the clear zone working
+    // and not a test that looked in the wrong place. (If a re-extract ever moves the trees, this is
+    // the line that fails, and the zone can go.)
+    expect(raw).toBeGreaterThan(0);
   });
 
   /** `PROFILE=1 npx vitest run src/home/Villa.test.ts` writes the model's cost to .scratch/home. */

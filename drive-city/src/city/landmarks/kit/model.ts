@@ -15,6 +15,8 @@ export interface AssembleOpts {
   height: number;
   /** Optional pieces outside the footprint (bridges, columns) the city may drop if they clash. */
   extras?: Parts;
+  /** Ground the city must keep free of street trees, lamps and furniture (LandmarkModel.clear). */
+  clear?: [number, number][][];
   farDistance?: number;
 }
 
@@ -49,5 +51,5 @@ export function assemble(o: AssembleOpts): LandmarkModel {
     farDrawCalls: far.children.length,
   };
   group.updateMatrixWorld(true);
-  return { group, colliders: o.colliders, footprint: o.footprint, height: o.height };
+  return { group, colliders: o.colliders, footprint: o.footprint, clear: o.clear, height: o.height };
 }

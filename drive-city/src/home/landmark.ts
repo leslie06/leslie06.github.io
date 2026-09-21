@@ -20,6 +20,7 @@ function build(env: EnvUniforms): LandmarkModel {
     mats: villaMaterials(env),
     colliders: s.colliders,
     footprint: s.footprint,
+    clear: s.clear,
     height: s.height,
     // A two-storey house is not read from across the city; drop to the massing sooner than a tower.
     farDistance: 900,

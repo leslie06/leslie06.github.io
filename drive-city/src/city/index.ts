@@ -27,12 +27,12 @@ async function loadLandmarks(): Promise<LandmarkDef[]> {
   catch (e) { console.warn('[city] landmarks unavailable', e); return []; }
 }
 
-/** Landmarks at their OSM anchors, with colliders; returns their footprints in world XZ (flat). */
-function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): number[][] {
+/** Landmarks at their OSM anchors, with colliders; returns their footprints and clear zones in world XZ (flat). */
+function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): { footprints: number[][]; clear: number[][] } {
   /** ?nostone skips the walkable stone colliders (for measuring what they cost). */
   const noStone = new URLSearchParams(location.search).has('nostone');
   const { R, world } = engine.physics;
-  const footprints: number[][] = [];
+  const footprints: number[][] = [], clear: number[][] = [];
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
   /** Same world geometry, but invisible to cars: see ColliderSpec.walkOnly. */
@@ -50,6 +50,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
     model.group.name = `landmark ${def.id}`;
     engine.scene.add(model.group);
     footprints.push(model.footprint.flatMap(([lx, lz]) => toWorld(lx, lz)));
+    for (const zone of model.clear ?? []) clear.push(zone.flatMap(([lx, lz]) => toWorld(lx, lz)));
     // Stone you can stand on. Terraces, steps and bridges are geometry only, so the player used to
     // stand on the ground *under* them and looked buried. Build trimesh colliders from the stone
     // meshes, preferring the far LOD (same shape, a fraction of the triangles).
@@ -92,7 +93,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
       if (desc) engine.physics.tag(world.createCollider(desc.setCollisionGroups(sp.walkOnly ? gWalk : g).setFriction(0.6), body), { surface: 'concrete', tag: `landmark:${def.id}` });
     }
   }
-  return footprints;
+  return { footprints, clear };
 }
 
 /**
@@ -127,11 +128,11 @@ export async function install(engine: Engine): Promise<void> {
   groundMesh.name = 'ground';
   scene.add(groundMesh);
 
-  const footprints = placeLandmarks(engine, env, defs);
+  const { footprints, clear } = placeLandmarks(engine, env, defs);
   const sky = new SkylineLod(skyline, env);
   sky.exclude(footprints);
   scene.add(sky.mesh);
-  const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers);
+  const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear);
   streamer.onDetailChange = (keys) => sky.setDetailed(keys);
   engine.add(streamer);
   const routes = new Routes(network);

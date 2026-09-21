@@ -4,7 +4,7 @@ import { Parts, box, circlePoly, cyl, flat, hexa, lathe, prism, rectPoly, tube, 
 import { landmarkMaterials, nightGlow } from '../city/landmarks/kit/mats';
 import { grimeTex, marbleTex, pavingTex } from '../city/landmarks/kit/tex';
 import {
-  BAR, BED, BEDROOMS, CURVES, DECK, DOOR, DOOR_HEAD, DRIVE, EDGE, ENTRY, GARAGE, GARAGE_DOOR, GATE,
+  BAR, BED, BEDROOMS, CURVES, DECK, DOOR, DOOR_HEAD, DRIVE, DRIVE_CLEAR, EDGE, ENTRY, GARAGE, GARAGE_DOOR, GATE,
   HERO_TREE, HOUSE, LANDING, LIGHTS, PARK_AT, PLINTH, PLOT, POOL, REFLECT, ROOM, SLIDER, STAIR,
   TERRACE, TREES, UPPER_ROOM, UPPER_WALL, VOID, Y, stairAngle, stairPoint,
 } from './Layout';
@@ -1093,7 +1093,7 @@ function terraceFurniture(P: Parts): void {
   }
 }
 
-export interface VillaStatic { parts: Parts; colliders: ColliderSpec[]; footprint: [number, number][]; height: number }
+export interface VillaStatic { parts: Parts; colliders: ColliderSpec[]; footprint: [number, number][]; clear: [number, number][][]; height: number }
 
 export function buildVillaStatic(): VillaStatic {
   const P = new Parts();
@@ -1102,7 +1102,7 @@ export function buildVillaStatic(): VillaStatic {
   ];
   garden(P);
   terraceFurniture(P);
-  return { parts: P, colliders, footprint: rectPoly(PLOT.hw, PLOT.hd), height: HOUSE.roof };
+  return { parts: P, colliders, footprint: rectPoly(PLOT.hw, PLOT.hd), clear: [poly(DRIVE_CLEAR)], height: HOUSE.roof };
 }
 
 /** Outside the footprint: the drive crossing the verge to 恒惠路's kerb. */

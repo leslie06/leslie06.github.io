@@ -8,6 +8,7 @@ import { buildBuildings } from './Buildings';
 import { buildRoads } from './Roads';
 import { buildAreas } from './Areas';
 import { placeFurniture, type Furniture } from './visual/StreetFurniture';
+import { clearStreet, inside } from './Clear';
 import type * as THREE from 'three';
 
 export interface PackedGeometry { name: string; attrs: { name: string; array: Float32Array; itemSize: number }[]; index?: Uint32Array }
@@ -19,15 +20,6 @@ export interface TileResult {
   trees?: number[]; lamps?: number[]; signals?: number[]; stops?: number[];
   /** Street furniture instances (visual/StreetFurniture.ts). */
   furniture?: Furniture;
-}
-
-function inside(x: number, z: number, r: number[]): boolean {
-  let c = false;
-  for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
-    const ax = r[i], az = r[i + 1], bx = r[j], bz = r[j + 1];
-    if ((az > z) !== (bz > z) && x < (bx - ax) * (z - az) / (bz - az) + ax) c = !c;
-  }
-  return c;
 }
 
 function pack(name: string, g: THREE.BufferGeometry | null, out: PackedGeometry[], transfer: Transferable[]): void {
@@ -42,8 +34,8 @@ function pack(name: string, g: THREE.BufferGeometry | null, out: PackedGeometry[
   out.push({ name, attrs, index });
 }
 
-self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][] }>) => {
-  const { key, url, footprints } = ev.data;
+self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][] }>) => {
+  const { key, url, footprints, clear = [] } = ev.data;
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -61,8 +53,9 @@ self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints:
     for (const [k, g] of Object.entries(rm)) pack(k, g as THREE.BufferGeometry | null, geoms, transfer);
     for (const [k, g] of buildAreas(data.areas)) pack(`area:${k}`, g, geoms, transfer);
     transfer.push(bm.colVerts.buffer, bm.colIdx.buffer);
-    const furniture = placeFurniture(data.roads, data.crossings, data.stops);
-    const msg: TileResult = { key, geoms, colVerts: bm.colVerts, colIdx: bm.colIdx, trees: data.trees, lamps: data.lamps, signals: data.signals, stops: data.stops, furniture };
+    // A footprint removes buildings; a landmark's clear zones remove what the street put in its way.
+    const { trees, lamps, furniture } = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, clear);
+    const msg: TileResult = { key, geoms, colVerts: bm.colVerts, colIdx: bm.colIdx, trees, lamps, signals: data.signals, stops: data.stops, furniture };
     (self as unknown as Worker).postMessage(msg, transfer);
   } catch (e) {
     (self as unknown as Worker).postMessage({ key, error: String((e as Error)?.message ?? e) } satisfies TileResult);

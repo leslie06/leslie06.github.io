@@ -123,7 +123,7 @@ export class CityStreamer implements System {
   private _m = new THREE.Matrix4(); private _q = new THREE.Quaternion(); private _p = new THREE.Vector3(); private _s = new THREE.Vector3();
   onDetailChange?: (keys: Set<string>) => void;
 
-  constructor(private engine: Engine, private manifest: Manifest, private mats: CityMaterials, private env: EnvUniforms, private footprints: number[][], workers?: Worker[]) {
+  constructor(private engine: Engine, private manifest: Manifest, private mats: CityMaterials, private env: EnvUniforms, private footprints: number[][], workers?: Worker[], private clear: number[][] = []) {
     const tier = engine.quality.tier;
     this.radius = tier === 'low' ? 2 : tier === 'medium' ? 3 : 4;
     this.vegRadius = tier === 'low' ? 1 : tier === 'medium' ? 2 : 3;
@@ -177,7 +177,7 @@ export class CityStreamer implements System {
     if (this.tiles.has(k) || this.inflight.has(k)) return;
     const w = this.workers[this.rr++ % this.workers.length];
     this.inflight.set(k, performance.now());
-    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, location.href).href, footprints: this.footprints });
+    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, location.href).href, footprints: this.footprints, clear: this.clear });
   }
 
   private build(res: TileResult): void {
