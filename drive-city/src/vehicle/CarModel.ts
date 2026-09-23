@@ -137,9 +137,11 @@ function assemble(parts: BodyParts, spec: VehicleSpec, mats: CarMaterials): CarM
   for (let i = 0; i < 4; i++) {
     const w = spec.wheels[i];
     const hub = new THREE.Group();
-    hub.position.set(w.x, 0, w.z);
+    hub.position.set(spec.single ? 0 : w.x, 0, w.z);
     const spin = new THREE.Group();
     hub.add(spin);
+    // A two-wheeler draws one wheel per axle, at the centre; the right-hand mounts stay as empty pivots.
+    if (spec.single && i % 2 === 1) { hubs.push(hub); spinners.push(spin); continue; }
     const side = w.x > 0 ? 1 : -1;   // +X is the car's left; the rim faces outward
     const geo = !w.front && wr ? wr : wf!;
     const place = (dx: number) => {

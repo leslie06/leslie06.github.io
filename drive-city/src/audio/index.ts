@@ -1,12 +1,16 @@
 import type { Engine, System } from '../core/Engine';
 import type { VehicleApi, WantedApi, RenderApi, PlayerApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
+import type { HudApi } from '../game/Contracts';
+import { Radio } from './Radio';
 
 export interface AudioApi extends System {
   /** Must be called synchronously inside a user gesture (the start button). */
   unlock(): void;
   muted: boolean;
   setMuted(m: boolean): void;
+  /** The car radio (Radio.ts), once the context exists. */
+  radio: Radio | null;
 }
 
 /**
@@ -25,6 +29,7 @@ export async function install(engine: Engine): Promise<void> {
   let windGain: GainNode, hornGain: GainNode;
   let sirenGain: GainNode, sirenLfo: OscillatorNode;
   let cityGain: GainNode, passGain: GainNode, humGain: GainNode;
+  let radio: Radio | null = null;
   let stepDist = 0;
   let noiseBuf: AudioBuffer;
   let shiftDip = 0;
@@ -104,6 +109,10 @@ export async function install(engine: Engine): Promise<void> {
     humGain = c.createGain(); humGain.gain.value = 0;
     const hlp = c.createBiquadFilter(); hlp.type = 'lowpass'; hlp.frequency.value = 240;
     hum.connect(hlp).connect(humGain).connect(master); hum.start();
+
+    // The radio, on its own bus under the master so mute covers it.
+    radio = new Radio(c, master, noiseBuf);
+    radio.onTrack = (label) => { if (engine.get<PlayerApi>('player')?.mode === 'driving') engine.get<HudApi>('hud')?.toast(label); };
   }
 
   /** One footstep: a short, soft noise tick (harder when running). */
@@ -130,6 +139,29 @@ export async function install(engine: Engine): Promise<void> {
     o.connect(og).connect(master); o.start(t); o.stop(t + 0.4);
   }
 
+  /** Another driver's horn: a lower two-tone burst, quieter with distance. */
+  function npcHorn(x: number, z: number): void {
+    if (!ctx || muted) return;
+    const c = ctx, t0 = c.currentTime, cam = engine.camera.position;
+    const d = Math.hypot(x - cam.x, z - cam.z), vol = 0.07 * Math.max(0.15, 1 - d / 60);
+    const g = c.createGain(); g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02); g.gain.setValueAtTime(vol, t0 + 0.45); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55);
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200;
+    for (const fr of [370, 466]) { const o = c.createOscillator(); o.type = 'square'; o.frequency.value = fr; o.connect(f); o.start(t0); o.stop(t0 + 0.6); }
+    f.connect(g).connect(master);
+  }
+  /** The wanted level rose: one siren whoop over everything. Fell to zero: a soft two-note all-clear. */
+  function stinger(up: boolean): void {
+    if (!ctx || muted) return;
+    const c = ctx, t0 = c.currentTime;
+    const g = c.createGain(); g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(up ? 0.16 : 0.09, t0 + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t0 + (up ? 0.7 : 0.9));
+    const o = c.createOscillator(); o.type = up ? 'sawtooth' : 'triangle';
+    if (up) { o.frequency.setValueAtTime(520, t0); o.frequency.exponentialRampToValueAtTime(1500, t0 + 0.35); o.frequency.exponentialRampToValueAtTime(600, t0 + 0.7); }
+    else { o.frequency.setValueAtTime(660, t0); o.frequency.setValueAtTime(880, t0 + 0.3); }
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 0.8;
+    o.connect(f).connect(g).connect(master); o.start(t0); o.stop(t0 + 1);
+  }
+  engine.events.on('traffic:horn', ({ x, z }) => npcHorn(x, z));
+  engine.events.on('wanted:level', ({ up }) => stinger(up));
   engine.events.on('vehicle:impact', ({ strength }) => thump(Math.min(1, strength / 12)));
   engine.events.on('vehicle:land', ({ airTime }) => thump(Math.min(0.8, airTime * 0.5), 55));
   engine.events.on('vehicle:shift', () => { shiftDip = 0.14; });
@@ -138,6 +170,7 @@ export async function install(engine: Engine): Promise<void> {
     name: 'audio',
     get muted() { return muted; },
     set muted(m: boolean) { api.setMuted(m); },
+    get radio() { return radio; },
     setMuted(m) {
       muted = m;
       try { localStorage.setItem('drivecity.muted', m ? '1' : '0'); } catch { /* ignore */ }
@@ -157,8 +190,13 @@ export async function install(engine: Engine): Promise<void> {
       const c = ctx, t = c.currentTime, car = v.car;
       if (engine.input.state.mutePressed) api.setMuted(!muted);
       const paused = engine.paused;
-      // Engine off while the player is out of the car.
-      const off = !v.occupied;
+      const driving = v.occupied && engine.get<PlayerApi>('player')?.mode === 'driving';
+      if (radio) {
+        if (engine.input.state.radioPressed && driving) radio.next();
+        radio.update(!!driving, paused);
+      }
+      // Engine off while the player is out of the car, and a bicycle has none.
+      const off = !v.occupied || car.spec.name === 'bike';
       const rpm = off ? 0 : car.rpm, thr = paused || off ? 0 : v.controls.throttle;
       const f = rpm / 30;
       shiftDip = Math.max(0, shiftDip - dt);

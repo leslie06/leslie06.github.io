@@ -12,6 +12,7 @@ export interface TouchInput {
   steer: number; forward: number; back: number; handbrake: boolean; sprint: boolean; analog: boolean;
   lookDX: number; lookDY: number;
   jumpPressed: boolean; enterPressed: boolean; punchPressed: boolean; mapPressed: boolean; cameraPressed: boolean; pausePressed: boolean;
+  radioPressed: boolean;
 }
 
 export interface InputState {
@@ -40,6 +41,8 @@ export interface InputState {
   pausePressed: boolean;
   helpPressed: boolean;
   mutePressed: boolean;
+  /** N: next radio station, then off. */
+  radioPressed: boolean;
   diagPressed: boolean;
 }
 
@@ -101,6 +104,14 @@ export class Input {
    */
   touch: TouchInput | null = null;
 
+  private pad: Gamepad | null = null;
+  /** Shake the gamepad (if it can): impacts, landings. Magnitudes 0..1, `ms` long. */
+  rumble(strong: number, weak: number, ms: number): void {
+    const act = (this.pad as unknown as { vibrationActuator?: { playEffect?: (t: string, o: object) => Promise<unknown> } } | null)?.vibrationActuator;
+    if (!act?.playEffect) return;
+    act.playEffect('dual-rumble', { duration: ms, strongMagnitude: Math.min(1, strong), weakMagnitude: Math.min(1, weak) }).catch(() => {});
+  }
+
   /** Call once per frame before systems read `state`. */
   poll(): InputState {
     const s = this.state;
@@ -131,6 +142,7 @@ export class Input {
     s.pausePressed = p('Escape') || p('KeyP');
     s.helpPressed = p('F1');
     s.mutePressed = p('KeyM');
+    s.radioPressed = p('KeyN');
     s.diagPressed = p('F9');
     s.mapPressed = p('Tab');
     s.punchPressed = p('KeyE') || this.clicked;
@@ -158,6 +170,7 @@ export class Input {
     s.punchPressed ||= c.punchPressed; c.punchPressed = false;
     s.mapPressed ||= c.mapPressed; c.mapPressed = false;
     s.cameraPressed ||= c.cameraPressed; c.cameraPressed = false;
+    s.radioPressed ||= c.radioPressed; c.radioPressed = false;
     s.pausePressed ||= c.pausePressed; c.pausePressed = false;
   }
 
@@ -166,6 +179,7 @@ export class Input {
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
     let pad: Gamepad | null = null;
     for (const g of pads) if (g && g.connected && g.mapping === 'standard') { pad = g; break; }
+    this.pad = pad;
     if (!pad) return;
     const b = (i: number) => pad!.buttons[i]?.pressed ?? false;
     const v = (i: number) => pad!.buttons[i]?.value ?? 0;
@@ -198,6 +212,6 @@ export class Input {
 
   static empty(): InputState {
     return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
-      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, diagPressed: false };
+      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, diagPressed: false };
   }
 }

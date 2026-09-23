@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import { onLangChange, t } from '../core/I18n';
 import type { CameraApi, HudApi, PlayerApi, VehicleApi, WorldApi, ParkApi } from '../game/Contracts';
@@ -38,6 +39,8 @@ css(`
 .hud .prompt{position:absolute;left:50%;bottom:17vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:800 15px/1 ${F.ui};letter-spacing:.08em;border-left:3px solid ${C.yellow}}
 .hud .toast{position:absolute;left:50%;bottom:22vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:700 14px/1 ${F.ui};letter-spacing:.08em;opacity:0;transition:opacity .2s}
 .hud .toast.on{opacity:1}
+.hud .shout{position:absolute;left:0;top:0;padding:5px 9px;border-radius:5px;background:rgba(244,241,232,.92);color:#15171a;font:800 13px/1 ${F.ui};white-space:nowrap;pointer-events:none;will-change:transform}
+.hud .shout[hidden]{display:none}
 .hud .flipped{position:absolute;left:50%;top:42%;transform:translateX(-50%);padding:12px 20px;border-radius:8px;background:${C.inkGlass};font:700 18px/1 ${F.ui};border-left:3px solid ${C.yellow}}
 .hud .help{position:absolute;left:var(--hud-x);top:calc(var(--hud-y) + 58px);padding:14px 16px;border-radius:8px;background:${C.inkGlass};font:500 13px/1.9 ${F.ui};min-width:260px}
 /* The radar sits in the top-left corner (see Minimap.ts), so these stack below it. Only when a
@@ -102,6 +105,9 @@ export class Hud implements HudApi {
   private rideEl!: HTMLDivElement;
   private rideOffEl!: HTMLDivElement;
   private speedoEl!: HTMLDivElement;
+  /** Shouts from the pavement: a few bubbles projected from world points. */
+  private bubbles: { el: HTMLDivElement; p: THREE.Vector3; t: number }[] = [];
+  private readonly proj = new THREE.Vector3();
 
   constructor(private engine: Engine, container: HTMLElement) {
     const root = this.root = el('div', 'hud', container);
@@ -143,10 +149,15 @@ export class Hud implements HudApi {
     this.rideOffEl.appendChild(L('hud.rideOff'));
     this.rideOffEl.hidden = true;
     this.speedoEl = root.querySelector('.speedo') as HTMLDivElement;
+    for (let i = 0; i < 5; i++) { const b = el('div', 'shout', root); b.hidden = true; this.bubbles.push({ el: b, p: new THREE.Vector3(), t: 0 }); }
+    engine.events.on('people:shout', ({ x, z, text }) => {
+      const b = this.bubbles.reduce((a, c) => (c.t < a.t ? c : a));
+      b.p.set(x, 1.95, z); b.t = 2.2; b.el.textContent = text; b.el.hidden = false;
+    });
     this.flipped = el('div', 'flipped', root); this.flipped.appendChild(L('hud.flipped')); this.flipped.hidden = true;
     this.help = el('div', 'help', root);
     this.help.hidden = true;
-    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['Esc', 'ctl.pause']];
+    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['Esc', 'ctl.pause']];
     for (const [k, key] of rows) {
       const r = el('div', 'row', this.help);
       const a = el('span', '', r);
@@ -251,5 +262,16 @@ export class Hud implements HudApi {
     }
     if (inp.mutePressed) { /* audio flips first in boot order */ setTimeout(() => this.toast(t((this.engine.get<{ name: string; muted: boolean }>('audio')?.muted ? 'hud.muted' : 'hud.unmuted'))), 0); }
     if (this.toastT > 0) { this.toastT -= dt; if (this.toastT <= 0) this.toastEl.classList.remove('on'); }
+    // Shout bubbles follow their speaker on screen and fade.
+    const w = this.root.clientWidth, h = this.root.clientHeight;
+    for (const b of this.bubbles) {
+      if (b.t <= 0) continue;
+      b.t -= dt;
+      this.proj.copy(b.p).project(this.engine.camera);
+      const behind = this.proj.z > 1, far = this.engine.camera.position.distanceTo(b.p) > 45;
+      if (b.t <= 0 || behind || far) { b.t = 0; b.el.hidden = true; continue; }
+      b.el.style.transform = `translate(${((this.proj.x + 1) / 2 * w).toFixed(0)}px, ${((1 - this.proj.y) / 2 * h - 8 - (2.2 - b.t) * 14).toFixed(0)}px) translate(-50%, -100%)`;
+      b.el.style.opacity = String(Math.min(1, b.t / 0.5));
+    }
   }
 }

@@ -12,6 +12,14 @@ export interface GameEvents {
   'people:hit': { x: number; z: number; speed: number; byPlayer: boolean };
   /** The player got in (`carjacked`: took a traffic car) or out of a car. */
   'player:mode': { mode: 'driving' | 'onfoot'; carjacked: boolean };
+  /** Someone on the pavement shouted at the player (a bubble over their head). */
+  'people:shout': { x: number; z: number; text: string };
+  /** A witness finished phoning the police about the player. */
+  'people:report': { x: number; z: number };
+  /** A traffic car blew its horn at (x, z). */
+  'traffic:horn': { x: number; z: number };
+  /** The wanted level changed (`up`: it rose). */
+  'wanted:level': { level: number; up: boolean };
   'game:start': Record<string, never>;
   'game:pause': { paused: boolean };
   /** The GPU dropped the WebGL context (driver reset / out of memory). Nothing renders after this. */

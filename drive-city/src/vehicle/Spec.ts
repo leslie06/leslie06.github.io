@@ -7,6 +7,8 @@ export interface WheelMount { x: number; z: number; front: boolean }
 export interface VehicleSpec {
   name: string;
   mass: number;
+  /** A two-wheeler: the four wheel mounts are a narrow pair per axle for the physics, drawn as one wheel at x = 0. */
+  single?: boolean;
   /** Centre of mass in the body frame. Lower than a real car's on purpose: arcade roll-over margin. */
   com: [number, number, number];
   /** Principal inertia about X (pitch), Y (yaw), Z (roll), kg·m². */
@@ -404,4 +406,106 @@ export const TRUCK: VehicleSpec = {
 };
 
 /** Spec per body type (the sedan is the taxi's). */
-export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK };
+// ---- two-wheelers ----------------------------------------------------------------------------------
+// The same ray-cast physics on a 0.32 m track: with the tyre forces acting AT the centre of mass
+// (`forceHeight` is its height above the road, no lever at all: with a lever the friction that
+// stops a sideways creep rolled the narrow body, the rolled springs pushed it on, and it slid at a
+// steady 0.08 m/s standing still) and stiff anti-roll, the narrow body cannot tip, and the lean into corners is
+// drawn (vehicle/index.ts) rather than simulated - the arcade answer, and the one that lets a bike run
+// on the taxi's tyre model, brakes, gearbox and drift scoring unchanged.
+
+/** A naked 650 sports bike with its rider: quick, light, 180 km/h, brakes hard. */
+export const MOTO: VehicleSpec = {
+  name: 'moto',
+  single: true,
+  mass: 260,
+  com: [0, 0.04, 0.02],
+  inertia: [95, 85, 30],
+  chassis: [
+    { half: [0.2, 0.36, 0.95], at: [0, 0.34, 0.0], round: 0.08 },
+    { half: [0.16, 0.3, 0.3], at: [0, 0.95, -0.15], round: 0.1 },
+  ],
+  wheels: [
+    { x: 0.16, z: 0.72, front: true },
+    { x: -0.16, z: 0.72, front: true },
+    { x: 0.16, z: -0.72, front: false },
+    { x: -0.16, z: -0.72, front: false },
+  ],
+  wheelRadius: 0.32,
+  wheelWidth: 0.12,
+  mountY: 0.21,
+  suspension: {
+    restLength: 0.28, stiffnessFront: 9000, stiffnessRear: 10500,
+    bump: 620, rebound: 950, travel: 0.13,
+    antiRollFront: 30000, antiRollRear: 30000,
+  },
+  tire: {
+    muLat: 1.15, muLong: 1.2, B: 14, C: 1.5, slide: 0.75, loadSensitivity: 0.06,
+    forceHeight: 0.36, rolling: 0.014, rearGrip: 1.08, driftDriveCap: 0.85, driftDriveCapNeutral: 0.68,
+    driftDriveCapNeutralFast: 0.56, driftCapFastFrom: 14, driftCapFastTo: 24,
+  },
+  steer: { lock: 0.62, overdrive: 1.3, minAngle: 0.07, rate: 4.2, counterSteer: 0.85, driftCut: 0.65 },
+  engine: {
+    idle: 1300, redline: 11000,
+    torque: [[2000, 44], [5000, 62], [8000, 70], [9800, 64], [11000, 50]],
+    gears: [2.6, 1.85, 1.45, 1.2, 1.03, 0.92], reverse: 3.0, final: 5.4, efficiency: 0.9,
+    shiftUp: 10500, shiftDown: 4500, shiftTime: 0.1,
+    frontShare: 0, engineBrake: 0.35,
+    limiterKmh: 182, reverseKmh: 6, launchRpm: 5000,
+  },
+  brakes: { force: 4200, frontBias: 0.7 },
+  aero: { drag: 0.5, downforce: 0.2 },
+  assists: {
+    spinGuard: 2.8, spinAngle: 0.6, spinAngleNeutral: 0.45, calmYawDamp: 2.2, airDamping: 1.8, airControl: 2.6, selfRight: 2,
+    donut: { steer: 0.8, throttle: 0.9, speedLo: 6, speedHi: 10, cap: 0.95 },
+  },
+};
+
+/** A city bicycle with its rider: 95 kg, 35 km/h flat out, the "engine" is the rider's cadence. */
+export const BIKE: VehicleSpec = {
+  name: 'bike',
+  single: true,
+  mass: 95,
+  com: [0, 0.1, 0.0],
+  inertia: [38, 32, 12],
+  chassis: [
+    { half: [0.16, 0.34, 0.8], at: [0, 0.36, 0.0], round: 0.07 },
+    { half: [0.16, 0.3, 0.25], at: [0, 0.98, -0.12], round: 0.1 },
+  ],
+  wheels: [
+    { x: 0.16, z: 0.525, front: true },
+    { x: -0.16, z: 0.525, front: true },
+    { x: 0.16, z: -0.525, front: false },
+    { x: -0.16, z: -0.525, front: false },
+  ],
+  wheelRadius: 0.34,
+  wheelWidth: 0.04,
+  mountY: 0.16,
+  suspension: {
+    restLength: 0.2, stiffnessFront: 5200, stiffnessRear: 5600,
+    bump: 260, rebound: 380, travel: 0.08,
+    antiRollFront: 14000, antiRollRear: 14000,
+  },
+  tire: {
+    muLat: 0.95, muLong: 1.0, B: 12, C: 1.4, slide: 0.7, loadSensitivity: 0.05,
+    forceHeight: 0.44, rolling: 0.008, rearGrip: 1.05, driftDriveCap: 0.85, driftDriveCapNeutral: 0.7,
+    driftDriveCapNeutralFast: 0.6, driftCapFastFrom: 8, driftCapFastTo: 12,
+  },
+  steer: { lock: 0.75, overdrive: 1.2, minAngle: 0.12, rate: 4.5, counterSteer: 0.8, driftCut: 0.5 },
+  engine: {
+    idle: 40, redline: 125,
+    torque: [[40, 62], [75, 68], [100, 60], [125, 45]],
+    gears: [2.1, 1.55, 1.15, 0.85, 0.63, 0.47], reverse: 2.5, final: 1.0, efficiency: 0.95,
+    shiftUp: 112, shiftDown: 55, shiftTime: 0.05,
+    frontShare: 0, engineBrake: 0.04,
+    limiterKmh: 38, reverseKmh: 4, launchRpm: 60,
+  },
+  brakes: { force: 900, frontBias: 0.6 },
+  aero: { drag: 0.62, downforce: 0 },
+  assists: {
+    spinGuard: 3, spinAngle: 0.6, spinAngleNeutral: 0.45, calmYawDamp: 2.5, airDamping: 2, airControl: 2, selfRight: 2,
+    donut: { steer: 0.8, throttle: 0.9, speedLo: 3, speedHi: 6, cap: 0.9 },
+  },
+};
+
+export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE };

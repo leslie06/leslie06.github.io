@@ -42,8 +42,11 @@ export class CameraRig implements CameraApi {
   private readonly rayGroups = groups(CG.CAR, CG.WORLD);
 
   constructor(private engine: Engine) {
-    engine.events.on('vehicle:impact', ({ strength }) => this.shake(Math.min(1, strength / 10)));
-    engine.events.on('vehicle:land', ({ airTime }) => this.shake(Math.min(0.6, airTime * 0.5)));
+    engine.events.on('vehicle:impact', ({ strength }) => {
+      this.shake(Math.min(1.2, strength / 7));
+      if (strength > 3) engine.input.rumble(Math.min(1, strength / 10), Math.min(1, strength / 6), 90 + Math.min(260, strength * 22));
+    });
+    engine.events.on('vehicle:land', ({ airTime }) => { this.shake(Math.min(0.6, airTime * 0.5)); engine.input.rumble(0.3, 0.6, 120); });
     engine.events.on('vehicle:reset', () => this.snap());
   }
 
@@ -124,7 +127,7 @@ export class CameraRig implements CameraApi {
     this.pos.y = Math.max(this.pos.y, 0.45);
 
     // Shake: impacts, landings and a little road rumble at speed.
-    this.shakeAmt = Math.max(0, this.shakeAmt - dt * 1.8);
+    this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.4);
     const rumble = 0.012 * smoothstep(15, 50, speed);
     const a = this.shakeAmt * this.shakeAmt * 0.35 + rumble;
     const n = (f: number, o: number) => Math.sin(this.t * f + o) * 0.6 + Math.sin(this.t * f * 2.3 + o * 1.7) * 0.4;

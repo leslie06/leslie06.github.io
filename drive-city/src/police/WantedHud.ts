@@ -7,6 +7,11 @@ const CSS = `
 .hud .wanted span{color:rgba(255,255,255,.16);text-shadow:0 1px 0 rgba(0,0,0,.7),0 0 10px rgba(0,0,0,.45)}
 .hud .wanted span.on{color:#fbfbf8}
 .hud .wanted.search span.on{animation:dc-wflash .9s steps(2,jump-none) infinite}
+.hud .wanted span.pop{animation:dc-wpop .45s ease-out}
+@keyframes dc-wpop{0%{transform:scale(2.2);color:#ff3b30}100%{transform:scale(1)}}
+.hud .evade{position:absolute;top:calc(var(--hud-y) + 34px);right:var(--hud-x);width:158px;height:4px;border-radius:2px;background:rgba(8,10,12,.55);box-shadow:inset 0 0 0 1px rgba(244,241,232,.18);overflow:hidden;opacity:0;transition:opacity .3s}
+.hud .evade.on{opacity:1}
+.hud .evade i{display:block;height:100%;background:#f4f4f1;width:0}
 @keyframes dc-wflash{50%{color:rgba(255,255,255,.22)}}
 .dc-busted{position:fixed;inset:0;display:grid;place-items:center;z-index:40;pointer-events:none;
   background:radial-gradient(ellipse at center,rgba(8,10,14,.25),rgba(8,10,14,.72));animation:dc-bfade .7s ease both}
@@ -23,6 +28,9 @@ export class WantedHud {
   private overlay: HTMLDivElement | null = null;
   private shown = -1;
   private flashing = false;
+  private bar: HTMLDivElement | null = null;
+  private fill: HTMLElement | null = null;
+  private evadeShown = -1;
 
   private mount(): boolean {
     if (this.root) return true;
@@ -35,6 +43,9 @@ export class WantedHud {
     this.root.className = 'wanted';
     for (let i = 0; i < 5; i++) { const s = document.createElement('span'); s.textContent = '★'; this.root.appendChild(s); this.stars.push(s); }
     hud.appendChild(this.root);
+    this.bar = document.createElement('div'); this.bar.className = 'evade';
+    this.fill = document.createElement('i'); this.bar.appendChild(this.fill);
+    hud.appendChild(this.bar);
     this.overlay = document.createElement('div');
     this.overlay.className = 'dc-busted';
     this.overlay.hidden = true;
@@ -45,15 +56,23 @@ export class WantedHud {
     return true;
   }
 
-  update(level: number, seen: boolean): void {
+  update(level: number, seen: boolean, evade = 0): void {
     if (!this.mount()) return;
     if (level !== this.shown) {
+      const up = level > this.shown && this.shown >= 0;
       this.shown = level;
-      this.stars.forEach((s, i) => s.classList.toggle('on', i < level));
+      this.stars.forEach((s, i) => {
+        s.classList.toggle('on', i < level);
+        // The newest star lands with a thump.
+        if (up && i === level - 1) { s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop'); }
+      });
       this.root!.classList.toggle('active', level > 0);
     }
     const f = level > 0 && !seen;
-    if (f !== this.flashing) { this.flashing = f; this.root!.classList.toggle('search', f); }
+    if (f !== this.flashing) { this.flashing = f; this.root!.classList.toggle('search', f); this.bar!.classList.toggle('on', f); }
+    // How close to losing them: fills while they search and cannot see you.
+    const q = f ? Math.round(evade * 100) : 0;
+    if (q !== this.evadeShown) { this.evadeShown = q; this.fill!.style.width = `${q}%`; }
   }
 
   busted(on: boolean): void {

@@ -9,6 +9,7 @@ import { buildCar, defaultLivery, TAXI_LIVERY } from './CarModel';
 import { bodyOfSpec, type BodyType } from './Bodies';
 import type { RenderSystem } from '../render';
 import type { PathPilot } from './Autopilot';
+import { shotMode } from '../debug/ShotMode';
 
 /**
  * The player's taxi: input -> ControlFilter -> Vehicle physics at 60 Hz, the model drawn at the
@@ -44,6 +45,8 @@ export async function install(engine: Engine): Promise<void> {
   const renderPos = car.pos.clone(), renderQuat = car.quat.clone();
   // Lean state: [pitch, roll] and their rates, as a critically-ish damped spring.
   const lean = { p: 0, r: 0, vp: 0, vr: 0 };
+  const leanOut = { pitch: 0, roll: 0 };
+  let hitStopUntil = 0;
   const drift: DriftState = { active: false, score: 0, multiplier: 1, angle: 0, best: 0, last: 0, lastAt: -99, lastCrashed: false };
   let driftTime = 0, calmTime = 0;
   const drive: DriveInput = { forward: 0, back: 0, steer: 0, analog: false, handbrake: false };
@@ -66,6 +69,7 @@ export async function install(engine: Engine): Promise<void> {
     get car() { return car; },
     get model() { return model; },
     renderPos, renderQuat, drift, look,
+    lean: leanOut,
     occupied: true,
     power: 1,
     swapCar(next, nextLook) {
@@ -126,6 +130,9 @@ export async function install(engine: Engine): Promise<void> {
       car.afterStep(dt);
       curPos.copy(car.pos); curQuat.copy(car.quat);
       if (car.impact > 2.5) engine.events.emit('vehicle:impact', { strength: car.impact, point: [car.impactPoint.x, car.impactPoint.y, car.impactPoint.z] });
+      // Hit-stop: a hard crash freezes the world for a few frames (wall clock, so the freeze is the
+      // same length whatever the frame rate). Not in shot mode, whose frames must stay deterministic.
+      if (car.impact > 6 && api.occupied && !shotMode) hitStopUntil = performance.now() + Math.min(130, 40 + car.impact * 6);
       const air = car.takeLanding();
       if (air > 0) engine.events.emit('vehicle:land', { airTime: air, speed: car.speed });
       // Drift scoring: points for angle x speed, a multiplier for holding it, lost on a crash.
@@ -144,6 +151,7 @@ export async function install(engine: Engine): Promise<void> {
     },
     update(dt, alpha) {
       const inp = engine.input.state;
+      engine.timeScale = performance.now() < hitStopUntil ? 0.25 : 1;
       if (api.inputEnabled && api.occupied && inp.resetPressed) api.reset();
       renderPos.lerpVectors(prevPos, curPos, alpha);
       renderQuat.slerpQuaternions(prevQuat, curQuat, alpha);
@@ -157,13 +165,18 @@ export async function install(engine: Engine): Promise<void> {
       }
       // Body lean from the smoothed body-frame acceleration: nose dives under braking, squats on
       // launch, rolls out of corners. Visual only; the physics body stays stiff (see Spec.forceHeight).
-      const tp = THREE.MathUtils.clamp(-car.accel.z * 0.0048, -0.055, 0.07);
-      const tr = THREE.MathUtils.clamp(car.accel.x * 0.0075, -0.085, 0.085) * (car.grounded > 1 ? 1 : 0);
-      const k = 90, d = 12;
+      // A two-wheeler leans INTO the corner instead, as far as 32 degrees, and its rider with it.
+      const two = !!car.spec.single;
+      const tp = THREE.MathUtils.clamp(-car.accel.z * (two ? 0.003 : 0.0048), -0.055, 0.07);
+      const tr = two
+        ? THREE.MathUtils.clamp(-car.accel.x * 0.06 * Math.min(1, car.speed / 4), -0.56, 0.56) * (car.grounded > 1 ? 1 : 0)
+        : THREE.MathUtils.clamp(car.accel.x * 0.0075, -0.085, 0.085) * (car.grounded > 1 ? 1 : 0);
+      const k = two ? 60 : 90, d = two ? 11 : 12;
       lean.vp += ((tp - lean.p) * k - lean.vp * d) * dt; lean.p += lean.vp * dt;
       lean.vr += ((tr - lean.r) * k - lean.vr * d) * dt; lean.r += lean.vr * dt;
       model.body.rotation.set(lean.p, 0, lean.r);
-      model.body.position.y = -Math.abs(lean.r) * 0.25;
+      model.body.position.y = two ? 0 : -Math.abs(lean.r) * 0.25;
+      leanOut.pitch = lean.p; leanOut.roll = lean.r;
       const c = filter.out;
       const night = engine.get<RenderApi>('render')?.night ?? 0;
       const head = api.occupied && night > 0.35;

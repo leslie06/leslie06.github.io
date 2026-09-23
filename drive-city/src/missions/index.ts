@@ -10,6 +10,7 @@ import { Gait } from '../character/Animator';
 import { randomLook } from '../character/Body';
 import { nearestKerb, SIDEWALK, type Kerb } from '../people/Pavement';
 import { Marker } from './Marker';
+import { Jobs } from './Jobs';
 import { MissionHud } from './MissionHud';
 
 type Stage = 'off' | 'wait' | 'pickup' | 'boarding' | 'ride' | 'alight';
@@ -42,6 +43,10 @@ export interface MissionSystem extends MissionApi {
   /** Shots and testing: put a fare on the kerb near the player now. */
   debug: {
     startFare(): boolean;
+    /** The short jobs: where they start, start one by name, which one runs. */
+    jobPosts(): { kind: string; x: number; z: number; ready: boolean }[];
+    startJob(kind: 'delivery' | 'chase' | 'trial'): boolean;
+    job(): string | null;
     state(): { stage: string; pickup: { x: number; z: number } | null; dest: { x: number; z: number; label: string } | null; limit: number; elapsed: number };
   };
 }
@@ -88,6 +93,7 @@ export async function install(engine: Engine): Promise<void> {
   let cash = 0;
   try { cash = Math.max(0, Number(localStorage.getItem('drivecity.cash') ?? 0) || 0); } catch { /* private mode */ }
   const saveCash = () => { try { localStorage.setItem('drivecity.cash', String(cash)); } catch { /* ignore */ } };
+  let jobs: Jobs | null = null;
 
   let stage: Stage = 'off', timer = 0, objective: string | null = null, blipsOn = false;
   let pickup: Kerb | null = null;
@@ -177,14 +183,21 @@ export async function install(engine: Engine): Promise<void> {
     name: 'missions',
     get cash() { return cash; },
     addCash(n) { cash = Math.max(0, cash + Math.round(n)); saveCash(); if (n > 0) hud.earned(Math.round(n)); },
-    get objective() { return objective; },
+    get objective() { return jobs?.objective ?? objective; },
     debug: {
       startFare: () => { stage = 'wait'; return startFare(); },
+      jobPosts: () => jobs?.postList ?? [],
+      startJob: (kind) => jobs?.startKind(kind) ?? false,
+      job: () => jobs?.kind ?? null,
       state: () => ({ stage, pickup: pickup && stage !== 'ride' ? { x: client.pos.x, z: client.pos.z } : null, dest, limit, elapsed }),
     },
     fixedUpdate(dt) {
       const v = vehicle(), car = v.car;
       careT -= dt;
+      // The short jobs (Jobs.ts): while one runs, no fare is offered and a running fare is dropped.
+      if (!jobs) jobs = new Jobs(engine, { places, resolve, addCash: (n) => api.addCash(n), toast, rnd });
+      jobs.fixedUpdate(dt);
+      if (jobs.busy) { if (stage !== 'off' && stage !== 'wait') end(null, 8); if (stage === 'wait') timer = Math.max(timer, 3); }
       // The client's walk is gameplay (boarding ends when they reach the door): stepped here, drawn in update.
       client.prev.copy(client.pos);
       if (client.visible) {
@@ -262,6 +275,7 @@ export async function install(engine: Engine): Promise<void> {
       const n = nav();
       if (n && !blipsOn) {
         blipsOn = true;
+        n.addBlips(() => jobs?.provideBlips() ?? []);
         n.addBlips(() => {
           blips.length = 0;
           if ((stage === 'pickup' || stage === 'boarding') && pickup) blips.push({ kind: 'pickup', x: client.pos.x, z: client.pos.z });

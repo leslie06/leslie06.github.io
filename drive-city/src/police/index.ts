@@ -3,7 +3,7 @@ import type { Engine } from '../core/Engine';
 import { t } from '../core/I18n';
 import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
-import type { Crime, HudApi, NavApi, PlayerApi, RenderApi, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { Crime, HudApi, NavApi, PlayerApi, RenderApi, VehicleApi, WantedApi, WorldApi, PeopleApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import { CarKit } from '../traffic/CarKit';
 import { POLICE_LIVERY } from '../vehicle/CarModel';
@@ -21,7 +21,7 @@ const COUNT = [0, 2, 3, 4, 5, 7];
 const MAX = 9;
 const WHITE = new THREE.Color('#f4f5f3'), BLUE = new THREE.Color('#1c47a8');
 /** Heat per crime, in stars (half as much once already wanted). */
-const HEAT: Record<Crime, number> = { hit_person: 1, carjack: 1, hit_police: 1, ram: 0.35, speeding: 1 };
+const HEAT: Record<Crime, number> = { hit_person: 1, carjack: 1, hit_police: 1, ram: 0.35, speeding: 1, report: 1 };
 const STOP: DriveInput = { forward: 0, back: 0, steer: 0, analog: true, handbrake: true };
 const searchRadius = (lv: number) => 90 + 30 * lv;
 
@@ -173,15 +173,23 @@ export async function install(engine: Engine): Promise<void> {
     return true;
   };
 
+  /** A new star: tell the player what it means, and let the HUD and the siren stinger react. */
+  const levelUp = (lv: number) => {
+    engine.get<HudApi>('hud')?.toast(t(`wanted.up${Math.min(5, lv)}` as 'wanted.up1'));
+    engine.events.emit('wanted:level', { level: lv, up: true });
+  };
+
   const crime = (kind: Crime, x: number, z: number) => {
     if (busted >= 0) return;
-    let witnessed = kind === 'hit_police';
+    let witnessed = kind === 'hit_police' || kind === 'report';
     for (const c of cops) if (!witnessed && c.active && canSee(c.car, x, 1, z, 90)) witnessed = true;
-    // Otherwise someone may call it in.
-    if (!witnessed) witnessed = kind === 'hit_person' ? rnd() < 0.7 : kind === 'carjack' ? rnd() < 0.3 : false;
-    if (!witnessed) return;
+    // Otherwise it only counts if someone on the pavement phones it in (people/: they stop and
+    // dial, and `people:report` arrives a few seconds later unless they are scared off first).
+    if (!witnessed) { if (kind === 'hit_person' || kind === 'carjack') engine.get<PeopleApi>('people')?.witness(x, z); return; }
+    const before = level();
     heat = Math.min(5.99, heat + HEAT[kind] * (level() === 0 ? 1 : 0.5));
     if (level() > 0) { lastX = x; lastZ = z; seen = true; evade = 0; }
+    if (level() > before) levelUp(level());
   };
 
   const clear = () => {
@@ -203,6 +211,7 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   engine.events.on('people:hit', (e) => { if (e.byPlayer) crime('hit_person', e.x, e.z); });
+  engine.events.on('people:report', (e) => crime('report', e.x, e.z));
   engine.events.on('player:mode', (e) => { if (e.carjacked) { readPlayer(); crime('carjack', P.x, P.z); } });
   /** The player drove into (ox, oz): moving, and mostly towards it (being rammed is not a crime). */
   const atFault = (car: Vehicle, ox: number, oz: number) => {
@@ -231,6 +240,7 @@ export async function install(engine: Engine): Promise<void> {
     get level() { return level(); },
     get seen() { return seen; },
     get sirenDistance() { return level() > 0 || busted >= 0 ? sirenD : Infinity; },
+    get evade() { const lv = level(); return lv > 0 && !seen ? Math.min(1, evade / (6 + 3 * lv)) : 0; },
     policeCars: () => onStreet,
     crime, clear,
     debug: {
@@ -260,7 +270,7 @@ export async function install(engine: Engine): Promise<void> {
       if (lv > 0) {
         if (cops.some((c) => c.active && c.sees)) {
           seen = true; lastX = P.x; lastZ = P.z; evade = 0;
-          if (heat < 4.99) heat = Math.min(4.99, heat + dt / 120);   // a long chase escalates, up to four stars
+          if (heat < 4.99) { const b = level(); heat = Math.min(4.99, heat + dt / 120); if (level() > b) levelUp(level()); }   // a long chase escalates, up to four stars
         } else {
           seen = false;
           const outside = Math.hypot(P.x - lastX, P.z - lastZ) > searchRadius(lv);
@@ -268,6 +278,7 @@ export async function install(engine: Engine): Promise<void> {
           if (evade > 6 + 3 * lv) {
             heat = 0; evade = 0; lv = 0;
             engine.get<HudApi>('hud')?.toast(t('wanted.lost'));
+            engine.events.emit('wanted:level', { level: 0, up: false });
           }
         }
       } else { seen = false; heat = Math.max(0, heat - dt * 0.02); }
@@ -314,7 +325,8 @@ export async function install(engine: Engine): Promise<void> {
           gl.x = s.x; gl.z = s.z; gl.vx = gl.vz = 0;
           c.driver.topSpeed = 17;
         }
-        const inp = c.driver.update(c.car, gl, direct, dt, router, gentle);
+        // Three stars and up they stop boxing and start ramming.
+        const inp = c.driver.update(c.car, gl, direct, dt, router, gentle, lv >= 3 && seen);
         c.prevPos.copy(c.curPos); c.prevQuat.copy(c.curQuat);
         c.car.step(c.filter.update(inp, c.car.forwardSpeed, dt), dt);
       }
@@ -371,7 +383,7 @@ export async function install(engine: Engine): Promise<void> {
         glowR.position.copy(nearPos).addScaledVector(nearLeft, 0.3); glowR.position.y += 1.5;
         glowB.position.copy(nearPos).addScaledVector(nearLeft, -0.3); glowB.position.y += 1.5;
       }
-      hud.update(level(), seen);
+      hud.update(level(), seen, api.evade);
     },
   };
   engine.add(api);

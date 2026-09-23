@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ANKLE_H, BALL, BIND_ROT, HEEL, J, JOINT_COUNT, LOOK_FLOATS, SHIN, SKELETON, THIGH, lookScale, packLook, type Look } from './Body';
 
-export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch';
+export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch' | 'ride';
 
 /** What drives a pose this frame. */
 export interface Motion {
@@ -12,6 +12,9 @@ export interface Motion {
   t: number;
   /** Tumble axis for `knocked` (character-local, horizontal): extra roll rate, rad/s. */
   tumble?: number;
+  /** `ride`: which saddle (a motorcycle crouch or an upright pedal), and the machine's lean (roll, rad) to sit with. */
+  ride?: 'moto' | 'bike';
+  lean?: number;
 }
 
 const TAU = Math.PI * 2;
@@ -141,6 +144,7 @@ export class Gait {
     else if (m.action === 'getup') this.getup(m.t);
     else if (m.action === 'air') this.air(m.t);
     else if (m.action === 'punch') { this.locomotion(m.speed, dt); this.shoveArm(m.t); }
+    else if (m.action === 'ride') this.ride(m, dt);
     else this.locomotion(m.speed, dt);
     if (this.fade > 0) {
       const k = this.fade * this.fade * (3 - 2 * this.fade);
@@ -366,6 +370,36 @@ export class Gait {
       r[jH * 3] = -0.95 - 0.3 * Math.sin(t * 6 + ph) * fl; r[jH * 3 + 2] = side * 0.18;
       r[jK * 3] = 0.8 + 0.45 * Math.sin(t * 7.5 + ph + 1) * fl;
       r[(k === 0 ? J.ankleL : J.ankleR) * 3] = 0.4;
+    }
+  }
+
+  /**
+   * In the saddle. The root stays under the pelvis (the player puts the pelvis on the seat), the
+   * pelvis rolls with the machine so the whole body leans into the corner, a motorcyclist crouches
+   * over the tank with the knees out round it, a cyclist sits up and pedals at the road speed.
+   */
+  private ride(m: Motion, dt: number): void {
+    const r = this.rot;
+    r.fill(0);
+    this.sway = this.bob = this.fwd = this.drop = 0;
+    const moto = m.ride !== 'bike';
+    const pitch = moto ? 0.55 : 0.28;
+    r[J.pelvis * 3] = pitch; r[J.pelvis * 3 + 2] = m.lean ?? 0;
+    r[J.spine * 3] = moto ? 0.12 : 0.06; r[J.chest * 3] = moto ? 0.08 : 0.04;
+    r[J.neck * 3] = -pitch * 0.75; r[J.head * 3] = -pitch * 0.35;
+    // Cadence follows the road speed (crank 0.17 m, ~2.3 m per turn in a middle gear).
+    if (!moto) this.phase = (this.phase + dt * Math.max(0, m.speed) / 2.3) % 1;
+    for (let k = 0; k < 2; k++) {
+      const side = k === 0 ? 1 : -1;
+      const jS = k === 0 ? J.shoulderL : J.shoulderR, jE = k === 0 ? J.elbowL : J.elbowR, jH = k === 0 ? J.hipL : J.hipR, jK = k === 0 ? J.kneeL : J.kneeR, jA = k === 0 ? J.ankleL : J.ankleR;
+      if (moto) {
+        r[jH * 3] = -1.3; r[jH * 3 + 2] = side * 0.28; r[jK * 3] = 1.75; r[jA * 3] = -0.35;
+        r[jS * 3] = -0.95; r[jS * 3 + 2] = side * 0.12; r[jE * 3] = -0.45;
+      } else {
+        const ph = (this.phase + k * 0.5) % 1, c = Math.cos(ph * TAU);
+        r[jH * 3] = -0.95 - 0.38 * c; r[jH * 3 + 2] = side * 0.06; r[jK * 3] = 1.25 + 0.5 * c; r[jA * 3] = -0.15 - 0.15 * c;
+        r[jS * 3] = -0.7; r[jS * 3 + 2] = side * 0.08; r[jE * 3] = -0.35;
+      }
     }
   }
 

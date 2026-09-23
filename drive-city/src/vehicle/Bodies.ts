@@ -4,6 +4,7 @@ import { clamp, curve, F_CUTOUT, LAMP, latheX, Mesher, smooth, surf, TONE_FIXED,
 import { Shell, type CapFace, type ShellDef, type WallFace, type WallRow } from './Shell';
 import { uv } from './Atlas';
 import type { VehicleSpec } from './Spec';
+import { buildTwoWheeler } from './TwoWheelers';
 
 /**
  * Body shapes. Each type is a Shell definition (see Shell.ts) plus the parts that are not panels:
@@ -12,8 +13,8 @@ import type { VehicleSpec } from './Spec';
  * a full-detail car and CarKit into instanced traffic. Node-safe: no DOM here.
  */
 
-export type BodyType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck';
-export const BODY_TYPES: readonly BodyType[] = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck'];
+export type BodyType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'moto' | 'bike';
+export const BODY_TYPES: readonly BodyType[] = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'moto', 'bike'];
 export type Detail = 'high' | 'low';
 
 /** What the livery adds to the geometry. */
@@ -766,6 +767,7 @@ export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, 
     case 'mpv': return buildCarBody(type, mpvParams(spec), spec, opts, detail);
     case 'bus': return buildBus(spec, opts, detail);
     case 'truck': return buildTruck(spec, opts, detail);
+    case 'moto': case 'bike': return buildTwoWheeler(type, spec, detail);
     default: return buildCarBody(type, sedanParams(spec), spec, opts, detail);
   }
 }

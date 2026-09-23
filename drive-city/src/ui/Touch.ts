@@ -83,7 +83,7 @@ export class TouchControls implements System {
   private state = {
     steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false,
     lookDX: 0, lookDY: 0,
-    jumpPressed: false, enterPressed: false, punchPressed: false, mapPressed: false, cameraPressed: false, pausePressed: false,
+    jumpPressed: false, enterPressed: false, punchPressed: false, mapPressed: false, cameraPressed: false, pausePressed: false, radioPressed: false,
   };
 
   constructor(private engine: Engine, container: HTMLElement) {
@@ -102,6 +102,7 @@ export class TouchControls implements System {
     const top = el('div', 'top', this.root);
     this.button(top, 'both', t('touch.pause'), (down) => { if (down) this.state.pausePressed = true; });
     this.button(top, 'both', t('touch.map'), (down) => { if (down) this.state.mapPressed = true; });
+    this.button(top, 'drive', t('touch.radio'), (down) => { if (down) this.state.radioPressed = true; });
 
     const pads = el('div', 'pads', this.root);
     // Row 1: camera / get in or out / shove or jump.

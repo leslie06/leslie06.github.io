@@ -39,6 +39,8 @@ export interface VehicleApi extends System {
   readonly look: CarLook;
   /** Make `next` the player's car (recolouring the full model). Returns the previous car and its look. */
   swapCar(next: Vehicle, look: CarLook): { car: Vehicle; look: CarLook };
+  /** The drawn body lean this frame (radians): a car rolls out of a corner, a bike leans into it. The rider is drawn with it. */
+  readonly lean: { pitch: number; roll: number };
   readonly model: CarModel;
   readonly controls: VehicleControls;
   /** Interpolated pose the model is drawn at (use this, not the physics body, for anything visual). */
@@ -162,7 +164,7 @@ export interface NavApi extends System {
 
 // --- Wanted level (police/) -----------------------------------------------------------------------
 
-export type Crime = 'hit_person' | 'carjack' | 'hit_police' | 'ram' | 'speeding';
+export type Crime = 'hit_person' | 'carjack' | 'hit_police' | 'ram' | 'speeding' | 'report';
 export interface WantedApi extends System {
   /** 0..5 stars. */
   readonly level: number;
@@ -173,6 +175,8 @@ export interface WantedApi extends System {
   clear(): void;
   /** Metres from the camera to the nearest police car with its siren on (Infinity: none). */
   readonly sirenDistance: number;
+  /** How far along losing them the player is while out of sight, 0..1 (0 when seen or not wanted). */
+  readonly evade: number;
   /** Police cars on the streets (collisions with people, traffic keeping its distance). */
   policeCars(): readonly Vehicle[];
 }
@@ -197,6 +201,8 @@ export interface MissionApi extends System {
 /** Pedestrians on the pavements. Implemented by people/. */
 export interface PeopleApi extends System {
   readonly count: number;
+  /** Someone near (x, z) saw what the player did: they stop, phone the police, and `people:report` fires unless they are scared off first. */
+  witness(x: number, z: number): void;
   /** Pedestrians on the carriageway right now (crossing or running): drivers brake for them. */
   inRoad(): readonly { x: number; z: number }[];
   /** Someone thrown out of their car at (x, z): gets up and runs for the pavement. */

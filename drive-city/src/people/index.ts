@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { t } from '../core/I18n';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
@@ -25,7 +26,7 @@ const GAP = 4.5;
 const SPAWN_R = 100, DESPAWN_R = 125;
 const RUN = 4.3;
 
-type Mode = 'walk' | 'wait' | 'flee' | 'knocked' | 'down' | 'getup' | 'lost';
+type Mode = 'walk' | 'wait' | 'flee' | 'knocked' | 'down' | 'getup' | 'lost' | 'call';
 
 interface Ped {
   on: boolean;
@@ -44,6 +45,8 @@ interface Ped {
   pos: THREE.Vector3; prev: THREE.Vector3; vel: THREE.Vector3; vy: number;
   yaw: number; want: number; pace: number; cur: number; moved: number;
   gait: Gait; look: Look; seed: number;
+  /** Saw something: phones the police once they have stopped running. */
+  willCall: boolean;
 }
 
 const wrap = (a: number) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
@@ -105,7 +108,7 @@ export async function install(engine: Engine): Promise<void> {
     waitJ: -1, waitPhase: 0, backLink: 0, backS: 0, backDir: 1, backSide: 1,
     pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0,
     yaw: 0, want: 0, pace: 1.3, cur: 1.3, moved: 0,
-    gait: new Gait(), look: randomLook(rnd), seed: rnd(),
+    gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false,
   }));
   let active = 0, spawnT = 0, frame = 0;
   const road: THREE.Vector3[] = [];
@@ -208,8 +211,11 @@ export async function install(engine: Engine): Promise<void> {
   const calm = (p: Ped) => p.mode === 'walk' || p.mode === 'wait' || p.mode === 'flee';
 
   /** Run from a threat at (fx, fz): along the pavement away from it (or on across the road). */
-  const scare = (p: Ped, fx: number, fz: number, secs: number) => {
+  const scare = (p: Ped, fx: number, fz: number, secs: number, byPlayer = false) => {
+    // Scared mid-call: the call is dropped (no report).
+    if (p.mode === 'call') { p.mode = 'walk'; p.t = 0; }
     if (!calm(p)) return;
+    if (byPlayer && rnd() < 0.35) shout(p, 'scare');
     // Waiting at the kerb they are already on the crossing's line, so fleeing used to mean
     // sprinting over it - on red, in front of the car that scared them, and every car passing in
     // the near lane is inside the scare zone. Jump back from the kerb instead.
@@ -223,11 +229,45 @@ export async function install(engine: Engine): Promise<void> {
     p.mode = 'flee'; p.fear = Math.max(p.fear, secs);
   };
 
+  /** A line over someone's head, rate-limited so a crowd does not wallpaper the screen. */
+  let shoutT = 0;
+  const shout = (p: Ped, kind: 'hit' | 'shove' | 'scare' | 'call') => {
+    // A scare is background chatter and waits its turn; being hit is always said.
+    if (shoutT > 0 && kind === 'scare') return;
+    shoutT = kind === 'scare' ? 0.9 : 0.25;
+    const text = kind === 'call' ? t('shout.call') : t(`shout.${kind}${1 + Math.floor(rnd() * 3)}` as 'shout.hit1');
+    engine.events.emit('people:shout', { x: p.pos.x, z: p.pos.z, text });
+  };
+
+  /**
+   * Somebody saw that (a hit, a carjacking): the nearest walker within 30 m stops, pulls out a
+   * phone and dials; `people:report` fires after the call unless they are knocked or scared off
+   * first - so the player can still shut a witness up, which is very much the game.
+   */
+  const witness = (x: number, z: number) => {
+    let best: Ped | null = null, bd = 40 * 40;
+    for (const q of peds) {
+      if (!q.on || !(q.mode === 'walk' || q.mode === 'wait' || q.mode === 'flee') || q.cross || q.willCall) continue;
+      const dx = q.pos.x - x, dz = q.pos.z - z, d2 = dx * dx + dz * dz;
+      if (d2 < bd && d2 > 4) { bd = d2; best = q; }
+    }
+    if (!best) return;
+    if (best.mode === 'flee') { best.willCall = true; return; }   // once they have run clear
+    startCall(best, x, z);
+  };
+
+  const startCall = (p: Ped, x: number, z: number) => {
+    p.mode = 'call'; p.t = 0; p.hold = 3.5 + rnd() * 1.5; p.willCall = false; p.cross = false;
+    p.want = Math.atan2(x - p.pos.x, z - p.pos.z);
+    shout(p, 'call');
+  };
+
   const knock = (p: Ped, vx: number, vz: number, byPlayer: boolean) => {
     const speed = Math.hypot(vx, vz);
-    p.mode = 'knocked'; p.t = 0; p.cross = false;
+    p.mode = 'knocked'; p.t = 0; p.cross = false; p.willCall = false;
     p.vel.set(vx, 0, vz); p.vy = Math.max(2.2, speed * 0.3);
     p.want = p.yaw = Math.atan2(-vx, -vz);   // face what hit them, fly backwards
+    if (byPlayer) shout(p, speed > 4 ? 'hit' : 'shove');
     engine.events.emit('people:hit', { x: p.pos.x, z: p.pos.z, speed, byPlayer });
     for (const q of peds) {
       if (!q.on || q === p) continue;
@@ -362,7 +402,19 @@ export async function install(engine: Engine): Promise<void> {
       }
       return;
     }
-    if (p.mode === 'flee') { p.fear -= dt; if (p.fear <= 0) { p.mode = 'walk'; p.t = 0; p.fracT = 0.3 + rnd() * 0.6; } }
+    if (p.mode === 'call') {
+      p.t += dt; p.cur += (0 - p.cur) * (1 - Math.exp(-dt * 6));
+      if (p.t > p.hold) { p.mode = 'walk'; p.t = 0; engine.events.emit('people:report', { x: p.pos.x, z: p.pos.z }); }
+      return;
+    }
+    if (p.mode === 'flee') {
+      p.fear -= dt;
+      if (p.fear <= 0) {
+        p.mode = 'walk'; p.t = 0; p.fracT = 0.3 + rnd() * 0.6;
+        if (p.willCall && !p.cross) { const pc = vehicle().car; startCall(p, pc.pos.x, pc.pos.z); return; }
+        p.willCall = false;
+      }
+    }
     else if (!p.cross && rnd() < dt * 0.012) { p.mode = 'wait'; p.t = 0; p.hold = 1.5 + rnd() * 3.5; p.waitJ = -1; return; }
     const target = p.mode === 'flee' ? RUN : p.cross ? p.pace * 1.35 : p.pace;
     p.cur += (target - p.cur) * (1 - Math.exp(-dt * 3));
@@ -411,6 +463,7 @@ export async function install(engine: Engine): Promise<void> {
         return best ? { x: best.pos.x, z: best.pos.z } : null;
       },
     },
+    witness,
     shove(x, z, dirX, dirZ) {
       let best: Ped | null = null, bd = 2.2;
       for (const p of peds) {
@@ -441,6 +494,7 @@ export async function install(engine: Engine): Promise<void> {
     fixedUpdate(dt) {
       if (!cap) return;
       frame++;
+      shoutT = Math.max(0, shoutT - dt);
       spawnT -= dt;
       if (spawnT <= 0) { spawnT = 0.05; if (active < cap) trySpawn(active < cap * 0.35); }
       const v = vehicle(), pc = v.car;
@@ -462,6 +516,11 @@ export async function install(engine: Engine): Promise<void> {
         const cdx = p.pos.x - cam.x, cdz = p.pos.z - cam.z, cd = Math.hypot(cdx, cdz);
         if (cd > DESPAWN_R || (p.mode === 'lost' && (p.t > p.hold || (cdx * camDir.x + cdz * camDir.z) < 0))) { despawn(p); continue; }
         if ((p.cross && p.road) || p.mode === 'down' || p.mode === 'getup') road.push(p.pos);
+        // A witness on the phone is scared off it by a car coming at them (the player's way out).
+        if (p.mode === 'call') {
+          const dx = p.pos.x - pc.pos.x, dz = p.pos.z - pc.pos.z;
+          if (pc.speed > 4 && dx * dx + dz * dz < 12 * 12) scare(p, pc.pos.x, pc.pos.z, 3, true);
+        }
         if (!calm(p)) continue;
         // Threats, a third of the crowd per step: any car bearing down on them, not just the
         // player's. Someone caught on a crossing sprints the rest of the way (RUN) instead of
@@ -474,10 +533,10 @@ export async function install(engine: Engine): Promise<void> {
             if (dx * dx + dz * dz > 400) continue;
             const ahead = (dx * threats[k * 5 + 2] + dz * threats[k * 5 + 3]) / sp;
             const lat = Math.abs(dx * threats[k * 5 + 3] - dz * threats[k * 5 + 2]) / sp;
-            if (ahead > -2 && ahead < 5 + sp * 0.8 && lat < 3.5) { scare(p, cx, cz, 3 + rnd() * 2); break; }
+            if (ahead > -2 && ahead < 5 + sp * 0.8 && lat < 3.5) { scare(p, cx, cz, 3 + rnd() * 2, k === 0 && v.occupied); break; }
           }
           const dx = p.pos.x - pc.pos.x, dz = p.pos.z - pc.pos.z, d2 = dx * dx + dz * dz;
-          if (horn && d2 < 20 * 20) scare(p, pc.pos.x, pc.pos.z, 2 + rnd() * 2);
+          if (horn && d2 < 20 * 20) scare(p, pc.pos.x, pc.pos.z, 2 + rnd() * 2, true);
         }
         // Walking into someone only makes them step aside and stop for a moment; it takes a
         // deliberate shove (see `shove`) to put anyone on the ground.
@@ -505,6 +564,7 @@ export async function install(engine: Engine): Promise<void> {
         if (d > 8 && dx * camDir.x + dz * camDir.z < -0.2 * d) continue;   // behind the camera
         const action: Action = p.mode === 'knocked' || p.mode === 'down' || p.mode === 'getup' ? p.mode : 'move';
         p.gait.update({ speed: p.moved, action, t: p.t }, dt, p.seed);
+        if (p.mode === 'call') p.gait.prop = 1;
         draw.lerpVectors(p.prev, p.pos, alpha);
         crowd.add(draw, p.yaw, p.gait, p.look);
       }

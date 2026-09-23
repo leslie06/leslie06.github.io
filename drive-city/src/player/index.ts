@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import type { Motion } from '../character/Animator';
+import { J, SKELETON } from '../character/Body';
+import { SEAT, type TwoWheeler } from '../vehicle/TwoWheelers';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import type { HudApi, MissionApi, PeopleApi, PlayerApi, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
@@ -87,6 +90,14 @@ export async function install(engine: Engine): Promise<void> {
   const traffic = () => engine.get<TrafficCars>('traffic');
 
   const footView = { pos: foot.pos, vel: foot.vel, get yaw() { return foot.yaw; } };
+  /** On a motorcycle or bicycle the player is in plain sight: drawn in the saddle, leaning with it. */
+  const rideMotion: Motion = { speed: 0, action: 'ride', t: 0, ride: 'moto', lean: 0 };
+  const seatPos = new THREE.Vector3(), seatFwd = new THREE.Vector3();
+  const twoWheeler = (): TwoWheeler | null => { const b = vehicle().look.body; return b === 'moto' || b === 'bike' ? b : null; };
+  // No bodywork round you: a crash on a bike hurts.
+  engine.events.on('vehicle:impact', (e) => {
+    if (mode === 'driving' && twoWheeler() && e.strength > 4) hurt(Math.min(45, (e.strength - 4) * 5));
+  });
 
   const exitCar = () => {
     const v = vehicle(), car = v.car;
@@ -266,6 +277,15 @@ export async function install(engine: Engine): Promise<void> {
         foot.animate(dt);
         drawFeet.lerpVectors(prevFeet, curFeet, alpha);
         crowd.add(drawFeet, foot.yaw, foot.gait, look);
+      } else if (mode === 'driving' && twoWheeler()) {
+        // The pelvis on the saddle, the saddle leaning with the drawn body, the feet-root under it.
+        const two = twoWheeler()!, seat = SEAT[two], lean = v.lean;
+        seatPos.set(seat[0], seat[1], seat[2]).applyEuler(new THREE.Euler(lean.pitch, 0, lean.roll)).applyQuaternion(v.renderQuat).add(v.renderPos);
+        seatFwd.set(0, 0, 1).applyQuaternion(v.renderQuat);
+        rideMotion.ride = two; rideMotion.lean = lean.roll; rideMotion.speed = v.car.forwardSpeed;
+        foot.gait.update(rideMotion, dt, 0.3);
+        seatPos.y -= SKELETON[J.pelvis].offset[1] * foot.gait.scale;
+        crowd.add(seatPos, Math.atan2(seatFwd.x, seatFwd.z), foot.gait, look);
       }
     },
   };

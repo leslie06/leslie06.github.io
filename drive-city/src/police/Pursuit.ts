@@ -40,7 +40,7 @@ export class Pursuit {
     out.x = p[(n - 1) * 2]; out.z = p[(n - 1) * 2 + 1];
   }
 
-  update(car: Vehicle, goal: Goal, direct: boolean, dt: number, route: Router | null, gentle: boolean): DriveInput {
+  update(car: Vehicle, goal: Goal, direct: boolean, dt: number, route: Router | null, gentle: boolean, ram = false): DriveInput {
     const inp = this.input;
     const v = Math.max(0, car.forwardSpeed);
     this.pathAge += dt;
@@ -85,7 +85,8 @@ export class Pursuit {
       if (ang > 0.35) vt = Math.min(vt, Math.max(9, this.topSpeed * Math.cos(ang)));
     }
     const gs = Math.hypot(goal.vx, goal.vz);
-    if (direct && dist < 16) vt = Math.min(vt, gs + (gentle ? 1.5 : 6));
+    // Ramming: no speed matching, straight through the player (they are still boxed in when stopped).
+    if (direct && dist < 16 && !(ram && gs > 4)) vt = Math.min(vt, gs + (gentle ? 1.5 : 6));
     // Up against a stopped player: stop and box them in (ramming would keep shoving them free).
     if (direct && dist < 9 && gs < 3) vt = 0;
     if (vt < 0.5) { inp.forward = 0; inp.back = v > 0.5 ? 1 : 0; inp.handbrake = v < 1; inp.steer = steer; this.lastSteer = steer; this.stuck = 0; return inp; }

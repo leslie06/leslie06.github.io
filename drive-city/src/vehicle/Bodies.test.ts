@@ -19,13 +19,15 @@ const report = new Map<BodyType, Record<string, number>>();
 const put = (t: BodyType, k: string, v: number) => { const r = report.get(t) ?? {}; r[k] = v; report.set(t, r); };
 
 /** Per type: speed to reach (km/h) and within how long, braking test speed and the longest stop. */
-const EXPECT: Record<BodyType, { v: number; within: number; brakeFrom: number; stop: number; topMin: number }> = {
+const EXPECT: Record<BodyType, { v: number; within: number; brakeFrom: number; stop: number; topMin: number; stopMin?: number; lane?: number }> = {
   sedan: { v: 100, within: 9, brakeFrom: 60, stop: 22, topMin: 165 },
   hatch: { v: 100, within: 11, brakeFrom: 60, stop: 22, topMin: 165 },
   suv: { v: 100, within: 11.5, brakeFrom: 60, stop: 23, topMin: 165 },
   mpv: { v: 100, within: 12.5, brakeFrom: 60, stop: 24, topMin: 160 },
   bus: { v: 50, within: 16, brakeFrom: 50, stop: 24, topMin: 70 },
   truck: { v: 60, within: 16, brakeFrom: 60, stop: 30, topMin: 90 },
+  moto: { v: 100, within: 8, brakeFrom: 60, stop: 20, topMin: 160 },
+  bike: { v: 25, within: 10, brakeFrom: 25, stop: 9, topMin: 30, stopMin: 2, lane: 25 },
 };
 
 const rigFor = (t: BodyType) => Rig.create({ spec: SPEC_OF[t], at: { x: 0, y: SPEC_OF[t].wheelRadius + 0.05, z: 0 } });
@@ -93,7 +95,7 @@ describe.each(BODY_TYPES)('%s', (t) => {
     const yaw = deg(Math.abs(Math.atan2(rig.car.fwd.x, rig.car.fwd.z) - h0));
     put(t, `brake.${ex.brakeFrom}-0 m`, dist); put(t, 'brake.lateral m', lat); put(t, 'brake.yaw deg', yaw);
     expect(dist).toBeLessThan(ex.stop);
-    expect(dist).toBeGreaterThan(8);
+    expect(dist).toBeGreaterThan(ex.stopMin ?? 8);
     expect(lat).toBeLessThan(0.5);
     expect(yaw).toBeLessThan(3);
   });
@@ -101,13 +103,14 @@ describe.each(BODY_TYPES)('%s', (t) => {
   it('changes lanes at 60 km/h on all four wheels', async () => {
     const rig = await rigFor(t);
     rig.settle();
-    rig.launch(60 / KMH);
+    const vLane = ex.lane ?? 60;
+    rig.launch(vLane / KMH);
     const path: [number, number][] = [];
     for (let z = 0; z <= 500; z += 2) {
       const u = z < 60 ? 0 : z < 100 ? (1 - Math.cos((z - 60) / 40 * Math.PI)) / 2 : z < 150 ? 1 : z < 190 ? (1 + Math.cos((z - 150) / 40 * Math.PI)) / 2 : 0;
       path.push([3.5 * u, z]);
     }
-    const pilot = new PathPilot(path, { speed: 60 / KMH, lookahead: t === 'bus' ? 20 : 14, closed: false });
+    const pilot = new PathPilot(path, { speed: vLane / KMH, lookahead: t === 'bus' ? 20 : 14, closed: false });
     let maxSlip = 0, maxCte = 0, minUp = 1, minGround = 4, maxRoll = 0;
     for (let s = 0; s < 14; s += DT) {
       rig.stepInput(pilot.update(rig.view(), DT));

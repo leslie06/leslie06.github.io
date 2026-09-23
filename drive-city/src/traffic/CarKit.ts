@@ -77,10 +77,11 @@ export class CarKit {
     if (lamps) lamps.setAttribute('instLamp', this.flags);
     add(lamps, mats.lamp, false);
     // Wheels: front and rear (twin rear tyres are two instances each side).
-    this.hubs = spec.wheels.map((w) => new THREE.Vector3(w.x, 0, w.z));
+    this.hubs = spec.wheels.map((w) => new THREE.Vector3(spec.single ? 0 : w.x, 0, w.z));
     const wf = parts.wheel.build('trim')!, wr = parts.wheelRear?.build('trim') ?? null;
-    const rearSlots = parts.dual > 0 ? [2, 3].flatMap((k) => [{ k, dx: parts.dual / 2 }, { k, dx: -parts.dual / 2 }]) : [{ k: 2, dx: 0 }, { k: 3, dx: 0 }];
-    const front = [{ k: 0, dx: 0 }, { k: 1, dx: 0 }];
+    // A two-wheeler: one wheel per axle at the centre.
+    const rearSlots = spec.single ? [{ k: 2, dx: 0 }] : parts.dual > 0 ? [2, 3].flatMap((k) => [{ k, dx: parts.dual / 2 }, { k, dx: -parts.dual / 2 }]) : [{ k: 2, dx: 0 }, { k: 3, dx: 0 }];
+    const front = spec.single ? [{ k: 0, dx: 0 }] : [{ k: 0, dx: 0 }, { k: 1, dx: 0 }];
     const sets: [THREE.BufferGeometry, { k: number; dx: number }[]][] = wr ? [[wf, front], [wr, rearSlots]] : [[wf, [...front, ...rearSlots]]];
     for (const [g, slots] of sets) {
       count(g, slots.length);

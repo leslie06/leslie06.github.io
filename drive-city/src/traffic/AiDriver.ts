@@ -28,6 +28,9 @@ export class AiDriver {
   lane: number;
   private queue: number[] = [];
   mode: 'drive' | 'shaken' | 'lost' = 'drive';
+  /** A getaway driver: target speed multiplier, and no stopping for red lights. */
+  boost = 1;
+  reckless = false;
   private timer = 0;
   stuck = 0;
   lateral = 0;
@@ -108,7 +111,7 @@ export class AiDriver {
     inp.steer = Math.max(-1, Math.min(1, -wheel / Math.max(0.05, car.maxSteerAngle(v))));
 
     // Target speed: road class, the turn within the next ~45 m, then the light at the end.
-    let vt = l.speed;
+    let vt = l.speed * this.boost;
     this.along(Math.max(8, v * 1.2), this.q);
     const h0x = this.q.dx, h0z = this.q.dz;
     this.along(Math.max(8, v * 1.2) + 28, this.q);
@@ -124,7 +127,7 @@ export class AiDriver {
       if (light === 2) lineStats.onRed++;
     }
     this.lineLink = this.link; this.lineToEnd = toEnd;
-    if (light !== 0 && stopAt > -0.5) {
+    if (light !== 0 && stopAt > -0.5 && !this.reckless) {
       const canStop = v * v / (2 * 4.5) < stopAt + 0.5;
       if (light === 2 || canStop) vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 2.6 * Math.max(0, stopAt - 0.8))));
     }
