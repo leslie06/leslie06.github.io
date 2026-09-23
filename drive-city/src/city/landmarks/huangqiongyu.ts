@@ -14,9 +14,9 @@ import { assemble } from './kit/model';
  */
 const WALL = { cz: 19, r: 32.6, h: 3.7 };
 
-function body(P: Parts, lod: boolean): void {
+function body(P: Parts, lod: boolean, colliders?: ColliderSpec[]): void {
   const res = lod ? 0.3 : 1;
-  const top = terrace(P, { tiers: [{ hw: 11.2, hd: 11.2, h: 2.3, round: true }], stairs: [{ side: 'S', w: 6.5, ramp: 2.2 }, { side: 'E', w: 3 }, { side: 'W', w: 3 }], topKey: 'paving', lod });
+  const top = terrace(P, { tiers: [{ hw: 11.2, hd: 11.2, h: 2.3, round: true }], stairs: [{ side: 'S', w: 6.5, ramp: 2.2 }, { side: 'E', w: 3 }, { side: 'W', w: 3 }], topKey: 'paving', lod, colliders });
   const s1 = roundStory(P, { y0: top, r: 6.9, n: 8, colH: 5.4, colR: 0.36, fill: 'windows', beamH: 0.7, bracketH: 0.9, bracketOut: 0.9, lod });
   roof(P, { kind: 'round', y0: s1.top + 0.12, y1: 16.9, hw: 10.0, hd: 0, ridge: 0.6, wall: s1.wall, tile: 'B', curve: 0.35, lift: 0.3, finial: 2.2, res, lod });
   // the Echo Wall: grey brick with blue glazed coping, open at the south gate
@@ -47,11 +47,11 @@ function build(env: EnvUniforms): LandmarkModel {
   const P = new Parts(), F = new Parts();
   const flood = floodGlow({ base: 0.25, front: 0.2, under: 0.9, top: 0.2, foot: 0.45, footH: 4, above: 0.2, aboveY: 2.4 });
   P.ctx.glow = flood; F.ctx.glow = flood;
-  body(P, false); body(F, true);
   const colliders: ColliderSpec[] = [
     { kind: 'cylinder', center: [0, 1.15, 0], radius: 11.2, halfHeight: 1.15 },
     { kind: 'cylinder', center: [0, 8, 0], radius: 7.5, halfHeight: 6 },
   ];
+  body(P, false, colliders); body(F, true);
   for (let i = 0; i < 20; i++) {
     const a = ((i + 0.5) / 20) * Math.PI * 2;
     if (Math.abs(a - Math.PI / 2) < 0.3) continue;

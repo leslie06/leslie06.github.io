@@ -11,11 +11,11 @@ import { assemble } from './kit/model';
  * south), and the round hall: 12 outer columns with lattice doors all round, two lattice drums, three
  * tiers of deep-blue glazed eaves (32.7 / 26 / 20 m) and a gilded finial, 38 m above the terrace.
  */
-function body(P: Parts, lod: boolean): number {
+function body(P: Parts, lod: boolean, colliders?: ColliderSpec[]): number {
   const top = terrace(P, {
     tiers: [{ hw: 45.5, hd: 45.5, h: 1.9, round: true }, { hw: 39.8, hd: 39.8, h: 1.9, round: true }, { hw: 34.2, hd: 34.2, h: 1.9, round: true }],
     stairs: [{ side: 'S', w: 10, ramp: 2.8 }, { side: 'N', w: 10, ramp: 2.8 }, { side: 'E', w: 4.5 }, { side: 'W', w: 4.5 }],
-    topKey: 'paving', railStep: 1.6, lod,
+    topKey: 'paving', railStep: 1.6, lod, colliders,
   });
   sumeru(P, 'marble', 17.6, 17.6, top, 0.85, { round: true, top: 'paving', plain: lod });
   const y0 = top + 0.85;
@@ -31,18 +31,25 @@ function body(P: Parts, lod: boolean): number {
   return s3.top + 0.15 + 8.9 + 5.0;
 }
 
-function build(env: EnvUniforms): LandmarkModel {
-  const mats = landmarkMaterials(env);
+/** The geometry and colliders without materials, so the tests can build them in Node. */
+export function qiniandianParts(): { P: Parts; F: Parts; colliders: ColliderSpec[]; height: number } {
   const P = new Parts(), F = new Parts();
   const flood = floodGlow({ base: 0.2, front: 0.2, under: 1.0, top: 0.2, foot: 0.5, footH: 4, above: 0.3, aboveY: 6.5 });
   P.ctx.glow = flood; F.ctx.glow = flood;
-  const height = body(P, false); body(F, true);
+  // The three tiers as solid drums (the stairs' ramps are added by the terrace), and the hall.
   const colliders: ColliderSpec[] = [
     { kind: 'cylinder', center: [0, 0.95, 0], radius: 45.5, halfHeight: 0.95 },
     { kind: 'cylinder', center: [0, 1.9, 0], radius: 39.8, halfHeight: 1.9 },
     { kind: 'cylinder', center: [0, 2.85, 0], radius: 34.2, halfHeight: 2.85 },
     { kind: 'cylinder', center: [0, 20, 0], radius: 13.5, halfHeight: 14 },
   ];
+  const height = body(P, false, colliders); body(F, true);
+  return { P, F, colliders, height };
+}
+
+function build(env: EnvUniforms): LandmarkModel {
+  const mats = landmarkMaterials(env);
+  const { P, F, colliders, height } = qiniandianParts();
   return assemble({ name: 'qiniandian', detail: P, far: F, mats, colliders, footprint: circlePoly(46, 32), height: Math.round(height * 10) / 10 });
 }
 

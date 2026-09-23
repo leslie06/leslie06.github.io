@@ -60,8 +60,8 @@ function baohe(y0: number, lod: boolean): HallSpec {
   };
 }
 
-function body(P: Parts, lod: boolean): number {
-  const top = polyTerrace(P, { tiers: tiers(), topKey: 'paving', spouts: true, railStep: 2.1, rise: 0.17, tread: 0.28, lod });
+function body(P: Parts, lod: boolean, colliders?: ColliderSpec[]): number {
+  const top = polyTerrace(P, { tiers: tiers(), topKey: 'paving', spouts: true, railStep: 2.1, rise: 0.17, tread: 0.28, lod, colliders });
   let height = 0;
   const on = (z: number, hw: number, hd: number, spec: (y: number, lod: boolean) => HallSpec) => {
     P.push(new THREE.Matrix4().makeTranslation(0, 0, z));
@@ -75,13 +75,13 @@ function body(P: Parts, lod: boolean): number {
   return height;
 }
 
-function build(env: EnvUniforms): LandmarkModel {
-  const mats = landmarkMaterials(env);
+/** The geometry and colliders without materials, so the tests can build them in Node. */
+export function taihedianParts(): { P: Parts; F: Parts; colliders: ColliderSpec[]; height: number } {
   const P = new Parts(), F = new Parts();
   const flood = floodGlow({ base: 0.2, front: 0.3, under: 0.9, top: 0.2, foot: 0.5, footH: 5, above: 0.3, aboveY: 8.5 });
   P.ctx.glow = flood; F.ctx.glow = flood;
-  const height = body(P, false); body(F, true);
   const colliders: ColliderSpec[] = [];
+  const height = body(P, false, colliders); body(F, true);
   for (let k = 0; k < 3; k++) {
     const d = k * STEP, yc = TH * (k + 1) / 2, hh = TH * (k + 1) / 2;
     colliders.push({ kind: 'box', center: [0, yc, 7], half: [66 - d, hh, 43 - d] });
@@ -89,6 +89,12 @@ function build(env: EnvUniforms): LandmarkModel {
     colliders.push({ kind: 'box', center: [0, yc, -125], half: [58 - d, hh, 31 - d] });
   }
   colliders.push({ kind: 'box', center: [0, 20, 0], half: [34, 12, 20] }, { kind: 'box', center: [0, 16, Z_ZH], half: [13, 8, 13] }, { kind: 'box', center: [0, 18, Z_BH], half: [26, 10, 13.5] });
+  return { P, F, colliders, height };
+}
+
+function build(env: EnvUniforms): LandmarkModel {
+  const mats = landmarkMaterials(env);
+  const { P, F, colliders, height } = taihedianParts();
   return assemble({ name: 'taihedian', detail: P, far: F, mats, colliders, footprint: offsetPoly(T1, -1), height: Math.max(35.05, height) });
 }
 

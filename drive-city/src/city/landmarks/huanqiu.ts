@@ -36,11 +36,11 @@ function lingxing(P: Parts, lod: boolean): void {
   }
 }
 
-function body(P: Parts, lod: boolean): void {
+function body(P: Parts, lod: boolean, colliders?: ColliderSpec[]): void {
   terrace(P, {
     tiers: [{ hw: 27.46, hd: 27.46, h: 1.72, round: true }, { hw: 19.2, hd: 19.2, h: 1.72, round: true }, { hw: 11.83, hd: 11.83, h: 1.72, round: true }],
     stairs: (['S', 'N', 'E', 'W'] as const).map((side) => ({ side, w: 3.4 })),
-    topKey: 'paving', railStep: 1.25, railH: 0.95, lod,
+    topKey: 'paving', railStep: 1.25, railH: 0.95, lod, colliders,
   });
   if (!lod) cyl(P.get('marble'), 0, 5.16, 0, 0.5, 0.5, 0.04, 16);      // 天心石
   const red = P.get('redWall'), cap = P.get('glzB');
@@ -85,12 +85,12 @@ function build(env: EnvUniforms): LandmarkModel {
   const P = new Parts(), F = new Parts();
   const flood = floodGlow({ base: 0.3, front: 0.2, under: 0.8, top: 0.1, foot: 0.4, footH: 3 });
   P.ctx.glow = flood; F.ctx.glow = flood;
-  body(P, false); body(F, true);
   const colliders: ColliderSpec[] = [
     { kind: 'cylinder', center: [0, 0.86, 0], radius: 27.46, halfHeight: 0.86 },
     { kind: 'cylinder', center: [0, 1.72, 0], radius: 19.2, halfHeight: 1.72 },
     { kind: 'cylinder', center: [0, 2.58, 0], radius: 11.83, halfHeight: 2.58 },
   ];
+  body(P, false, colliders); body(F, true);
   for (const [cx, cz, along] of [[0, HW_OUT, 'x'], [0, -HW_OUT, 'x'], [HW_OUT, 0, 'z'], [-HW_OUT, 0, 'z']] as const) for (const s of [-1, 1]) {
     const mid = s * (GATE_SET / 2 + HW_OUT) / 2, half = (HW_OUT - GATE_SET / 2) / 2;
     colliders.push({ kind: 'box', center: [along === 'x' ? mid : cx, 0.95, along === 'x' ? cz : mid], half: along === 'x' ? [half, 0.95, 0.45] : [0.45, 0.95, half] });

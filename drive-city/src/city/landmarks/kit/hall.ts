@@ -3,6 +3,7 @@ import { Parts, GeoBuf, V3, box, cyl, lerp, clamp, flat, rectPoly, circlePoly, l
 import { bandV, type BandName } from './tex';
 import { roof, type RoofSpec } from './roof';
 import type { TileColor } from './mats';
+import type { ColliderSpec } from '../../../game/Contracts';
 
 /**
  * The traditional-architecture kit: stepped marble terraces (须弥座 with balustrades, stairs and
@@ -71,6 +72,14 @@ export interface TerraceSpec {
   tiers: Tier[]; y0?: number; key?: string; topKey?: string;
   rail?: boolean; railH?: number; railStep?: number; stairs?: Stair[]; spouts?: boolean; sumeru?: boolean; lod?: boolean;
   cx?: number; cz?: number;
+  /**
+   * Where to put a walk-only ramp collider for every stair flight (detail builds only). The stairs
+   * are drawn on the detail LOD alone while `placeLandmarks` takes its stone trimesh from the far
+   * one, and the tiers are solid drums or boxes besides - so a flight without one of these is a
+   * picture: you walk up the ground underneath, buried to the waist, and stop at the tier's face
+   * (祈年殿, 2026-09-23). A landmark that hands its collider list in gets the flight for free.
+   */
+  colliders?: ColliderSpec[];
 }
 
 const SUMERU: [number, number][] = [[0, 0], [0, 0.13], [0.05, 0.19], [0.12, 0.23], [0.12, 0.29], [0.2, 0.33], [0.2, 0.67], [0.12, 0.71], [0.12, 0.77], [0.05, 0.81], [0, 0.87], [0, 1]];
@@ -112,7 +121,11 @@ export function terrace(P: Parts, o: TerraceSpec): number {
     const t = tiers[i];
     sumeru(P, key, t.hw, t.hd, y, t.h, { round: t.round, plain: o.sumeru === false || o.lod, cx, cz, top: o.topKey ?? key });
     const yTop = y + t.h;
-    for (const st of o.stairs ?? []) if (!o.lod) stairOld(P, key, t, st, y, yTop, cx, cz);
+    for (const st of o.stairs ?? []) if (!o.lod) {
+      const f = stairFrame(t, st, y, yTop, cx, cz);
+      stairOld(P, key, t, st, y, yTop, cx, cz);
+      o.colliders?.push(stairWedge(f.ox, f.oz, f.ry, st.w, f.run, y, yTop));
+    }
     if (o.rail !== false && !o.lod) {
       const inset = 0.28;
       const gap = (x: number, z: number) => (o.stairs ?? []).some((st) => inStair(st, t, x - cx, z - cz, inset));
@@ -137,8 +150,8 @@ function inStair(st: Stair, t: Tier, x: number, z: number, inset: number): boole
 }
 
 /** Steps up one tier face, with sloped side rails and an optional central carved ramp (御路). */
-function stairOld(P: Parts, key: string, t: Tier, st: Stair, y0: number, y1: number, cx: number, cz: number): void {
-  const b = P.get(key);
+/** The frame of a tier stair: origin at the tier face, `ry` turning local +z outward, `run` the flight's length. */
+function stairFrame(t: Tier, st: Stair, y0: number, y1: number, cx: number, cz: number): { ox: number; oz: number; ry: number; n: number; rr: number; run: number } {
   const rise = 0.15, tread = 0.32;
   const n = Math.max(2, Math.round((y1 - y0) / rise)), rr = (y1 - y0) / n, run = n * tread;
   const edge = st.side === 'S' || st.side === 'N' ? (t.round ? t.hw : t.hd) : t.hw;
@@ -149,8 +162,38 @@ function stairOld(P: Parts, key: string, t: Tier, st: Stair, y0: number, y1: num
   // `at` is the world offset along the face (x on S/N faces, z on E/W faces)
   const ox = st.side === 'S' || st.side === 'N' ? at : st.side === 'E' ? off : -off;
   const oz = st.side === 'S' ? off : st.side === 'N' ? -off : at;
+  return { ox: cx + ox, oz: cz + oz, ry, n, rr, run };
+}
+
+/**
+ * The ramp a person climbs a drawn flight on: a convex hull under the treads and their side rails,
+ * walk-only so a car meets the tier's face instead (a ramp gentle enough to walk is gentle enough to
+ * drive, which is how a taxi once parked on the villa's terrace). Steps built as boxes are standable
+ * but not walkable - the character controller slides along the riser - so it is one slope, from the
+ * ground just outside the foot to a hair above the tier top just inside the face. Local frame as the
+ * flight's: origin (x, z) at the face, `ry` turning local +z outward.
+ */
+export function stairWedge(x: number, z: number, ry: number, w: number, run: number, y0: number, y1: number): ColliderSpec {
+  const hw = w / 2 + 0.6, c = Math.cos(ry), s = Math.sin(ry);
+  // The slope reaches the tier top AT the face, then runs level 0.4 m into the tier: a slope that
+  // only got there inside the face stood 0.2 m short of a box tier's lip at the face, and of the
+  // next flight's foot where flights stack (太和殿), and the character controller does not step a
+  // lip like that - it stops (the villa's steps taught the same).
+  const zIn = -0.4, zOut = run + 0.05, yTop = y1 + 0.03, yOut = y0 + 0.01, yBase = y0 - 0.15;
+  const pts: number[] = [];
+  for (const [lx, ly, lz] of [
+    [-hw, yBase, zIn], [hw, yBase, zIn], [hw, yBase, zOut], [-hw, yBase, zOut],
+    [-hw, yTop, zIn], [hw, yTop, zIn], [-hw, yTop, 0], [hw, yTop, 0], [hw, yOut, zOut], [-hw, yOut, zOut],
+  ]) pts.push(x + lx * c + lz * s, ly, z - lx * s + lz * c);
+  return { kind: 'hull', walkOnly: true, points: pts };
+}
+
+function stairOld(P: Parts, key: string, t: Tier, st: Stair, y0: number, y1: number, cx: number, cz: number): void {
+  const b = P.get(key);
+  const tread = 0.32;
+  const f = stairFrame(t, st, y0, y1, cx, cz), { n, rr, run, ry } = f;
   // Rotate so local +z points outward, then place.
-  P.push(new THREE.Matrix4().makeRotationY(ry).setPosition(cx + ox, 0, cz + oz));
+  P.push(new THREE.Matrix4().makeRotationY(ry).setPosition(f.ox, 0, f.oz));
   const hw = st.w / 2;
   for (let i = 0; i < n; i++) {
     const yt = y0 + (i + 1) * rr, zf = run - i * tread, zb = zf - tread;
@@ -573,14 +616,17 @@ export function stairFlight(P: Parts, key: string, st: StairAt, y0: number, y1: 
 
 export interface PolyTier { poly: [number, number][]; h: number; stairs?: StairAt[] }
 /** Stepped marble terrace over polygons, with balustrades, spouts and explicit stair flights. Returns the top. */
-export function polyTerrace(P: Parts, o: { tiers: PolyTier[]; key?: string; topKey?: string; rail?: boolean; railStep?: number; spouts?: boolean; lod?: boolean; rise?: number; tread?: number }): number {
+export function polyTerrace(P: Parts, o: { tiers: PolyTier[]; key?: string; topKey?: string; rail?: boolean; railStep?: number; spouts?: boolean; lod?: boolean; rise?: number; tread?: number; colliders?: ColliderSpec[] }): number {
   const key = o.key ?? 'marble';
   let y = 0;
   for (const t of o.tiers) {
     sumeruPoly(P, key, t.poly, y, t.h, { plain: o.lod, top: o.topKey ?? key });
     const yTop = y + t.h;
     if (!o.lod) {
-      for (const st of t.stairs ?? []) stairFlight(P, key, st, y, yTop, o.rise, o.tread);
+      for (const st of t.stairs ?? []) {
+        const run = stairFlight(P, key, st, y, yTop, o.rise, o.tread);
+        o.colliders?.push(stairWedge(st.x, st.z, st.ry, st.w, run, y, yTop));
+      }
       if (o.rail !== false) {
         const gap = (x: number, z: number) => (t.stairs ?? []).some((st) => {
           const dx = x - st.x, dz = z - st.z, c = Math.cos(st.ry), s2 = Math.sin(st.ry);
