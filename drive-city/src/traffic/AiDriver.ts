@@ -43,7 +43,14 @@ export class AiDriver {
   }
 
   private fill(): void {
-    while (this.queue.length < 3) this.queue.push(this.g.next(this.queue.length ? this.queue[this.queue.length - 1] : this.link, this.rnd));
+    // Stops short where the road ends: `next` has nothing to give, the queue stays short, and the
+    // driver brakes for the end of the link as for a red light, then reports itself lost.
+    while (this.queue.length < 3) {
+      const last = this.queue.length ? this.queue[this.queue.length - 1] : this.link;
+      const n = this.g.next(last, this.rnd);
+      if (n < 0 || n === last) break;
+      this.queue.push(n);
+    }
   }
 
   /** Point `ahead` metres along the path (current link, then the queue) at this car's lane. */
@@ -63,7 +70,13 @@ export class AiDriver {
     const pr = g.project(l, car.pos.x, car.pos.z, this.s);
     this.s = pr.s;
     this.lateral = pr.d;
-    while (this.s > l.len - 0.3 && this.queue.length) {
+    // Onto the next link(s) the car has reached. Bounded: a car cannot honestly pass more than a few
+    // links in one step, and unbounded this loop hung the whole game at a one-way dead end - `next`
+    // handed the same link back, the projection landed on its end again, and so on until the tab was
+    // killed (2026-09-23, 「游戏死机了」). `fill` no longer feeds it such a link, and the cap makes
+    // sure no other glitch in the data can hold the main thread either.
+    let hops = 0;
+    while (this.s > l.len - 0.3 && this.queue.length && hops++ < 6) {
       this.s -= l.len;
       this.link = this.queue.shift()!;
       l = g.links[this.link];
@@ -71,6 +84,10 @@ export class AiDriver {
       this.fill();
       this.s = g.project(l, car.pos.x, car.pos.z, Math.max(0, this.s)).s;
     }
+    // The road ends with this link. At its end the car is done: stop, and let the pool take it
+    // back once it is out of view.
+    const ending = !this.queue.length;
+    if (ending && l.len - this.s < 3) this.mode = 'lost';
     const v = Math.max(0, car.forwardSpeed);
     const inp = this.input;
     if (this.mode === 'shaken') {
@@ -98,6 +115,8 @@ export class AiDriver {
     const turn = Math.acos(Math.max(-1, Math.min(1, h0x * this.q.dx + h0z * this.q.dz)));
     if (turn > 0.12) vt = Math.min(vt, Math.sqrt(2.6 * 28 / turn));
     const toEnd = l.len - this.s;
+    // Brake for the end of a road that ends, as for a red light at it.
+    if (ending) vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 2.6 * (toEnd - 1.5))));
     const light: Light = this.sig.state(l, t);
     const stopAt = toEnd - STOP_LINE;
     if (this.lineLink === this.link && this.lineToEnd > STOP_LINE && toEnd <= STOP_LINE && this.sig.junctionOf(l.to) >= 0) {

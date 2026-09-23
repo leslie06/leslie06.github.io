@@ -105,12 +105,19 @@ export class LaneGraph {
     return best;
   }
 
-  /** Pick the link to take after `id`: mostly straight on, stays on its class, no U-turns if avoidable. */
+  /**
+   * Pick the link to take after `id`: mostly straight on, stays on its class, no U-turns if
+   * avoidable. -1 when there is no way on at all: a one-way road that simply ends (the city has 74
+   * of them, one the west end of 景恒街, 320 m from the villa - inside the traffic radius of anyone
+   * at its gate). It used to hand back `id` there, and AiDriver's advance loop read that as "moved
+   * onto the next link", projected the car onto its end again, and went round forever: the hang of
+   * 2026-09-23 (「游戏死机了」), the moment a car reached that end.
+   */
   next(id: number, rnd: () => number): number {
     const l = this.links[id];
     const cand = this.out[l.to].filter((c) => c !== l.rev);
     const list = cand.length ? cand : this.out[l.to];
-    if (!list.length) return l.rev >= 0 ? l.rev : id;
+    if (!list.length) return l.rev;
     let best = list[0], bs = -Infinity;
     for (const c of list) {
       const o = this.links[c];
@@ -119,6 +126,12 @@ export class LaneGraph {
       if (score > bs) { bs = score; best = c; }
     }
     return best;
+  }
+
+  /** True when the road simply ends after `id`: no way on, and no reverse direction to turn into. */
+  endsAfter(id: number): boolean {
+    const l = this.links[id];
+    return !this.out[l.to].length && l.rev < 0;
   }
 
   /** Links with a point in the 64 m cells overlapping the square around (x, z). */

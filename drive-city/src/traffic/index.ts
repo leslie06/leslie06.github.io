@@ -133,6 +133,8 @@ export async function install(engine: Engine): Promise<void> {
       const id = ids[Math.floor(rnd() * ids.length)];
       const l = g.links[id];
       if (l.len < 24 || l.cls === 'service' || l.cls === 'living_street') continue;
+      // Not on a road that ends: the car would only drive to its end and stand there.
+      if (g.endsAfter(id)) continue;
       if (n.body === 'bus' && !BUS_ROADS.has(l.cls)) continue;
       if (n.body === 'truck' && l.cls === 'residential') continue;
       const s = 6 + rnd() * (l.len - 12);
