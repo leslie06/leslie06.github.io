@@ -307,7 +307,62 @@ export const DRIVE_CLEAR = {
 
 /** Low stone wall and hedge on the plot line, with the gate left open on the west. */
 export const EDGE = { wall: 0.7, t: 0.4, inset: 0.6, hedge: 1.1 };
-export const GATE = { z: -10, w: 7.6, pierW: 1.2, pierH: 2.6 };
+
+/**
+ * The gate: an opening in the west wall with a splayed mouth (八字口), the way a drive meets a street.
+ *
+ * Nobody arrives along the drive's axis off 恒惠路 the way every home probe did: the block round the
+ * plot is an OSM parking lot and two pitches, flat drivable paving with no colliders, so a player
+ * comes at the gate from anywhere on it - the one in the screenshot of 2026-09-23 (「我把车开到家
+ * 门口就卡住了」) came diagonally across it from the south-west at 20 km/h. With straight walls and
+ * the piers on the plot line, any line that grazes the wall beside the opening puts the car's nose
+ * into the inside corner between the wall's face and the pier's face: the throttle only spins the
+ * wheels (the smoke in the screenshot), sliding on along the wall is stopped by the pier, and only
+ * reverse gets it out. So the last `splay` metres of wall each side turn 45° away from the drive,
+ * and the piers stand at the inner ends of those wings, turned with them so their faces continue
+ * the wing's: a car cutting across the plaza meets a wall parallel to its heading and is led in,
+ * and there is no corner for a nose to lodge in. `w` is between the wings' inner ends on the centre
+ * line (the clear opening between their faces is 0.28 m less); the mouth on the plot wall is
+ * `w + 2 * splay` wide. `Gate.test.ts` drives the real car in along the lines players take.
+ */
+export const GATE = { z: -10, w: 7.6, pierW: 1.2, pierH: 2.6, splay: 4 };
+
+/** The plot wall's centre line on the west, where the drive leaves the plot. */
+export const WALL_X = -(PLOT.hw - EDGE.inset);
+
+/** The mouth of the gate on the plot wall: the z extent between the wings' outer ends. */
+export const gateMouth = (): { z0: number; z1: number } =>
+  ({ z0: GATE.z - GATE.w / 2 - GATE.splay, z1: GATE.z + GATE.w / 2 + GATE.splay });
+
+/**
+ * One side of the mouth (`s` -1 north, +1 south): the wing wall's centre line from the plot wall
+ * (`outer`) to its inner end (`inner`), the yaw a box needs to lie along it (local +x runs outer to
+ * inner, and `dir` is that unit vector), and `back`, the unit normal away from the drive. The model
+ * stands the pier at `inner` from these.
+ */
+export function gateWing(s: -1 | 1): {
+  outer: { x: number; z: number }; inner: { x: number; z: number };
+  yaw: number; dir: { x: number; z: number }; back: { x: number; z: number };
+} {
+  const r = Math.SQRT1_2;
+  return {
+    outer: { x: WALL_X, z: GATE.z + s * (GATE.w / 2 + GATE.splay) },
+    inner: { x: WALL_X + GATE.splay, z: GATE.z + s * GATE.w / 2 },
+    yaw: s * Math.PI / 4,
+    dir: { x: r, z: -s * r },
+    back: { x: r, z: s * r },
+  };
+}
+
+/**
+ * The drive inside the plot as one polygon: the bell mouth between the wings, a verge off their
+ * faces, then the straight run to the court. `DRIVE.in` is that straight run's rectangle, which the
+ * tests and probes still measure against.
+ */
+export function driveInPoly(): [number, number][] {
+  const v = 0.6, m = gateMouth(), r = DRIVE.in;
+  return [[r.x0, m.z0 + v], [r.x0 + GATE.splay, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0 + GATE.splay, r.z1], [r.x0, m.z1 - v]];
+}
 
 /**
  * The feature tree the house is built around (the cork oak of the reference), and the rest of the

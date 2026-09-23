@@ -6,7 +6,7 @@ import { grimeTex, marbleTex, pavingTex } from '../city/landmarks/kit/tex';
 import {
   BAR, BED, BEDROOMS, CURVES, DECK, DOOR, DOOR_HEAD, DRIVE, DRIVE_CLEAR, EDGE, ENTRY, GARAGE, GARAGE_DOOR, GATE,
   HERO_TREE, HOUSE, LANDING, LIGHTS, PARK_AT, PLINTH, PLOT, POOL, REFLECT, ROOM, SLIDER, STAIR,
-  TERRACE, TREES, UPPER_ROOM, UPPER_WALL, VOID, Y, stairAngle, stairPoint,
+  TERRACE, TREES, UPPER_ROOM, UPPER_WALL, VOID, Y, driveInPoly, gateMouth, gateWing, stairAngle, stairPoint,
 } from './Layout';
 import {
   armchair, art, basin, bed, bench, bookRow, bookStack, bowl, chair, curtains, dressingRun,
@@ -308,7 +308,8 @@ function plinthAndGround(P: Parts): ColliderSpec[] {
   const out: ColliderSpec[] = [];
   const stone = P.get('vTravertine'), conc = P.get('vConcrete');
   flat(P.get('vLawn'), rectPoly(PLOT.hw, PLOT.hd), Y.lawn);
-  for (const r of [DRIVE.in, DRIVE.court]) flat(conc, poly(r), Y.court);
+  flat(conc, driveInPoly(), Y.court);
+  flat(conc, poly(DRIVE.court), Y.court);
 
   // The plinth: a stone table the house stands on, with the terrace on top.
   prism(stone, poly(PLINTH), Y.lawn, Y.plinth, { top: false });
@@ -356,15 +357,19 @@ function plinthAndGround(P: Parts): ColliderSpec[] {
     prism(conc, ringSeg(t.r, t.r + t.wall, cx, cz, Math.PI * 0.06, Math.PI * 0.74, 26), y - 0.9, y);
   }
 
-  // Low concrete wall and clipped hedge on the plot line, gate open on the west.
+  // Low concrete wall and clipped hedge on the plot line. The gate on the west is splayed (GATE in
+  // Layout.ts): the last `splay` metres of wall each side turn 45° away from the drive, and the
+  // piers stand at the inner ends of those wings, turned with them so their faces continue the
+  // wing's. A car cutting across the plaza then meets a face parallel to its heading instead of
+  // the inside corner between a straight wall and its pier, which is where the taxi's nose lodged.
   const hx = PLOT.hw - EDGE.inset, hz = PLOT.hd - EDGE.inset;
-  const gz0 = GATE.z - GATE.w / 2, gz1 = GATE.z + GATE.w / 2;
+  const mouth = gateMouth();
   const runs: Rect[] = [
     { x0: -hx, x1: hx, z0: -hz - EDGE.t / 2, z1: -hz + EDGE.t / 2 },
     { x0: -hx, x1: hx, z0: hz - EDGE.t / 2, z1: hz + EDGE.t / 2 },
     { x0: hx - EDGE.t / 2, x1: hx + EDGE.t / 2, z0: -hz, z1: hz },
-    { x0: -hx - EDGE.t / 2, x1: -hx + EDGE.t / 2, z0: -hz, z1: gz0 },
-    { x0: -hx - EDGE.t / 2, x1: -hx + EDGE.t / 2, z0: gz1, z1: hz },
+    { x0: -hx - EDGE.t / 2, x1: -hx + EDGE.t / 2, z0: -hz, z1: mouth.z0 },
+    { x0: -hx - EDGE.t / 2, x1: -hx + EDGE.t / 2, z0: mouth.z1, z1: hz },
   ];
   for (const r of runs) {
     prism(conc, poly(r), 0, EDGE.wall);
@@ -372,10 +377,26 @@ function plinthAndGround(P: Parts): ColliderSpec[] {
     box(P.get('vHedge'), mid(r.x0, r.x1), EDGE.wall + EDGE.hedge / 2, mid(r.z0, r.z1),
       r.x1 - r.x0 + 1.2, EDGE.hedge, r.z1 - r.z0 + 1.2);
   }
-  for (const s of [-1, 1]) {
-    const z = GATE.z + s * (GATE.w / 2 + GATE.pierW / 2);
-    box(conc, -hx, GATE.pierH / 2, z, GATE.pierW, GATE.pierH, GATE.pierW * 1.6);
-    out.push({ kind: 'box', center: [-hx, GATE.pierH / 2, z], half: [GATE.pierW / 2, GATE.pierH / 2, GATE.pierW * 0.8] });
+  const pierL = GATE.pierW * 1.6, guard = EDGE.wall + EDGE.hedge;
+  for (const s of [-1, 1] as const) {
+    const g = gateWing(s);
+    // The wing, run half a thickness into the wall's corner so the mitre is closed.
+    const o = { x: g.outer.x - g.dir.x * EDGE.t / 2, z: g.outer.z - g.dir.z * EDGE.t / 2 };
+    const len = Math.hypot(g.inner.x - o.x, g.inner.z - o.z);
+    const c = { x: (o.x + g.inner.x) / 2, z: (o.z + g.inner.z) / 2 };
+    box(conc, c.x, EDGE.wall / 2, c.z, len, EDGE.wall, EDGE.t, { ry: g.yaw });
+    out.push({ kind: 'box', center: [c.x, guard / 2, c.z], half: [len / 2, guard / 2, EDGE.t / 2], yaw: g.yaw });
+    // The hedge on it stops where the pier starts, rather than growing out of the pier's face.
+    const hl = len - pierL;
+    box(P.get('vHedge'), o.x + g.dir.x * hl / 2, EDGE.wall + EDGE.hedge / 2, o.z + g.dir.z * hl / 2, hl, EDGE.hedge, EDGE.t + 1.2, { ry: g.yaw });
+    // The pier is the thickened end of the wing: its drive-side face flush with the wing's, the
+    // extra thickness on the garden side, its far end flush with the wing's end.
+    const p = {
+      x: g.inner.x - g.dir.x * pierL / 2 + g.back.x * (GATE.pierW - EDGE.t) / 2,
+      z: g.inner.z - g.dir.z * pierL / 2 + g.back.z * (GATE.pierW - EDGE.t) / 2,
+    };
+    box(conc, p.x, GATE.pierH / 2, p.z, pierL, GATE.pierH, GATE.pierW, { ry: g.yaw });
+    out.push({ kind: 'box', center: [p.x, GATE.pierH / 2, p.z], half: [pierL / 2, GATE.pierH / 2, GATE.pierW / 2], yaw: g.yaw });
   }
   return out;
 }

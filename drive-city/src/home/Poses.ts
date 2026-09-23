@@ -305,4 +305,14 @@ export function registerHomePoses(): void {
       run(e, 0.6, 0.6);
     },
   });
+
+  registerPose({
+    name: 'home_gate',
+    description: 'The splayed gate from the plaza south-west of it, where the taxi of 2026-09-23 was heading when it stuck: the wing walls lead a car in.',
+    async apply(e) {
+      await base(e);
+      await shot(e, [-62, 2.6, 6], [-44, 1.0, GATE.z], 58);
+      run(e, 0.6, 0.6);
+    },
+  });
 }
