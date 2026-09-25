@@ -65,6 +65,14 @@ export interface CameraApi extends System {
   override: ((camera: THREE.PerspectiveCamera, dt: number) => void) | null;
 }
 
+/** A shared bike standing in a street rack (city/): the player rides off on one with F. */
+export interface SharedBike {
+  /** Where it stands (the rack instance's origin), and the heading a Vehicle there would take. */
+  x: number; y: number; z: number; heading: number;
+  /** Its operator's colour (the frame). */
+  colour: THREE.Color;
+}
+
 export interface WorldApi extends System {
   readonly spawn: { x: number; y: number; z: number; yaw: number };
   /** Loose props (the driving-school yard only). */
@@ -75,6 +83,10 @@ export interface WorldApi extends System {
   placeName?(x: number, z: number): string;
   /** Streaming worlds: resolves once everything around (x, z) is loaded, colliders included. */
   preload?(x: number, z: number): Promise<void>;
+  /** The nearest shared bike standing within `r` of (x, z), if the world has any. */
+  sharedBike?(x: number, z: number, r: number): SharedBike | null;
+  /** That bike leaves its rack (the player is riding it). */
+  takeSharedBike?(b: SharedBike): void;
 }
 
 /** Cars other than the player's: traffic and cars left parked. Implemented by traffic/. */
@@ -84,6 +96,8 @@ export interface TrafficCars extends System {
   takeCar(car: Vehicle): CarLook | null;
   /** Leave a car parked in the world (simulated and drawn by traffic until far away). */
   parkCar(car: Vehicle, look: CarLook): void;
+  /** A bicycle standing where a shared bike was, for the player to ride (not in the traffic pool). */
+  rentBike?(b: SharedBike): Vehicle;
 }
 
 export interface PlayerApi extends System {

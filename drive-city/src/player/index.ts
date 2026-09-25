@@ -4,7 +4,7 @@ import { J, SKELETON } from '../character/Body';
 import { SEAT, type TwoWheeler } from '../vehicle/TwoWheelers';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
-import type { HudApi, MissionApi, PeopleApi, PlayerApi, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { HudApi, MissionApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import { project } from '../city/Geo';
 import { t } from '../core/I18n';
@@ -16,6 +16,9 @@ import { Crowd, CROWD_CAP } from '../character/Crowd';
 import type { Look } from '../character/Body';
 
 const REACH = 4.2;
+/** A shared bike is taken from beside it (they stand 0.62 m apart in a rack). */
+const BIKE_REACH = 1.8;
+const BIKE_FRAME = new THREE.Color('#2a2b2d');
 /** Where the wasted wake up: 北京协和医院, on 东单北大街 (rough WGS84 hint; the street name decides). */
 const HOSPITAL = { road: '东单北大街', lat: 39.9125, lon: 116.415 };
 
@@ -138,6 +141,16 @@ export async function install(engine: Engine): Promise<void> {
     const d = Math.hypot(v.car.pos.x - foot.pos.x, v.car.pos.z - foot.pos.z);
     entering = { t: 0, dur: Math.max(0.25, Math.min(0.9, (d - 1) / 3.2)), carjacked };
   };
+  /** Ride off on a shared bike from a street rack: it leaves the rack as a bicycle of the same colour. */
+  const takeSharedBike = (b: SharedBike) => {
+    const v = vehicle(), tr = traffic(), world = engine.get<WorldApi>('world');
+    if (!tr?.rentBike || !world?.takeSharedBike) return;
+    world.takeSharedBike(b);
+    const bike = tr.rentBike(b);
+    const prev = v.swapCar(bike, { upper: b.colour.clone(), lower: BIKE_FRAME.clone(), taxi: false, parked: true, body: 'bike' });
+    tr.parkCar(prev.car, prev.look);
+    entering = { t: 0, dur: 0.3, carjacked: false };
+  };
   const finishEnter = () => {
     const v = vehicle(), carjacked = entering?.carjacked ?? false;
     entering = null;
@@ -247,8 +260,13 @@ export async function install(engine: Engine): Promise<void> {
         if (v.inputEnabled && inp.punchPressed && !entering && foot.shove()) {
           engine.get<PeopleApi>('people')?.shove(foot.pos.x, foot.pos.z, Math.sin(foot.yaw), Math.cos(foot.yaw));
         }
-        nearCar = !!target && !foot.knock && !entering;
-        if (v.inputEnabled && inp.enterPressed && target && !foot.knock && !entering) enterCar(target);
+        // A shared bike in a rack, when it is nearer than any car.
+        const sb = engine.get<WorldApi>('world')?.sharedBike?.(foot.pos.x, foot.pos.z, BIKE_REACH) ?? null;
+        const bike = sb && (!target || Math.hypot(sb.x - foot.pos.x, sb.z - foot.pos.z) < Math.hypot(target.pos.x - foot.pos.x, target.pos.z - foot.pos.z)) ? sb : null;
+        nearCar = (!!target || !!bike) && !foot.knock && !entering;
+        if (v.inputEnabled && inp.enterPressed && !foot.knock && !entering) {
+          if (bike) takeSharedBike(bike); else if (target) enterCar(target);
+        }
       } else if (v.inputEnabled && v.occupied && inp.enterPressed && !v.autopilot) {
         exitCar();
       }

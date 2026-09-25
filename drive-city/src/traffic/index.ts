@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { Rng } from '../core/Rng';
-import type { CarLook, PeopleApi, PlayerApi, RenderApi, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { CarLook, SharedBike, PeopleApi, PlayerApi, RenderApi, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { Routes } from '../city/Routes';
 import { Vehicle } from '../vehicle/Vehicle';
 import { SPEC_OF } from '../vehicle/Spec';
@@ -74,8 +74,11 @@ export async function install(engine: Engine): Promise<void> {
   const tier = engine.quality.tier;
   const max = new URLSearchParams(location.search).has('notraffic') ? 0 : tier === 'low' ? 12 : tier === 'medium' ? 26 : 42;
   const MAX_PARKED = 6;
-  /** Two-wheelers standing at kerbs within reach of the player. */
-  const BIKES = 3;
+  /**
+   * Motorcycles standing at kerbs within reach of the player (bicycles are the shared bikes in the
+   * street racks: `rentBike`). Three were too few to ever come across one.
+   */
+  const BIKES = tier === 'low' ? 5 : 8;
   const BIKE_ROADS = new Set(['residential', 'tertiary', 'secondary', 'unclassified', 'living_street']);
   // How many of each body the pool holds, and one instanced kit per body (each its own livery).
   const counts = new Map<BodyType, number>();
@@ -170,10 +173,10 @@ export async function install(engine: Engine): Promise<void> {
     }
   };
 
-  /** A motorcycle or bicycle left at a kerb 40-160 m from the camera, out of the road, for the player to take. */
+  /** A motorcycle left at a kerb 30-200 m from the camera, out of the road, for the player to take. */
   const spawnBike = () => {
     const cam = engine.camera.position;
-    const ids = g.near(cam.x, cam.z, 160);
+    const ids = g.near(cam.x, cam.z, 200);
     if (!ids.length) return;
     const pv = player();
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -184,10 +187,10 @@ export async function install(engine: Engine): Promise<void> {
       // On the pavement, a metre in from the kerb on the right of travel, pointing along the road.
       g.at(l, s, -(l.hw + 1.1), tmp);
       const d = Math.hypot(tmp.x - cam.x, tmp.z - cam.z);
-      if (d < 40 || d > 160) continue;
+      if (d < 30 || d > 200) continue;
       if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 7)) continue;
       if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < 12) continue;
-      const body: BodyType = rnd() < 0.5 ? 'moto' : 'bike';
+      const body: BodyType = 'moto';
       // A free slot of this body keeps its own vehicle. It must not also go to `spares`: newCar would
       // hand it out again while this slot still drives it (the bike the player took with F kept being
       // parked at another kerb, handbrake on, by the slot that took over from it).
@@ -303,6 +306,12 @@ export async function install(engine: Engine): Promise<void> {
         return { car: npc.car, release: () => { if (npc.active && npc.runner) despawn(npc); } };
       }
       return null;
+    },
+    rentBike(b: SharedBike) {
+      const car = newCar('bike');
+      car.body.setEnabled(true);
+      car.reset({ x: b.x, y: b.y + car.spec.wheelRadius + 0.04, z: b.z }, b.heading);
+      return car;
     },
     parkCar(car, look) {
       const parked = pool.filter((n) => n.parked && !n.bike);

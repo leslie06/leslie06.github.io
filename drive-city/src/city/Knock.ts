@@ -3,7 +3,7 @@ import type RAPIER_NS from '@dimforge/rapier3d-compat';
 import type { Engine, System } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
-import type { VehicleApi } from '../game/Contracts';
+import type { SharedBike, VehicleApi } from '../game/Contracts';
 import type { RenderSystem } from '../render/RenderSystem';
 import type { FxApi } from '../fx';
 import type { Furniture } from './visual/StreetFurniture';
@@ -96,6 +96,26 @@ export class StreetKnocks implements System {
     return false;
   }
   get anyHidden(): boolean { return this.hidden.length > 0; }
+  /** Take one instance out of the pools without knocking it (a shared bike someone rode off on). */
+  hide(kind: KnockKind, x: number, z: number): void { this.hidden.push({ kind, x, z }); this.version++; }
+
+  /** The nearest shared bike still standing within `r` of (x, z). */
+  nearestBike(x: number, z: number, r: number): SharedBike | null {
+    let best: SharedBike | null = null, bd = r;
+    for (const f of this.near(x, z)) {
+      const a = f.bike;
+      for (let i = 0; i < a.length; i += 5) {
+        // Measured to the middle of the bike (the saddle), which is where one stands to take it.
+        const d = Math.hypot(a[i] - x, a[i + 2] - z);
+        if (d >= bd || this.isHidden('bike', a[i], a[i + 2])) continue;
+        bd = d;
+        // Its front (basket, bars) is local +x: (cos, -sin) in world x/z.
+        const c = Math.cos(a[i + 3]), s = Math.sin(a[i + 3]);
+        best = { x: a[i], y: a[i + 1], z: a[i + 2], heading: Math.atan2(c, -s), colour: new THREE.Color().fromArray(this.parts.bikeColours[a[i + 4]] ?? this.parts.bikeColours[0]) };
+      }
+    }
+    return best;
+  }
 
   private measure(spec: { chassis: { half: [number, number, number]; at: [number, number, number] }[] }): void {
     if (this.foot.spec === spec) return;

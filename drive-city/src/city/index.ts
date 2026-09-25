@@ -149,6 +149,8 @@ export async function install(engine: Engine): Promise<void> {
     attract: { path, closed: false, speed: 15, start: { x: sp.x, z: sp.z, yaw: sp.yaw } },
     placeName: (x, z) => routes.nameAt(x, z),
     preload: (x, z) => streamer.preload(x, z),
+    sharedBike: (x, z, r) => streamer.knocks.nearestBike(x, z, r),
+    takeSharedBike: (b) => streamer.knocks.hide('bike', b.x, b.z),
     manifest, routes, streamer,
   };
   engine.add(api);
