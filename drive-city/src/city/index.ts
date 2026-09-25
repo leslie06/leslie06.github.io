@@ -135,6 +135,7 @@ export async function install(engine: Engine): Promise<void> {
   const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear);
   streamer.onDetailChange = (keys) => sky.setDetailed(keys);
   engine.add(streamer);
+  engine.add(streamer.knocks);
   const routes = new Routes(network);
 
   const sp = manifest.spawn;

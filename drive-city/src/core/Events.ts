@@ -16,6 +16,8 @@ export interface GameEvents {
   'people:shout': { x: number; z: number; text: string };
   /** A witness finished phoning the police about the player. */
   'people:report': { x: number; z: number };
+  /** The player's car knocked a bin, a shared bike or a railing flying (city/Knock.ts). */
+  'prop:hit': { kind: 'bin' | 'bike' | 'rail'; x: number; y: number; z: number; speed: number };
   /** A traffic car blew its horn at (x, z). */
   'traffic:horn': { x: number; z: number };
   /** The wanted level changed (`up`: it rose). */

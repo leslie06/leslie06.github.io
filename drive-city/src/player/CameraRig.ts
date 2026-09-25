@@ -46,6 +46,8 @@ export class CameraRig implements CameraApi {
       this.shake(Math.min(1.2, strength / 7));
       if (strength > 3) engine.input.rumble(Math.min(1, strength / 10), Math.min(1, strength / 6), 90 + Math.min(260, strength * 22));
     });
+    // Knocking a bin or a railing flying: a little jolt, not a crash.
+    engine.events.on('prop:hit', ({ kind, speed }) => { this.shake(Math.min(0.35, speed / (kind === 'rail' ? 50 : 70))); engine.input.rumble(0.15, 0.35, 70); });
     engine.events.on('vehicle:land', ({ airTime }) => { this.shake(Math.min(0.6, airTime * 0.5)); engine.input.rumble(0.3, 0.6, 120); });
     engine.events.on('vehicle:reset', () => this.snap());
   }

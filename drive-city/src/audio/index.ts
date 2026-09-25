@@ -139,6 +139,48 @@ export async function install(engine: Engine): Promise<void> {
     o.connect(og).connect(master); o.start(t); o.stop(t + 0.4);
   }
 
+  /** A short band-passed noise burst at `t` (a tick of rattle, a crack, a scrape). */
+  function burst(t: number, freq: number, q: number, gain: number, dur: number): void {
+    const c = ctx!;
+    const src = c.createBufferSource(); src.buffer = noiseBuf;
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const g = c.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+    src.connect(f).connect(g).connect(master); src.start(t, Math.random() * 1.5, dur + 0.02);
+  }
+  /** A decaying sine partial (metal ringing, a bell, a hollow bin). */
+  function ring(t: number, freq: number, gain: number, dur: number, type: OscillatorType = 'sine'): void {
+    const c = ctx!;
+    const o = c.createOscillator(); o.type = type; o.frequency.value = freq;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0005, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+    o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  /**
+   * Street furniture hit by the car (city/Knock.ts): a pair of plastic sorting bins is a hollow
+   * bonk and the rubbish rattling out; a shared bike a metal clatter with its bell; a railing a
+   * steel clang (inharmonic partials) and a scrape. Louder the faster the car.
+   */
+  function knock(kind: 'bin' | 'bike' | 'rail', speed: number): void {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime, k = Math.min(1, 0.35 + speed / 22), r = () => Math.random();
+    if (kind === 'bin') {
+      burst(t, 700, 0.8, 0.5 * k, 0.12);
+      ring(t, 150 + r() * 40, 0.35 * k, 0.22, 'triangle');
+      ring(t, 235 + r() * 50, 0.18 * k, 0.16, 'triangle');
+      for (let i = 0; i < 5; i++) burst(t + 0.08 + r() * 0.45, 1400 + r() * 2500, 2, 0.12 * k, 0.04 + r() * 0.05);
+    } else if (kind === 'bike') {
+      burst(t, 2600, 1.2, 0.35 * k, 0.08);
+      for (let i = 0; i < 6; i++) burst(t + 0.03 + r() * 0.5, 2500 + r() * 3500, 5, 0.16 * k, 0.03 + r() * 0.04);
+      // The bell: two close partials, the second a little late (it swings on its bracket).
+      ring(t + 0.02, 2350, 0.08 * k, 0.9); ring(t + 0.02, 3020, 0.045 * k, 0.7);
+      ring(t + 0.25 + r() * 0.15, 2350, 0.05 * k, 0.6);
+      ring(t, 480 + r() * 60, 0.12 * k, 0.25, 'triangle');
+    } else {
+      burst(t, 1800, 0.9, 0.45 * k, 0.07);
+      for (const [f, a, d] of [[233, 0.2, 0.9], [587, 0.14, 0.7], [1161, 0.09, 0.55], [1893, 0.05, 0.4]] as const) ring(t, f * (0.97 + r() * 0.06), a * k, d);
+      burst(t + 0.05, 3200, 1.5, 0.12 * k, 0.35 + speed * 0.01);
+    }
+  }
+
   /** Another driver's horn: a lower two-tone burst, quieter with distance. */
   function npcHorn(x: number, z: number): void {
     if (!ctx || muted) return;
@@ -163,6 +205,7 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('traffic:horn', ({ x, z }) => npcHorn(x, z));
   engine.events.on('wanted:level', ({ up }) => stinger(up));
   engine.events.on('vehicle:impact', ({ strength }) => thump(Math.min(1, strength / 12)));
+  engine.events.on('prop:hit', ({ kind, speed }) => knock(kind, speed));
   engine.events.on('vehicle:land', ({ airTime }) => thump(Math.min(0.8, airTime * 0.5), 55));
   engine.events.on('vehicle:shift', () => { shiftDip = 0.14; });
 

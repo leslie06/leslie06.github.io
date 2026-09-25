@@ -11,6 +11,10 @@ import { TILE, tileOf } from './Geo';
 import { treeGeometries, treeMaterials, lampGeometries, LAMP_REACH } from './Vegetation';
 import { furnitureGeometries, furnitureMaterials } from './visual/FurnitureGeo';
 import type { Furniture } from './visual/StreetFurniture';
+import { StreetKnocks } from './Knock';
+
+const RAIL_COLOURS = [[1, 1, 1], [0.86, 0.93, 1]];
+const BIKE_COLOURS = [[0.98, 0.74, 0.08], [0.16, 0.5, 0.92], [0.28, 0.72, 0.36]];
 
 const BASE: string = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
 
@@ -105,6 +109,13 @@ export class CityStreamer implements System {
   private lampLists = new Map<string, Float32Array>();
   /** Every loaded tile's lamp heads changed: hand them to the renderer (street light). */
   private headsDirty = false;
+  /** Each loaded tile's furniture as placed (the knock test reads it). */
+  private furnRaw = new Map<string, Furniture>();
+  /** Bins, bikes and railings the car can knock flying (a System of its own: city/index adds it). */
+  readonly knocks: StreetKnocks;
+  private knockVer = 0;
+  /** Tiles and focus the furniture pools were last filled for. */
+  private furnAt = { mid: [] as string[], near: [] as string[], x: 0, z: 0 };
   private furnLists = new Map<string, { rail: Float32Array; railC: Float32Array; shelter: Float32Array; bin: Float32Array; bike: Float32Array; bikeC: Float32Array }>();
   private railPool: InstancePool;
   private shelterPool: InstancePool;
@@ -149,6 +160,10 @@ export class CityStreamer implements System {
     this.shelterPool = new InstancePool([{ geo: fg.shelter, mat: fm.props, shadow: true }], 400, scene, false, 'pool:furn-shelter');
     this.binPool = new InstancePool([{ geo: fg.bin, mat: fm.props, shadow: true }], low ? 300 : 800, scene, false, 'pool:furn-bin');
     this.bikePool = new InstancePool([{ geo: fg.bike, mat: fm.props, shadow: true }], low ? 400 : 1500, scene, true, 'pool:furn-bike');
+    this.knocks = new StreetKnocks(engine, {
+      geo: { bin: fg.bin, bike: fg.bike, rail: fg.rail }, mat: { bin: fm.props, bike: fm.props, rail: fm.rail }, depth: { rail: fm.railDepth },
+      bikeColours: BIKE_COLOURS, railColours: RAIL_COLOURS,
+    }, (x, z) => this.furnitureNear(x, z));
     const lg = lampGeometries();
     queueMicrotask(() => this.engine.get<RenderSystem>('render')?.prepare?.(scene));
     this.lampHead = new THREE.MeshStandardMaterial({ color: '#fff6e0', emissive: '#ffcf8a', emissiveIntensity: 0.1, roughness: 0.4 });
@@ -216,6 +231,7 @@ export class CityStreamer implements System {
     this.lampLists.set(res.key, this.lampMatrices(t.lamps));
     this.headsDirty = true;
     this.furnLists.set(res.key, this.furnMatrices(res.furniture));
+    if (res.furniture) this.furnRaw.set(res.key, res.furniture);
     this.onDetailChange?.(this.loadedKeys);
   }
 
@@ -251,10 +267,30 @@ export class CityStreamer implements System {
       return out;
     };
     return {
-      rail: mats(f?.rail, 5), railC: cols(f?.rail, 5, [[1, 1, 1], [0.86, 0.93, 1]]),
+      rail: mats(f?.rail, 5), railC: cols(f?.rail, 5, RAIL_COLOURS),
       shelter: mats(f?.shelter, 4), bin: mats(f?.bin, 4),
-      bike: mats(f?.bike, 5), bikeC: cols(f?.bike, 5, [[0.98, 0.74, 0.08], [0.16, 0.5, 0.92], [0.28, 0.72, 0.36]]),
+      bike: mats(f?.bike, 5), bikeC: cols(f?.bike, 5, BIKE_COLOURS),
     };
+  }
+
+  /** Furniture pools round the focus, less whatever has been knocked out of its place. */
+  private fillFurniture(): void {
+    const { mid, near, x: ox, z: oz } = this.furnAt, kn = this.knocks;
+    this.knockVer = kn.version;
+    const F = (k: string) => this.furnLists.get(k)!;
+    const within = (r: number) => (x: number, z: number) => (x - ox) * (x - ox) + (z - oz) * (z - oz) < r * r;
+    const standing = (kind: 'rail' | 'bin' | 'bike', r: number) => { const w = within(r); return kn.anyHidden ? (x: number, z: number) => w(x, z) && !kn.isHidden(kind, x, z) : w; };
+    this.railPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), standing('rail', 360));
+    this.shelterPool.set(mid.map((k) => F(k).shelter), undefined, within(420));
+    this.binPool.set(near.map((k) => F(k).bin), undefined, standing('bin', 150));
+    this.bikePool.set(near.map((k) => F(k).bike), near.map((k) => F(k).bikeC), standing('bike', 170));
+  }
+
+  /** The furniture on the tile under (x, z) and its eight neighbours. */
+  private furnitureNear(x: number, z: number): Furniture[] {
+    const [ix, iz] = tileOf(x, z), out: Furniture[] = [];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { const f = this.furnRaw.get(`${ix + dx}_${iz + dz}`); if (f) out.push(f); }
+    return out;
   }
 
   /** Head positions (x, z) of every lamp on the loaded tiles, for render/StreetLights. */
@@ -291,6 +327,7 @@ export class CityStreamer implements System {
     this.lampLists.delete(t.key);
     this.headsDirty = true;
     this.furnLists.delete(t.key);
+    this.furnRaw.delete(t.key);
     this.onDetailChange?.(this.loadedKeys);
   }
 
@@ -309,6 +346,19 @@ export class CityStreamer implements System {
     for (let i = 0; i < t.lamps.length; i += 3) {
       const c = world.createCollider(R.ColliderDesc.cylinder(3.5, 0.14).setTranslation(t.lamps[i], 3.5, t.lamps[i + 1]).setCollisionGroups(g), body);
       this.engine.physics.tag(c, { surface: 'metal', tag: 'lamp' });
+    }
+    // Bus shelters (visual/FurnitureGeo shelterGeometry, 7.4 m along local +x, the road at +z): the
+    // back row of posts, glass, lightbox and bench as one box, and the canopy as another, 2.59 m up -
+    // a car passes under it, a bus does not.
+    const sh = this.furnRaw.get(t.key)?.shelter ?? [];
+    for (let i = 0; i < sh.length; i += 4) {
+      const x = sh[i], y = sh[i + 1], z = sh[i + 2], yaw = sh[i + 3], c = Math.cos(yaw), sn = Math.sin(yaw);
+      const rot = this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      const r = { x: rot.x, y: rot.y, z: rot.z, w: rot.w };
+      for (const [hx, hy, hz, lx, ly, lz] of [[3.95, 1.3, 0.31, 0.45, 1.3, -0.56], [3.7, 0.16, 0.99, 0, 2.7, 0.1]]) {
+        const col = world.createCollider(R.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x + lx * c + lz * sn, y + ly, z - lx * sn + lz * c).setRotation(r).setCollisionGroups(g).setFriction(0.5), body);
+        this.engine.physics.tag(col, { surface: 'metal', tag: 'shelter' });
+      }
     }
     t.body = body;
   }
@@ -369,13 +419,9 @@ export class CityStreamer implements System {
       this.lampPool.set(mid.map((k) => this.lampLists.get(k)!), undefined, (x, z) => !isNear(x, z));
       this.lampHeads.set(vk.map((k) => this.lampLists.get(k)!));
       this.lampNear.set(near.map((k) => this.lampLists.get(k)!), undefined, isNear);
-      const F = (k: string) => this.furnLists.get(k)!;
-      const within = (r: number) => (x: number, z: number) => d2(x, z) < r * r;
-      this.railPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), within(360));
-      this.shelterPool.set(mid.map((k) => F(k).shelter), undefined, within(420));
-      this.binPool.set(near.map((k) => F(k).bin), undefined, within(150));
-      this.bikePool.set(near.map((k) => F(k).bike), near.map((k) => F(k).bikeC), within(170));
-    }
+      this.furnAt = { mid, near, x: ox, z: oz };
+      this.fillFurniture();
+    } else if (this.knocks.version !== this.knockVer) this.fillFurniture();
     this.lampHead.emissiveIntensity = 0.1 + 7 * this.env.uNight.value;
     if (this.headsDirty) this.pushHeads();
     if (this.waiters.length && want.every((k) => this.tiles.has(k) || !this.manifest.tiles[k])) {
