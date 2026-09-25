@@ -47,6 +47,8 @@ export interface VehicleApi extends System {
   readonly renderPos: THREE.Vector3;
   readonly renderQuat: THREE.Quaternion;
   readonly drift: DriftState;
+  /** The nitro is burning this step (the car's bottle: `car.tune.nitro` seconds, `car.nitroFill` left). */
+  readonly nitroActive: boolean;
   /** When set, drives the car instead of the player (shot poses, the title-screen attract loop). */
   autopilot: PathPilot | null;
   /** Player input reaches the car only when true (off behind menus). */
@@ -210,6 +212,8 @@ export interface MissionApi extends System {
   addCash(n: number): void;
   /** One line for the HUD (what to do now), or null while free roaming. */
   readonly objective: string | null;
+  /** A story beat's line (the intro): shown instead of the jobs' and the fares' while set. */
+  story: string | null;
 }
 
 /** Pedestrians on the pavements. Implemented by people/. */

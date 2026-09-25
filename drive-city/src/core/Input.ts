@@ -13,6 +13,8 @@ export interface TouchInput {
   lookDX: number; lookDY: number;
   jumpPressed: boolean; enterPressed: boolean; punchPressed: boolean; mapPressed: boolean; cameraPressed: boolean; pausePressed: boolean;
   radioPressed: boolean;
+  /** Held: nitro (driving). */
+  nitro: boolean;
 }
 
 export interface InputState {
@@ -44,6 +46,8 @@ export interface InputState {
   /** N: next radio station, then off. */
   radioPressed: boolean;
   diagPressed: boolean;
+  /** Driving, held: nitro (Shift, gamepad B or LB, the touch button). On foot Shift is sprint. */
+  nitro: boolean;
 }
 
 const DEADZONE = 0.12;
@@ -132,6 +136,7 @@ export class Input {
     s.analog = false;
     s.handbrake = k('Space');
     s.sprint = k('ShiftLeft') || k('ShiftRight');
+    s.nitro = s.sprint;
     s.jumpPressed = p('Space');
     s.enterPressed = p('KeyF') || p('Enter');
     s.horn = k('KeyE') || k('KeyH');
@@ -163,6 +168,7 @@ export class Input {
     s.back = Math.max(s.back, c.back);
     s.handbrake ||= c.handbrake;
     s.sprint ||= c.sprint;
+    s.nitro ||= c.nitro;
     s.lookDX += c.lookDX; s.lookDY += c.lookDY;
     c.lookDX = 0; c.lookDY = 0;
     s.jumpPressed ||= c.jumpPressed; c.jumpPressed = false;
@@ -206,12 +212,13 @@ export class Input {
       s.pausePressed ||= edge(9);
       s.mapPressed ||= edge(12);
       s.punchPressed ||= edge(1);
+      s.nitro ||= b(1) || b(4);
     }
     this.padPrev = pad.buttons.map((x) => x.pressed);
   }
 
   static empty(): InputState {
     return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
-      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, diagPressed: false };
+      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, diagPressed: false, nitro: false };
   }
 }

@@ -31,8 +31,10 @@ export class Marker {
     scene.add(this.group);
   }
 
-  show(x: number, z: number, color: string): void {
+  /** `scale` shrinks the column and ring (a hailer on the kerb is a smaller mark than a destination). */
+  show(x: number, z: number, color: string, scale = 1): void {
     this.group.position.set(x, 0, z);
+    this.group.scale.setScalar(scale);
     this.col.uniforms.uColor.value.set(color);
     this.ring.color.set(color);
     this.group.visible = true;

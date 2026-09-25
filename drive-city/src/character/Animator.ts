@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ANKLE_H, BALL, BIND_ROT, HEEL, J, JOINT_COUNT, LOOK_FLOATS, SHIN, SKELETON, THIGH, lookScale, packLook, type Look } from './Body';
 
-export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch' | 'ride';
+export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch' | 'ride' | 'wave';
 
 /** What drives a pose this frame. */
 export interface Motion {
@@ -144,6 +144,7 @@ export class Gait {
     else if (m.action === 'getup') this.getup(m.t);
     else if (m.action === 'air') this.air(m.t);
     else if (m.action === 'punch') { this.locomotion(m.speed, dt); this.shoveArm(m.t); }
+    else if (m.action === 'wave') { this.locomotion(m.speed, dt); this.waveArm(m.t); }
     else if (m.action === 'ride') this.ride(m, dt);
     else this.locomotion(m.speed, dt);
     if (this.fade > 0) {
@@ -471,6 +472,15 @@ export class Gait {
     r[J.chest * 3 + 1] = -0.45 * out;
     r[J.spine * 3 + 1] = -0.15 * out;
     this.fwd = 0.05 * out;
+  }
+
+  /** Hailing a cab: the right arm up above the head, the hand waving side to side. */
+  private waveArm(t: number): void {
+    const r = this.rot, up = sstep(0, 0.35, t), w = Math.sin(t * 8) * up;
+    r[J.shoulderR * 3] = -2.55 * up;
+    r[J.shoulderR * 3 + 2] = (-0.3 + 0.28 * w) * up;
+    r[J.elbowR * 3] = (-0.45 - 0.35 * w) * up;
+    r[J.chest * 3 + 2] = 0.06 * up;
   }
 
   private air(t: number): void {

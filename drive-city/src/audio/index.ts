@@ -26,7 +26,8 @@ export async function install(engine: Engine): Promise<void> {
   let master: GainNode;
   let engineGain: GainNode, engineFilter: BiquadFilterNode, o1: OscillatorNode, o2: OscillatorNode, o3: OscillatorNode, intakeFilter: BiquadFilterNode, intakeGain: GainNode;
   let tyreGain: GainNode, tyreFilter: BiquadFilterNode, squealGain: GainNode, s1: OscillatorNode, s2: OscillatorNode;
-  let windGain: GainNode, hornGain: GainNode;
+  let windGain: GainNode, hornGain: GainNode, nitroGain: GainNode;
+  let nitroWas = false;
   let sirenGain: GainNode, sirenLfo: OscillatorNode;
   let cityGain: GainNode, passGain: GainNode, humGain: GainNode;
   let radio: Radio | null = null;
@@ -83,6 +84,13 @@ export async function install(engine: Engine): Promise<void> {
     const wf = c.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 520;
     windGain = c.createGain(); windGain.gain.value = 0;
     noise(c).connect(wf).connect(windGain).connect(master);
+    // Nitro: a gas hiss (band-passed noise) with a low roar under it, while it burns.
+    const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 1500; nf.Q.value = 0.6;
+    const nl = c.createBiquadFilter(); nl.type = 'lowpass'; nl.frequency.value = 180;
+    nitroGain = c.createGain(); nitroGain.gain.value = 0;
+    noise(c).connect(nf).connect(nitroGain);
+    noise(c).connect(nl).connect(nitroGain);
+    nitroGain.connect(master);
 
     // Horn: the flat two-tone of a Chinese saloon.
     hornGain = c.createGain(); hornGain.gain.value = 0;
@@ -258,6 +266,10 @@ export async function install(engine: Engine): Promise<void> {
       squealGain.gain.setTargetAtTime(paused ? 0 : skid * skid * 0.05 * sf, t, 0.06);
       tyreFilter.frequency.setTargetAtTime(700 + car.speed * 25, t, 0.1);
       windGain.gain.setTargetAtTime(paused ? 0 : Math.min(0.2, car.speed * car.speed / 9000), t, 0.2);
+      const n2o = v.nitroActive && !paused;
+      nitroGain.gain.setTargetAtTime(n2o ? 0.2 : 0, t, n2o ? 0.03 : 0.12);
+      if (n2o && !nitroWas && !muted) { burst(t, 700, 0.7, 0.4, 0.5); burst(t, 2600, 1.2, 0.15, 0.3); }
+      nitroWas = n2o;
       hornGain.gain.setTargetAtTime(!paused && v.inputEnabled && engine.input.state.horn ? 0.09 : 0, t, 0.015);
       // City ambience (quieter at night), cars passing close, footsteps on foot.
       const traffic = engine.get<TrafficApi>('traffic');

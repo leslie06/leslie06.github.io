@@ -42,7 +42,8 @@ css(`
 }
 `);
 
-export type MenuState = 'title' | 'playing' | 'paused';
+/** `overlay`: a game screen of its own is up (the garage): no menu, no driving, the world runs on. */
+export type MenuState = 'title' | 'playing' | 'paused' | 'overlay';
 
 /** Title and pause screens over the live scene. */
 export class Menu {
@@ -91,7 +92,7 @@ export class Menu {
     const card = el('div', 'card', root);
     const h2 = el('h2', '', card); h2.appendChild(L('title.controls'));
     const k = el('div', 'k', card);
-    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['@key.mouse', 'ctl.orbit'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['F1', 'ctl.help'], ['Esc', 'ctl.pause']];
+    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['@key.mouse', 'ctl.orbit'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.nitro'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['F1', 'ctl.help'], ['Esc', 'ctl.pause']];
     for (const [keys, key] of rows) {
       const a = el('span', '', k);
       for (const x of keys.split(' ')) { const kb = el('kbd', '', a); kb.append(x.startsWith('@') ? L(x.slice(1) as 'key.space') : x); }
@@ -102,7 +103,7 @@ export class Menu {
   }
 
   set(state: MenuState): void {
-    this.root.hidden = state === 'playing';
+    this.root.hidden = state === 'playing' || state === 'overlay';
     const paused = state === 'paused';
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');
     this.pauseHint.hidden = !paused;

@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
-import { lang, t } from '../core/I18n';
+import { t } from '../core/I18n';
 import type { Blip, NavApi, PlayerApi, VehicleApi, WorldApi } from '../game/Contracts';
 import { nearestKerb, type Kerb } from '../people/Pavement';
 import type { TrafficApi } from '../traffic';
 import type { Vehicle } from '../vehicle/Vehicle';
 import { Marker } from './Marker';
+import { pickAddress, type Stop } from './Address';
 
 /**
  * Short jobs with a Beijing flavour, GTA style: drive into a glowing marker and a 2-4 minute job
@@ -22,11 +23,8 @@ export interface Place { x: number; z: number; zh: string; en: string; kerb?: Ke
 export interface JobDeps { places: Place[]; resolve(p: Place): Kerb | null; addCash(n: number): void; toast(s: string): void; rnd(): number }
 
 type Kind = 'delivery' | 'chase' | 'trial';
-interface Stop { x: number; z: number; label: string }
 interface Post { kind: Kind; x: number; z: number; marker: Marker; cooldown: number }
 
-/** Streets a job may send you down: two-way, named, and not the ring roads. */
-const STREETS = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
 const COLOR: Record<Kind, string> = { delivery: '#ff8a3d', chase: '#ff4d4d', trial: '#5fd1ff' };
 const fmt = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
 
@@ -89,25 +87,7 @@ export class Jobs {
    * Chained stop to stop, this keeps a job inside the dense grid instead of on the ring roads.
    */
   private pickKerb(x: number, z: number, minR: number, maxR: number, avoid: Stop[], apart = 120, byRoad = true): Stop | null {
-    const g = this.engine.get<TrafficApi>('traffic')!.graph, nav = this.nav(), tmp = { x: 0, z: 0, dx: 0, dz: 0 };
-    // Every candidate street in a random order: the one-ways make most of them a long way round
-    // by road, and 60 random draws out of a thousand links found none of the few that fit.
-    const ids = g.near(x, z, maxR).sort(() => this.deps.rnd() - 0.5);
-    for (const id of ids) {
-      const l = g.links[id];
-      if (l.oneway || !l.name || l.len < 30 || !STREETS.has(l.cls)) continue;
-      const s = 10 + this.deps.rnd() * (l.len - 20);
-      g.at(l, s, -(l.hw + 0.8), tmp);
-      const d = Math.hypot(tmp.x - x, tmp.z - z);
-      if (d > maxR || d < minR * 0.4) continue;
-      if (avoid.some((a) => Math.hypot(a.x - tmp.x, a.z - tmp.z) < apart)) continue;
-      // Heading NaN: either way along the road, since a driver may turn round for a delivery.
-      if (byRoad) { const len = nav?.route(x, z, NaN, tmp.x, tmp.z)?.len ?? d * 1.4; if (len < minR || len > maxR) continue; }
-      else if (d < minR) continue;
-      const no = 2 + Math.floor(this.deps.rnd() * 60) * 2;
-      return { x: tmp.x, z: tmp.z, label: lang() === 'zh' ? `${l.name}${no}号` : `${no} ${l.name}` };
-    }
-    return null;
+    return pickAddress(this.engine.get<TrafficApi>('traffic')!.graph, this.nav(), this.deps.rnd, x, z, minR, maxR, avoid, apart, byRoad);
   }
 
   private routeLen(x: number, z: number): number {

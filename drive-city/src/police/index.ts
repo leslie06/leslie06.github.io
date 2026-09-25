@@ -335,7 +335,7 @@ export async function install(engine: Engine): Promise<void> {
         const driving = pl.mode === 'driving';
         const near = cops.some((c) => c.active && c.car.speed < 4 && Math.hypot(c.car.pos.x - P.x, c.car.pos.z - P.z) < (driving ? 7.5 : 5));
         bust = near && P.speed < (driving ? 1.5 : 1.2) ? bust + dt : Math.max(0, bust - dt * 2);
-        if (bust > (driving ? 2.5 : 1.2)) { busted = 0; bust = 0; hud.busted(true); vehicle().inputEnabled = false; }
+        if (bust > (driving ? 2.5 : 1.2)) { busted = 0; bust = 0; hud.busted(true); vehicle().inputEnabled = false; engine.events.emit('wanted:busted', { level: lv }); }
       }
     },
     postStep(dt) {

@@ -103,6 +103,15 @@ export class Vehicle {
   readonly impactPoint = new THREE.Vector3();
   /** Seconds of the landing that just happened (set for one step), else 0. */
   landed = 0;
+  /**
+   * Garage work on this one car (the spec is shared by every car of its type): engine torque and
+   * top speed, tyre grip, and nitro - the seconds of boost a full bottle gives, 0 when none is fitted.
+   */
+  tune = { torque: 1, top: 1, grip: 1, nitro: 0 };
+  /** Nitro left in the bottle, 0..1 of `tune.nitro`. */
+  nitroFill = 0;
+  /** Extra forward acceleration while the nitro burns, m/s² (set every step by whoever drives). */
+  boost = 0;
   private readonly velBefore = new THREE.Vector3();
   private readonly impulse = new THREE.Vector3();
   private readonly staticLoad: number[];
@@ -329,8 +338,8 @@ export class Vehicle {
       w.vLong = vx; w.vLat = vy;
       const gx = _g.dot(_wf), gy = _g.dot(_wl);
       const grip = Math.max(0.5, 1 - tire.loadSensitivity * (load / this.staticLoad[i] - 1));
-      const fxMax = tire.muLong * load * grip;
-      const fyMax = tire.muLat * load * grip * (m.front ? 1 : tire.rearGrip);
+      const fxMax = tire.muLong * load * grip * this.tune.grip;
+      const fyMax = tire.muLat * load * grip * this.tune.grip * (m.front ? 1 : tire.rearGrip);
       const driven = m.front ? s.engine.frontShare > 0 : s.engine.frontShare < 1;
       const share = driven ? (m.front ? s.engine.frontShare : 1 - s.engine.frontShare) / 2 : 0;
       const brakeCap = s.brakes.force * c.brake * (m.front ? s.brakes.frontBias : 1 - s.brakes.frontBias) / 2;
@@ -427,6 +436,12 @@ export class Vehicle {
     _f.copy(this.vel).multiplyScalar(-s.aero.drag * this.speed);
     _f.addScaledVector(this.up, -s.aero.downforce * this.forwardSpeed * this.forwardSpeed * (grounded > 0 ? 1 : 0.3));
     this.push(_f, _p);
+
+    // --- nitro: a push at the centre of mass, past the limiter but not without end -----------------
+    if (this.boost > 0 && grounded >= 2 && this.forwardSpeed > -1 && this.forwardSpeed * 3.6 < s.engine.limiterKmh * this.tune.top * 1.3) {
+      _f.copy(this.fwd).multiplyScalar(s.mass * this.boost);
+      this.push(_f, _p);
+    }
 
     // --- assists ----------------------------------------------------------------------------------
     const I = s.inertia;
@@ -559,7 +574,7 @@ export class Vehicle {
     this.rpm += (Math.min(target, e.redline) - this.rpm) * Math.min(1, dt * 16);
 
     const kmh = Math.abs(this.forwardSpeed) * 3.6;
-    const limited = this.gear > 0 ? kmh > e.limiterKmh : kmh > e.reverseKmh;
+    const limited = this.gear > 0 ? kmh > e.limiterKmh * this.tune.top : kmh > e.reverseKmh;
     if (this.shiftTimer > 0 || limited || c.throttle <= 0.02) {
       // Engine braking, always against the wheels' rotation.
       if (c.throttle <= 0.02 && this.rpm > e.idle * 1.3 && Math.abs(vDrive) > 1) {
@@ -569,6 +584,6 @@ export class Vehicle {
       return 0;
     }
     const torque = torqueAt(e.torque, Math.max(this.rpm, rpm)) * c.throttle * (this.rpm >= e.redline - 10 ? 0 : 1);
-    return torque * ratio(this.gear) * e.final * e.efficiency / r;
+    return torque * this.tune.torque * ratio(this.gear) * e.final * e.efficiency / r;
   }
 }

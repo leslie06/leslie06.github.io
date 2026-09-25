@@ -20,6 +20,14 @@ css(`
 .hud .speedo .unit{position:absolute;left:0;right:0;top:120px;text-align:center;font:700 10px/1 ${F.num};letter-spacing:.24em;color:${C.muted}}
 .hud .speedo .gear{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);width:34px;height:34px;border:2px solid ${C.yellow};border-radius:6px;display:grid;place-items:center;font:800 19px/1 ${F.num};color:${C.yellow};background:rgba(10,12,14,.6)}
 .hud .speedo .gear.flash{background:${C.yellow};color:${C.ink}}
+/* Nitro bottle: a bar up the left of the dial, only when one is fitted. */
+.hud .speedo .n2o{position:absolute;left:-4px;top:34px;width:9px;height:122px;border-radius:5px;background:rgba(10,12,14,.6);box-shadow:inset 0 0 0 1px rgba(160,210,255,.28);overflow:hidden}
+.hud .speedo .n2o[hidden]{display:none}
+.hud .speedo .n2o i{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(0deg,#2f7dff,#8fd8ff)}
+.hud .speedo .n2o.on{box-shadow:inset 0 0 0 1px #bfe8ff,0 0 14px rgba(120,200,255,.75)}
+.hud .speedo .n2o.on i{background:linear-gradient(0deg,#6fb6ff,#e8f7ff)}
+.hud .speedo .n2olabel{position:absolute;left:-10px;top:160px;width:22px;text-align:center;font:800 9px/1 ${F.num};letter-spacing:.04em;color:#9fd4ff}
+.hud .speedo .n2olabel[hidden]{display:none}
 .hud .drift{position:absolute;left:50%;top:8vh;transform:translateX(-50%);text-align:center;transition:opacity .25s}
 .hud .drift .label{font:800 14px/1 ${F.ui};letter-spacing:.3em;color:${C.yellow};text-shadow:0 1px 8px rgba(0,0,0,.5)}
 .hud .drift .score{font:800 46px/1.1 ${F.num};font-variant-numeric:tabular-nums;text-shadow:0 2px 14px rgba(0,0,0,.5)}
@@ -75,6 +83,9 @@ export class Hud implements HudApi {
   readonly root: HTMLDivElement;
   private num: HTMLDivElement;
   private gear: HTMLDivElement;
+  private n2o!: HTMLDivElement;
+  private n2oFill!: HTMLElement;
+  private n2oLabel!: HTMLDivElement;
   private rpmPath: SVGPathElement;
   private driftBox: HTMLDivElement;
   private driftScore: HTMLSpanElement;
@@ -95,7 +106,7 @@ export class Hud implements HudApi {
   private lastCam = '';
   private visible = true;
   /** Last values written to the DOM, so a frame that changes nothing writes nothing. */
-  private shown = { kmh: -1, rpm: -1, red: false, gear: '', best: '', score: -1, mult: -1, angle: -1 };
+  private shown = { kmh: -1, rpm: -1, red: false, gear: '', best: '', score: -1, mult: -1, angle: -1, n2o: -2, n2oOn: false };
   private bestEl: HTMLElement;
   private streetEl: HTMLDivElement;
   private street = '';
@@ -125,6 +136,8 @@ export class Hud implements HudApi {
     this.num = el('div', 'num', speedo);
     const unit = el('div', 'unit', speedo); unit.appendChild(L('hud.kmh'));
     this.gear = el('div', 'gear', speedo);
+    this.n2o = el('div', 'n2o', speedo); this.n2oFill = el('i', '', this.n2o);
+    this.n2oLabel = el('div', 'n2olabel', speedo); this.n2oLabel.textContent = 'N₂O';
     this.driftBox = el('div', 'drift', root);
     this.driftLabel = el('div', 'label', this.driftBox); this.driftLabel.appendChild(L('hud.drift'));
     const sc = el('div', 'score', this.driftBox);
@@ -157,7 +170,7 @@ export class Hud implements HudApi {
     this.flipped = el('div', 'flipped', root); this.flipped.appendChild(L('hud.flipped')); this.flipped.hidden = true;
     this.help = el('div', 'help', root);
     this.help.hidden = true;
-    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['Esc', 'ctl.pause']];
+    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.nitro'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['Esc', 'ctl.pause']];
     for (const [k, key] of rows) {
       const r = el('div', 'row', this.help);
       const a = el('span', '', r);
@@ -200,6 +213,14 @@ export class Hud implements HudApi {
     const e = car.spec.engine;
     const rpmQ = Math.round(Math.max(0.001, Math.min(1, car.rpm / e.redline)) * 200);
     if (rpmQ !== sh.rpm) { sh.rpm = rpmQ; this.rpmPath.setAttribute('d', arc(rpmQ / 200)); }
+    // Nitro bottle: hidden without one fitted (-1), the fill in 1% steps otherwise.
+    const n2o = car.tune.nitro > 0 ? Math.round(car.nitroFill * 100) : -1;
+    if (n2o !== sh.n2o) {
+      sh.n2o = n2o;
+      this.n2o.hidden = this.n2oLabel.hidden = n2o < 0;
+      if (n2o >= 0) this.n2oFill.style.height = `${n2o}%`;
+    }
+    if (v.nitroActive !== sh.n2oOn) { sh.n2oOn = v.nitroActive; this.n2o.classList.toggle('on', sh.n2oOn); }
     const red = car.rpm > e.shiftUp;
     if (red !== sh.red) { sh.red = red; this.rpmPath.setAttribute('stroke', red ? C.red : C.yellow); }
 

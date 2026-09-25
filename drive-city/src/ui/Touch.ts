@@ -1,6 +1,6 @@
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
-import type { NavApi, PlayerApi } from '../game/Contracts';
+import type { NavApi, PlayerApi, VehicleApi } from '../game/Contracts';
 import type { UiApi } from '.';
 import { C, F, css, el } from './theme';
 
@@ -34,6 +34,7 @@ const SHEET = `
 .touch button.wide{grid-column:span 1}
 .touch button.gas{width:82px;height:82px;background:rgba(243,181,15,.24);border-color:rgba(243,181,15,.6)}
 .touch button.brake{background:rgba(226,64,47,.2);border-color:rgba(226,64,47,.5)}
+.touch button.nitro{background:rgba(80,170,255,.2);border-color:rgba(120,190,255,.55)}
 .touch button:active,.touch button.down{background:rgba(243,181,15,.45);border-color:${C.yellow}}
 .touch .top{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:10px}
 .touch .top button{width:48px;height:48px;font-size:12px}
@@ -77,11 +78,15 @@ export class TouchControls implements System {
   private stick: HTMLDivElement;
   private knob: HTMLElement;
   private btns: Btn[] = [];
+  private spacer!: HTMLDivElement;
+  private nitroBtn!: HTMLButtonElement;
+  /** The car has a nitro bottle: the button shows only then (an empty cell otherwise). */
+  private n2o = false;
   private pointers = new Map<number, { kind: 'stick' | 'look'; x: number; y: number }>();
   private shown = false;
   private driving = true;
   private state = {
-    steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false,
+    steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false, nitro: false,
     lookDX: 0, lookDY: 0,
     jumpPressed: false, enterPressed: false, punchPressed: false, mapPressed: false, cameraPressed: false, pausePressed: false, radioPressed: false,
   };
@@ -114,7 +119,10 @@ export class TouchControls implements System {
     // Row 2: brake / run / throttle.
     this.button(pads, 'drive', t('touch.brake'), (down) => { this.state.back = down ? 1 : 0; }, true, 'brake');
     this.button(pads, 'foot', t('touch.run'), (down) => { this.state.sprint = down; }, true);
-    const spacer = el('div', undefined, pads);
+    // The middle of row 2: nitro while driving, an empty cell on foot so the throttle keeps its place.
+    this.button(pads, 'drive', t('touch.nitro'), (down) => { this.state.nitro = down; }, true, 'nitro');
+    this.nitroBtn = this.btns[this.btns.length - 1].el;
+    const spacer = this.spacer = el('div', undefined, pads);
     spacer.style.width = '64px';
     this.button(pads, 'both', t('touch.gas'), (down) => { this.state.forward = down ? 1 : 0; }, true, 'gas');
 
@@ -189,12 +197,14 @@ export class TouchControls implements System {
 
   private syncMode(): void {
     for (const b of this.btns) if (b.mode !== 'both') b.el.hidden = (b.mode === 'drive') !== this.driving;
+    this.nitroBtn.hidden = !(this.driving && this.n2o);
+    this.spacer.hidden = this.driving && this.n2o;
   }
 
   private release(): void {
     this.pointers.clear();
     this.stick.classList.remove('on');
-    Object.assign(this.state, { steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false });
+    Object.assign(this.state, { steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false, nitro: false });
     for (const b of this.btns) b.el.classList.remove('down');
   }
 
@@ -213,5 +223,7 @@ export class TouchControls implements System {
       this.syncMode();
       this.release();
     }
+    const n2o = (this.engine.get<VehicleApi>('vehicle')?.car.tune.nitro ?? 0) > 0;
+    if (n2o !== this.n2o) { this.n2o = n2o; this.syncMode(); if (!n2o) this.state.nitro = false; }
   }
 }

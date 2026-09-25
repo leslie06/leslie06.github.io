@@ -11,6 +11,9 @@ import type { RenderSystem } from '../render';
 import type { PathPilot } from './Autopilot';
 import { shotMode } from '../debug/ShotMode';
 
+/** Nitro's push, m/s² (about 0.7 g: a taxi's own launch is ~5). */
+export const NITRO_ACCEL = 7;
+
 /**
  * The player's taxi: input -> ControlFilter -> Vehicle physics at 60 Hz, the model drawn at the
  * interpolated pose every frame, plus the visual body lean and the drift score.
@@ -49,6 +52,8 @@ export async function install(engine: Engine): Promise<void> {
   let hitStopUntil = 0;
   const drift: DriftState = { active: false, score: 0, multiplier: 1, angle: 0, best: 0, last: 0, lastAt: -99, lastCrashed: false };
   let driftTime = 0, calmTime = 0;
+  /** Nitro: burning now (the player holds it with throttle and the bottle has some left). */
+  let nitroOn = false;
   const drive: DriveInput = { forward: 0, back: 0, steer: 0, analog: false, handbrake: false };
   try { drift.best = Number(localStorage.getItem('drivecity.drift.best') ?? 0) || 0; } catch { /* private mode */ }
 
@@ -99,6 +104,7 @@ export async function install(engine: Engine): Promise<void> {
       return prev;
     },
     get controls() { return filter.out; },
+    get nitroActive() { return nitroOn; },
     autopilot: null as PathPilot | null,
     inputEnabled: false,
     reset(pos, yaw) {
@@ -123,6 +129,12 @@ export async function install(engine: Engine): Promise<void> {
         drive.forward = 0; drive.back = 0; drive.steer = 0; drive.analog = false; drive.handbrake = !api.occupied;
       }
       const c = filter.update(drive, car.forwardSpeed, dt);
+      // Nitro: while held with the throttle down, the bottle empties over `tune.nitro` seconds and
+      // pushes the car on at NITRO_ACCEL, past the limiter (Vehicle caps it at 1.3x).
+      const fitted = car.tune.nitro > 0;
+      nitroOn = fitted && api.inputEnabled && api.occupied && !api.autopilot && inp.nitro && c.throttle > 0.2 && car.nitroFill > 0 && car.gear > 0;
+      if (nitroOn) car.nitroFill = Math.max(0, car.nitroFill - dt / car.tune.nitro);
+      car.boost = nitroOn ? NITRO_ACCEL * api.power : 0;
       prevPos.copy(curPos); prevQuat.copy(curQuat);
       car.step(c, dt);
     },

@@ -18,6 +18,12 @@ export interface UiApi extends System {
   showTitle(): void;
   start(): void;
   pause(): void;
+  /**
+   * A screen of the game's own over the play (the garage): driving input off, the mouse free, the
+   * touch pads hidden, the world still running. `false` goes back to driving (call it from a click
+   * or key, which is what the pointer lock needs).
+   */
+  overlay(on: boolean): void;
 }
 
 /** A figure-eight drift pilot starting at the pad's crossing, for the title screen and the shots. */
@@ -90,6 +96,15 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       veh.inputEnabled = true;
       engine.paused = false;
       if (!TOUCH) engine.input.requestLock();
+    },
+    overlay(on) {
+      if (on) {
+        if (api.state !== 'playing') return;
+        api.state = 'overlay';
+        menu.set('overlay');
+        v().inputEnabled = false;
+        engine.input.exitLock();
+      } else if (api.state === 'overlay') api.start();
     },
     pause() {
       if (api.state !== 'playing') return;

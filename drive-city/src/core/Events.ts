@@ -18,6 +18,12 @@ export interface GameEvents {
   'people:report': { x: number; z: number };
   /** The player's car knocked a bin, a shared bike or a railing flying (city/Knock.ts). */
   'prop:hit': { kind: 'bin' | 'bike' | 'rail'; x: number; y: number; z: number; speed: number };
+  /** A move that scores in the street combo (stunts/): a near miss, a drift, a jump... `points` before the multiplier. */
+  'stunt:event': { kind: 'near' | 'drift' | 'air' | 'oncoming' | 'redlight' | 'smash' | 'evade'; points: number };
+  /** The combo ended: banked as `cash`, or `lost` in a crash (cash 0). */
+  'stunt:bank': { points: number; cash: number; lost: boolean };
+  /** The police got the player (police/), just before the respawn: fines and the impound hang off it. */
+  'wanted:busted': { level: number };
   /** A traffic car blew its horn at (x, z). */
   'traffic:horn': { x: number; z: number };
   /** The wanted level changed (`up`: it rose). */

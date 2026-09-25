@@ -173,6 +173,89 @@ class Smoke {
   clear(): void { this.alive = 0; this.mesh.count = 0; }
 }
 
+/**
+ * Nitro flames: short-lived additive billboards out of the exhaust, white-blue at the pipe and
+ * orange as they die. HDR colours, so bloom makes them glow.
+ */
+class Flames {
+  readonly mesh: THREE.InstancedMesh;
+  private p: Float32Array; private v: Float32Array; private age: Float32Array; private life: Float32Array; private size: Float32Array;
+  private aPos: THREE.InstancedBufferAttribute; private aSize: THREE.InstancedBufferAttribute; private aHeat: THREE.InstancedBufferAttribute;
+  private alive = 0;
+  private rng = new Rng(77);
+
+  constructor(private max: number) {
+    this.p = new Float32Array(max * 3); this.v = new Float32Array(max * 3);
+    this.age = new Float32Array(max); this.life = new Float32Array(max); this.size = new Float32Array(max);
+    const geo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1) as unknown as THREE.InstancedBufferGeometry);
+    this.aPos = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3).setUsage(THREE.DynamicDrawUsage) as THREE.InstancedBufferAttribute;
+    this.aSize = new THREE.InstancedBufferAttribute(new Float32Array(max), 1).setUsage(THREE.DynamicDrawUsage) as THREE.InstancedBufferAttribute;
+    this.aHeat = new THREE.InstancedBufferAttribute(new Float32Array(max), 1).setUsage(THREE.DynamicDrawUsage) as THREE.InstancedBufferAttribute;
+    geo.setAttribute('iPos', this.aPos); geo.setAttribute('iSize', this.aSize); geo.setAttribute('iHeat', this.aHeat);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: /* glsl */`
+        attribute vec3 iPos; attribute float iSize; attribute float iHeat;
+        varying vec2 vUv; varying float vHeat;
+        void main() {
+          vUv = uv; vHeat = iHeat;
+          vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+          vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+          vec3 w = iPos + (right * position.x + up * position.y) * iSize;
+          gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
+        }`,
+      fragmentShader: /* glsl */`
+        varying vec2 vUv; varying float vHeat;
+        void main() {
+          float r = length(vUv - 0.5) * 2.0;
+          float a = smoothstep(1.0, 0.0, r);
+          if (a < 0.01) discard;
+          // Hot (1): blue-white core; cooling (0): orange, then gone.
+          vec3 hot = vec3(3.0, 4.5, 8.0), warm = vec3(8.0, 3.0, 0.7);
+          vec3 col = mix(warm, hot, vHeat) * a * a * (0.35 + 0.65 * vHeat);
+          gl_FragColor = vec4(col, a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    this.mesh = new THREE.InstancedMesh(geo, mat, max);
+    this.mesh.count = 0;
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 3;
+  }
+
+  emit(x: number, y: number, z: number, vx: number, vy: number, vz: number): void {
+    if (this.alive >= this.max) return;
+    const i = this.alive++, r = this.rng;
+    this.p[i * 3] = x; this.p[i * 3 + 1] = y; this.p[i * 3 + 2] = z;
+    this.v[i * 3] = vx + r.range(-0.4, 0.4); this.v[i * 3 + 1] = vy + r.range(0, 0.5); this.v[i * 3 + 2] = vz + r.range(-0.4, 0.4);
+    this.age[i] = 0; this.life[i] = r.range(0.07, 0.14); this.size[i] = r.range(0.3, 0.46);
+  }
+
+  update(dt: number): void {
+    let n = this.alive;
+    for (let i = 0; i < n; i++) {
+      this.age[i] += dt;
+      if (this.age[i] >= this.life[i]) {
+        n--;
+        this.p.copyWithin(i * 3, n * 3, n * 3 + 3); this.v.copyWithin(i * 3, n * 3, n * 3 + 3);
+        this.age[i] = this.age[n]; this.life[i] = this.life[n]; this.size[i] = this.size[n];
+        i--; continue;
+      }
+      this.p[i * 3] += this.v[i * 3] * dt; this.p[i * 3 + 1] += this.v[i * 3 + 1] * dt; this.p[i * 3 + 2] += this.v[i * 3 + 2] * dt;
+      const t = this.age[i] / this.life[i];
+      this.aPos.setXYZ(i, this.p[i * 3], this.p[i * 3 + 1], this.p[i * 3 + 2]);
+      this.aSize.setX(i, this.size[i] * (0.6 + t * 0.9));
+      this.aHeat.setX(i, 1 - t);
+    }
+    this.alive = n;
+    this.mesh.count = n;
+    this.aPos.needsUpdate = this.aSize.needsUpdate = this.aHeat.needsUpdate = true;
+  }
+
+  clear(): void { this.alive = 0; this.mesh.count = 0; }
+}
+
 export interface FxApi extends System {
   clear(): void;
   /** One smoke puff (engine smoke and the like); `shade` 0 is pale tyre smoke, 1 is black. */
@@ -183,17 +266,33 @@ export async function install(engine: Engine): Promise<void> {
   const q = engine.quality;
   const marks = new SkidMarks(q.skidSegments);
   const smoke = new Smoke(q.smokeParticles);
-  engine.scene.add(marks.mesh, smoke.mesh);
+  const flames = new Flames(120);
+  engine.scene.add(marks.mesh, smoke.mesh, flames.mesh);
+  /** Where the exhaust is, per spec: the back of the chassis, low, a little off centre. */
+  const tail = new WeakMap<object, number>();
+  let flameAcc = 0;
   const lateral = new THREE.Vector3();
   const acc = [0, 0, 0, 0];
   const api: FxApi = {
     name: 'fx',
-    clear() { marks.clear(); smoke.clear(); },
+    clear() { marks.clear(); smoke.clear(); flames.clear(); },
     smoke: (x, y, z, vx, vy, vz, size, life, shade) => smoke.emit(x, y, z, vx, vy, vz, size, life, shade ?? 0),
     postStep(dt) {
       const v = engine.get<VehicleApi>('vehicle');
       if (!v) return;
       const car = v.car;
+      // Nitro: flames out of the exhaust, pushed back against the car's motion.
+      if (v.nitroActive) {
+        let back = tail.get(car.spec);
+        if (back === undefined) { back = Math.min(...car.spec.chassis.map((c) => c.at[2] - c.half[2])); tail.set(car.spec, back); }
+        const side = car.spec.single ? 0.18 : 0.42;
+        flameAcc += dt * 90;
+        while (flameAcc >= 1) {
+          flameAcc -= 1;
+          const ex = car.pos.x + car.fwd.x * (back + 0.05) - car.left.x * side, ey = car.pos.y - 0.12, ez = car.pos.z + car.fwd.z * (back + 0.05) - car.left.z * side;
+          flames.emit(ex, ey, ez, car.vel.x - car.fwd.x * 3.5, 0.1, car.vel.z - car.fwd.z * 3.5);
+        }
+      } else flameAcc = 0;
       for (let i = 0; i < 4; i++) {
         const w = car.wheels[i];
         if (!w.contact) { marks.add(i, w.point, lateral, 0.2, 0); continue; }
@@ -215,6 +314,7 @@ export async function install(engine: Engine): Promise<void> {
       const r = engine.get<RenderApi>('render');
       if (r) smoke.tint(r.night, r.hazeColor);
       smoke.update(dt);
+      flames.update(dt);
     },
   };
   engine.events.on('vehicle:reset', () => { /* keep marks: they are the record of your driving */ });

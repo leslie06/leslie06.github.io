@@ -7,7 +7,7 @@ export interface Leader { gap: number; speed: number }
 
 const A_MAX = 2.2, B_COMF = 3.2, S0 = 3, HEADWAY = 1.25, CAR_LEN = 4.6;
 /** Where a driver stops for a red: this far short of the junction node. */
-const STOP_LINE = 7;
+export const STOP_LINE = 7;
 
 /**
  * Stop lines crossed by every AiDriver since boot, and how many of them on red: the probe's proof

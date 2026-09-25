@@ -130,7 +130,8 @@ export class CameraRig implements CameraApi {
 
     // Shake: impacts, landings and a little road rumble at speed.
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.4);
-    const rumble = 0.012 * smoothstep(15, 50, speed);
+    // The nitro kicks: a wider lens (below) and a harder rumble while it burns.
+    const rumble = 0.012 * smoothstep(15, 50, speed) + (v.nitroActive ? 0.03 : 0);
     const a = this.shakeAmt * this.shakeAmt * 0.35 + rumble;
     const n = (f: number, o: number) => Math.sin(this.t * f + o) * 0.6 + Math.sin(this.t * f * 2.3 + o * 1.7) * 0.4;
     this.pos.x += n(31, 0) * a; this.pos.y += n(37, 2) * a; this.pos.z += n(29, 4) * a;
@@ -148,7 +149,7 @@ export class CameraRig implements CameraApi {
     if (lookBack) lead.negate();
     cam.lookAt(this.look.x + lead.x, this.look.y + 0.15, this.look.z + lead.z);
     cam.rotateZ(n(23, 5) * a * 0.4);
-    const wantFov = cfg.fov + 16 * smoothstep(8, 48, speed) + this.shakeAmt * 3;
+    const wantFov = cfg.fov + 16 * smoothstep(8, 48, speed) + this.shakeAmt * 3 + (v.nitroActive ? 10 : 0);
     this.fov += (wantFov - this.fov) * (1 - Math.exp(-dt * 4));
     cam.fov = this.fov;
     cam.updateProjectionMatrix();
