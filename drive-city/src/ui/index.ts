@@ -109,6 +109,12 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     pause() {
       if (api.state !== 'playing') return;
       api.state = 'paused';
+      // What there is to do and how far along it is: ramps, 兔儿爷, the best shift and combo.
+      const jumps = engine.get<{ name: string; done: number; total: number }>('jumps'), rabbits = engine.get<{ name: string; found: number; total: number }>('collect');
+      const combo = engine.get<{ name: string; best: number }>('stunts');
+      let taxiBest = 0;
+      try { taxiBest = Number(localStorage.getItem('drivecity.taxi.best') ?? 0) || 0; } catch { /* private mode */ }
+      menu.setProgress(jumps && rabbits ? t('pause.progress', { j: jumps.done, jt: jumps.total, r: rabbits.found, rt: rabbits.total, taxi: taxiBest, combo: (combo?.best ?? 0).toLocaleString() }) : '');
       menu.set('paused');
       v().inputEnabled = false;
       engine.paused = true;

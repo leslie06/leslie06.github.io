@@ -9,6 +9,9 @@ import { createCityMaterials } from './Materials';
 import { Routes } from './Routes';
 import { SkylineLod } from './Skyline';
 import { CityStreamer, spawnTileWorkers } from './Streamer';
+import { undergroundHoles } from '../underground/Layout';
+import { shortcutClear } from '../stunts/Structures';
+import { SHORTCUTS } from '../stunts/spots';
 
 export interface CityApi {
   name: 'city';
@@ -114,13 +117,32 @@ export async function install(engine: Engine): Promise<void> {
   const b = manifest.bounds;
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
 
-  // Ground: one collider at road level, one plane of paving with metre UVs.
+  // Ground: one collider at road level, one plane of paving with metre UVs - both with a hole where
+  // the underground car park goes down (underground/): the collider round the whole car park (its
+  // own floors and roof slab take over), the plane round its open ramp only (the roof slab is
+  // street, drawn by this plane).
   const R = physics.R;
-  const ground = physics.world.createCollider(R.ColliderDesc.cuboid(14000, 1, 14000).setTranslation(cx, -0.97, cz).setFriction(0.95)
-    .setCollisionGroups(groups(CG.WORLD, CG.ALL)), physics.world.createRigidBody(R.RigidBodyDesc.fixed()));
-  physics.tag(ground, { surface: 'asphalt' });
-  const size = 26000;
-  const pg = new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2).translate(cx, 0, cz);
+  const gbody = physics.world.createRigidBody(R.RigidBodyDesc.fixed());
+  const size = 26000, E = size / 2;
+  const hole = undergroundHoles();
+  const slabs: [number, number, number, number][] = hole
+    ? [[cx - E, cz - E, hole.all.x0, cz + E], [hole.all.x1, cz - E, cx + E, cz + E], [hole.all.x0, cz - E, hole.all.x1, hole.all.z0], [hole.all.x0, hole.all.z1, hole.all.x1, cz + E]]
+    : [[cx - E, cz - E, cx + E, cz + E]];
+  for (const [x0, z0, x1, z1] of slabs) {
+    const ground = physics.world.createCollider(R.ColliderDesc.cuboid((x1 - x0) / 2, 1, (z1 - z0) / 2).setTranslation((x0 + x1) / 2, -0.97, (z0 + z1) / 2).setFriction(0.95)
+      .setCollisionGroups(groups(CG.WORLD, CG.ALL)), gbody);
+    physics.tag(ground, { surface: 'asphalt' });
+  }
+  let pg: THREE.BufferGeometry;
+  if (hole) {
+    // Shape space is (x, y) facing +z; laid down with rotateX(-90°) its y becomes -z and it faces up,
+    // so the outline and the hole are given as (x, -z).
+    const v = (x: number, z: number) => new THREE.Vector2(x, -z);
+    const shape = new THREE.Shape([v(cx - E, cz - E), v(cx + E, cz - E), v(cx + E, cz + E), v(cx - E, cz + E)]);
+    const o = hole.open;
+    shape.holes.push(new THREE.Path([v(o.x0, o.z0), v(o.x0, o.z1), v(o.x1, o.z1), v(o.x1, o.z0)]));
+    pg = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2);
+  } else pg = new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2).translate(cx, 0, cz);
   const uv = pg.getAttribute('uv') as THREE.BufferAttribute, pos = pg.getAttribute('position');
   for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i), pos.getZ(i));
   const groundMesh = new THREE.Mesh(pg, mats.ground);
@@ -129,6 +151,7 @@ export async function install(engine: Engine): Promise<void> {
   scene.add(groundMesh);
 
   const { footprints, clear } = placeLandmarks(engine, env, defs);
+  clear.push(...shortcutClear(SHORTCUTS));
   const sky = new SkylineLod(skyline, env);
   sky.exclude(footprints);
   scene.add(sky.mesh);

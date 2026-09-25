@@ -11,6 +11,7 @@ export const INK = 'rgba(9,11,13,0.9)';
 export const POLICE_RED = '#ff3b30', POLICE_BLUE = '#2f7bff';
 export const BLIP_COLOR: Record<MarkKind, string> = {
   police: POLICE_BLUE, target: C.yellow, pickup: '#3aa6ff', dropoff: '#3ccf72', car: '#d8dbde', landmark: '#d4b264', waypoint: C.yellow, mission: C.yellow,
+  jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a',
 };
 
 /** Police lights: red/blue at ~2.5 Hz. */
@@ -83,6 +84,36 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       ctx.closePath();
       ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1.5, r * 0.22); ctx.strokeStyle = INK; ctx.stroke();
       ctx.beginPath(); ctx.arc(x, cy, R * 0.38, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill();
+      break;
+    }
+    case 'jump': {
+      // A ramp seen side-on: a wedge rising to the right.
+      ctx.translate(x, y);
+      ctx.beginPath(); ctx.moveTo(-r * 1.1, r * 0.6); ctx.lineTo(r * 1.1, r * 0.6); ctx.lineTo(r * 1.1, -r * 0.7); ctx.closePath();
+      ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1.5, r * 0.24); ctx.strokeStyle = INK; ctx.stroke();
+      break;
+    }
+    case 'parking': {
+      // A blue square with a P.
+      const s = r * 1.5;
+      ctx.beginPath(); ctx.roundRect(x - s / 2, y - s / 2, s, s, s * 0.2);
+      ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1.5, r * 0.22); ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = `800 ${Math.round(s * 0.8)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('P', x, y + s * 0.04);
+      break;
+    }
+    case 'shortcut': {
+      // A red lantern: an oval with a gold cap and tassel.
+      ctx.beginPath(); ctx.ellipse(x, y, r * 0.75, r * 0.95, 0, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1.3, r * 0.2); ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = '#f2c14e'; ctx.fillRect(x - r * 0.45, y - r * 1.1, r * 0.9, r * 0.28); ctx.fillRect(x - r * 0.1, y + r * 0.9, r * 0.2, r * 0.45);
+      break;
+    }
+    case 'collect': {
+      // A small rabbit head: a disc and two ears.
+      ctx.fillStyle = col; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, r * 0.2);
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(x + s * r * 0.32, y - r * 0.75, r * 0.22, r * 0.5, s * 0.25, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(x, y, r * 0.62, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       break;
     }
     case 'mission':

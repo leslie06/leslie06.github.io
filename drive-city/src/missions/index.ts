@@ -27,6 +27,8 @@ const TIERS = [
   { color: '#ffc21f', min: 800, max: 1500, weight: 0.35 },
   { color: '#ff5a4a', min: 1500, max: 2600, weight: 0.2 },
 ];
+/** A street event's rush fare: its colour, and how long it waits for you (s). */
+const URGENT_COLOR = '#ff2d55', URGENT_WAIT = 40;
 /** People hailing at once, and how far out they stand (m). */
 const HAILERS = 4, HAIL_MIN = 45, HAIL_MAX = 260;
 /** Seconds a shift starts with; each delivery adds some back. */
@@ -72,7 +74,7 @@ export interface MissionSystem extends MissionApi {
     startJob(kind: 'delivery' | 'chase' | 'trial'): boolean;
     job(): string | null;
     state(): { stage: string; pickup: { x: number; z: number } | null; dest: { x: number; z: number; label: string } | null; limit: number; elapsed: number;
-      shift: { on: boolean; clock: number; fares: number; earned: number }; hailers: { x: number; z: number; tier: number }[] };
+      shift: { on: boolean; clock: number; fares: number; earned: number }; hailers: { x: number; z: number; tier: number; urgent: boolean }[] };
   };
 }
 
@@ -131,9 +133,11 @@ export async function install(engine: Engine): Promise<void> {
   let summary = '';
   const shift = { on: false, clock: 0, fares: 0, earned: 0, away: 0 };
 
-  interface Hailer { pos: THREE.Vector3; yaw: number; look: Look; gait: Gait; t: number; tier: number; marker: Marker }
+  /** `urgent`: a street event's rush fare - red, flashing, gone in URGENT_WAIT s, double pay on a tighter clock. */
+  interface Hailer { pos: THREE.Vector3; yaw: number; look: Look; gait: Gait; t: number; tier: number; marker: Marker; urgent: boolean }
+  let urgentRide = false;
   const hailers: Hailer[] = [];
-  const spareMarkers = Array.from({ length: HAILERS }, () => new Marker(engine.scene));
+  const spareMarkers = Array.from({ length: HAILERS + 1 }, () => new Marker(engine.scene));
   const client = { pos: new THREE.Vector3(), prev: new THREE.Vector3(), draw: new THREE.Vector3(), yaw: 0, gait: new Gait(), look: randomLook(rnd), visible: false,
     from: new THREE.Vector3(), to: new THREE.Vector3(), walkT: 0, walkDur: 1, speed: 0 };
   const blips: Blip[] = [];
@@ -154,7 +158,7 @@ export async function install(engine: Engine): Promise<void> {
   const clearHailers = () => { while (hailers.length) dropHailer(hailers[0]); };
 
   /** Someone on a kerb HAIL_MIN-HAIL_MAX m from the taxi, facing the road, going as far as their colour says. */
-  const spawnHailer = (min = HAIL_MIN, max = HAIL_MAX): boolean => {
+  const spawnHailer = (min = HAIL_MIN, max = HAIL_MAX, urgent = false): boolean => {
     const car = vehicle().car;
     const ids = g.near(car.pos.x, car.pos.z, max);
     for (let attempt = 0; attempt < 24 && ids.length; attempt++) {
@@ -164,11 +168,13 @@ export async function install(engine: Engine): Promise<void> {
       g.at(l, s, side * (l.hw + 0.8), at);
       const d = Math.hypot(at.x - car.pos.x, at.z - car.pos.z);
       if (d < min || d > max || hailers.some((h) => Math.hypot(h.pos.x - at.x, h.pos.z - at.z) < 40)) continue;
+      // Not on a job's post: stopping for the fare would start the job and lose them both.
+      if (jobs?.postList.some((p) => Math.hypot(p.x - at.x, p.z - at.z) < 30)) continue;
       const r = rnd();
-      const tr0 = r < TIERS[0].weight ? 0 : r < TIERS[0].weight + TIERS[1].weight ? 1 : 2;
+      const tr0 = urgent ? 2 : r < TIERS[0].weight ? 0 : r < TIERS[0].weight + TIERS[1].weight ? 1 : 2;
       const m = spareMarkers.pop()!;
-      const h: Hailer = { pos: new THREE.Vector3(at.x, 0.045, at.z), yaw: Math.atan2(-side * at.dz, side * at.dx), look: randomLook(rnd), gait: new Gait(), t: rnd() * 3, tier: tr0, marker: m };
-      m.show(at.x, at.z, TIERS[tr0].color, 0.5);
+      const h: Hailer = { pos: new THREE.Vector3(at.x, 0.045, at.z), yaw: Math.atan2(-side * at.dz, side * at.dx), look: randomLook(rnd), gait: new Gait(), t: rnd() * 3, tier: tr0, marker: m, urgent };
+      m.show(at.x, at.z, urgent ? URGENT_COLOR : TIERS[tr0].color, urgent ? 0.8 : 0.5);
       hailers.push(h);
       return true;
     }
@@ -214,7 +220,7 @@ export async function install(engine: Engine): Promise<void> {
     const car = vehicle().car, T = TIERS[tr0], heading = Math.atan2(car.fwd.x, car.fwd.z);
     const set = (x: number, z: number, label: string, len: number) => {
       dest = { x, z, label }; tripLen = len;
-      limit = tripLen / 10.5 + 10; elapsed = 0; crashes = 0; tips = 0; tier = tr0;
+      limit = urgentRide ? tripLen / 12 + 6 : tripLen / 10.5 + 10; elapsed = 0; crashes = 0; tips = 0; tier = tr0;
       nav()?.setTarget({ x, z, kind: 'mission', label });
       marker.show(x, z, TIERS[tr0].color);
       const say = (['taxi.say1', 'taxi.say2', 'taxi.say3'] as const)[Math.floor(rnd() * 3)];
@@ -251,6 +257,16 @@ export async function install(engine: Engine): Promise<void> {
     get cash() { return cash; },
     addCash(n) { cash = Math.max(0, cash + Math.round(n)); saveCash(); if (n > 0) hud.earned(Math.round(n)); },
     story: null,
+    get busy() { return !!jobs?.busy || stage === 'boarding' || stage === 'ride'; },
+    urgentFare() {
+      if (!inTaxi() || stage !== 'pickup' || hailers.some((h) => h.urgent)) return false;
+      // Room for it: the farthest ordinary hailer makes way.
+      const car = vehicle().car;
+      if (hailers.length >= HAILERS) dropHailer(hailers.reduce((a, b) => (a.pos.distanceTo(car.pos) > b.pos.distanceTo(car.pos) ? a : b)));
+      if (!spawnHailer(50, 160, true)) return false;
+      toast(t('taxi.urgent'));
+      return true;
+    },
     get objective() { return api.story ?? jobs?.objective ?? objective; },
     debug: {
       startFare: () => { if (!inTaxi()) return false; stage = 'pickup'; clearHailers(); return spawnHailer(12, 60) || spawnHailer(); },
@@ -261,7 +277,7 @@ export async function install(engine: Engine): Promise<void> {
         const car = vehicle().car;
         const near = hailers.reduce<Hailer | null>((b, h) => (!b || h.pos.distanceTo(car.pos) < b.pos.distanceTo(car.pos) ? h : b), null);
         const pickup = stage === 'boarding' ? { x: client.pos.x, z: client.pos.z } : stage === 'pickup' && near ? { x: near.pos.x, z: near.pos.z } : null;
-        return { stage, pickup, dest, limit, elapsed, shift: { ...shift }, hailers: hailers.map((h) => ({ x: h.pos.x, z: h.pos.z, tier: h.tier })) };
+        return { stage, pickup, dest, limit, elapsed, shift: { ...shift }, hailers: hailers.map((h) => ({ x: h.pos.x, z: h.pos.z, tier: h.tier, urgent: h.urgent })) };
       },
     },
     fixedUpdate(dt) {
@@ -300,7 +316,7 @@ export async function install(engine: Engine): Promise<void> {
         case 'pickup': {
           if (!inTaxi() && pl.mode === 'driving') { clearHailers(); stage = 'off'; break; }
           // Keep four out, none too far behind; none while something else is going on.
-          for (const h of [...hailers]) if (h.pos.distanceTo(car.pos) > HAIL_MAX + 120 || other) dropHailer(h);
+          for (const h of [...hailers]) if (h.pos.distanceTo(car.pos) > HAIL_MAX + 120 || other || (h.urgent && h.t > URGENT_WAIT + 3)) dropHailer(h);
           spawnT -= dt;
           if (spawnT <= 0 && !other && hailers.length < HAILERS) { spawnT = 0.4; spawnHailer(); }
           if (pl.mode !== 'driving' || car.speed > 3) break;
@@ -312,7 +328,7 @@ export async function install(engine: Engine): Promise<void> {
           const side = Math.sign((client.pos.x - car.pos.x) * car.left.x + (client.pos.z - car.pos.z) * car.left.z) || 1;
           door.copy(car.pos).addScaledVector(car.left, side * 1.15).addScaledVector(car.fwd, -0.45); door.y = client.pos.y;
           walk(client.pos, door);
-          tier = h.tier;
+          tier = h.tier; urgentRide = h.urgent;
           dropHailer(h);
           stage = 'boarding';
           break;
@@ -333,7 +349,7 @@ export async function install(engine: Engine): Promise<void> {
           if (elapsed > limit) { alight(car.pos.x, car.pos.z); toast(t('taxi.late')); dest = null; break; }
           if (Math.hypot(car.pos.x - dest!.x, car.pos.z - dest!.z) < 12 && car.speed < 2.5) {
             const left = 1 - elapsed / limit, r = RATINGS.find((q) => left >= q.min)!;
-            const base = payFor(tripLen / 1000), bonus = Math.round(base * r.bonus), tip = Math.max(0, tips - crashes * 3);
+            const base = payFor(tripLen / 1000) * (urgentRide ? 2 : 1), bonus = Math.round(base * r.bonus), tip = Math.max(0, tips - crashes * 3);
             const total = base + bonus + tip;
             api.addCash(total);
             shift.fares++; shift.earned += total; shift.clock += r.time;
@@ -367,7 +383,7 @@ export async function install(engine: Engine): Promise<void> {
         n.addBlips(() => jobs?.provideBlips() ?? []);
         n.addBlips(() => {
           blips.length = 0;
-          if (stage === 'pickup') for (const h of hailers) blips.push({ kind: 'pickup', x: h.pos.x, z: h.pos.z });
+          if (stage === 'pickup') for (const h of hailers) blips.push({ kind: 'pickup', x: h.pos.x, z: h.pos.z, flash: h.urgent });
           else if (stage === 'ride' && dest) blips.push({ kind: 'dropoff', x: dest.x, z: dest.z, label: dest.label });
           return blips;
         });

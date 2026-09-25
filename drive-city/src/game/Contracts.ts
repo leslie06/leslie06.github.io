@@ -47,6 +47,8 @@ export interface VehicleApi extends System {
   readonly renderPos: THREE.Vector3;
   readonly renderQuat: THREE.Quaternion;
   readonly drift: DriftState;
+  /** Slow motion someone asked for (a stunt ramp's flight): the world runs at this rate, 1 normal. A crash's hit-stop still wins. */
+  slowMo: number;
   /** The nitro is burning this step (the car's bottle: `car.tune.nitro` seconds, `car.nitroFill` left). */
   readonly nitroActive: boolean;
   /** When set, drives the car instead of the player (shot poses, the title-screen attract loop). */
@@ -151,7 +153,7 @@ export interface HomeApi extends System {
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------
 
-export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark';
+export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'jump' | 'collect' | 'parking' | 'shortcut';
 /** A marker on the minimap and map. `heading` (atan2(x, z)) turns it into an arrow. */
 export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string }
 export interface NavTarget { x: number; z: number; kind: 'waypoint' | 'mission'; label?: string }
@@ -212,8 +214,12 @@ export interface MissionApi extends System {
   addCash(n: number): void;
   /** One line for the HUD (what to do now), or null while free roaming. */
   readonly objective: string | null;
-  /** A story beat's line (the intro): shown instead of the jobs' and the fares' while set. */
+  /** A story beat's line (the intro, a street event): shown instead of the jobs' and the fares' while set. */
   story: string | null;
+  /** A job is running or a passenger is aboard (street events wait). */
+  readonly busy: boolean;
+  /** Put an urgent fare on a kerb near the taxi (a street event): true if one appeared. */
+  urgentFare?(): boolean;
 }
 
 /** Pedestrians on the pavements. Implemented by people/. */

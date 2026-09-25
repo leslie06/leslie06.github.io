@@ -273,7 +273,9 @@ export async function install(engine: Engine): Promise<void> {
           if (heat < 4.99) { const b = level(); heat = Math.min(4.99, heat + dt / 120); if (level() > b) levelUp(level()); }   // a long chase escalates, up to four stars
         } else {
           seen = false;
-          const outside = Math.hypot(P.x - lastX, P.z - lastZ) > searchRadius(lv);
+          // Down in the underground car park counts as gone: they cannot see through the slab.
+          const hidden = engine.get<{ name: string; contains(x: number, y: number, z: number): boolean }>('underground')?.contains(P.x, P.y, P.z) ?? false;
+          const outside = hidden || Math.hypot(P.x - lastX, P.z - lastZ) > searchRadius(lv);
           evade += dt * (outside ? 1 : 0.3);
           if (evade > 6 + 3 * lv) {
             heat = 0; evade = 0; lv = 0;

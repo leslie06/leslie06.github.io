@@ -126,7 +126,8 @@ export class CameraRig implements CameraApi {
     this.tmp.divideScalar(len);
     const hit = this.engine.physics.raycast(this.look, this.tmp, len, this.rayGroups, true, car.body);
     if (hit && hit.userData.tag !== 'prop') this.pos.copy(this.look).addScaledVector(this.tmp, Math.max(1.2, hit.distance - 0.3));
-    this.pos.y = Math.max(this.pos.y, 0.45);
+    // Never under the street - unless the car is below it (the underground car park), then not under its floor.
+    this.pos.y = Math.max(this.pos.y, car.pos.y < -1 ? car.pos.y + 0.2 : 0.45);
 
     // Shake: impacts, landings and a little road rumble at speed.
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.4);
@@ -185,7 +186,7 @@ export class CameraRig implements CameraApi {
     this.tmp.divideScalar(len);
     const hit = this.engine.physics.raycast(this.look, this.tmp, len, this.rayGroups, true);
     if (hit && hit.userData.tag !== 'prop' && hit.userData.tag !== 'player') this.pos.copy(this.look).addScaledVector(this.tmp, Math.max(0.6, hit.distance - 0.25));
-    this.pos.y = Math.max(this.pos.y, 0.35);
+    this.pos.y = Math.max(this.pos.y, f.pos.y < -1 ? f.pos.y + 0.35 : 0.35);
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 1.8);
     const a = this.shakeAmt * this.shakeAmt * 0.3;
     this.pos.x += Math.sin(this.t * 31) * a; this.pos.y += Math.sin(this.t * 37 + 2) * a;

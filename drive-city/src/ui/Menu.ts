@@ -29,6 +29,8 @@ css(`
 .menu .card kbd{display:inline-block;min-width:22px;padding:0 6px;margin-right:4px;border-radius:4px;border:1px solid ${C.line};background:rgba(244,241,232,.08);font:700 11px/22px ${F.mono};text-align:center}
 .menu .card .pad{margin-top:12px;font:400 12px/1.5 ${F.ui};color:${C.muted};max-width:36ch}
 .menu .pausehint{font:500 14px/1.4 ${F.ui};color:${C.muted}}
+.menu .progress{font:700 13px/1.9 ${F.ui};color:${C.paper};letter-spacing:.04em;white-space:pre-line}
+.menu .progress[hidden]{display:none}
 @media (max-width: 820px){.menu{grid-template-columns:1fr;align-items:end}.menu .card{display:none}}
 /* A phone held sideways is only ~390px tall: compact the title so the start button stays on screen. */
 @media (max-height: 470px){
@@ -53,6 +55,7 @@ export class Menu {
   private pauseHint: HTMLElement;
   private noteEl: HTMLElement;
   private subEl: HTMLElement;
+  private progressEl!: HTMLElement;
   onStart: () => void = () => {};
 
   constructor(private engine: Engine, container: HTMLElement) {
@@ -64,6 +67,8 @@ export class Menu {
     this.subEl = el('div', 'sub', left); this.subEl.appendChild(L('title.sub'));
     this.noteEl = el('div', 'note', left); this.noteEl.appendChild(L('title.note'));
     this.pauseHint = el('div', 'pausehint', left); this.pauseHint.appendChild(L('pause.hint'));
+    this.progressEl = el('div', 'progress', left);
+    this.progressEl.hidden = true;
     const row = el('div', 'row', left);
     const go = el('button', 'go', row);
     go.id = 'start';
@@ -102,11 +107,15 @@ export class Menu {
     this.set('title');
   }
 
+  /** The pause screen's progress lines (ramps, 兔儿爷, bests), or '' for none. */
+  setProgress(text: string): void { this.progressEl.textContent = text; }
+
   set(state: MenuState): void {
     this.root.hidden = state === 'playing' || state === 'overlay';
     const paused = state === 'paused';
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');
     this.pauseHint.hidden = !paused;
+    this.progressEl.hidden = !paused || !this.progressEl.textContent;
     this.noteEl.hidden = paused;
     this.subEl.hidden = paused;
     this.title.style.opacity = paused ? '0.85' : '1';

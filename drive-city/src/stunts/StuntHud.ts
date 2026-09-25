@@ -19,7 +19,7 @@ const CSS = `
 body.dc-touch .hud .combo{top:17vh;transform:translateX(-50%) scale(.8);transform-origin:top center}
 `;
 
-const LABEL: Record<StuntKind, string> = { near: 'stunt.near', drift: 'stunt.drift', air: 'stunt.air', oncoming: 'stunt.oncoming', redlight: 'stunt.redlight', smash: 'stunt.smash', evade: 'stunt.evade' };
+const LABEL: Record<StuntKind, string> = { near: 'stunt.near', drift: 'stunt.drift', air: 'stunt.air', oncoming: 'stunt.oncoming', redlight: 'stunt.redlight', smash: 'stunt.smash', evade: 'stunt.evade', shortcut: 'stunt.shortcut' };
 
 /** The combo under the drift meter: running total and multiplier, the last few moves, the result. */
 export class StuntHud {

@@ -77,6 +77,7 @@ export async function install(engine: Engine): Promise<void> {
     lean: leanOut,
     occupied: true,
     power: 1,
+    slowMo: 1,
     swapCar(next, nextLook) {
       const prev = { car, look: { upper: look.upper.clone(), lower: look.lower.clone(), taxi: look.taxi, body: bodyType } };
       car.onShift = undefined;
@@ -163,7 +164,7 @@ export async function install(engine: Engine): Promise<void> {
     },
     update(dt, alpha) {
       const inp = engine.input.state;
-      engine.timeScale = performance.now() < hitStopUntil ? 0.25 : 1;
+      engine.timeScale = performance.now() < hitStopUntil ? 0.25 : api.slowMo;
       if (api.inputEnabled && api.occupied && inp.resetPressed) api.reset();
       renderPos.lerpVectors(prevPos, curPos, alpha);
       renderQuat.slerpQuaternions(prevQuat, curQuat, alpha);

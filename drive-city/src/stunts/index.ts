@@ -6,6 +6,8 @@ import { STOP_LINE } from '../traffic/AiDriver';
 import type { Link } from '../traffic/LaneGraph';
 import type { Vehicle } from '../vehicle/Vehicle';
 import { StuntHud } from './StuntHud';
+import { installJumps } from './Jumps';
+import { installShortcuts } from './Shortcuts';
 
 export type StuntKind = GameEvents['stunt:event']['kind'];
 
@@ -27,6 +29,8 @@ export interface StuntApi extends System {
   /** The running combo: points before the multiplier, the multiplier, moves in it, seconds left. */
   readonly combo: { points: number; mult: number; count: number; timer: number };
   readonly best: number;
+  /** A move scored from outside (a hutong shortcut): into the combo like any other. */
+  score(kind: StuntKind, points: number): void;
   debug: { event(kind: StuntKind, points: number): void; wrongWay(): boolean; state(): { passes: { gap: number; rel: number; hit: boolean }[]; line: { link: number; toEnd: number } | null } };
 }
 
@@ -147,6 +151,7 @@ export async function install(engine: Engine): Promise<void> {
     name: 'stunts',
     combo,
     get best() { return best; },
+    score: (kind, points) => event(kind, points),
     debug: { event, wrongWay, state: () => ({ passes: [...passes.values()].map((p) => ({ gap: p.gap, rel: p.rel, hit: p.hit })), line }) },
 
     postStep(dt) {
@@ -213,4 +218,6 @@ export async function install(engine: Engine): Promise<void> {
     },
   };
   engine.add(api);
+  installJumps(engine);
+  installShortcuts(engine);
 }

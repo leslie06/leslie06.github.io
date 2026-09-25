@@ -121,7 +121,7 @@ export class MapScreen implements System {
     const legend = el('div', 'card legend', side);
     el('h2', '', legend).appendChild(L('map.legend'));
     const rows: [MarkKind | 'you' | 'route' | 'search', TKey][] = [['you', 'map.you'], ['waypoint', 'map.waypoint'], ['mission', 'map.mission'], ['pickup', 'map.pickup'], ['dropoff', 'map.dropoff'],
-      ['police', 'map.police'], ['car', 'map.car'], ['landmark', 'map.landmark'], ['route', 'map.route'], ['search', 'map.search']];
+      ['police', 'map.police'], ['car', 'map.car'], ['landmark', 'map.landmark'], ['jump', 'map.jump'], ['collect', 'map.collect'], ['parking', 'map.parking'], ['shortcut', 'map.shortcut'], ['route', 'map.route'], ['search', 'map.search']];
     for (const [kind, key] of rows) {
       const r = el('div', 'row', legend);
       this.legendIcon(el('canvas', '', r), kind);
