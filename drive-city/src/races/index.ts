@@ -181,7 +181,7 @@ export async function install(engine: Engine): Promise<void> {
         }
         return;
       }
-      if (stage === 'done') { doneT -= dt; if (doneT <= 0) { stage = 'idle'; release(); } }
+      if (stage === 'done') { doneT -= dt; if (doneT <= 0) { stage = 'idle'; release(); banner.hide(); return; } }
       clock += dt;
       if (stage === 'countdown') {
         const n = 3 - Math.floor(clock);
