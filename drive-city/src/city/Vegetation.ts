@@ -21,6 +21,9 @@ export function treeMaterials(env: EnvUniforms, tier: string): { mat: THREE.Mesh
  * Beijing's main-road lamp: a tapered grey pole, one long arm over the road (+z), a flat LED head.
  * Six-sided and capless (~50 triangles); the lens is a separate emissive part.
  */
+/** How far the head sits out over the road from the pole (local +z). */
+export const LAMP_REACH = 1.6;
+
 export function lampGeometries(): { post: THREE.BufferGeometry; head: THREE.BufferGeometry } {
   const tint = (g: THREE.BufferGeometry, hex: string) => {
     const geo = g.index ? g.toNonIndexed() : g, n = geo.getAttribute('position').count, c = new THREE.Color(hex), a = new Float32Array(n * 3);
@@ -32,8 +35,8 @@ export function lampGeometries(): { post: THREE.BufferGeometry; head: THREE.Buff
     tint(new THREE.CylinderGeometry(0.075, 0.13, 8.2, 6, 1, true).translate(0, 4.1, 0), '#8e9398'),
     tint(new THREE.CylinderGeometry(0.2, 0.24, 0.6, 6, 1, true).translate(0, 0.3, 0), '#7a7f84'),
     tint(new THREE.BoxGeometry(0.07, 0.07, 1.75).translate(0, 8.12, 0.82), '#8e9398'),
-    tint(new THREE.BoxGeometry(0.36, 0.11, 0.72).translate(0, 8.07, 1.6), '#c5c9cc'),
+    tint(new THREE.BoxGeometry(0.36, 0.11, 0.72).translate(0, 8.07, LAMP_REACH), '#c5c9cc'),
   ])!;
-  const head = new THREE.BoxGeometry(0.3, 0.04, 0.62).translate(0, 8.0, 1.6);
+  const head = new THREE.BoxGeometry(0.3, 0.04, 0.62).translate(0, 8.0, LAMP_REACH);
   return { post, head };
 }

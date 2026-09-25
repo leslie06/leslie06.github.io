@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CSM } from 'three/examples/jsm/csm/CSM.js';
 import type { Engine } from '../core/Engine';
 import { patchWet, wetKind, type WetKind, type WetUniforms } from './Wet';
+import type { StreetLights } from './StreetLights';
 
 type Hook = (shader: THREE.WebGLProgramParametersWithUniforms, renderer: THREE.WebGLRenderer) => void;
 interface Patch { hook: Hook; prev: Hook; baseKey: string; wet: WetKind | null; keyFn: () => string }
@@ -20,8 +21,8 @@ interface Patch { hook: Hook; prev: Hook; baseKey: string; wet: WetKind | null; 
  *  - 1: one stabilised map of `shadowMapSize` over +-`shadowExtent` m, pushed ahead of the car
  *    along the view direction and snapped to texels (the iGPU path).
  *
- * Materials: CSM needs a define and uniforms per lit material, and wet surfaces need their shader
- * patch. City tiles stream in and out with new materials, so the scene is scanned every 30 frames
+ * Materials: CSM needs a define and uniforms per lit material, wet surfaces need their shader
+ * patch, and with `lamps` every lit material takes the street lamps' light (StreetLights). City tiles stream in and out with new materials, so the scene is scanned every 30 frames
  * (WeakMap, so scanning is a lookup per material) and anything new is patched, chaining whatever
  * onBeforeCompile it already has (world/ uses one for the asphalt macro variation). A material
  * rendered before the scan reaches it would otherwise sum every cascade light (3x the sun);
@@ -57,7 +58,7 @@ export class Lighting {
   private static pcfPatched = false;
   private static guarded = false;
 
-  constructor(private engine: Engine, private wet: WetUniforms, private ripples: boolean, private backdrop: { value: THREE.Color }) {
+  constructor(private engine: Engine, private wet: WetUniforms, private ripples: boolean, private backdrop: { value: THREE.Color }, private lamps: StreetLights | null = null) {
     const q = engine.quality;
     const r = engine.renderer;
     r.shadowMap.enabled = true;
@@ -238,7 +239,7 @@ export class Lighting {
     const replaced = !p || m.onBeforeCompile !== p.hook;
     if (!replaced && p!.wet === kind) return;
     // Nothing to add (no cascades, not wet) and never patched: leave the material alone.
-    if (!p && !this.csm && !kind) return;
+    if (!p && !this.csm && !kind && !this.lamps) return;
     const prev: Hook = replaced ? m.onBeforeCompile : p!.prev;
     const baseKey = !replaced ? p!.baseKey : p && m.customProgramCacheKey === p.keyFn ? prev.toString() : m.customProgramCacheKey();
     let csmHook: Hook | null = null;
@@ -251,16 +252,17 @@ export class Lighting {
         m.addEventListener('dispose', () => { csm.shaders.delete(m); });
       }
     }
-    const wet = this.wet, ripples = this.ripples;
+    const wet = this.wet, ripples = this.ripples, lamps = this.lamps;
     const hook: Hook = function (this: THREE.Material, shader, renderer) {
       prev.call(this, shader, renderer);
       csmHook?.call(this, shader, renderer);
       if (kind) patchWet(shader, kind, wet, ripples);
+      lamps?.patch(shader);
     };
     // Every wrapper has the same source text, and three's default program cache key is
     // onBeforeCompile.toString(): without our own key, two materials with different inner hooks
     // (asphalt macro vs plain) could share one compiled program.
-    const key = baseKey + (this.csm ? '|dc-csm' : '') + (kind ? `|dc-wet-${kind}${ripples ? '-r' : ''}` : '');
+    const key = baseKey + (this.csm ? '|dc-csm' : '') + (kind ? `|dc-wet-${kind}${ripples ? '-r' : ''}` : '') + (lamps ? '|dc-lamp' : '');
     const keyFn = () => key;
     m.onBeforeCompile = hook;
     m.customProgramCacheKey = keyFn;

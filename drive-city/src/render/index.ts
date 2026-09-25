@@ -6,6 +6,7 @@ import { TimeOfDay, type Look } from './TimeOfDay';
 import { SkyDome } from './SkyDome';
 import { Lighting } from './Lighting';
 import { Rain } from './Rain';
+import { StreetLights } from './StreetLights';
 import { PostFx } from './PostFx';
 import type { WetUniforms } from './Wet';
 import type { RenderSystem } from './RenderSystem';
@@ -30,7 +31,8 @@ export type { RenderSystem } from './RenderSystem';
  * materials. Materials opt into the wet look with `material.userData.wet = true` (see Wet.ts).
  *
  * URL: `?tod=17.5` fixes the clock (timeScale 0), `?rain=0.8`, `?timescale=N` (in-game hours per
- * real minute; default 0.5 = a day in 48 minutes), `?tm=aces|neutral`, `?nofx=...` (PostFx).
+ * real minute; default 0.5 = a day in 48 minutes), `?tm=aces|neutral`, `?nofx=...` (PostFx), `?lamps=0.5`
+ * (street light gain, 0 = off).
  */
 const wrap24 = (h: number) => ((h % 24) + 24) % 24;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -52,6 +54,7 @@ class Render implements RenderSystem {
   private sky: SkyDome;
   private lighting: Lighting;
   private rainFx: Rain;
+  private lamps: StreetLights;
   private focus = new THREE.Vector3();
   private wetU: WetUniforms;
   /** Unlit backdrops (skyline) scale with the horizon: current / at build time. */
@@ -79,7 +82,8 @@ class Render implements RenderSystem {
 
     const q = engine.quality;
     this.wetU = { dcWetness: this.uniforms.uWet, dcRain: { value: this.rain }, dcTime: this.uniforms.uTime };
-    this.lighting = new Lighting(engine, this.wetU, q.wetRipples, this.backdrop);
+    this.lamps = new StreetLights(engine.renderer, q.tier === 'low' ? 512 : 1024, Math.max(0, num('lamps') ?? 1));
+    this.lighting = new Lighting(engine, this.wetU, q.wetRipples, this.backdrop, this.lamps);
     this.sky = new SkyDome(engine.renderer, { lutWidth: q.skyLutSize, viewSteps: q.skySteps, lightSteps: q.tier === 'low' ? 4 : 6, envSize: q.envSize });
     engine.scene.add(this.sky.mesh);
     this.rainFx = new Rain(q.rainStreaks);
@@ -108,6 +112,7 @@ class Render implements RenderSystem {
 
   setFocus(p: THREE.Vector3): void { this.focus.copy(p); }
   prepare(root: THREE.Object3D): void { this.lighting.prepare(root); }
+  setStreetLamps(xz: Float32Array): void { this.lamps.setHeads(xz); }
   settle(): void { this.snapAll = true; }
 
   private updateLook(force: boolean): void {
@@ -181,6 +186,7 @@ class Render implements RenderSystem {
     this.lighting.setKey(L.keyDir, L.keyColor, L.keyIntensity, L.shadowIntensity, L.keyIsMoon ? 1 : L.overcast);
     this.lighting.setAmbient(L.hemiSky, L.hemiGround);
     this.lighting.beforeRender(this.focus);
+    this.lamps.update(e.camera.position, L.night);
     if (this.lutDirty(L)) { this.sky.setAtmosphere(L.atmo); this.sky.renderLut(); this.markLut(L); }
     this.framesSinceEnv++;
     // The env capture (6 faces + PMREM) is the one expensive refresh: only when the sky changed by
@@ -199,7 +205,7 @@ class Render implements RenderSystem {
 
   resize(): void { this.postfx.resize(); }
 
-  dispose(): void { this.lighting.dispose(); this.sky.dispose(); }
+  dispose(): void { this.lighting.dispose(); this.sky.dispose(); this.lamps.dispose(); }
 }
 
 export async function install(engine: Engine): Promise<void> {

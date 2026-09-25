@@ -8,7 +8,7 @@ import type { Manifest } from './Data';
 import type { CityMaterials } from './Materials';
 import type { TileResult } from './tileWorker';
 import { TILE, tileOf } from './Geo';
-import { treeGeometries, treeMaterials, lampGeometries } from './Vegetation';
+import { treeGeometries, treeMaterials, lampGeometries, LAMP_REACH } from './Vegetation';
 import { furnitureGeometries, furnitureMaterials } from './visual/FurnitureGeo';
 import type { Furniture } from './visual/StreetFurniture';
 
@@ -103,6 +103,8 @@ export class CityStreamer implements System {
   private physRadius = 1;
   private treeLists = new Map<string, { m: Float32Array[]; c: Float32Array[] }>();
   private lampLists = new Map<string, Float32Array>();
+  /** Every loaded tile's lamp heads changed: hand them to the renderer (street light). */
+  private headsDirty = false;
   private furnLists = new Map<string, { rail: Float32Array; railC: Float32Array; shelter: Float32Array; bin: Float32Array; bike: Float32Array; bikeC: Float32Array }>();
   private railPool: InstancePool;
   private shelterPool: InstancePool;
@@ -152,8 +154,9 @@ export class CityStreamer implements System {
     this.lampHead = new THREE.MeshStandardMaterial({ color: '#fff6e0', emissive: '#ffcf8a', emissiveIntensity: 0.1, roughness: 0.4 });
     const postMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.4 });
     postMat.userData.wet = 'surface';
-    this.lampPool = new InstancePool([{ geo: lg.post, mat: postMat, shadow: false }], tier === 'low' ? 600 : 1000, scene, false, 'pool:lamp');
-    this.lampHeads = new InstancePool([{ geo: lg.head, mat: this.lampHead, shadow: false }], tier === 'low' ? 600 : 1500, scene, false, 'pool:lamp-head');
+    // Every street has lamps: up to ~1350 on the 5x5 tiles round the densest spot, ~2200 on 7x7.
+    this.lampPool = new InstancePool([{ geo: lg.post, mat: postMat, shadow: false }], tier === 'low' ? 700 : 1500, scene, false, 'pool:lamp');
+    this.lampHeads = new InstancePool([{ geo: lg.head, mat: this.lampHead, shadow: false }], tier === 'low' ? 700 : 2400, scene, false, 'pool:lamp-head');
     this.lampNear = new InstancePool([{ geo: lg.post, mat: postMat, shadow: true }], 200, scene, false, 'pool:lamp-near');
   }
 
@@ -211,6 +214,7 @@ export class CityStreamer implements System {
     this.tiles.set(res.key, t);
     this.treeLists.set(res.key, this.treeMatrices(t.trees));
     this.lampLists.set(res.key, this.lampMatrices(t.lamps));
+    this.headsDirty = true;
     this.furnLists.set(res.key, this.furnMatrices(res.furniture));
     this.onDetailChange?.(this.loadedKeys);
   }
@@ -253,6 +257,22 @@ export class CityStreamer implements System {
     };
   }
 
+  /** Head positions (x, z) of every lamp on the loaded tiles, for render/StreetLights. */
+  private pushHeads(): void {
+    this.headsDirty = false;
+    const render = this.engine.get<RenderSystem>('render');
+    if (!render?.setStreetLamps) return;
+    let n = 0;
+    for (const t of this.tiles.values()) n += t.lamps.length / 3;
+    const out = new Float32Array(n * 2);
+    let k = 0;
+    for (const t of this.tiles.values()) {
+      const l = t.lamps;
+      for (let i = 0; i < l.length; i += 3, k += 2) { out[k] = l[i] + Math.sin(l[i + 2]) * LAMP_REACH; out[k + 1] = l[i + 1] + Math.cos(l[i + 2]) * LAMP_REACH; }
+    }
+    render.setStreetLamps(out);
+  }
+
   private lampMatrices(lamps: number[]): Float32Array {
     const out: number[] = [];
     for (let i = 0; i < lamps.length; i += 3) {
@@ -269,6 +289,7 @@ export class CityStreamer implements System {
     this.tiles.delete(t.key);
     this.treeLists.delete(t.key);
     this.lampLists.delete(t.key);
+    this.headsDirty = true;
     this.furnLists.delete(t.key);
     this.onDetailChange?.(this.loadedKeys);
   }
@@ -356,6 +377,7 @@ export class CityStreamer implements System {
       this.bikePool.set(near.map((k) => F(k).bike), near.map((k) => F(k).bikeC), within(170));
     }
     this.lampHead.emissiveIntensity = 0.1 + 7 * this.env.uNight.value;
+    if (this.headsDirty) this.pushHeads();
     if (this.waiters.length && want.every((k) => this.tiles.has(k) || !this.manifest.tiles[k])) {
       const w = this.waiters; this.waiters = []; for (const f of w) f();
     }

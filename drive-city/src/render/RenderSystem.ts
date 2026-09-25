@@ -12,6 +12,11 @@ export interface RenderSystem extends RenderApi {
    * for the 30-frame scan. Call it on a freshly built tile before adding it to the scene.
    */
   prepare(root: THREE.Object3D): void;
+  /**
+   * The street lamp heads streamed in right now, world [x, z] pairs (city/): they light every lit
+   * material near the camera at night (StreetLights).
+   */
+  setStreetLamps(xz: Float32Array): void;
   /** Jump every lagging quantity (exposure, wetness, sky LUT, environment map) to its target. */
   settle(): void;
   /** Everything the current time and weather resolve to (read-only use). */

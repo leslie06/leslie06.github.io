@@ -4,3 +4,4 @@ shots
 .scratch
 .cache
 public/textures
+.DS_Store

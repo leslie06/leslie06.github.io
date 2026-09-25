@@ -415,13 +415,21 @@ for (const a of areaPolys) {
 }
 // Street trees and lamps along the drivable roads.
 const STREET_TREES = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'trunk']);
-const LAMPS = new Set(['trunk', 'primary', 'secondary', 'tertiary']);
+// Every street is lit, the lanes too (a residential street with no lamps was a black canyon at
+// night): lamp spacing in metres per class. Service roads (driveways, car parks) stay dark.
+const LAMPS = {
+  motorway: 36, trunk: 32, primary: 32, secondary: 32, tertiary: 30, unclassified: 28, residential: 26, living_street: 24, busway: 32,
+  motorway_link: 32, trunk_link: 30, primary_link: 30, secondary_link: 30, tertiary_link: 30,
+};
+const nearTree = (x, z, r) => { const t = tiles.get(tileOf(x, z).join('_')); if (!t) return false; for (let i = 0; i < t.trees.length; i += 4) if (Math.abs(t.trees[i] - x) < r && Math.abs(t.trees[i + 1] - z) < r) return true; return false; };
 let nLamps = 0;
 for (const w of ways) {
   const info = w._road; if (!info || !info.car) continue;
   const p = w._pts, ids = w._ids;
   const junctions = ids.map((id, i) => ((degCar.get(id) || 0) >= 3 ? p[i] : null)).filter(Boolean);
-  let acc = 0, lampAcc = 0, side = 1;
+  // Lamps start half a gap in: from 0, every way put one at its junction end, so they bunched at
+  // corners (three or four within 10 m) and left the middle of short blocks dark.
+  let acc = 0, lampAcc = (LAMPS[info.cls] ?? 0) / 2, side = 1;
   for (let i = 1; i < p.length; i++) {
     const [ax, az] = p[i - 1], [bx, bz] = p[i];
     const L = Math.hypot(bx - ax, bz - az); if (L < 0.5) continue;
@@ -431,13 +439,17 @@ for (const w of ways) {
       if (junctions.some((j) => Math.hypot(j[0] - x, j[1] - z) < 14)) continue;
       if (STREET_TREES.has(info.cls)) for (const sd of info.oneway ? [1] : [1, -1]) addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2));
     }
-    if (LAMPS.has(info.cls)) for (let s = (32 - lampAcc % 32) % 32; s < L; s += 32) {
+    const gap = LAMPS[info.cls];
+    if (gap) for (let s = (gap - lampAcc % gap) % gap; s < L; s += gap) {
       const x = ax + dx * s, z = az + dz * s;
       const off = info.w / 2 + 0.9;
       const lx = x + nx * side * off, lz = z + nz * side * off;
+      // The arm (+z of the model) points back over the carriageway. Taken before `side` flips:
+      // taking it after pointed every two-way street's arms away from the road.
+      const yaw = Math.atan2(-nx * side, -nz * side);
       side = info.oneway ? 1 : -side;
-      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5)) continue;
-      tile(...tileOf(lx, lz)).lamps.push(q1(lx), q1(lz), +Math.atan2(-nx * side, -nz * side).toFixed(3));
+      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2)) continue;
+      tile(...tileOf(lx, lz)).lamps.push(q1(lx), q1(lz), +yaw.toFixed(3));
       nLamps++;
     }
     acc += L; lampAcc += L;
