@@ -188,8 +188,11 @@ export async function install(engine: Engine): Promise<void> {
       if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 7)) continue;
       if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < 12) continue;
       const body: BodyType = rnd() < 0.5 ? 'moto' : 'bike';
+      // A free slot of this body keeps its own vehicle. It must not also go to `spares`: newCar would
+      // hand it out again while this slot still drives it (the bike the player took with F kept being
+      // parked at another kerb, handbrake on, by the slot that took over from it).
       let n = pool.find((p) => !p.active && !p.parked && p.body === body);
-      if (n) recycle(n); else { n = makeNpc(newCar(body), body); pool.push(n); }
+      if (!n) { n = makeNpc(newCar(body), body); pool.push(n); }
       kitFor(body);
       n.car.body.setEnabled(true);
       n.car.reset({ x: tmp.x, y: 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
@@ -286,7 +289,7 @@ export async function install(engine: Engine): Promise<void> {
         if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 8)) { bs += 12; continue; }
         const body: BodyType = rnd() < 0.5 ? 'hatch' : 'sedan';
         let n = pool.find((p) => !p.active && !p.parked && p.body === body);
-        if (n) recycle(n); else { n = makeNpc(newCar(body), body); pool.push(n); }
+        if (!n) { n = makeNpc(newCar(body), body); pool.push(n); }   // a free slot keeps its own car (see spawnBike)
         kitFor(body);
         n.car.body.setEnabled(true);
         n.car.reset({ x: tmp.x, y: 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
@@ -312,7 +315,9 @@ export async function install(engine: Engine): Promise<void> {
       kitFor(body);
       n.upper.copy(look.upper); n.lower.copy(look.lower); n.taxi = look.taxi;
       n.prevPos.copy(car.pos); n.curPos.copy(car.pos); n.prevQuat.copy(car.quat); n.curQuat.copy(car.quat);
-      pool.push(n);
+      // Already in the pool either way (a reused slot, or pushed above): pushing it again stepped the
+      // car twice a frame, and a second entry survived `takeCar`, so the player's own car, taken back,
+      // stood with its handbrake on.
     },
     fixedUpdate(dt) {
       t += dt;
