@@ -50,4 +50,12 @@ if (fs.existsSync(texDir)) {
     }
   }
 }
+// The site's anonymous play stats (stats/apply.mjs) live in each game's index.html, and the copy
+// above replaced ours, so every deploy since 2026-09-17 had shipped bcity without them - no data at
+// all on how long anyone played. Put them back, following the site: the endpoint the site's own
+// index.html reports to, and nothing if stats are switched off there (`apply.mjs --off`).
+const site = fs.readFileSync(path.resolve(root, '..', 'index.html'), 'utf8');
+const api = site.match(/const API = '([^']+)', GAME = 'index'/)?.[1];
+if (api && !api.includes('STATS-ENDPOINT')) execFileSync('node', [path.resolve(root, '..', 'stats', 'apply.mjs'), api, 'bcity'], { stdio: 'inherit' });
+else console.log('stats are off on the site: bcity deployed without them');
 console.log(`deployed to ${out}: ${before} MB -> ${mb(out)} MB`);
