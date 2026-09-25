@@ -16,10 +16,13 @@ const GROUND = 0.045;
 /** Longest walk across a junction. Wider roads are not crossed at street level (Beijing has underpasses). */
 const MAX_CROSS = 26;
 /**
- * How many pedestrians live around the camera. The crowd texture holds more (CROWD_CAP), but a
- * hundred people inside 100 m reads as a demonstration, not a street; `?peds=N` overrides.
+ * How many pedestrians live around the camera (inside SPAWN_R). Doubled on 2026-09-25 (「增加路上行人
+ * 的数量」): 34 on high left whole blocks empty. They are cheap - the people system took 0.09 ms a
+ * frame at 34 and 0.15 ms at 80 (`.scratch/pedcost.mjs`), and the crowd draws in the same 8 calls -
+ * so the bound is the look: a hundred inside 100 m reads as a demonstration, not a street. The
+ * crowd texture (CROWD_CAP, less the player and a fare) is the hard limit; `?peds=N` overrides.
  */
-const PED_CAP = { low: 12, medium: 22, high: 34 } as const;
+const PED_CAP = { low: 24, medium: 44, high: 70 } as const;
 /** A pedestrian steps off the kerb only when nothing would reach the crossing within this long. */
 const GAP = 4.5;
 /** Spawn and despawn distances from the camera: people further than ~100 m are a few pixels tall. */
@@ -439,11 +442,12 @@ export async function install(engine: Engine): Promise<void> {
   /** Crossings started at a light since boot, and how many of them against it (`.scratch/order.mjs`). */
   const lights = { crossed: 0, onRed: 0 };
   interface Stats { active: number; cap: number; onRoad: number; crossing: number; waiting: number; walking: number; down: number; lightCrossings: number; crossedOnRed: number }
-  const api: PeopleApi & { debug: { knocked(): number; stats(): Stats; nearest(x: number, z: number, r: number): { x: number; z: number } | null } } = {
+  const api: PeopleApi & { debug: { knocked(): number; stats(): Stats; nearest(x: number, z: number, r: number): { x: number; z: number } | null; positions(): { x: number; z: number }[] } } = {
     name: 'people',
     get count() { return active; },
     inRoad: () => road,
     debug: {
+      positions: () => peds.filter((p) => p.on).map((p) => ({ x: p.pos.x, z: p.pos.z })),
       knocked: () => peds.reduce((n, p) => n + (p.on && !calm(p) ? 1 : 0), 0),
       stats: () => {
         const st: Stats = { active, cap, onRoad: 0, crossing: 0, waiting: 0, walking: 0, down: 0, lightCrossings: lights.crossed, crossedOnRed: lights.onRed };
