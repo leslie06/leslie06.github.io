@@ -95,7 +95,7 @@ export function at(l: Line, s: number): [number, number, number, number, number,
 }
 
 /** Arc length along the line nearest (x, z) and the lateral offset there (left positive). */
-export function project(l: Line, x: number, z: number): { s: number; lat: number } {
+export function project(l: Line, x: number, z: number): { s: number; lat: number; d: number } {
   let best = { s: 0, lat: Infinity, d: Infinity };
   for (let k = 0; k < l.P.length - 1; k++) {
     const [ax, az] = l.P[k], [bx, bz] = l.P[k + 1], vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz || 1;
@@ -253,6 +253,10 @@ export function zebrasOn(l: Line, hw: number, crossings: number[]): number[] {
 const CONCRETE = new THREE.Color(1, 1, 1), SOFFIT = new THREE.Color(0.72, 0.72, 0.7), PIER = new THREE.Color(0.9, 0.89, 0.86);
 /** Bridge dimensions, m: parapet width and height, deck depth, the height under which a ramp is a filled embankment, pier size and spacing. */
 export const DECK = { parapet: 0.4, rail: 0.9, depth: 1.1, fill: 3.2, pier: 1.3, pierGap: 26 };
+/** Headroom kept clear over every carriageway, m: nothing of a bridge but a deck high enough may stand in it. */
+const HEADROOM = 4.3;
+/** Parapet height over a deck `h` m up: rising out of the ramp from 0.45 m to full height at 1.45. */
+const railOf = (h: number) => Math.max(0, Math.min(DECK.rail, (h - 0.45) * 0.9));
 /** Metres between the lamps along a deck (as on a trunk road below). */
 const DECK_LAMP = 32;
 /** Collider triangles as a flat [x, y, z, ...] soup. */
@@ -269,7 +273,7 @@ const quad3 = (col: Soup, a: number[], b: number[], c: number[], d: number[]) =>
  * into `col`: the deck top (from where it leaves the ground, so a car drives up without a step),
  * the parapets, the embankment walls and the piers.
  */
-function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number, z: number, h: number) => boolean, joins: (x: number, z: number, h: number) => boolean, lamps: number[]): void {
+function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number, z: number, h: number, gap: number, maxGap?: number) => boolean, inJunction: (x: number, z: number, h: number) => boolean, joins: (x: number, z: number, h: number, step?: boolean, margin?: number) => boolean, lamps: number[], occupied: (x: number, z: number, y0: number, y1: number) => boolean): void {
   const hw = r.w / 2, oi = hw + 0.05, oo = hw + 0.05 + DECK.parapet;
   const P = (s: number, o: number, y: number): number[] => { const [x, z, nx, nz] = at(l, s); return [x + nx * o, y, z + nz * o]; };
   const V = (p: number[], u: number, v: number) => [p[0], p[1], p[2], u, v];
@@ -289,38 +293,61 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
     for (let k = 0; k < cuts.length - 1; k++) {
       const s0 = cuts[k], s1 = cuts[k + 1], h0 = hAt(l, s0) + Y.road, h1 = hAt(l, s1) + Y.road;
       const [, , n0x, n0z] = at(l, s0);
-      // The deck top the wheels run on, parapet to parapet.
+      // The deck top the wheels run on, parapet to parapet. (Leaving strips out over a road close
+      // underneath was tried twice: both times it opened holes the car fell through.)
       quad3(col, P(s0, -oo, h0), P(s1, -oo, h1), P(s1, oo, h1), P(s0, oo, h0));
       if (Math.max(h0, h1) < 0.2) continue;
-      const bot = (h: number) => (h > DECK.fill ? h - DECK.depth : 0);
+      // Low enough to be a filled embankment - unless a lower road runs under this edge (OSM's widths
+      // overlap a ramp with the road beside it): then it is open underneath, a deck on the lower road.
+      const sm = (s0 + s1) / 2, hm = (h0 + h1) / 2;
+      const open = (side: number) => { const q = P(sm, side * oo, 0); return below(q[0], q[2], hm, 1.5); };
+      const openL = open(-1), openR = open(1);
       for (const side of [-1, 1]) {
-        const ti = side * oi, to = side * oo, r0 = h0 + DECK.rail, r1 = h1 + DECK.rail;
+        const bot = (h: number) => (h > DECK.fill || (side < 0 ? openL : openR) ? Math.max(0.2, h - DECK.depth) : 0);
+        const ti = side * oi, to = side * oo;
         // No parapet across a slip road leaving or joining here: its carriageway covers this edge.
-        const mid = P((s0 + s1) / 2, to, 0);
+        // Tested just beyond the parapet's outer face: only a carriageway whose surface reaches past it
+        // makes it a merge. One within a metre with a gap between was taken for one, and the gap between
+        // a road's two carriageways on 东三环 or 国贸桥 was left open to fall through.
+        const mid = P((s0 + s1) / 2, side * (oo + 0.3), 0);
         if (joins(mid[0], mid[2], (h0 + h1) / 2)) continue;
+        // Nor one standing on another carriageway at this level: the outer parapet of a slip road
+        // still inside the main line it is leaving stood in the main line's lane, beside its own.
+        const foot = P((s0 + s1) / 2, side * (oi + DECK.parapet / 2), 0);
+        if (joins(foot[0], foot[2], (h0 + h1) / 2, false, -0.15)) continue;
+        // The parapet grows out of the deck as the ramp leaves the ground (none under 0.45 m, full height
+        // from 1.45): at full height from the first centimetre its end stood in the lane of the road
+        // the ramp comes off, a concrete block across it. And none over another carriageway only a step
+        // lower, which it would stand in.
+        const g0 = railOf(h0), g1 = railOf(h1), rail = (g0 > 0 || g1 > 0) && !joins(mid[0], mid[2], (h0 + h1) / 2, true);
+        const r0 = h0 + (rail ? g0 : 0), r1 = h1 + (rail ? g1 : 0);
         const n = [n0x * side, 0, n0z * side], inN = [-n[0], 0, -n[2]];
         // Inside face (towards the road), the top, the outside face down to the deck edge or the ground.
         const i0 = P(s0, ti, h0), i1 = P(s1, ti, h1), i2 = P(s1, ti, r1), i3 = P(s0, ti, r0);
         const o0 = P(s0, to, bot(h0)), o1 = P(s1, to, bot(h1)), o2 = P(s1, to, r1), o3 = P(s0, to, r0);
+        // The outside face: a collider only where it is more than a kerb (a car climbs 0.45 m).
+        const face = !(side < 0 ? openL : openR) && Math.max(r0, r1) > 0.5;
         if (side > 0) {
-          st.quad(Y3(i1, s1), Y3(i0, s0), Y3(i3, s0), Y3(i2, s1), inN, CONCRETE);
+          if (rail) { st.quad(Y3(i1, s1), Y3(i0, s0), Y3(i3, s0), Y3(i2, s1), inN, CONCRETE); quad3(col, i1, i0, i3, i2); }
           st.quad(Y3(o0, s0), Y3(o1, s1), Y3(o2, s1), Y3(o3, s0), n, CONCRETE);
-          quad3(col, i1, i0, i3, i2); quad3(col, o0, o1, o2, o3);
+          if (face) quad3(col, o0, o1, o2, o3);
         } else {
-          st.quad(Y3(i0, s0), Y3(i1, s1), Y3(i2, s1), Y3(i3, s0), inN, CONCRETE);
+          if (rail) { st.quad(Y3(i0, s0), Y3(i1, s1), Y3(i2, s1), Y3(i3, s0), inN, CONCRETE); quad3(col, i0, i1, i2, i3); }
           st.quad(Y3(o1, s1), Y3(o0, s0), Y3(o3, s0), Y3(o2, s1), n, CONCRETE);
-          quad3(col, i0, i1, i2, i3); quad3(col, o1, o0, o3, o2);
+          if (face) quad3(col, o1, o0, o3, o2);
         }
         const t0 = P(s0, ti, r0), t1 = P(s1, ti, r1), t2 = P(s1, to, r1), t3 = P(s0, to, r0);
         if (side > 0) st.quad(V(t0, s0, oi), V(t1, s1, oi), V(t2, s1, oo), V(t3, s0, oo), UP, CONCRETE);
         else st.quad(V(t1, s1, -oi), V(t0, s0, -oi), V(t3, s0, -oo), V(t2, s1, -oo), UP, CONCRETE);
       }
       // The soffit where the deck stands on piers; a wall across where the embankment ends.
-      const hi0 = h0 > DECK.fill, hi1 = h1 > DECK.fill;
+      const hi0 = h0 > DECK.fill || openL || openR, hi1 = h1 > DECK.fill || openL || openR;
       if (hi0 && hi1) {
         const y0 = h0 - DECK.depth, y1 = h1 - DECK.depth;
         st.quad(V(P(s0, oo, y0), s0, oo), V(P(s1, oo, y1), s1, oo), V(P(s1, -oo, y1), s1, -oo), V(P(s0, -oo, y0), s0, -oo), [0, -1, 0], SOFFIT);
-      } else if (hi0 !== hi1) {
+      } else if (hi0 !== hi1 && ![-1, -0.5, 0, 0.5, 1].some((u) => { const q = P(hi0 ? s0 : s1, u * oo, 0); return occupied(q[0], q[2], 0, (hi0 ? h0 : h1) - DECK.depth); })) {
+        // (Not where another carriageway runs through it: the end of 国贸桥's embankment stood across the
+        // slip road beside it as a block of concrete.)
         const sc = hi0 ? s0 : s1, h = hi0 ? h0 : h1, f = hi0 ? 1 : -1;
         const [, , , , tx, tz] = at(l, sc);
         const q = [P(sc, -oo, 0), P(sc, oo, 0), P(sc, oo, h - DECK.depth), P(sc, -oo, h - DECK.depth)];
@@ -341,7 +368,7 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
       const [x, z, nx, nz] = at(l, sl), side = lampSide, o = side * (oi + DECK.parapet / 2);
       if (!r.o) lampSide = -lampSide;
       const lx = x + nx * o, lz = z + nz * o;
-      if (joins(lx, lz, h)) continue;
+      if (joins(x + nx * side * (oo + 0.3), z + nz * side * (oo + 0.3), h)) continue;
       lamps.push(lx, h + DECK.rail, lz, Math.atan2(-nx * side, -nz * side));
     }
     // Piers on the high stretches, not on a road below.
@@ -354,12 +381,15 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
       let any = false;
       for (const o of offs) {
         const px = x + nx * o, pz = z + nz * o;
-        if (below(px, pz, h)) continue;
+        if (below(px, pz, h, 0.5) || inJunction(px, pz, h)) continue;
         any = true;
         box(st, col, px, pz, tx, tz, DECK.pier / 2, DECK.pier / 2, 0, h - DECK.depth, PIER);
       }
-      // A cross-head under the deck where at least one pier stands.
-      if (any) box(st, null, x, z, tx, tz, 0.7, w - 0.3, h - DECK.depth - 0.9, h - DECK.depth, PIER);
+      // A cross-head under the deck where at least one pier stands, unless it would reach into the space
+      // over another carriageway beside or under the deck (it stuck out across a ramp at head height).
+      let clear = any;
+      for (let o = -(w - 0.3); clear && o <= w - 0.3 + 1e-6; o += (w - 0.3) / 4) clear = !occupied(x + nx * o, z + nz * o, h - DECK.depth - 0.9, h - DECK.depth);
+      if (clear) box(st, null, x, z, tx, tz, 0.7, w - 0.3, h - DECK.depth - 0.9, h - DECK.depth, PIER);
     }
   }
 }
@@ -386,7 +416,7 @@ function box(st: Strip, col: Soup | null, x: number, z: number, tx: number, tz: 
  * junctions, zebra crossings, the yellow tactile strip on pavements, manhole covers. Pavements and
  * lines stop where the crossing road begins, so junction corners stay open.
  */
-export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number[] = [], deckLamps: number[] = []): RoadMeshes {
+export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number[] = [], deckLamps: number[] = [], ctx: RoadPiece[] = []): RoadMeshes {
   const road = new Strip(true), walk = new Strip(true), curb = walk, paint = new Strip(true), bridge = new Strip(true);
   const J = junctions(pieces);
   // Every carriageway with its line, for the piers: none may stand on a road below its deck.
@@ -394,7 +424,7 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
   // knows its own pieces, and the stretch of 国贸桥 across the tile edge was missing, so the slip
   // road beside it built its parapet straight across the main carriageway - a wall at x 4864.
   const carLines: { r: RoadPiece; l: Line }[] = [];
-  for (const r of pieces) if (isCar(r.c) && r.p.length >= 4) {
+  for (const r of [...pieces, ...ctx]) if (isCar(r.c) && r.p.length >= 4) {
     const h = r.h, a = r.a, b = r.b;
     const ext: RoadPiece = { ...r, a: 0, b: 0,
       p: [...(a || []), ...r.p, ...(b || [])],
@@ -402,9 +432,22 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
       h: h ? [...(a ? [h[0]] : []), ...h, ...(b ? [h[h.length - 1]] : [])] : undefined };
     carLines.push({ r, l: lineOf(ext) });
   }
-  const below = (x: number, z: number, h: number) => carLines.some(({ r, l }) => {
+  /** Where the roads' pieces end - junction mouths, mostly - and their heights: no pier stands in a junction under a deck, where cars cut across between the roads (大望桥 over 西大望路). */
+  const ends: [number, number, number][] = [];
+  for (const { l } of carLines) { const n = l.P.length - 1; ends.push([l.P[0][0], l.P[0][1], hAt(l, 0)], [l.P[n][0], l.P[n][1], hAt(l, l.len)]); }
+  /** A carriageway at (x, z) lower than h by more than `gap` (and less than `maxGap`): under a deck's edge, where a pier would land, or overlapping a deck too close under it. */
+  const below = (x: number, z: number, h: number, gap: number, maxGap = Infinity) => carLines.some(({ r, l }) => {
     const p = project(l, x, z);
-    return Math.abs(p.lat) < r.w / 2 + 1.2 && p.s > -2 && p.s < l.len + 2 && hAt(l, Math.max(0, Math.min(l.len, p.s))) < h - 2.5;
+    if (p.d >= r.w / 2 + 1.2) return false;
+    const d = h - hAt(l, Math.max(0, Math.min(l.len, p.s))) - Y.road;
+    return d > gap && d < maxGap;
+  });
+  /** Whether the space over any carriageway at (x, z) - its surface up to a lorry's height - reaches into [y0, y1]: where no pier, cross-head or wall may stand. */
+  const occupied = (x: number, z: number, y0: number, y1: number) => carLines.some(({ r, l }) => {
+    const p = project(l, x, z);
+    if (p.d >= r.w / 2 + 0.3) return false;
+    const y = hAt(l, Math.max(0, Math.min(l.len, p.s))) + Y.road;
+    return y < y1 - 0.05 && y + HEADROOM > y0;
   });
   for (const r of pieces) {
     const n = r.p.length / 2;
@@ -418,11 +461,17 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
     const block = (extra: number, useRoad = false) => spans(l.len, junctions.map((j) => [j.s - (useRoad ? j.road : j.cut) - extra, j.s + (useRoad ? j.road : j.cut) + extra] as [number, number]));
     // Up on an interchange: parapets and the structure instead of pavements.
     const up = lifted(l, 0.15).map(([a, b]) => [a - 3, b + 3] as [number, number]);
-    if (l.H) bridgeOf(bridge, col, l, r, below, (x, z, h) => carLines.some((o) => {
+    if (l.H) bridgeOf(bridge, col, l, r, below, (x, z, h) => ends.some(([ex, ez, eh]) => eh < h - 2.5 && Math.hypot(ex - x, ez - z) < 24), (x, z, h, step, margin = 0.05) => carLines.some((o) => {
       if (o.r === r) return false;
       const p = project(o.l, x, z);
-      return p.s > 0.5 && p.s < o.l.len - 0.5 && Math.abs(p.lat) < o.r.w / 2 + 0.8 && Math.abs(hAt(o.l, p.s) + Y.road - h) < 1.5;
-    }), deckLamps);
+      // Real distance, not the lateral offset: at a node where a dozen short pieces of 建国门桥 meet,
+      // the junction lies off the ends of them all, and an in-span test left their parapets standing.
+      if (p.d >= o.r.w / 2 + margin) return false;
+      // One level (a merge), or with `step` a carriageway 0.3-1.5 m lower: a drop a car can take, where a
+      // parapet would stand in its lanes. A carriageway lower still beside the edge is a real drop.
+      const dh = h - hAt(o.l, p.s) - Y.road;
+      return step ? dh > 0.3 && dh < 1.5 : Math.abs(dh) < 0.5;
+    }), deckLamps, occupied);
     // Pavements with curbs, and the median of one-way main roads.
     const sw = SIDEWALK[r.c] ?? 0;
     const sides: number[] = sw ? (r.o ? [-1] : [1, -1]) : [];

@@ -47,10 +47,11 @@ describe('the interchanges (scripts/city/build.mjs lifts OSM bridges over roads)
     expect(Math.max(...e3.map((e) => Math.max(...e.h!)))).toBeGreaterThanOrEqual(12.5);
   });
 
-  it('has no cliffs: no ramp steeper than 13%', () => {
+  it('has no cliffs: no ramp steeper than 15%', () => {
     const s = segments();
     expect(s.length).toBeGreaterThan(1500);
-    const bad = s.filter((x) => x.g > 0.13).map((x) => `${x.n} at ${x.x},${x.z} ${x.h0}->${x.h1}`);
+    // STEEP is 12%; where roads overlapping each other were brought level a short step can reach 14%.
+    const bad = s.filter((x) => x.g > 0.15).map((x) => `${x.n} at ${x.x},${x.z} ${x.h0}->${x.h1}`);
     expect(bad).toEqual([]);
   });
 
@@ -59,7 +60,7 @@ describe('the interchanges (scripts/city/build.mjs lifts OSM bridges over roads)
     // road's parapet used to be built straight across the main carriageway (the stretch of main line
     // on the far side of the edge is in the other tile) and stopped every car dead at x 4864.
     const col: number[] = [];
-    for (const k of ['18_0', '19_0']) { const t = read<TileData>(`t_${k}.json`); buildRoads(t.roads, t.crossings, col); }
+    for (const k of ['18_0', '19_0']) { const t = read<TileData>(`t_${k}.json`); buildRoads(t.roads, t.crossings, col, [], t.ctx); }
     expect(col.length).toBeGreaterThan(9 * 100);
     for (const z of [204, 206, 208, 210, 212]) {
       const p = [4830, 7.2, z], q = [4900, 7.2, z];

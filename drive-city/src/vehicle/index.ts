@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { LaneGraph } from '../traffic/LaneGraph';
 import type { Engine } from '../core/Engine';
 import type { CarLook, DriftState, VehicleApi, WorldApi } from '../game/Contracts';
 import type { RenderApi } from '../render';
@@ -69,6 +70,39 @@ export async function install(engine: Engine): Promise<void> {
     drift.active = false; drift.score = 0; drift.multiplier = 1; driftTime = 0;
   };
 
+  /**
+   * Where R puts the car: back on the nearest lane of the road it is on or beside (within 25 m, on the
+   * same level - a deck or the road under it), facing along it; or where it is, if there is none (the
+   * yard). A car wedged against a pier or a parapet got nowhere by being set upright in place.
+   */
+  const backOnRoad = (): { pos: { x: number; y: number; z: number }; yaw: number } | null => {
+    const g = engine.get<{ name: string; graph: LaneGraph }>('traffic')?.graph;
+    if (!g) return null;
+    const p = car.pos, at = { x: 0, z: 0, dx: 0, dz: 0 };
+    // Lane points every 4 m within 40 m, nearest (and nearest in height) first.
+    const cand: { score: number; x: number; h: number; z: number; yaw: number }[] = [];
+    for (const id of g.near(p.x, p.z, 40)) {
+      const l = g.links[id];
+      for (let s = 2; s < l.len - 2; s += 4) {
+        g.at(l, s, g.laneOffset(l, 0), at);
+        const h = g.heightAt(l, s), d = Math.hypot(at.x - p.x, at.z - p.z);
+        if (d > 40) continue;
+        cand.push({ score: d + Math.abs(h - (p.y - 0.4)) * 3, x: at.x, h, z: at.z, yaw: Math.atan2(at.dx, at.dz) });
+      }
+    }
+    cand.sort((a, b) => a.score - b.score);
+    // The first with room for the car: nothing but the road under it (a lane squeezed under a deck's
+    // edge or against a parapet would only wedge it again).
+    const { R, world } = engine.physics;
+    const box = new R.Cuboid(0.95, 0.6, 2.1);
+    for (const c of cand.slice(0, 40)) {
+      const q = { x: 0, y: Math.sin(c.yaw / 2), z: 0, w: Math.cos(c.yaw / 2) };
+      let blocked = false;
+      world.intersectionsWithShape({ x: c.x, y: c.h + 0.03 + 1.25, z: c.z }, q, box, (col) => { if (col.parent() !== car.body) { blocked = true; return false; } return true; });
+      if (!blocked) return { pos: { x: c.x, y: c.h + 0.03 + car.spec.wheelRadius + 0.3, z: c.z }, yaw: c.yaw };
+    }
+    return null;
+  };
   const api: VehicleApi = {
     name: 'vehicle',
     get car() { return car; },
@@ -165,7 +199,7 @@ export async function install(engine: Engine): Promise<void> {
     update(dt, alpha) {
       const inp = engine.input.state;
       engine.timeScale = performance.now() < hitStopUntil ? 0.25 : api.slowMo;
-      if (api.inputEnabled && api.occupied && inp.resetPressed) api.reset();
+      if (api.inputEnabled && api.occupied && inp.resetPressed) { const b = backOnRoad(); if (b) api.reset(b.pos, b.yaw); else api.reset(); }
       renderPos.lerpVectors(prevPos, curPos, alpha);
       renderQuat.slerpQuaternions(prevQuat, curQuat, alpha);
       model.root.position.copy(renderPos);

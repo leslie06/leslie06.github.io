@@ -57,6 +57,8 @@ export interface TileData {
   crossings: number[];
   /** [x, z, road angle] per bus stop. */
   stops: number[];
+  /** Carriageways of the neighbouring tiles within 40 m of this one's edge, where raised roads are about: context for its parapets and piers, not drawn. */
+  ctx?: RoadPiece[];
 }
 
 export interface Manifest {

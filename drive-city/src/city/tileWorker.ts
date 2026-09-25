@@ -54,7 +54,7 @@ self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints:
     const bm = buildBuildings(data.buildings, skip, data.roads);
     pack('facade', bm.facade, geoms, transfer);
     const deck: number[] = [], deckLamps: number[] = [];
-    const rm = buildRoads(data.roads, data.crossings, deck, deckLamps);
+    const rm = buildRoads(data.roads, data.crossings, deck, deckLamps, data.ctx);
     for (const [k, g] of Object.entries(rm)) pack(k, g as THREE.BufferGeometry | null, geoms, transfer);
     for (const [k, g] of buildAreas(data.areas)) pack(`area:${k}`, g, geoms, transfer);
     transfer.push(bm.colVerts.buffer, bm.colIdx.buffer);
