@@ -21,7 +21,7 @@ import { SunShaftsEffect } from './effects/SunShafts';
  *                              perspective from the sky LUT) -> SunShafts -> Bloom -> ToneMapping
  *                              (AgX; `?tm=aces|neutral`) -> Grade
  *   4. EffectPass "aa"         SMAA, plus the lens stage (vignette, grain) when it does not sample
- *   5. EffectPass "lens"       only when sharpen/CA are on (high): they sample the AA'd image
+ *   5. EffectPass "lens"       only when sharpen/CA are on (sharpen: low and high; CA: high): they sample the AA'd image
  *
  * The renderer does not tone-map while the chain runs (`renderer.toneMapping = NoToneMapping`):
  * three only applies tone mapping and the sRGB encode when drawing to the canvas, so every
@@ -98,7 +98,8 @@ export class PostFx {
     const presets = [SMAAPreset.LOW, SMAAPreset.MEDIUM, SMAAPreset.HIGH, SMAAPreset.ULTRA];
     this.smaa = new SMAAEffect({ preset: presets[q.smaaPreset], edgeDetectionMode: EdgeDetectionMode.COLOR });
     this.smaa.edgeDetectionMaterial.edgeDetectionThreshold = 0.05;
-    this.lens = new LensEffect({ sharpen: q.sharpen, ca: q.sharpen > 0 ? 0.7 : 0, grain: q.filmGrain });
+    // Chromatic aberration only on high: it smears edges, and low sharpens to get the phone's upscaled picture crisp.
+    this.lens = new LensEffect({ sharpen: q.sharpen, ca: q.tier === 'high' ? 0.7 : 0, grain: q.filmGrain });
     const aa: Effect[] = off.has('smaa') ? [] : [this.smaa];
     const lensOn = !off.has('lens');
     if (lensOn && !this.lens.samples) aa.push(this.lens);

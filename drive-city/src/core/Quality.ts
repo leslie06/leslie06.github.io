@@ -99,14 +99,18 @@ const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 
 
 export const QUALITY: Record<QualityTier, QualitySettings> = {
   low: {
-    tier: 'low', pixelRatio: dpr, antialias: true, shadowMapSize: 1024, shadowExtent: 40, anisotropy: 4,
-    textureRes: 512, canvasTextureRes: 1024, smokeParticles: 160, skidSegments: 1500, propDensity: 0.5,
-    // Floor at 0.75, not 0.6: at this tier the frame is dominated by fixed per-frame cost (~180 draw
-    // calls), not fill - measured on one phone-sized buffer, 4x the pixels cost +32% of a frame - so
-    // shedding pixels buys the governor little and it would otherwise park a phone at 0.09 MP for it.
-    adaptiveResolution: true, targetFps: 60, minRenderScale: 0.75, maxRenderScale: 1, maxPixels: 1.6, frameCap: 60,
+    // Phones get this tier, and on 2026-09-25 it read as 「画面特别差，画面不清晰」: a 3x screen showing a
+    // 2x buffer the governor had cut to 0.75 (a 2x upscale), 512 px photo maps, 4x anisotropy, no
+    // sharpening. Maps are 1024 (the deployed files are 1024 colour / 512 normal and roughness, so
+    // nothing more is downloaded), anisotropy 8, a CAS sharpen, and the resolution floor is 1: the
+    // frame here is dominated by fixed per-frame cost (~200 draw calls), not fill - measured on one
+    // phone-sized buffer, 4x the pixels cost +32% of a frame - so shedding pixels bought the governor
+    // a few percent of frame time for a visibly softer picture.
+    tier: 'low', pixelRatio: dpr, antialias: true, shadowMapSize: 1024, shadowExtent: 40, anisotropy: 8,
+    textureRes: 1024, canvasTextureRes: 1024, smokeParticles: 160, skidSegments: 1500, propDensity: 0.5,
+    adaptiveResolution: true, targetFps: 60, minRenderScale: 1, maxRenderScale: 1, maxPixels: 1.6, frameCap: 60,
     shadowCascades: 1, csmMapSize: 1024, shadowDistance: 40, shadowPcfTaps: 5, ao: 0, aoSamples: 8, aoRadius: 1.2,
-    bloomLevels: 4, smaaPreset: 0, motionBlurSamples: 0, cloudSteps: 0, sunShafts: false, filmGrain: 0.012, sharpen: 0,
+    bloomLevels: 4, smaaPreset: 0, motionBlurSamples: 0, cloudSteps: 0, sunShafts: false, filmGrain: 0.012, sharpen: 0.3,
     skyLutSize: 128, skySteps: 14, envSize: 64, rainStreaks: 2500, wetRipples: false,
   },
   medium: {

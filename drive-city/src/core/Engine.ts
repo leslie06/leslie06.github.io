@@ -85,7 +85,16 @@ export class Engine {
     this.input = new Input(this.canvas);
     this.renderFrame = () => this.renderer.render(this.scene, this.camera);
 
-    window.addEventListener('resize', () => this.resize());
+    // Follow the container's real size. 'resize' alone is not enough on a phone: iOS fires it on a
+    // rotation before the page is laid out again, so the buffer took the portrait size in landscape
+    // and the picture was stretched sideways (「换成横屏，刚开始车很宽，过了一会才正常」) until the
+    // resolution governor happened to resize. A ResizeObserver reports the laid-out size; the
+    // orientation and visual-viewport events and a late re-check cover browsers that are slower still.
+    const onResize = () => { this.resize(); setTimeout(() => this.resizeIfChanged(), 250); setTimeout(() => this.resizeIfChanged(), 700); };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.resizeIfChanged()).observe(container);
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this.contextLost = true;
@@ -116,9 +125,19 @@ export class Engine {
     return px <= cap ? r : r * Math.sqrt(cap / px);
   }
 
+  /** Size the buffer, camera and post chain was last set up for (CSS pixels). */
+  private sized = { w: 0, h: 0 };
+
+  private resizeIfChanged(): void {
+    const w = this.canvas.parentElement?.clientWidth ?? window.innerWidth;
+    const h = this.canvas.parentElement?.clientHeight ?? window.innerHeight;
+    if (w !== this.sized.w || h !== this.sized.h) this.resize();
+  }
+
   resize(): void {
     const w = this.canvas.parentElement?.clientWidth ?? window.innerWidth;
     const h = this.canvas.parentElement?.clientHeight ?? window.innerHeight;
+    this.sized = { w, h };
     this.renderer.setPixelRatio(this.baseRatio(w, h) * this.renderScale);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / Math.max(1, h); this.camera.updateProjectionMatrix();
