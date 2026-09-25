@@ -23,3 +23,18 @@ CREATE TABLE IF NOT EXISTS geo (
   isp      TEXT,
   ts       INTEGER NOT NULL DEFAULT 0
 );
+
+-- 排行榜：每个玩家（随机的 pid，存在他浏览器里）每个榜只占一行，只留最好成绩。
+-- 名字是玩家自己填的昵称；ip_hash 同 ev 表，每天换盐，只用来限制一台设备一天能开几个新号。
+CREATE TABLE IF NOT EXISTS lb (
+  game    TEXT    NOT NULL,
+  board   TEXT    NOT NULL,             -- 榜名，白名单见 worker.js 的 BOARDS
+  pid     TEXT    NOT NULL,
+  name    TEXT    NOT NULL,
+  score   INTEGER NOT NULL,             -- 成绩；计时榜是毫秒（越小越好），积分榜越大越好
+  day     TEXT    NOT NULL DEFAULT '',  -- 这一行第一次上榜的日期（北京时间）
+  ip_hash TEXT    NOT NULL DEFAULT '',
+  ts      INTEGER NOT NULL DEFAULT 0,   -- 最近一次刷新成绩的时间戳
+  PRIMARY KEY (game, board, pid)
+);
+CREATE INDEX IF NOT EXISTS lb_rank ON lb (game, board, score);

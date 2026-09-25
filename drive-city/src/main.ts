@@ -29,6 +29,8 @@ import * as garage from './garage';
 import * as intro from './intro';
 import * as collect from './collect';
 import * as events from './events';
+import * as story from './story';
+import * as leaderboard from './online/Leaderboard';
 import * as underground from './underground';
 import * as park from './park';
 import { registerParkPoses } from './park/Poses';
@@ -60,7 +62,7 @@ async function boot() {
   await damage.install(engine);
   if (worldName === 'city') { await traffic.install(engine); await people.install(engine); }
   if (worldName === 'city') await nav.install(engine);
-  if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await intro.install(engine); await events.install(engine); }
+  if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await intro.install(engine); await events.install(engine); leaderboard.install(engine); await story.install(engine); }
   await fx.install(engine);
   await audio.install(engine);
   await ui.install(engine, container);

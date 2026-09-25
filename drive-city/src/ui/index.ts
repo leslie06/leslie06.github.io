@@ -11,6 +11,7 @@ import { TOUCH, TouchControls } from './Touch';
 import { Menu, type MenuState } from './Menu';
 import { Minimap } from './Minimap';
 import { MapScreen } from './MapScreen';
+import { Boards } from './Boards';
 
 export interface UiApi extends System {
   state: MenuState;
@@ -39,6 +40,9 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   const hud = new Hud(engine, container);
   if (TOUCH) engine.add(new TouchControls(engine, container));
   const menu = new Menu(engine, container);
+  // The leaderboards, where there are any (the city).
+  const boards = engine.get('leaderboard') ? new Boards(engine, container) : null;
+  if (boards) menu.onBoards = () => boards.show();
   engine.add(hud);
   // Radar and full-screen map (city only; before `api` so the map's Esc/Tab handling runs first).
   // `dc-radar` tells the HUD that the top-left corner is taken (the yard has no nav, no radar).
@@ -80,6 +84,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       engine.paused = false;
     },
     start() {
+      boards?.hide();
       engine.get<AudioApi>('audio')?.unlock();
       const veh = v();
       if (api.state === 'title') {

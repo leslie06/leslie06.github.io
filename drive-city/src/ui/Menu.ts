@@ -18,6 +18,9 @@ css(`
 .menu button{font:inherit;cursor:pointer;border:0;border-radius:6px}
 .menu .go{padding:15px 30px;background:${C.yellow};color:${C.ink};font:800 18px/1 ${F.ui};letter-spacing:.12em;box-shadow:0 8px 28px rgba(243,181,15,.28)}
 .menu .go:hover,.menu .go:focus-visible{background:#ffd04a;outline:none}
+.menu .ghost{padding:14px 20px;background:rgba(244,241,232,.1);color:${C.paper};font:800 15px/1 ${F.ui};letter-spacing:.1em;border:1px solid ${C.line}}
+.menu .ghost:hover,.menu .ghost:focus-visible{background:rgba(244,241,232,.18);outline:none}
+.menu .ghost[hidden]{display:none}
 .menu .seg{display:inline-flex;border:1px solid ${C.line};border-radius:6px;overflow:hidden}
 .menu .seg button{padding:9px 13px;background:transparent;color:${C.muted};font:700 12px/1 ${F.ui};letter-spacing:.1em}
 .menu .seg button.on{background:rgba(244,241,232,.14);color:${C.paper}}
@@ -57,6 +60,9 @@ export class Menu {
   private subEl: HTMLElement;
   private progressEl!: HTMLElement;
   onStart: () => void = () => {};
+  /** The 排行榜 button; unset (the yard), the button stays hidden. */
+  onBoards: (() => void) | null = null;
+  private boardsBtn: HTMLButtonElement;
 
   constructor(private engine: Engine, container: HTMLElement) {
     const root = this.root = el('div', 'menu', container);
@@ -75,6 +81,9 @@ export class Menu {
     this.goLabel = L('title.start');
     go.appendChild(this.goLabel);
     go.addEventListener('click', () => this.onStart());
+    const boards = this.boardsBtn = el('button', 'ghost', row);
+    boards.appendChild(L('lb.title'));
+    boards.addEventListener('click', () => this.onBoards?.());
     const opts = el('div', 'row', left);
     const langSeg = el('div', 'seg', opts);
     for (const l of LANGS) {
@@ -97,7 +106,7 @@ export class Menu {
     const card = el('div', 'card', root);
     const h2 = el('h2', '', card); h2.appendChild(L('title.controls'));
     const k = el('div', 'k', card);
-    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['@key.mouse', 'ctl.orbit'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.nitro'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['F1', 'ctl.help'], ['Esc', 'ctl.pause']];
+    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['@key.mouse', 'ctl.orbit'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.nitro'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['T', 'ctl.phone'], ['F1', 'ctl.help'], ['Esc', 'ctl.pause']];
     for (const [keys, key] of rows) {
       const a = el('span', '', k);
       for (const x of keys.split(' ')) { const kb = el('kbd', '', a); kb.append(x.startsWith('@') ? L(x.slice(1) as 'key.space') : x); }
@@ -112,6 +121,7 @@ export class Menu {
 
   set(state: MenuState): void {
     this.root.hidden = state === 'playing' || state === 'overlay';
+    this.boardsBtn.hidden = !this.onBoards;
     const paused = state === 'paused';
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');
     this.pauseHint.hidden = !paused;

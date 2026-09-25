@@ -97,5 +97,40 @@ ok('看板页能打开', (await worker.fetch(new Request('https://s/?k=secret'),
 ok('/health 正常', (await worker.fetch(new Request('https://s/health'), env)).status === 200);
 ok('乱路径 404', (await worker.fetch(new Request('https://s/whatever'), env)).status === 404);
 
+// —— 排行榜
+const post = (body, ip = '5.6.7.8') => worker.fetch(new Request('https://s/lb', {
+  method: 'POST', body: JSON.stringify(body), headers: { 'user-agent': 'ua', 'cf-connecting-ip': ip, 'content-type': 'text/plain' },
+}), env).then(async (r) => ({ status: r.status, cors: r.headers.get('access-control-allow-origin'), body: await r.json() }));
+const top = (b, p = '') => worker.fetch(new Request(`https://s/lb?g=bcity&b=${b}&p=${p}`), env).then((r) => r.json());
+let r1 = await post({ g: 'bcity', b: 'race0', p: 'pa', n: '阿飞', v: 150000 });
+ok('交成绩回名次', r1.status === 200 && r1.body.rank === 1 && r1.body.best, JSON.stringify(r1.body));
+ok('排行榜带跨域头', r1.cors === '*');
+await post({ g: 'bcity', b: 'race0', p: 'pb', n: '小李', v: 120000 });
+await post({ g: 'bcity', b: 'race0', p: 'pc', n: '<img src=x>老王', v: 200000 });
+r1 = await post({ g: 'bcity', b: 'race0', p: 'pa', n: '阿飞', v: 170000 });
+ok('更慢的成绩不覆盖', !r1.body.best && r1.body.score === 150000 && r1.body.rank === 2, JSON.stringify(r1.body));
+r1 = await post({ g: 'bcity', b: 'race0', p: 'pa', n: '阿飞', v: 110000 });
+ok('更快的成绩刷新并升到第一', r1.body.best && r1.body.rank === 1);
+let lb = await top('race0', 'pc');
+ok('计时榜从快到慢', lb.top.map((x) => x.score).join() === '110000,120000,200000', lb.top.map((x) => x.score).join());
+ok('查询带上自己的名次', lb.me?.rank === 3 && lb.top[2].me && !lb.top[0].me);
+ok('名字里的尖括号被去掉', !lb.top.some((x) => /[<>]/.test(x.name)), lb.top[2].name);
+await post({ g: 'bcity', b: 'combo', p: 'pa', n: '阿飞', v: 3000 });
+await post({ g: 'bcity', b: 'combo', p: 'pb', n: '小李', v: 9000 });
+lb = await top('combo', 'pa');
+ok('积分榜从高到低', lb.top[0].score === 9000 && lb.me.rank === 2);
+ok('超出范围的成绩不收', (await post({ g: 'bcity', b: 'race0', p: 'pd', v: 1000 })).status === 400);
+ok('不在白名单的榜不收', (await post({ g: 'bcity', b: 'hack', p: 'pd', v: 5000 })).status === 400);
+ok('别的游戏的榜不收', (await post({ g: 'kart', b: 'race0', p: 'pd', v: 50000 })).status === 400);
+ok('像网址的名字换成默认', (await post({ g: 'bcity', b: 'taxi', p: 'pe', n: 'www.spam.com', v: 500 })).body.name === '车手');
+await post({ g: 'bcity', b: 'taxi', p: 'pe', n: '新名字' });
+ok('只给名字就改名', (await top('taxi')).top[0].name === '新名字');
+const both = await Promise.all([post({ g: 'bcity', b: 'taxi', p: 'pz', n: 'z', v: 300 }), post({ g: 'bcity', b: 'taxi', p: 'pz', n: 'z', v: 900 })]);
+ok('同一个人同时交两次不出错，留好的那次', both.every((r) => r.status === 200) && (await top('taxi', 'pz')).me?.score === 900, both.map((r) => r.status).join());
+let limited = 0;
+for (let i = 0; i < 7; i++) if ((await post({ g: 'bcity', b: 'combo', p: 'flood' + i, n: 'x', v: 100 + i }, '8.8.8.8')).status === 429) limited++;
+ok('同一设备一天最多开 5 个新号', limited === 2, `(${limited} 次被挡)`);
+ok('库里没有完整 IP（排行榜）', !JSON.stringify(db.prepare('SELECT * FROM lb').all()).includes('8.8.8.8'));
+
 console.log(failed ? `\n${failed} 条没过` : '\n全过');
 process.exit(failed ? 1 : 0);

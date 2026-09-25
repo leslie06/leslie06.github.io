@@ -216,6 +216,8 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('prop:hit', ({ kind, speed }) => knock(kind, speed));
   // A 兔儿爷 found: a bright rising three-note chime.
   engine.events.on('collect:found', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; [1047, 1319, 1568].forEach((f, i) => ring(t0 + i * 0.09, f, 0.12, 0.6)); });
+  // A text message: the two-note phone chime, soft enough to sit under the radio.
+  engine.events.on('phone:sms', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; ring(t0, 1568, 0.07, 0.25); ring(t0 + 0.12, 2093, 0.07, 0.35); });
   engine.events.on('vehicle:land', ({ airTime }) => thump(Math.min(0.8, airTime * 0.5), 55));
   engine.events.on('vehicle:shift', () => { shiftDip = 0.14; });
 

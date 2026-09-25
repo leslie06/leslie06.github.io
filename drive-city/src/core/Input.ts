@@ -13,6 +13,8 @@ export interface TouchInput {
   lookDX: number; lookDY: number;
   jumpPressed: boolean; enterPressed: boolean; punchPressed: boolean; mapPressed: boolean; cameraPressed: boolean; pausePressed: boolean;
   radioPressed: boolean;
+  /** The phone: the last text messages. Optional: probes hand over a TouchInput without it. */
+  phonePressed?: boolean;
   /** Held: nitro (driving). */
   nitro: boolean;
 }
@@ -45,6 +47,8 @@ export interface InputState {
   mutePressed: boolean;
   /** N: next radio station, then off. */
   radioPressed: boolean;
+  /** T: the phone (the story's text messages). */
+  phonePressed: boolean;
   diagPressed: boolean;
   /** Driving, held: nitro (Shift, gamepad B or LB, the touch button). On foot Shift is sprint. */
   nitro: boolean;
@@ -148,6 +152,7 @@ export class Input {
     s.helpPressed = p('F1');
     s.mutePressed = p('KeyM');
     s.radioPressed = p('KeyN');
+    s.phonePressed = p('KeyT');
     s.diagPressed = p('F9');
     s.mapPressed = p('Tab');
     s.punchPressed = p('KeyE') || this.clicked;
@@ -177,6 +182,7 @@ export class Input {
     s.mapPressed ||= c.mapPressed; c.mapPressed = false;
     s.cameraPressed ||= c.cameraPressed; c.cameraPressed = false;
     s.radioPressed ||= c.radioPressed; c.radioPressed = false;
+    s.phonePressed ||= !!c.phonePressed; c.phonePressed = false;
     s.pausePressed ||= c.pausePressed; c.pausePressed = false;
   }
 
@@ -219,6 +225,6 @@ export class Input {
 
   static empty(): InputState {
     return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
-      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, diagPressed: false, nitro: false };
+      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, phonePressed: false, diagPressed: false, nitro: false };
   }
 }

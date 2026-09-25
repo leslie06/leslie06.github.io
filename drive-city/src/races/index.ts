@@ -20,7 +20,7 @@ const LENGTH = 2400, CP_EVERY = 300;
 const COLORS = ['#c8102e', '#1d1f22', '#2a5bd7'].map((c) => new THREE.Color(c));
 const STOP: DriveInput = { forward: 0, back: 0, steer: 0, analog: true, handbrake: true };
 /** Start lines on big roads, found by their OSM street names. */
-const STARTS = [
+export const STARTS = [
   { road: '建国门外大街', zh: '建国门外大街', en: 'Jianguomenwai Avenue' },
   { road: '东三环中路', zh: '东三环中路', en: 'East 3rd Ring Road' },
   { road: '崇文门外大街', zh: '崇文门外大街', en: 'Chongwenmenwai Street' },
@@ -48,8 +48,6 @@ export async function install(engine: Engine): Promise<void> {
   const pl = engine.get<PlayerApi>('player');
   if (!tr || !pl) return;
   const g = tr.graph;
-  const rng = new Rng(4040);
-  const rnd = () => rng.next();
   const kit = new CarKit(engine.scene, RIVALS);
   const marker = new Marker(engine.scene);
   const banner = new Banner();
@@ -75,7 +73,7 @@ export async function install(engine: Engine): Promise<void> {
   type Stage = 'idle' | 'countdown' | 'racing' | 'done';
   let stage: Stage = 'idle', clock = 0, raceT = 0, next = 0, finishers = 0, place = 0, offT = 0, hintCd = 0, doneT = 0;
   let ref = new Float32Array(0), refCum = new Float32Array(0), refLen = 0, playerS = 0, playerHint = 0;
-  let cps: { x: number; z: number }[] = [];
+  let cps: { x: number; z: number }[] = [], current = 0;
   let blipsOn = false;
   const blips: Blip[] = [];
   const veh = () => engine.get<VehicleApi>('vehicle')!;
@@ -83,8 +81,12 @@ export async function install(engine: Engine): Promise<void> {
   const toast = (s: string) => engine.get<HudApi>('hud')?.toast(s);
   const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
-  /** Links from the start, mostly straight on, for LENGTH metres. */
-  const buildRoute = (link: number, s0: number) => {
+  /**
+   * Links from the start, mostly straight on, for LENGTH metres. Each start line has its own seed,
+   * so its course is the same every time and for everyone: the times go on a leaderboard.
+   */
+  const buildRoute = (link: number, s0: number, race: number) => {
+    const rr = new Rng(4040 + race * 101), rnd = () => rr.next();
     const seq: { id: number; a: number; b: number }[] = [];
     let id = link, total = 0, a = s0;
     for (let hop = 0; hop < 60; hop++) {
@@ -135,7 +137,8 @@ export async function install(engine: Engine): Promise<void> {
   const start = (i: number): boolean => {
     const sp = spots[i];
     if (!sp) return false;
-    const seq = buildRoute(sp.link, sp.s);
+    const seq = buildRoute(sp.link, sp.s, i);
+    current = i;
     const r0 = pathFor(seq, 0);
     ref = r0.p; refCum = r0.cum; refLen = r0.len; playerHint = 0;
     cps = [];
@@ -199,6 +202,7 @@ export async function install(engine: Engine): Promise<void> {
             const prize = PRIZE[place - 1] ?? 0;
             if (prize) engine.get<MissionApi>('missions')?.addCash(prize);
             toast(t('race.finish', { place, prize, time: fmt(raceT) }));
+            engine.events.emit('race:finish', { race: current, place, time: raceT });
             banner.show(lang() === 'zh' ? `第${place}名` : `P${place}`, place === 1 ? '#ffc21f' : '#f4f4f1');
             stage = 'done'; doneT = 3; clock = 0;
             marker.hide(); nav()?.clearTarget('mission');

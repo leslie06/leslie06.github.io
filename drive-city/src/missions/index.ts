@@ -209,6 +209,7 @@ export async function install(engine: Engine): Promise<void> {
     const record = shift.earned > best;
     if (record) { best = shift.earned; try { localStorage.setItem('drivecity.taxi.best', String(best)); } catch { /* ignore */ } }
     summary = t(record ? 'taxi.shiftRecord' : 'taxi.shiftEnd', { n: shift.fares, cash: shift.earned, grade });
+    engine.events.emit('taxi:shift', { earned: shift.earned, fares: shift.fares });
     summaryT = 7;
     banner.show(t('taxi.shiftOver', { grade }), grade === 'S' || grade === 'A' ? '#ffc21f' : '#f4f4f1');
     setTimeout(() => banner.hide(), 2200);

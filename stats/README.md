@@ -53,6 +53,12 @@ console.table(db.prepare(\"SELECT day,game,active,ip_masked FROM ev ORDER BY ts 
 
 要关掉统计就跑 `node stats/apply.mjs --off` 再推送。
 
+## 排行榜（2026-09-25 起，b城追车在用）
+
+`POST /lb` 交成绩，`GET /lb?g=bcity&b=race0&p=玩家号` 取前十和自己的名次。库里一张 `lb` 表：每个玩家（游戏在浏览器里生成的随机号）每个榜一行，只留最好成绩，带玩家自己起的昵称。哪些榜、成绩合理范围在 `worker.js` 的 `BOARDS` 里，范围外的直接丢；昵称去掉尖括号引号、最多 12 个字、像网址的换成「车手」；同一台设备一天在一个榜上最多开 5 个新号。不存 IP，只存和打点一样的每日换盐哈希。
+
+服务器上建表不用手动：`server.mjs` 启动时会执行 `schema.sql`（`CREATE TABLE IF NOT EXISTS`）。所以按上面「改完代码怎么更新服务器」把 `worker.js`、`schema.sql` 传上去重启就行。
+
 ## 能看到什么
 
 看板（`https://你的接口地址/?k=密钥`）按游戏列出：

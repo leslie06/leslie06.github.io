@@ -1,6 +1,8 @@
 // 游戏统计接口。部署在 Cloudflare Workers 上，数据库用 D1（就是 SQLite）。
 //
 //   POST /e            游戏里的打点上报（匿名，无 Cookie）
+//   POST /lb           排行榜交成绩（text/plain 的 JSON，不触发跨域预检），回名次
+//   GET  /lb?g=&b=&p=  排行榜前十 + 这个玩家自己的名次
 //   GET  /?k=密钥      看板
 //   GET  /api?k=密钥   看板取数
 //
@@ -69,7 +71,7 @@ async function hash(...parts) {
 }
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' };
-const json = (o) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json;charset=utf-8', ...CORS } });
+const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json;charset=utf-8', 'cache-control': 'no-store', ...CORS } });
 
 async function ingest(request, env) {
   // 打点永远回 204：出错也不要让浏览器重试，更不要把错误吐给页面
@@ -94,6 +96,101 @@ async function ingest(request, env) {
       await env.DB.prepare(SQL.geoPut).bind(masked, request.cf.region, request.cf.city ?? '', '', Date.now()).run();
     }
   } catch { /* 静默丢弃 */ }
+}
+
+// ---------------------------------------------------------------- 排行榜
+// 每个游戏哪些榜、成绩的合理范围。asc = 越小越好（计时，毫秒）。范围外的成绩直接丢：
+// 挡不住有心人，但能挡住坏数据和手滑。
+export const BOARDS = {
+  bcity: {
+    race0: { asc: true, min: 40e3, max: 20 * 60e3 }, race1: { asc: true, min: 40e3, max: 20 * 60e3 },
+    race2: { asc: true, min: 40e3, max: 20 * 60e3 }, race3: { asc: true, min: 40e3, max: 20 * 60e3 },
+    combo: { asc: false, min: 1, max: 5e6 },
+    taxi: { asc: false, min: 1, max: 2e5 },
+    heist: { asc: true, min: 30e3, max: 30 * 60e3 },
+  },
+};
+const LB_TOP = 10;
+/** 一台设备（ip_hash，每天换盐）一天在一个榜上最多开几个新号，防刷屏。 */
+const LB_NEW_PER_DAY = 5;
+
+/** 昵称：去掉控制字符和尖括号引号，压空格，最多 12 个字；像网址的不要。 */
+export function cleanName(raw) {
+  let n = String(raw ?? '').normalize('NFKC').replace(/[\u0000-\u001f\u007f-\u009f<>&"'`\\]/g, '').replace(/\s+/g, ' ').trim();
+  n = [...n].slice(0, 12).join('').trim();
+  if (!n || /https?:|www\.|\.(com|cn|net|org|top|xyz|cc)\b/i.test(n)) return '';
+  return n;
+}
+const cleanPid = (p) => String(p ?? '').replace(/[^a-z0-9]/gi, '').slice(0, 32);
+
+const LBSQL = {
+  get: 'SELECT name, score FROM lb WHERE game = ? AND board = ? AND pid = ?',
+  // 一条语句插入或刷新：两次成绩前后脚到（同一个人连着交两个榜外成绩）时，先查后插会撞主键
+  upsertAsc: `INSERT INTO lb (game, board, pid, name, score, day, ip_hash, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(game, board, pid) DO UPDATE SET name = excluded.name,
+      ts = CASE WHEN excluded.score < lb.score THEN excluded.ts ELSE lb.ts END,
+      score = MIN(lb.score, excluded.score)`,
+  upsertDesc: `INSERT INTO lb (game, board, pid, name, score, day, ip_hash, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(game, board, pid) DO UPDATE SET name = excluded.name,
+      ts = CASE WHEN excluded.score > lb.score THEN excluded.ts ELSE lb.ts END,
+      score = MAX(lb.score, excluded.score)`,
+  rename: 'UPDATE lb SET name = ? WHERE game = ? AND pid = ?',
+  newToday: 'SELECT COUNT(*) AS c FROM lb WHERE game = ? AND board = ? AND day = ? AND ip_hash = ?',
+  total: 'SELECT COUNT(*) AS c FROM lb WHERE game = ? AND board = ?',
+  // 名次 = 严格比他好的人数 + 1；同分先到先得（ts 早的在前）
+  betterAsc: 'SELECT COUNT(*) AS c FROM lb WHERE game = ? AND board = ? AND (score < ? OR (score = ? AND ts < ?))',
+  betterDesc: 'SELECT COUNT(*) AS c FROM lb WHERE game = ? AND board = ? AND (score > ? OR (score = ? AND ts < ?))',
+  topAsc: `SELECT name, score, pid FROM lb WHERE game = ? AND board = ? ORDER BY score ASC, ts ASC LIMIT ${LB_TOP}`,
+  topDesc: `SELECT name, score, pid FROM lb WHERE game = ? AND board = ? ORDER BY score DESC, ts ASC LIMIT ${LB_TOP}`,
+};
+
+async function rankOf(env, g, b, spec, pid) {
+  const row = await env.DB.prepare('SELECT score, ts FROM lb WHERE game = ? AND board = ? AND pid = ?').bind(g, b, pid).first();
+  if (!row) return null;
+  const better = await env.DB.prepare(spec.asc ? LBSQL.betterAsc : LBSQL.betterDesc).bind(g, b, row.score, row.score, row.ts).first();
+  return { rank: (better?.c ?? 0) + 1, score: row.score };
+}
+
+async function board(env, g, b, pid) {
+  const spec = BOARDS[g]?.[b];
+  if (!spec) return json({ error: 'board' }, 400);
+  const top = await env.DB.prepare(spec.asc ? LBSQL.topAsc : LBSQL.topDesc).bind(g, b).all();
+  const total = await env.DB.prepare(LBSQL.total).bind(g, b).first();
+  const me = pid ? await rankOf(env, g, b, spec, pid) : null;
+  return json({
+    board: b, asc: spec.asc, total: total?.c ?? 0,
+    top: top.results.map((r) => ({ name: r.name, score: r.score, me: !!pid && r.pid === pid })),
+    me,
+  });
+}
+
+async function submit(request, env) {
+  let b;
+  try { b = JSON.parse(await request.text()); } catch { return json({ error: 'json' }, 400); }
+  const spec = BOARDS[b?.g]?.[b?.b];
+  const pid = cleanPid(b?.p);
+  const score = Math.round(+b?.v);
+  if (!spec || !pid) return json({ error: 'board' }, 400);
+  const name = cleanName(b.n) || '车手';
+  // 只改名字（v 不给）：这个玩家所有榜上的名字一起改
+  if (b.v === undefined || b.v === null) {
+    await env.DB.prepare(LBSQL.rename).bind(name, b.g, pid).run();
+    return json({ ok: true, name });
+  }
+  if (!Number.isFinite(score) || score < spec.min || score > spec.max) return json({ error: 'range' }, 400);
+  const now = Date.now(), day = cnDay(now);
+  const old = await env.DB.prepare(LBSQL.get).bind(b.g, b.b, pid).first();
+  const ip = request.headers.get('cf-connecting-ip') ?? '', ua = request.headers.get('user-agent') ?? '';
+  const ipHash = await hash(ip, ua, day, env.SALT ?? 'salt');
+  if (!old) {
+    const n = await env.DB.prepare(LBSQL.newToday).bind(b.g, b.b, day, ipHash).first();
+    if ((n?.c ?? 0) >= LB_NEW_PER_DAY) return json({ error: 'busy' }, 429);
+  }
+  await env.DB.prepare(spec.asc ? LBSQL.upsertAsc : LBSQL.upsertDesc).bind(b.g, b.b, pid, name, score, day, ipHash, now).run();
+  const best = !old || (spec.asc ? score < old.score : score > old.score);
+  const r = await rankOf(env, b.g, b.b, spec, pid);
+  const total = await env.DB.prepare(LBSQL.total).bind(b.g, b.b).first();
+  return json({ ok: true, best, rank: r?.rank ?? 0, score: r?.score ?? score, total: total?.c ?? 0, name });
 }
 
 async function api(env, days) {
@@ -121,6 +218,13 @@ export default {
       if (request.method !== 'POST') return new Response(null, { status: 405, headers: CORS });
       await ingest(request, env);
       return new Response(null, { status: 204, headers: CORS });
+    }
+    if (url.pathname === '/lb') {
+      try {
+        if (request.method === 'POST') return await submit(request, env);
+        if (request.method === 'GET') return await board(env, url.searchParams.get('g'), url.searchParams.get('b'), cleanPid(url.searchParams.get('p')));
+        return new Response(null, { status: 405, headers: CORS });
+      } catch (e) { console.error('lb', e); return json({ error: 'server' }, 500); }
     }
     if (url.pathname === '/health') return new Response('ok');
     // 自助排查：手机上打开这个地址，一眼看出这台设备是从哪个国家的出口连过来的

@@ -30,6 +30,12 @@ export interface GameEvents {
   'traffic:horn': { x: number; z: number };
   /** The wanted level changed (`up`: it rose). */
   'wanted:level': { level: number; up: boolean };
+  /** A street race was finished (races/): which start line, the place, seconds from the green light. */
+  'race:finish': { race: number; place: number; time: number };
+  /** A Crazy-Taxi shift ended (missions/): what it earned. */
+  'taxi:shift': { earned: number; fares: number };
+  /** A text message arrived on the player's phone (story/). */
+  'phone:sms': { from: string };
   'game:start': Record<string, never>;
   'game:pause': { paused: boolean };
   /** The GPU dropped the WebGL context (driver reset / out of memory). Nothing renders after this. */
