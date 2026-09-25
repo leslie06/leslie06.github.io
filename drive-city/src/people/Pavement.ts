@@ -15,7 +15,7 @@ export function nearestKerb(g: LaneGraph, x: number, z: number, r: number, off =
   let best: Kerb | null = null, bd = r;
   const at = { x: 0, z: 0, dx: 0, dz: 0 };
   for (const id of g.near(x, z, r)) {
-    const l = g.links[id], w = SIDEWALK[l.cls] ?? 0;
+    const l = g.links[id], w = l.hmax > 0.3 ? 0 : SIDEWALK[l.cls] ?? 0;
     if (!w || (l.rev >= 0 && l.rev < id)) continue;
     for (let k = 1; k < l.cum.length; k++) {
       const ax = l.pts[k * 2 - 2], az = l.pts[k * 2 - 1], vx = l.pts[k * 2] - ax, vz = l.pts[k * 2 + 1] - az;

@@ -74,7 +74,12 @@ export class Signals {
     /** 0 unlit; else bit 1 main crossing (long join radius), bit 2 a main road is involved (MAJOR plan). */
     const kind = new Uint8Array(n);
     const lit: number[] = [];
+    // A node up on an interchange's deck gets no lights: the heads stand on the ground. A junction on a
+    // ramp's low part (lifted a metre or two by the slope) keeps its lights.
+    const up = new Uint8Array(n);
+    for (const l of g.links) if (l.h) { if (l.h[0] > 3) up[l.from] = 1; if (l.h[l.h.length - 1] > 3) up[l.to] = 1; }
     for (let i = 0; i < n; i++) {
+      if (up[i]) continue;
       const main = this.mainCrossing(inc[i], i);
       let k = 0;
       if (g.sig[i]) k = 1 | 2 | (main ? 4 : 0);

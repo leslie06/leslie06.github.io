@@ -210,6 +210,10 @@ describe('the real city', () => {
     // classes meet and two of them cross at 60-120 degrees is a junction a driver expects a light at.
     const STREET = new Set(['primary', 'secondary', 'tertiary', 'unclassified', 'residential']);
     const arms: number[][] = Array.from({ length: g.nodeX.length }, () => []);
+    // Up on an interchange's deck (over 3 m) the heads could only stand on the ground below: those
+    // few junctions (7, on 广渠路's viaduct and the like) are left dark on purpose.
+    const deck = new Set<number>();
+    for (const e of city.edges) if (e.h) { if (e.h[0] > 3) deck.add(e.a); if (e.h[e.h.length - 1] > 3) deck.add(e.b); }
     for (const e of city.edges) {
       if (e.p.length < 4 || !STREET.has(e.c)) continue;
       const m = e.p.length;
@@ -225,7 +229,7 @@ describe('the real city', () => {
         const d = Math.abs(Math.cos(a[x] - a[y]));
         if (d < 0.5) { square = true; break; }
       }
-      if (!square) continue;
+      if (!square || deck.has(i)) continue;
       want++;
       if (sig.junctionOf(i) < 0) dark++;
     }

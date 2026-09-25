@@ -22,6 +22,9 @@ interface Tile {
   key: string; ix: number; iz: number;
   group: THREE.Group;
   colVerts: Float32Array; colIdx: Uint32Array;
+  deckVerts?: Float32Array; deckIdx?: Uint32Array;
+  /** Lamps on the decks' parapets, [x, y, z, yaw]: drawn and lighting the road like the others, no colliders. */
+  deckLamps: number[];
   trees: number[]; lamps: number[];
   body: RAPIER_NS.RigidBody | null;
   /** Tiles two or more away drop pavements and paint (a few pixels there): two draw calls each. */
@@ -96,6 +99,14 @@ export function spawnTileWorkers(n = Math.min(4, Math.max(1, (navigator.hardware
 export class CityStreamer implements System {
   name = 'cityStreamer';
   readonly focus = new THREE.Vector3();
+  /**
+   * While a preload waits, streaming stays centred here instead of on the camera. It used to move
+   * the camera for one call, but in the real frame loop the camera rig puts it back behind the car
+   * every frame and `update` then streamed round the car and never loaded the preloaded spot: the
+   * opening getaway, 2 km from the spawn, sat on 「准备中……」 with the car locked for the whole 60 s
+   * timeout (the probes tick by hand, so none saw it).
+   */
+  private pin: { x: number; z: number } | null = null;
   private tiles = new Map<string, Tile>();
   private inflight = new Map<string, number>();
   private done: TileResult[] = [];
@@ -217,7 +228,7 @@ export class CityStreamer implements System {
       mesh.name = pg.name;
       mesh.receiveShadow = true;
       // One shadow caster per tile: the buildings (roofs and roof clutter are in the same mesh).
-      mesh.castShadow = kind === 'facade';
+      mesh.castShadow = kind === 'facade' || kind === 'bridge';
       mesh.matrixAutoUpdate = false;
       group.add(mesh);
     }
@@ -225,10 +236,10 @@ export class CityStreamer implements System {
     // Patch the materials for shadow cascades / wetness now, not up to 30 frames later.
     this.engine.get<RenderSystem>('render')?.prepare?.(group);
     this.engine.scene.add(group);
-    const t: Tile = { key: res.key, ix, iz, group, colVerts: res.colVerts!, colIdx: res.colIdx!, trees: res.trees ?? [], lamps: res.lamps ?? [], body: null, far: false };
+    const t: Tile = { key: res.key, ix, iz, group, colVerts: res.colVerts!, colIdx: res.colIdx!, deckVerts: res.deckVerts, deckIdx: res.deckIdx, deckLamps: res.deckLamps ?? [], trees: res.trees ?? [], lamps: res.lamps ?? [], body: null, far: false };
     this.tiles.set(res.key, t);
     this.treeLists.set(res.key, this.treeMatrices(t.trees));
-    this.lampLists.set(res.key, this.lampMatrices(t.lamps));
+    this.lampLists.set(res.key, this.lampMatrices(t.lamps, t.deckLamps));
     this.headsDirty = true;
     this.furnLists.set(res.key, this.furnMatrices(res.furniture));
     if (res.furniture) this.furnRaw.set(res.key, res.furniture);
@@ -299,20 +310,26 @@ export class CityStreamer implements System {
     const render = this.engine.get<RenderSystem>('render');
     if (!render?.setStreetLamps) return;
     let n = 0;
-    for (const t of this.tiles.values()) n += t.lamps.length / 3;
+    for (const t of this.tiles.values()) n += t.lamps.length / 3 + t.deckLamps.length / 4;
     const out = new Float32Array(n * 2);
     let k = 0;
     for (const t of this.tiles.values()) {
       const l = t.lamps;
       for (let i = 0; i < l.length; i += 3, k += 2) { out[k] = l[i] + Math.sin(l[i + 2]) * LAMP_REACH; out[k + 1] = l[i + 1] + Math.cos(l[i + 2]) * LAMP_REACH; }
+      const d = t.deckLamps;
+      for (let i = 0; i < d.length; i += 4, k += 2) { out[k] = d[i] + Math.sin(d[i + 3]) * LAMP_REACH; out[k + 1] = d[i + 2] + Math.cos(d[i + 3]) * LAMP_REACH; }
     }
     render.setStreetLamps(out);
   }
 
-  private lampMatrices(lamps: number[]): Float32Array {
+  private lampMatrices(lamps: number[], deck: number[] = []): Float32Array {
     const out: number[] = [];
     for (let i = 0; i < lamps.length; i += 3) {
       this._m.compose(this._p.set(lamps[i], 0, lamps[i + 1]), this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), lamps[i + 2]), this._s.set(1, 1, 1));
+      out.push(...this._m.elements);
+    }
+    for (let i = 0; i < deck.length; i += 4) {
+      this._m.compose(this._p.set(deck[i], deck[i + 1], deck[i + 2]), this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), deck[i + 3]), this._s.set(1, 1, 1));
       out.push(...this._m.elements);
     }
     return new Float32Array(out);
@@ -338,6 +355,11 @@ export class CityStreamer implements System {
     if (t.colIdx.length) {
       const c = world.createCollider(R.ColliderDesc.trimesh(t.colVerts, t.colIdx).setCollisionGroups(g).setFriction(0.4), body);
       this.engine.physics.tag(c, { surface: 'concrete', tag: 'building' });
+    }
+    // Interchange decks: the wheels run on them, so asphalt, and the grip of a road.
+    if (t.deckIdx?.length) {
+      const c = world.createCollider(R.ColliderDesc.trimesh(t.deckVerts!, t.deckIdx).setCollisionGroups(g).setFriction(0.9), body);
+      this.engine.physics.tag(c, { surface: 'asphalt', tag: 'bridge' });
     }
     for (let i = 0; i < t.trees.length; i += 4) {
       const c = world.createCollider(R.ColliderDesc.cylinder(1.6, 0.24).setTranslation(t.trees[i], 1.6, t.trees[i + 1]).setCollisionGroups(g).setFriction(0.6), body);
@@ -371,7 +393,7 @@ export class CityStreamer implements System {
   }
 
   update(): void {
-    const cam = this.engine.camera.position;
+    const cam = this.pin ?? { x: this.engine.camera.position.x, z: this.engine.camera.position.z };
     this.focus.set(cam.x, 0, cam.z);
     const want = this.wanted();
     for (const k of want) this.request(k);
@@ -434,6 +456,11 @@ export class CityStreamer implements System {
    * wanted tile is built, then adds colliders around the point.
    */
   async preload(x: number, z: number): Promise<void> {
+    this.pin = { x, z };
+    try { await this.preloadAt(x, z); } finally { this.pin = null; }
+  }
+
+  private async preloadAt(x: number, z: number): Promise<void> {
     this.focus.set(x, 0, z);
     const cam = this.engine.camera.position;
     const saved = cam.clone();

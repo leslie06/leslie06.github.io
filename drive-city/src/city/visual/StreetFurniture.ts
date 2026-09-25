@@ -1,5 +1,5 @@
 import type { RoadPiece } from '../Data';
-import { MAIN, SIDEWALK, Y, at, isCar, junctions, lineOf, spans, zebrasOn, type Line } from '../Roads';
+import { MAIN, SIDEWALK, Y, at, isCar, junctions, lifted, lineOf, project, spans, zebrasOn, type Line } from '../Roads';
 import { hash3, h01 } from './hash';
 
 /**
@@ -17,19 +17,6 @@ const RAIL = 3;
 const yawOf = (tx: number, tz: number) => Math.atan2(-tz, tx);
 const RAILED = new Set(['trunk', 'primary', 'secondary']);
 
-function project(l: Line, x: number, z: number): { s: number; lat: number } {
-  let best = { s: 0, lat: Infinity, d: Infinity };
-  for (let k = 0; k < l.P.length - 1; k++) {
-    const [ax, az] = l.P[k], [bx, bz] = l.P[k + 1], vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz || 1;
-    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L2));
-    const px = ax + vx * t, pz = az + vz * t, d = Math.hypot(x - px, z - pz);
-    if (d < best.d) {
-      const L = Math.sqrt(L2), nx = vz / L, nz = -vx / L;   // left normal
-      best = { s: l.S[k] + L * t, lat: (x - px) * nx + (z - pz) * nz, d };
-    }
-  }
-  return best;
-}
 
 export function placeFurniture(pieces: RoadPiece[], crossings: number[], stops: number[]): Furniture {
   const out: Furniture = { rail: [], shelter: [], bin: [], bike: [] };
@@ -57,7 +44,10 @@ export function placeFurniture(pieces: RoadPiece[], crossings: number[], stops: 
     const seed = (Math.round(Math.abs(r.p[0] * 13.7 + r.p[1] * 7.3)) + 17) >>> 0;
     const R = (a: number, b = 0) => h01(hash3(seed, a, b));
     const sides = sw ? (r.o ? [-1] : [1, -1]) : [];
+    // Nothing on an interchange's decks and ramps, nor at their feet.
+    const up = lifted(l, 0.15).map(([a, b]) => [a - 4, b + 4] as [number, number]);
     const block = (extraJ: number, zebra: number, stop: number, side?: number) => spans(l.len, [
+      ...up,
       ...js.map((j) => [j.s - j.cut - extraJ, j.s + j.cut + extraJ] as [number, number]),
       ...zs.map((z) => [z - zebra, z + zebra] as [number, number]),
       ...(stop ? st.filter((q) => side === undefined || q.side === side).map((q) => [q.s - stop, q.s + stop] as [number, number]) : []),

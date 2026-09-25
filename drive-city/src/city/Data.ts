@@ -22,6 +22,8 @@ export interface RoadPiece {
   /** Neighbour points just outside this piece (for continuous normals), or 0. */
   a: number[] | 0;
   b: number[] | 0;
+  /** Height of the carriageway above the ground at each point (an interchange's decks and ramps); absent when flat. */
+  h?: number[];
 }
 
 export interface BuildingRec {
@@ -69,7 +71,8 @@ export interface Manifest {
   attribution: string;
 }
 
-export interface NetworkEdge { a: number; b: number; p: number[]; c: string; o: 0 | 1; l: number; w: number; n?: string; br?: 1 }
+/** `h`: height above the ground at each point of `p` (decks and ramps), absent when flat. */
+export interface NetworkEdge { a: number; b: number; p: number[]; c: string; o: 0 | 1; l: number; w: number; n?: string; br?: 1; h?: number[] }
 export interface Network { nodes: number[]; sig: number[]; edges: NetworkEdge[] }
 /** Buildings of 20 m+ for the far skyline: [cx, cz, angle, halfLength, halfWidth, height, kindIndex, seed] each. */
 export interface Skyline { b: number[] }

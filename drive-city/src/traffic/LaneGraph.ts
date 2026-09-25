@@ -16,6 +16,8 @@ export interface Link {
   name: string;
   /** Unit direction at the start and the end. */
   d0x: number; d0z: number; d1x: number; d1z: number;
+  /** Carriageway height above the ground at each point (a deck or a ramp of an interchange), or null when flat; and its highest. */
+  h: Float32Array | null; hmax: number;
 }
 
 const SPEED: Record<string, number> = {
@@ -52,7 +54,9 @@ export class LaneGraph {
         const laneW = (e.o ? e.w : e.w / 2) / lanes;
         const dir = (a: number, b: number) => { const dx = pts[b * 2] - pts[a * 2], dz = pts[b * 2 + 1] - pts[a * 2 + 1], L = Math.hypot(dx, dz) || 1; return [dx / L, dz / L]; };
         const [d0x, d0z] = dir(0, 1), [d1x, d1z] = dir(m - 2, m - 1);
-        return { id: this.links.length, from: fwd ? e.a : e.b, to: fwd ? e.b : e.a, pts, cum, len: cum[m - 1], cls: e.c, lanes, laneW, hw: e.w / 2, oneway: !!e.o,
+        let h: Float32Array | null = null, hmax = 0;
+        if (e.h) { h = new Float32Array(m); for (let k = 0; k < m; k++) { h[k] = e.h[fwd ? k : m - 1 - k]; hmax = Math.max(hmax, h[k]); } }
+        return { h, hmax, id: this.links.length, from: fwd ? e.a : e.b, to: fwd ? e.b : e.a, pts, cum, len: cum[m - 1], cls: e.c, lanes, laneW, hw: e.w / 2, oneway: !!e.o,
           speed: SPEED[e.c] ?? 8, rev: -1, name: e.n ?? '', d0x, d0z, d1x, d1z };
       };
       const f = make(true);
@@ -89,6 +93,18 @@ export class LaneGraph {
     out.x = ax + (bx - ax) * t + dz * off; out.z = az + (bz - az) * t - dx * off;
     out.dx = dx; out.dz = dz;
     return out;
+  }
+
+  /** Carriageway height above the ground at arc length `s` along `l` (0 on the flat). */
+  heightAt(l: Link, s: number): number {
+    const h = l.h;
+    if (!h) return 0;
+    const m = l.cum.length;
+    s = Math.max(0, Math.min(l.len, s));
+    let k = 1;
+    while (k < m - 1 && l.cum[k] < s) k++;
+    const s0 = l.cum[k - 1], s1 = l.cum[k], t = s1 > s0 ? (s - s0) / (s1 - s0) : 0;
+    return h[k - 1] + (h[k] - h[k - 1]) * t;
   }
 
   /** Arc length on `l` closest to (x, z), searched near `hint`. */

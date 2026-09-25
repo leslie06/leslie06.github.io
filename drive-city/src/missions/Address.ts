@@ -20,7 +20,7 @@ export function pickAddress(g: LaneGraph, nav: NavApi | undefined, rnd: () => nu
   const ids = g.near(x, z, maxR).sort(() => rnd() - 0.5);
   for (const id of ids) {
     const l = g.links[id];
-    if (l.oneway || !l.name || l.len < 30 || !STREETS.has(l.cls)) continue;
+    if (l.oneway || !l.name || l.len < 30 || !STREETS.has(l.cls) || l.hmax > 0.3) continue;
     const s = 10 + rnd() * (l.len - 20);
     g.at(l, s, -(l.hw + 0.8), tmp);
     const d = Math.hypot(tmp.x - x, tmp.z - z);

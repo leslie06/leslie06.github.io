@@ -33,7 +33,7 @@ const MANHOLE = new THREE.Color('#3d3e3f'), RIM = new THREE.Color('#646563');
 /** Vertex tints: minor roads greyer and more worn; curb stones and medians lighter than paving. */
 const MAIN_ASPHALT = new THREE.Color(1, 1, 1), OLD_ASPHALT = new THREE.Color(1.1, 1.09, 1.06), PAVING = new THREE.Color(1, 1, 1), CURB = new THREE.Color(1.22, 1.22, 1.2);
 
-export interface RoadMeshes { road: THREE.BufferGeometry | null; sidewalk: THREE.BufferGeometry | null; paint: THREE.BufferGeometry | null }
+export interface RoadMeshes { road: THREE.BufferGeometry | null; sidewalk: THREE.BufferGeometry | null; paint: THREE.BufferGeometry | null; bridge: THREE.BufferGeometry | null }
 
 export const MAIN = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link', 'busway']);
 const MINOR_CAR = new Set(['unclassified', 'residential', 'living_street', 'service']);
@@ -41,8 +41,8 @@ export const SIDEWALK: Record<string, number> = { trunk: 4.5, primary: 4.5, seco
 /** Heights: paths under the roads (roads cover them), the carriageway the car drives on, paint, raised pavement and curb. */
 export const Y = { path: 0.02, road: 0.03, mark: 0.034, walk: 0.06, curb: 0.075, median: 0.15 };
 
-/** Polyline with arc length and per-point left normals (from the context points at the ends). */
-export interface Line { P: [number, number][]; N: [number, number][]; S: number[]; len: number }
+/** Polyline with arc length, per-point left normals (from the context points at the ends) and heights above the ground (all 0 on the flat). */
+export interface Line { P: [number, number][]; N: [number, number][]; S: number[]; len: number; H: number[] | null }
 export function lineOf(r: RoadPiece): Line {
   const n = r.p.length / 2;
   const P: [number, number][] = [];
@@ -56,7 +56,32 @@ export function lineOf(r: RoadPiece): Line {
     N.push([tz, -tx]);
     if (i > 0) S.push(S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
   }
-  return { P, N, S, len: S[n - 1] };
+  return { P, N, S, len: S[n - 1], H: r.h && r.h.length === n ? r.h : null };
+}
+/** Height of the carriageway above the ground at arc length s (a deck or a ramp; 0 on the flat). */
+export function hAt(l: Line, s: number): number {
+  const H = l.H;
+  if (!H) return 0;
+  const S = l.S;
+  let i = 0;
+  while (i < S.length - 2 && S[i + 1] < s) i++;
+  const L = S[i + 1] - S[i] || 1, t = Math.max(0, Math.min(1, (s - S[i]) / L));
+  return H[i] + (H[i + 1] - H[i]) * t;
+}
+/** The stretches of the piece higher than `thr` above the ground, ends interpolated to where it crosses `thr`. */
+export function lifted(l: Line, thr: number): [number, number][] {
+  const H = l.H;
+  if (!H) return [];
+  const out: [number, number][] = [];
+  let start = H[0] > thr ? 0 : -1;
+  for (let i = 1; i < H.length; i++) {
+    const a = H[i - 1] > thr, b = H[i] > thr;
+    if (a === b) continue;
+    const t = (thr - H[i - 1]) / (H[i] - H[i - 1]), s = l.S[i - 1] + (l.S[i] - l.S[i - 1]) * t;
+    if (b) start = s; else { out.push([start, s]); start = -1; }
+  }
+  if (start >= 0) out.push([start, l.len]);
+  return out;
 }
 /** Point, left normal and tangent at arc length s. */
 export function at(l: Line, s: number): [number, number, number, number, number, number] {
@@ -67,6 +92,21 @@ export function at(l: Line, s: number): [number, number, number, number, number,
   let nx = N[i][0] + (N[i + 1][0] - N[i][0]) * t, nz = N[i][1] + (N[i + 1][1] - N[i][1]) * t;
   const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
   return [P[i][0] + (P[i + 1][0] - P[i][0]) * t, P[i][1] + (P[i + 1][1] - P[i][1]) * t, nx, nz, -nz, nx];
+}
+
+/** Arc length along the line nearest (x, z) and the lateral offset there (left positive). */
+export function project(l: Line, x: number, z: number): { s: number; lat: number } {
+  let best = { s: 0, lat: Infinity, d: Infinity };
+  for (let k = 0; k < l.P.length - 1; k++) {
+    const [ax, az] = l.P[k], [bx, bz] = l.P[k + 1], vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L2));
+    const px = ax + vx * t, pz = az + vz * t, d = Math.hypot(x - px, z - pz);
+    if (d < best.d) {
+      const L = Math.sqrt(L2), nx = vz / L, nz = -vx / L;   // left normal
+      best = { s: l.S[k] + L * t, lat: (x - px) * nx + (z - pz) * nz, d };
+    }
+  }
+  return best;
 }
 
 /** Parts of [0, len] outside the blocked intervals. */
@@ -87,9 +127,10 @@ function band(st: Strip, l: Line, s0: number, s1: number, o0: number, o1: number
   cuts.push(s1);
   for (let k = 0; k < cuts.length - 1; k++) {
     const [ax, az, anx, anz] = at(l, cuts[k]), [bx, bz, bnx, bnz] = at(l, cuts[k + 1]);
+    const ya = y + hAt(l, cuts[k]), yb = y + hAt(l, cuts[k + 1]);
     st.quad(
-      [ax + anx * lo, y, az + anz * lo, cuts[k], lo], [bx + bnx * lo, y, bz + bnz * lo, cuts[k + 1], lo],
-      [bx + bnx * hi, y, bz + bnz * hi, cuts[k + 1], hi], [ax + anx * hi, y, az + anz * hi, cuts[k], hi], UP, colour,
+      [ax + anx * lo, ya, az + anz * lo, cuts[k], lo], [bx + bnx * lo, yb, bz + bnz * lo, cuts[k + 1], lo],
+      [bx + bnx * hi, yb, bz + bnz * hi, cuts[k + 1], hi], [ax + anx * hi, ya, az + anz * hi, cuts[k], hi], UP, colour,
     );
   }
 }
@@ -103,7 +144,8 @@ function wall(st: Strip, l: Line, s0: number, s1: number, o: number, y0: number,
     const [ax, az, anx, anz] = at(l, cuts[k]), [bx, bz, bnx, bnz] = at(l, cuts[k + 1]);
     const A = [ax + anx * o, az + anz * o], B = [bx + bnx * o, bz + bnz * o];
     const n = [anx * facing, 0, anz * facing];
-    const q = [[A[0], y0, A[1], cuts[k], y0], [B[0], y0, B[1], cuts[k + 1], y0], [B[0], y1, B[1], cuts[k + 1], y1], [A[0], y1, A[1], cuts[k], y1]];
+    const ha = hAt(l, cuts[k]), hb = hAt(l, cuts[k + 1]);
+    const q = [[A[0], y0 + ha, A[1], cuts[k], y0], [B[0], y0 + hb, B[1], cuts[k + 1], y0], [B[0], y1 + hb, B[1], cuts[k + 1], y1], [A[0], y1 + ha, A[1], cuts[k], y1]];
     // winding: counter-clockwise seen from the normal side
     if (facing > 0) st.quad(q[1], q[0], q[3], q[2], n, CURB); else st.quad(q[0], q[1], q[2], q[3], n, CURB);
   }
@@ -120,8 +162,8 @@ function arrow(st: Strip, l: Line, s: number, o: number, dir: number, kind: Arro
   const [x, z, nx, nz, tx, tz] = at(l, s);
   // local (a along travel, c to the left of travel) -> world
   const T = [tx * dir, tz * dir], Nl = [nx * dir, nz * dir];
-  const cx = x + nx * o, cz = z + nz * o;
-  const W = (a: number, c: number): number[] => [cx + T[0] * a + Nl[0] * c, Y.mark + 0.001, cz + T[1] * a + Nl[1] * c, 0, 0];
+  const cx = x + nx * o, cz = z + nz * o, lift = hAt(l, s);
+  const W = (a: number, c: number): number[] => [cx + T[0] * a + Nl[0] * c, Y.mark + 0.001 + lift, cz + T[1] * a + Nl[1] * c, 0, 0];
   const seg = (a0: number, c0: number, a1: number, c1: number, head: boolean) => {
     const da = a1 - a0, dc = c1 - c0, L = Math.hypot(da, dc) || 1, pa = -dc / L * 0.08, pc = da / L * 0.08;
     const q = [W(a0 + pa, c0 + pc), W(a0 - pa, c0 - pc), W(a1 - pa, c1 - pc), W(a1 + pa, c1 + pc)];
@@ -206,6 +248,136 @@ export function zebrasOn(l: Line, hw: number, crossings: number[]): number[] {
   return out;
 }
 
+
+/** Concrete of the decks, parapets and piers (vertex tint on the bridge material). */
+const CONCRETE = new THREE.Color(1, 1, 1), SOFFIT = new THREE.Color(0.72, 0.72, 0.7), PIER = new THREE.Color(0.9, 0.89, 0.86);
+/** Bridge dimensions, m: parapet width and height, deck depth, the height under which a ramp is a filled embankment, pier size and spacing. */
+export const DECK = { parapet: 0.4, rail: 0.9, depth: 1.1, fill: 3.2, pier: 1.3, pierGap: 26 };
+/** Metres between the lamps along a deck (as on a trunk road below). */
+const DECK_LAMP = 32;
+/** Collider triangles as a flat [x, y, z, ...] soup. */
+type Soup = number[];
+const tri3 = (col: Soup, a: number[], b: number[], c: number[]) => { col.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); };
+const quad3 = (col: Soup, a: number[], b: number[], c: number[], d: number[]) => { tri3(col, a, b, c); tri3(col, a, c, d); };
+
+/**
+ * The structure under a lifted piece (`r.h`): a parapet each side (inside face, top, outside face),
+ * the deck's edge and soffit where it stands on piers, the outside faces carried down to the ground
+ * where the ramp is still low enough to be a filled embankment (under DECK.fill), a wall across
+ * where the one turns into the other, and piers every DECK.pierGap m on the high parts - one down
+ * the middle, or two on a wide deck - skipping any that would land on a road below. Colliders go
+ * into `col`: the deck top (from where it leaves the ground, so a car drives up without a step),
+ * the parapets, the embankment walls and the piers.
+ */
+function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number, z: number, h: number) => boolean, joins: (x: number, z: number, h: number) => boolean, lamps: number[]): void {
+  const hw = r.w / 2, oi = hw + 0.05, oo = hw + 0.05 + DECK.parapet;
+  const P = (s: number, o: number, y: number): number[] => { const [x, z, nx, nz] = at(l, s); return [x + nx * o, y, z + nz * o]; };
+  const V = (p: number[], u: number, v: number) => [p[0], p[1], p[2], u, v];
+  /** A vertex with its u along the road and v its height: metre UVs on the upright faces. */
+  const Y3 = (p: number[], u: number) => [p[0], p[1], p[2], u, p[1]];
+  // Every 4 m, so a parapet can open exactly where a slip road leaves or joins.
+  const cutsOf = (a: number, b: number) => {
+    const c = [a];
+    for (const x of l.S) if (x > a + 0.01 && x < b - 0.01) c.push(x);
+    c.push(b);
+    const out = [a];
+    for (let i = 1; i < c.length; i++) { const n = Math.max(1, Math.ceil((c[i] - c[i - 1]) / 4)); for (let k = 1; k <= n; k++) out.push(c[i - 1] + (c[i] - c[i - 1]) * k / n); }
+    return out;
+  };
+  for (const [a, b] of lifted(l, 0.02)) {
+    const cuts = cutsOf(a, b);
+    for (let k = 0; k < cuts.length - 1; k++) {
+      const s0 = cuts[k], s1 = cuts[k + 1], h0 = hAt(l, s0) + Y.road, h1 = hAt(l, s1) + Y.road;
+      const [, , n0x, n0z] = at(l, s0);
+      // The deck top the wheels run on, parapet to parapet.
+      quad3(col, P(s0, -oo, h0), P(s1, -oo, h1), P(s1, oo, h1), P(s0, oo, h0));
+      if (Math.max(h0, h1) < 0.2) continue;
+      const bot = (h: number) => (h > DECK.fill ? h - DECK.depth : 0);
+      for (const side of [-1, 1]) {
+        const ti = side * oi, to = side * oo, r0 = h0 + DECK.rail, r1 = h1 + DECK.rail;
+        // No parapet across a slip road leaving or joining here: its carriageway covers this edge.
+        const mid = P((s0 + s1) / 2, to, 0);
+        if (joins(mid[0], mid[2], (h0 + h1) / 2)) continue;
+        const n = [n0x * side, 0, n0z * side], inN = [-n[0], 0, -n[2]];
+        // Inside face (towards the road), the top, the outside face down to the deck edge or the ground.
+        const i0 = P(s0, ti, h0), i1 = P(s1, ti, h1), i2 = P(s1, ti, r1), i3 = P(s0, ti, r0);
+        const o0 = P(s0, to, bot(h0)), o1 = P(s1, to, bot(h1)), o2 = P(s1, to, r1), o3 = P(s0, to, r0);
+        if (side > 0) {
+          st.quad(Y3(i1, s1), Y3(i0, s0), Y3(i3, s0), Y3(i2, s1), inN, CONCRETE);
+          st.quad(Y3(o0, s0), Y3(o1, s1), Y3(o2, s1), Y3(o3, s0), n, CONCRETE);
+          quad3(col, i1, i0, i3, i2); quad3(col, o0, o1, o2, o3);
+        } else {
+          st.quad(Y3(i0, s0), Y3(i1, s1), Y3(i2, s1), Y3(i3, s0), inN, CONCRETE);
+          st.quad(Y3(o1, s1), Y3(o0, s0), Y3(o3, s0), Y3(o2, s1), n, CONCRETE);
+          quad3(col, i0, i1, i2, i3); quad3(col, o1, o0, o3, o2);
+        }
+        const t0 = P(s0, ti, r0), t1 = P(s1, ti, r1), t2 = P(s1, to, r1), t3 = P(s0, to, r0);
+        if (side > 0) st.quad(V(t0, s0, oi), V(t1, s1, oi), V(t2, s1, oo), V(t3, s0, oo), UP, CONCRETE);
+        else st.quad(V(t1, s1, -oi), V(t0, s0, -oi), V(t3, s0, -oo), V(t2, s1, -oo), UP, CONCRETE);
+      }
+      // The soffit where the deck stands on piers; a wall across where the embankment ends.
+      const hi0 = h0 > DECK.fill, hi1 = h1 > DECK.fill;
+      if (hi0 && hi1) {
+        const y0 = h0 - DECK.depth, y1 = h1 - DECK.depth;
+        st.quad(V(P(s0, oo, y0), s0, oo), V(P(s1, oo, y1), s1, oo), V(P(s1, -oo, y1), s1, -oo), V(P(s0, -oo, y0), s0, -oo), [0, -1, 0], SOFFIT);
+      } else if (hi0 !== hi1) {
+        const sc = hi0 ? s0 : s1, h = hi0 ? h0 : h1, f = hi0 ? 1 : -1;
+        const [, , , , tx, tz] = at(l, sc);
+        const q = [P(sc, -oo, 0), P(sc, oo, 0), P(sc, oo, h - DECK.depth), P(sc, -oo, h - DECK.depth)];
+        const nrm = [tx * f, 0, tz * f];
+        // Facing the open side (under the deck), which is towards the high end.
+        if (f > 0) st.quad(V(q[1], oo, q[1][1]), V(q[0], -oo, q[0][1]), V(q[3], -oo, q[3][1]), V(q[2], oo, q[2][1]), nrm, SOFFIT);
+        else st.quad(V(q[0], -oo, q[0][1]), V(q[1], oo, q[1][1]), V(q[2], oo, q[2][1]), V(q[3], -oo, q[3][1]), nrm, SOFFIT);
+        quad3(col, q[0], q[1], q[2], q[3]);
+      }
+    }
+    // Street lamps on the parapet every DECK_LAMP m (the ground's are kept off the decks), arm over
+    // the road: [x, y, z, yaw] with the base on the parapet's top. Right of travel on a one-way deck,
+    // alternating on a two-way one.
+    let lampSide = -1;
+    for (let sl = a + DECK_LAMP / 2; sl < b - 2; sl += DECK_LAMP) {
+      const h = hAt(l, sl) + Y.road;
+      if (h < 2.5) continue;
+      const [x, z, nx, nz] = at(l, sl), side = lampSide, o = side * (oi + DECK.parapet / 2);
+      if (!r.o) lampSide = -lampSide;
+      const lx = x + nx * o, lz = z + nz * o;
+      if (joins(lx, lz, h)) continue;
+      lamps.push(lx, h + DECK.rail, lz, Math.atan2(-nx * side, -nz * side));
+    }
+    // Piers on the high stretches, not on a road below.
+    const w = oo;
+    for (let sp = a + DECK.pierGap / 2; sp < b - 4; sp += DECK.pierGap) {
+      const h = hAt(l, sp) + Y.road;
+      if (h < DECK.fill + 0.4) continue;
+      const [x, z, nx, nz, tx, tz] = at(l, sp);
+      const offs = w > 8 ? [-w * 0.55, w * 0.55] : [0];
+      let any = false;
+      for (const o of offs) {
+        const px = x + nx * o, pz = z + nz * o;
+        if (below(px, pz, h)) continue;
+        any = true;
+        box(st, col, px, pz, tx, tz, DECK.pier / 2, DECK.pier / 2, 0, h - DECK.depth, PIER);
+      }
+      // A cross-head under the deck where at least one pier stands.
+      if (any) box(st, null, x, z, tx, tz, 0.7, w - 0.3, h - DECK.depth - 0.9, h - DECK.depth, PIER);
+    }
+  }
+}
+
+/** An upright box centred on (x, z), `ha` half along the road (tx, tz), `hc` half across, from y0 to y1; sides into `col` when given. */
+function box(st: Strip, col: Soup | null, x: number, z: number, tx: number, tz: number, ha: number, hc: number, y0: number, y1: number, c: THREE.Color): void {
+  const nx = -tz, nz = tx;
+  const p = (a: number, b: number, y: number): number[] => [x + tx * a + nx * b, y, z + tz * a + nz * b];
+  const V = (q: number[], u: number, v: number) => [q[0], q[1], q[2], u, v];
+  const faces: [number, number, number, number, number[]][] = [[ha, -hc, ha, hc, [tx, 0, tz]], [-ha, hc, -ha, -hc, [-tx, 0, -tz]], [ha, hc, -ha, hc, [nx, 0, nz]], [-ha, -hc, ha, -hc, [-nx, 0, -nz]]];
+  for (const [a0, b0, a1, b1, n] of faces) {
+    const q0 = p(a0, b0, y0), q1 = p(a1, b1, y0), q2 = p(a1, b1, y1), q3 = p(a0, b0, y1), w = Math.hypot(a1 - a0, b1 - b0);
+    st.quad(V(q1, 0, y0), V(q0, w, y0), V(q3, w, y1), V(q2, 0, y1), n, c);
+    if (col) quad3(col, q1, q0, q3, q2);
+  }
+  st.quad(V(p(-ha, -hc, y0), -ha, -hc), V(p(-ha, hc, y0), -ha, hc), V(p(ha, hc, y0), ha, hc), V(p(ha, -hc, y0), ha, -hc), [0, -1, 0], c);
+}
+
 /**
  * Ribbons along each road piece: carriageway, raised pavements with a curb face (both sides of
  * two-way roads, the right of one-way ones; a raised median on the left of one-way main roads),
@@ -214,9 +386,26 @@ export function zebrasOn(l: Line, hw: number, crossings: number[]): number[] {
  * junctions, zebra crossings, the yellow tactile strip on pavements, manhole covers. Pavements and
  * lines stop where the crossing road begins, so junction corners stay open.
  */
-export function buildRoads(pieces: RoadPiece[], crossings: number[]): RoadMeshes {
-  const road = new Strip(true), walk = new Strip(true), curb = walk, paint = new Strip(true);
+export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number[] = [], deckLamps: number[] = []): RoadMeshes {
+  const road = new Strip(true), walk = new Strip(true), curb = walk, paint = new Strip(true), bridge = new Strip(true);
   const J = junctions(pieces);
+  // Every carriageway with its line, for the piers: none may stand on a road below its deck.
+  // Each extended by its neighbour points where the road runs on into the next tile: a tile only
+  // knows its own pieces, and the stretch of 国贸桥 across the tile edge was missing, so the slip
+  // road beside it built its parapet straight across the main carriageway - a wall at x 4864.
+  const carLines: { r: RoadPiece; l: Line }[] = [];
+  for (const r of pieces) if (isCar(r.c) && r.p.length >= 4) {
+    const h = r.h, a = r.a, b = r.b;
+    const ext: RoadPiece = { ...r, a: 0, b: 0,
+      p: [...(a || []), ...r.p, ...(b || [])],
+      j: [...(a ? [0] : []), ...r.j, ...(b ? [0] : [])],
+      h: h ? [...(a ? [h[0]] : []), ...h, ...(b ? [h[h.length - 1]] : [])] : undefined };
+    carLines.push({ r, l: lineOf(ext) });
+  }
+  const below = (x: number, z: number, h: number) => carLines.some(({ r, l }) => {
+    const p = project(l, x, z);
+    return Math.abs(p.lat) < r.w / 2 + 1.2 && p.s > -2 && p.s < l.len + 2 && hAt(l, Math.max(0, Math.min(l.len, p.s))) < h - 2.5;
+  });
   for (const r of pieces) {
     const n = r.p.length / 2;
     if (n < 2) continue;
@@ -227,10 +416,17 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[]): RoadMeshes
     band(road, l, 0, l.len, -hw, hw, Y.road, MAIN.has(r.c) ? MAIN_ASPHALT : OLD_ASPHALT);
     const junctions = J.get(r) ?? [];
     const block = (extra: number, useRoad = false) => spans(l.len, junctions.map((j) => [j.s - (useRoad ? j.road : j.cut) - extra, j.s + (useRoad ? j.road : j.cut) + extra] as [number, number]));
+    // Up on an interchange: parapets and the structure instead of pavements.
+    const up = lifted(l, 0.15).map(([a, b]) => [a - 3, b + 3] as [number, number]);
+    if (l.H) bridgeOf(bridge, col, l, r, below, (x, z, h) => carLines.some((o) => {
+      if (o.r === r) return false;
+      const p = project(o.l, x, z);
+      return p.s > 0.5 && p.s < o.l.len - 0.5 && Math.abs(p.lat) < o.r.w / 2 + 0.8 && Math.abs(hAt(o.l, p.s) + Y.road - h) < 1.5;
+    }), deckLamps);
     // Pavements with curbs, and the median of one-way main roads.
     const sw = SIDEWALK[r.c] ?? 0;
     const sides: number[] = sw ? (r.o ? [-1] : [1, -1]) : [];
-    const walkSp = block(0);
+    const walkSp = up.length ? spans(l.len, [...junctions.map((j) => [j.s - j.cut, j.s + j.cut] as [number, number]), ...up]) : block(0);
     for (const side of sides) for (const [a, b] of walkSp) {
       wall(curb, l, a, b, side * hw, Y.road - 0.01, Y.curb, -side);
       band(curb, l, a, b, side * hw, side * (hw + 0.18), Y.curb, CURB);
@@ -287,6 +483,7 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[]): RoadMeshes
     for (let s = 20 + h01(hash3(seed, 1, 2)) * 30, k = 0; s < l.len - 5; s += 35 + h01(hash3(seed, k++, 3)) * 40) {
       const [x, z, nx, nz] = at(l, s);
       const lat = (h01(hash3(seed, k, 9)) - 0.5) * (r.w - 2);
+      if (hAt(l, s) > 0.05) continue;
       manhole(paint, x + nx * lat, z + nz * lat, Y.mark + 0.002);
       if (sw && h01(hash3(seed, k, 11)) < 0.5) { const side = sides[k % sides.length] ?? 1, o = side * (hw + sw * 0.75); manhole(paint, x + nx * o, z + nz * o, Y.walk + 0.004); }
     }
@@ -300,5 +497,5 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[]): RoadMeshes
       paint.quad(p(-2, v + 0.5), p(2, v + 0.5), p(2, v), p(-2, v), UP, WHITE);
     }
   }
-  return { road: road.build(), sidewalk: walk.build(), paint: paint.build() };
+  return { road: road.build(), sidewalk: walk.build(), paint: paint.build(), bridge: bridge.build() };
 }

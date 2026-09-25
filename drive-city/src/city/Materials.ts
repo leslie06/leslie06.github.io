@@ -30,6 +30,8 @@ export interface CityMaterials {
   /** Pavements, paths, curb stones and medians (vertex tint). */
   sidewalk: THREE.MeshStandardMaterial;
   paint: THREE.MeshStandardMaterial;
+  /** An interchange's parapets, deck edges, soffits and piers (vertex tint). */
+  bridge: THREE.MeshStandardMaterial;
   ground: THREE.MeshStandardMaterial;
   areas: Record<AreaKind, THREE.MeshStandardMaterial>;
 }
@@ -424,6 +426,7 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms): Pro
     road: skin(std({ roughness: 1, color: '#5c5d5f', vertexColors: true }, undefined, 0.9, 0.22, 5, 'ground'), 'asphalt_02', 7, { map: true, normal: true, rough: true }),
     sidewalk: skin(std({ roughness: 0.85, color: '#aeaaa2', vertexColors: true }, undefined, 0.75, 0.18, 1, 'ground'), 'square_brick_paving', 2.4, { map: true, normal: true }),
     paint: std({ roughness: 0.6, color: '#ffffff', vertexColors: true }, undefined, 0, 0.12, 7, 'ground'),
+    bridge: skin(std({ roughness: 0.92, color: '#b9b6ae', vertexColors: true }, undefined, 0.55, 0.2, 0, 'surface'), 'brushed_concrete', 4, { map: true }),
     ground,
     areas,
   };

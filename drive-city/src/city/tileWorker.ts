@@ -17,6 +17,10 @@ export interface TileResult {
   error?: string;
   geoms?: PackedGeometry[];
   colVerts?: Float32Array; colIdx?: Uint32Array;
+  /** The interchanges' decks, parapets, embankment walls and piers as one trimesh (Roads.ts `bridgeOf`), or absent. */
+  deckVerts?: Float32Array; deckIdx?: Uint32Array;
+  /** Street lamps standing on the decks' parapets: [x, y, z, yaw] each. */
+  deckLamps?: number[];
   trees?: number[]; lamps?: number[]; signals?: number[]; stops?: number[];
   /** Street furniture instances (visual/StreetFurniture.ts). */
   furniture?: Furniture;
@@ -49,13 +53,20 @@ self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints:
     const geoms: PackedGeometry[] = [], transfer: Transferable[] = [];
     const bm = buildBuildings(data.buildings, skip, data.roads);
     pack('facade', bm.facade, geoms, transfer);
-    const rm = buildRoads(data.roads, data.crossings);
+    const deck: number[] = [], deckLamps: number[] = [];
+    const rm = buildRoads(data.roads, data.crossings, deck, deckLamps);
     for (const [k, g] of Object.entries(rm)) pack(k, g as THREE.BufferGeometry | null, geoms, transfer);
     for (const [k, g] of buildAreas(data.areas)) pack(`area:${k}`, g, geoms, transfer);
     transfer.push(bm.colVerts.buffer, bm.colIdx.buffer);
     // A footprint removes buildings; a landmark's clear zones remove what the street put in its way.
     const { trees, lamps, furniture } = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, clear);
     const msg: TileResult = { key, geoms, colVerts: bm.colVerts, colIdx: bm.colIdx, trees, lamps, signals: data.signals, stops: data.stops, furniture };
+    if (deckLamps.length) msg.deckLamps = deckLamps;
+    if (deck.length) {
+      msg.deckVerts = Float32Array.from(deck);
+      msg.deckIdx = new Uint32Array(deck.length / 3).map((_, i) => i);
+      transfer.push(msg.deckVerts.buffer, msg.deckIdx.buffer);
+    }
     (self as unknown as Worker).postMessage(msg, transfer);
   } catch (e) {
     (self as unknown as Worker).postMessage({ key, error: String((e as Error)?.message ?? e) } satisfies TileResult);

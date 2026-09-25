@@ -163,7 +163,7 @@ export async function install(engine: Engine): Promise<void> {
     const ids = g.near(car.pos.x, car.pos.z, max);
     for (let attempt = 0; attempt < 24 && ids.length; attempt++) {
       const l = g.links[ids[Math.floor(rnd() * ids.length)]];
-      if (!SIDEWALK[l.cls] || l.len < 20) continue;
+      if (!SIDEWALK[l.cls] || l.len < 20 || l.hmax > 0.3) continue;
       const s = 6 + rnd() * (l.len - 12), side = l.oneway ? -1 : rnd() < 0.5 ? 1 : -1;
       g.at(l, s, side * (l.hw + 0.8), at);
       const d = Math.hypot(at.x - car.pos.x, at.z - car.pos.z);

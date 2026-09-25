@@ -189,6 +189,193 @@ for (const w of ways) {
     if (info.car) degCar.set(id, (degCar.get(id) || 0) + d);
   });
 }
+// ---------------------------------------------------------------------------------- elevation (立交)
+// OSM draws an interchange flat, with `bridge=yes` and `layer` on the parts that pass over. A car
+// bridge that crosses another kept road (or a railway) is lifted: DECK metres over whatever it
+// crosses (so a layer-2 flyover over a layer-1 one sits at 13 m), flat along its whole way. The
+// ways joined to it ramp down at GRADE until they reach the ground; the road it crosses is pinned
+// at 0 for PIN metres round the crossing, and nothing may climb faster than STEEP from a pinned
+// point (a slip road too short for GRADE gets steeper instead of lifting the road below into the
+// deck). Bridges over water stay flat. Heights are solved on the ways' points every <= 10 m and
+// written as `h` (per point) on road pieces and network edges; lamps and trees are kept off the decks.
+const DECK = 6.5, GRADE = 0.06, STEEP = 0.12, PIN = 35;
+const isBridgeT = (t) => t.bridge && t.bridge !== 'no';
+const layerOf = (t) => { const n = parseInt(t.layer, 10); return Number.isFinite(n) ? n : isBridgeT(t) ? 1 : 0; };
+const carWays = ways.filter((w) => w._road?.car);
+const ECELL = 64, ekey = (ix, iz) => `${ix},${iz}`;
+function gridOf(list) {
+  const g = new Map();
+  for (const it of list) for (let i = 1; i < it.p.length; i++) {
+    const [ax, az] = it.p[i - 1], [bx, bz] = it.p[i];
+    for (let ix = Math.floor(Math.min(ax, bx) / ECELL); ix <= Math.floor(Math.max(ax, bx) / ECELL); ix++)
+      for (let iz = Math.floor(Math.min(az, bz) / ECELL); iz <= Math.floor(Math.max(az, bz) / ECELL); iz++) (g.get(ekey(ix, iz)) ?? g.set(ekey(ix, iz), []).get(ekey(ix, iz))).push([it, i]);
+  }
+  return g;
+}
+function segX(a, b, c, d) {
+  const r = [b[0] - a[0], b[1] - a[1]], s = [d[0] - c[0], d[1] - c[1]], den = r[0] * s[1] - r[1] * s[0];
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((c[0] - a[0]) * s[1] - (c[1] - a[1]) * s[0]) / den, u = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+  return t > 0.001 && t < 0.999 && u > 0.001 && u < 0.999 ? [a[0] + r[0] * t, a[1] + r[1] * t] : null;
+}
+/** Everything in `grid` that `w`'s polyline properly crosses: [{ it, x, z }]. */
+function crossings(w, grid) {
+  const out = [], seen = new Set();
+  for (let i = 1; i < w._pts.length; i++) {
+    const a = w._pts[i - 1], b = w._pts[i];
+    for (let ix = Math.floor(Math.min(a[0], b[0]) / ECELL); ix <= Math.floor(Math.max(a[0], b[0]) / ECELL); ix++)
+      for (let iz = Math.floor(Math.min(a[1], b[1]) / ECELL); iz <= Math.floor(Math.max(a[1], b[1]) / ECELL); iz++)
+        for (const [it, k] of grid.get(ekey(ix, iz)) ?? []) {
+          if (it.w === w) continue;
+          const x = segX(a, b, it.p[k - 1], it.p[k]);
+          if (!x) continue;
+          const key = `${it.id}:${Math.round(x[0])},${Math.round(x[1])}`;
+          if (seen.has(key)) continue;
+          seen.add(key); out.push({ it, x: x[0], z: x[1] });
+        }
+  }
+  return out;
+}
+const carGrid = gridOf(carWays.map((w) => ({ w, id: w.id, p: w._pts })));
+const railGrid = gridOf(ways.filter((w) => w.tags?.railway && ['rail', 'light_rail', 'subway'].includes(w.tags.railway) && !(w.tags.tunnel && w.tags.tunnel !== 'no') && !isBridgeT(w.tags) && w.geometry).map((w) => ({ w, id: w.id, p: proj(w.geometry) })));
+const waterGrid = gridOf(ways.filter((w) => (w.tags?.waterway && ['river', 'canal', 'stream', 'drain', 'ditch'].includes(w.tags.waterway)) && w.geometry).map((w) => ({ w, id: w.id, p: proj(w.geometry) })));
+const lifted = new Map(); // way -> { H, over: [{ o, x, z }] }
+const overOf = new Map();
+for (const w of carWays) {
+  if (!isBridgeT(w.tags)) continue;
+  const L = layerOf(w.tags);
+  const over = crossings(w, carGrid).filter(({ it }) => !isBridgeT(it.w.tags) || layerOf(it.w.tags) < L).map(({ it, x, z }) => ({ o: it.w, x, z }));
+  const rail = crossings(w, railGrid).length > 0;
+  if (over.length || rail) overOf.set(w, { over, rail });
+}
+// Heights over what they cross, lowest layer first so a flyover over a flyover stacks.
+for (const [w, c] of [...overOf].sort((a, b) => layerOf(a[0].tags) - layerOf(b[0].tags))) {
+  let H = DECK;
+  for (const { o } of c.over) if (lifted.has(o)) H = Math.max(H, lifted.get(o).H + DECK);
+  lifted.set(w, { H, over: c.over });
+}
+// Bridge ways that cross nothing but join a lifted one (the rest of a viaduct), unless over water.
+const byNode = new Map();
+for (const w of carWays) for (const id of [w._ids[0], w._ids.at(-1)]) (byNode.get(id) ?? byNode.set(id, []).get(id)).push(w);
+for (let changed = true; changed;) {
+  changed = false;
+  for (const w of carWays) {
+    if (lifted.has(w) || !isBridgeT(w.tags) || layerOf(w.tags) < 1) continue;
+    let H = 0;
+    for (const id of [w._ids[0], w._ids.at(-1)]) for (const o of byNode.get(id) ?? []) if (lifted.has(o)) H = Math.max(H, lifted.get(o).H);
+    if (!H || crossings(w, waterGrid).length) continue;
+    lifted.set(w, { H, over: [] }); changed = true;
+  }
+}
+// Dense points on every car way (the OSM nodes keep their ids, so ways meet), and the graph.
+const LB = new Map(), pinned = new Set(), adj = new Map();
+const link = (a, b, d) => { (adj.get(a) ?? adj.set(a, []).get(a)).push([b, d]); (adj.get(b) ?? adj.set(b, []).get(b)).push([a, d]); };
+for (const w of carWays) {
+  const D = [];
+  for (let i = 0; i < w._pts.length; i++) {
+    if (i > 0) {
+      const [ax, az] = w._pts[i - 1], [bx, bz] = w._pts[i], L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 10), s0 = D.at(-1).s;
+      for (let k = 1; k < n; k++) D.push({ key: `${w.id}_${i}_${k}`, x: ax + (bx - ax) * k / n, z: az + (bz - az) * k / n, s: s0 + L * k / n });
+      D.push({ key: String(w._ids[i]), x: bx, z: bz, s: s0 + L });
+    } else D.push({ key: String(w._ids[0]), x: w._pts[0][0], z: w._pts[0][1], s: 0 });
+  }
+  for (let i = 1; i < D.length; i++) link(D[i - 1].key, D[i].key, D[i].s - D[i - 1].s);
+  w._dense = D;
+  const lf = lifted.get(w);
+  if (lf) for (const d of D) LB.set(d.key, Math.max(LB.get(d.key) ?? 0, lf.H));
+}
+for (const [, lf] of lifted) for (const { o, x, z } of lf.over) if (!lifted.has(o)) for (const d of o._dense) if (Math.hypot(d.x - x, d.z - z) < PIN) pinned.add(d.key);
+// A slip road leaving or joining a deck runs alongside it, overlapping, for a while: it stays at the
+// deck's height until it is clear of it, and only then ramps down. Before this it started down from
+// the shared node, was 2 m under the deck's edge where they overlapped, and the parapets closed the
+// merge on 东三环 (the car stuck between the ramp's and the deck's).
+const waysAt = new Map();
+for (const w of carWays) for (const id of w._ids) (waysAt.get(id) ?? waysAt.set(id, []).get(id)).push(w);
+const polyDist = (P, x, z) => { let m = Infinity; for (let i = 1; i < P.length; i++) m = Math.min(m, segDist(x, z, P[i - 1][0], P[i - 1][1], P[i][0], P[i][1])); return m; };
+let hugged = 0;
+for (const [W, lf] of lifted) for (const id of W._ids) for (const O of waysAt.get(id) ?? []) {
+  // (A lower deck joining a higher one too: this loop ramp is a 6.5 m bridge climbing to 东三环's 13.)
+  if (O === W || (lifted.get(O)?.H ?? 0) >= lf.H) continue;
+  const D = O._dense, k0 = D.findIndex((d) => d.key === String(id));
+  if (k0 < 0) continue;
+  const reach = W._road.w / 2 + O._road.w / 2 + 1;
+  for (const dir of [1, -1]) for (let k = k0 + dir; k >= 0 && k < D.length; k += dir) {
+    if (polyDist(W._pts, D[k].x, D[k].z) > reach) break;
+    if (pinned.has(D[k].key)) break;
+    LB.set(D[k].key, Math.max(LB.get(D[k].key) ?? 0, lf.H)); hugged++;
+  }
+}
+// A tiny binary heap for the two Dijkstras.
+class Heap {
+  constructor(less) { this.a = []; this.less = less; }
+  push(v) { const a = this.a; a.push(v); let i = a.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (!this.less(a[i], a[p])) break; [a[i], a[p]] = [a[p], a[i]]; i = p; } }
+  pop() { const a = this.a, top = a[0], last = a.pop(); if (a.length) { a[0] = last; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < a.length && this.less(a[l], a[m])) m = l; if (r < a.length && this.less(a[r], a[m])) m = r; if (m === i) break; [a[i], a[m]] = [a[m], a[i]]; i = m; } } return top; }
+  get size() { return this.a.length; }
+}
+// Down from the decks at GRADE (highest first), never onto a pinned point.
+const HT = new Map(LB);
+{
+  const q = new Heap((a, b) => a[0] > b[0]);
+  for (const [k, h] of LB) q.push([h, k]);
+  while (q.size) {
+    const [h, k] = q.pop();
+    if (h < (HT.get(k) ?? 0)) continue;
+    for (const [nb, d] of adj.get(k) ?? []) {
+      const c = h - GRADE * d;
+      if (c <= 0.02 || pinned.has(nb) || c <= (HT.get(nb) ?? 0)) continue;
+      HT.set(nb, c); q.push([c, nb]);
+    }
+  }
+}
+// And no faster than STEEP up from a pinned point.
+{
+  const U = new Map(), q = new Heap((a, b) => a[0] < b[0]);
+  for (const k of pinned) { U.set(k, 0); q.push([0, k]); HT.delete(k); }
+  while (q.size) {
+    const [u, k] = q.pop();
+    if (u > (U.get(k) ?? Infinity) || u > 30) continue;
+    for (const [nb, d] of adj.get(k) ?? []) { const c = u + STEEP * d; if (c < (U.get(nb) ?? Infinity)) { U.set(nb, c); q.push([c, nb]); } }
+  }
+  // Decks too: where OSM joins a bridge straight onto the road it crosses (a few places round 四惠),
+  // holding the deck flat left a 6.5 m cliff in 9 m; now it comes down at STEEP instead.
+  for (const [k, u] of U) if ((HT.get(k) ?? 0) > u) HT.set(k, u);
+}
+/** Height at arc length s along way w. */
+function heightAlong(w, s) {
+  const D = w._dense;
+  if (!D) return 0;
+  let i = 1;
+  while (i < D.length - 1 && D[i].s < s) i++;
+  const a = D[i - 1], b = D[i], t = b.s > a.s ? clamp((s - a.s) / (b.s - a.s), 0, 1) : 0;
+  return (HT.get(a.key) ?? 0) * (1 - t) + (HT.get(b.key) ?? 0) * t;
+}
+const nodeHeight = (id) => HT.get(String(id)) ?? 0;
+// Elevated stretches by tile, to keep lamps and trees out from under and off the decks.
+const elevSegs = new Map();
+let elevLen = 0;
+for (const w of carWays) {
+  const D = w._dense;
+  for (let i = 1; i < D.length; i++) {
+    const ha = HT.get(D[i - 1].key) ?? 0, hb = HT.get(D[i].key) ?? 0;
+    if (Math.max(ha, hb) < 0.3) continue;
+    elevLen += D[i].s - D[i - 1].s;
+    const hw = w._road.w / 2 + 1.6, a = D[i - 1], b = D[i];
+    eachTile([Math.min(a.x, b.x) - hw, Math.min(a.z, b.z) - hw, Math.max(a.x, b.x) + hw, Math.max(a.z, b.z) + hw], (ix, iz) => {
+      const k = `${ix}_${iz}`; (elevSegs.get(k) ?? elevSegs.set(k, []).get(k)).push([a.x, a.z, b.x, b.z, hw, Math.min(ha, hb)]);
+    });
+  }
+}
+/** The lowest deck over (x, z) (its road surface height), or Infinity. */
+const deckOver = (x, z) => { let m = Infinity; for (const [ax, az, bx, bz, hw, lo] of elevSegs.get(tileOf(x, z).join('_')) ?? []) if (lo < m && segDist(x, z, ax, az, bx, bz) < hw) m = lo; return m; };
+let underCut = 0;
+const underDeck = (x, z) => { for (const [ax, az, bx, bz, hw] of elevSegs.get(tileOf(x, z).join('_')) ?? []) if (segDist(x, z, ax, az, bx, bz) < hw) return true; return false; };
+if (process.env.ELEV_DEBUG) {
+  const rows = [...lifted].map(([w, lf]) => { let L = 0; for (let i = 1; i < w._pts.length; i++) L += Math.hypot(w._pts[i][0] - w._pts[i - 1][0], w._pts[i][1] - w._pts[i - 1][1]); return { L, w, lf }; }).sort((a, b) => b.L - a.L);
+  console.log('lifted total', Math.round(rows.reduce((s, r) => s + r.L, 0)), 'm');
+  for (const { L, w, lf } of rows.slice(0, 25)) console.log(Math.round(L), w.id, w.tags.name ?? w.tags.highway, 'layer', w.tags.layer ?? '-', 'H', lf.H, 'over', lf.over.map((c) => c.o.tags.name ?? c.o.tags.highway).slice(0, 3).join(','), overOf.has(w) ? '' : '(joined)');
+}
+console.log(`elevation: ${overOf.size} bridges over a road or railway, ${lifted.size} ways lifted, ${pinned.size} points pinned under them, ${hugged} slip-road points held level with a deck, ${(elevLen / 1000).toFixed(1)} km of road above ground`);
+
 const roadSegs = new Map(); // tile key -> [ax, az, bx, bz, halfWidth]
 function addSeg(ax, az, bx, bz, hw) {
   eachTile([Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw], (ix, iz) => {
@@ -198,20 +385,24 @@ function addSeg(ax, az, bx, bz, hw) {
 let roadPieces = 0;
 for (const w of ways) {
   const info = w._road; if (!info) continue;
-  const P = [], J = [];
+  const P = [], J = [], PS = [];
+  let run = 0;
   for (let i = 0; i < w._pts.length; i++) {
     if (i > 0) {
       const [ax, az] = w._pts[i - 1], [bx, bz] = w._pts[i];
-      const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 40);
-      for (let k = 1; k < n; k++) { P.push([ax + (bx - ax) * k / n, az + (bz - az) * k / n]); J.push(0); }
+      const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 40);
+      for (let k = 1; k < n; k++) { P.push([ax + (bx - ax) * k / n, az + (bz - az) * k / n]); J.push(0); PS.push(run + L * k / n); }
+      run += L;
     }
     P.push(w._pts[i]);
     J.push((degAll.get(w._ids[i]) || 0) >= 3 ? 1 : 0);
+    PS.push(run);
   }
   let cur = null;
   const flush = () => {
     if (!cur || cur.p.length < 2) return;
-    tile(cur.ix, cur.iz).roads.push({ c: info.cls, w: q1(info.w), o: info.oneway ? 1 : 0, l: info.lanes, br: info.bridge, n: info.name || undefined, p: flat(cur.p), j: cur.j, a: cur.a ? flat([cur.a]) : 0, b: cur.b ? flat([cur.b]) : 0 });
+    const h = info.car ? cur.s.map((s) => q1(heightAlong(w, s))) : [];
+    tile(cur.ix, cur.iz).roads.push({ c: info.cls, w: q1(info.w), o: info.oneway ? 1 : 0, l: info.lanes, br: info.bridge, n: info.name || undefined, p: flat(cur.p), j: cur.j, a: cur.a ? flat([cur.a]) : 0, b: cur.b ? flat([cur.b]) : 0, ...(h.some((v) => v > 0.05) ? { h } : {}) });
     roadPieces++;
   };
   for (let i = 0; i < P.length - 1; i++) {
@@ -219,8 +410,8 @@ for (const w of ways) {
     addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2);
     if (!inRegion(mx, mz)) { flush(); cur = null; continue; }
     const [ix, iz] = tileOf(mx, mz);
-    if (!cur || cur.ix !== ix || cur.iz !== iz) { flush(); cur = { ix, iz, p: [P[i]], j: [J[i]], a: i > 0 ? P[i - 1] : null, b: null }; }
-    cur.p.push(P[i + 1]); cur.j.push(J[i + 1]);
+    if (!cur || cur.ix !== ix || cur.iz !== iz) { flush(); cur = { ix, iz, p: [P[i]], j: [J[i]], s: [PS[i]], a: i > 0 ? P[i - 1] : null, b: null }; }
+    cur.p.push(P[i + 1]); cur.j.push(J[i + 1]); cur.s.push(PS[i + 1]);
     cur.b = i + 2 < P.length ? P[i + 2] : null;
   }
   flush();
@@ -233,14 +424,18 @@ function nearRoad(x, z, margin) {
 
 // Drivable graph for traffic / GPS / minimap: edges run between junctions.
 const netIndex = new Map(), netXZ = [], edges = [];
-const nodeIdx = (id, p) => { let i = netIndex.get(id); if (i === undefined) { i = netXZ.length / 2; netIndex.set(id, i); netXZ.push(q1(p[0]), q1(p[1])); } return i; };
+const netIds = [];
+const nodeIdx = (id, p) => { let i = netIndex.get(id); if (i === undefined) { i = netXZ.length / 2; netIndex.set(id, i); netXZ.push(q1(p[0]), q1(p[1])); netIds.push(id); } return i; };
 for (const w of ways) {
   const info = w._road; if (!info || !info.car) continue;
   if (!w._pts.some(([x, z]) => inRegion(x, z))) continue;
   let start = 0;
+  const vs = [0];
+  for (let i = 1; i < w._pts.length; i++) vs.push(vs[i - 1] + Math.hypot(w._pts[i][0] - w._pts[i - 1][0], w._pts[i][1] - w._pts[i - 1][1]));
   for (let i = 1; i < w._ids.length; i++) {
     if (i === w._ids.length - 1 || (degCar.get(w._ids[i]) || 0) >= 3) {
-      edges.push({ a: nodeIdx(w._ids[start], w._pts[start]), b: nodeIdx(w._ids[i], w._pts[i]), p: flat(w._pts.slice(start, i + 1)), c: info.cls, o: info.oneway, l: info.lanes, w: q1(info.w), n: info.name || undefined, br: info.bridge || undefined });
+      const h = vs.slice(start, i + 1).map((s) => q1(heightAlong(w, s)));
+      edges.push({ a: nodeIdx(w._ids[start], w._pts[start]), b: nodeIdx(w._ids[i], w._pts[i]), p: flat(w._pts.slice(start, i + 1)), c: info.cls, o: info.oneway, l: info.lanes, w: q1(info.w), n: info.name || undefined, br: info.bridge || undefined, ...(h.some((v) => v > 0.05) ? { h } : {}) });
       start = i;
     }
   }
@@ -330,6 +525,11 @@ for (const b of buildings) {
   if (roof === 'g' || roof === 'h') rec.ob = [q1(o.cx), q1(o.cz), +o.angle.toFixed(4), q1(o.hl), q1(o.hw)];
   if (t.name) { rec.n = t.name; named[t.name] = [q1(cx), q1(cz)]; }
   rec.s = +(r2).toFixed(3);
+  // A building a deck runs through goes (a ramp of 国贸桥 ran through a kiosk 15 m tall and the car
+  // stopped dead against its walls); one low enough to stand under the deck's soffit stays.
+  let deck = deckOver(cx, cz);
+  for (const [x, z] of b.ring) deck = Math.min(deck, deckOver(x, z));
+  if (deck < Infinity && h > deck - 1.5) { underCut++; continue; }
   tile(...tileOf(cx, cz)).buildings.push(rec);
   eachTile(b.bb, (ix, iz) => { const k = `${ix}_${iz}`; (bIndex.get(k) ?? bIndex.set(k, []).get(k)).push(b); });
 }
@@ -389,8 +589,11 @@ const treeType = (x, z, id) => {
   return r < 0.62 ? 0 : r < 0.84 ? 1 : 3;              // 0 国槐 scholar tree, 1 杨树 poplar, 2 柏树 cypress, 3 银杏 ginkgo
 };
 let nTrees = 0, treeSeed = 1;
-function addTree(x, z, kind) {
+function addTree(x, z, kind, drop = false) {
   if (!inRegion(x, z) || inBuilding(x, z, 0.8) || nearRoad(x, z, 1.2)) return;
+  // Off the decks and out from under them - still using up its seed, so every other tree in the
+  // city keeps the species and size it had before the interchanges were lifted.
+  if (drop || underDeck(x, z)) { treeSeed++; return; }
   const t = tile(...tileOf(x, z));
   t.trees.push(q1(x), q1(z), kind ?? treeType(x, z, treeSeed), +(0.8 + 0.45 * rnd(treeSeed, 9)).toFixed(2));
   treeSeed++; nTrees++;
@@ -437,7 +640,9 @@ for (const w of ways) {
     for (let s = (9 - acc % 9) % 9; s < L; s += 9) {
       const x = ax + dx * s, z = az + dz * s;
       if (junctions.some((j) => Math.hypot(j[0] - x, j[1] - z) < 14)) continue;
-      if (STREET_TREES.has(info.cls)) for (const sd of info.oneway ? [1] : [1, -1]) addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2));
+      // None along a deck or a ramp (`drop`: the seed is spent all the same, see addTree).
+      const up = heightAlong(w, acc + s) > 0.3;
+      if (STREET_TREES.has(info.cls)) for (const sd of info.oneway ? [1] : [1, -1]) addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2), undefined, up);
     }
     const gap = LAMPS[info.cls];
     if (gap) for (let s = (gap - lampAcc % gap) % gap; s < L; s += gap) {
@@ -448,7 +653,7 @@ for (const w of ways) {
       // taking it after pointed every two-way street's arms away from the road.
       const yaw = Math.atan2(-nx * side, -nz * side);
       side = info.oneway ? 1 : -side;
-      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2)) continue;
+      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2) || underDeck(lx, lz)) continue;
       tile(...tileOf(lx, lz)).lamps.push(q1(lx), q1(lz), +yaw.toFixed(3));
       nLamps++;
     }
@@ -469,6 +674,7 @@ for (const n of nodes) {
   const hwy = n.tags?.highway; if (!hwy) continue;
   const [x, z] = project(n.lat, n.lon); if (!inRegion(x, z)) continue;
   const t = tile(...tileOf(x, z));
+  if (underDeck(x, z) && nodeHeight(n.id) > 0.3) continue;
   if (hwy.includes('traffic_signals')) { t.signals.push(q1(x), q1(z)); nSignals++; }
   if (hwy.includes('crossing') || n.tags.crossing) {
     const r = roadAt(x, z, 3);
@@ -485,7 +691,7 @@ for (const n of nodes) if (n.tags?.highway?.includes('traffic_signals')) {
   const [x, z] = project(n.lat, n.lon);
   let bi = -1, bd = 30;
   for (let i = 0; i < netXZ.length; i += 2) { const d = Math.hypot(netXZ[i] - x, netXZ[i + 1] - z); if (d < bd) { bd = d; bi = i / 2; } }
-  if (bi >= 0) sig[bi] = 1;
+  if (bi >= 0 && nodeHeight(netIds[bi]) < 0.5) sig[bi] = 1;
 }
 
 // ---------------------------------------------------------------------------------- spawn
@@ -510,6 +716,7 @@ for (const e of edges) {
   }
 }
 
+console.log(`buildings cut by a deck: ${underCut}`);
 // Far skyline: every building of 20 m or more as an oriented box, for the distant city silhouette.
 const sky = [];
 for (const [, t] of tiles) for (const b of t.buildings) {

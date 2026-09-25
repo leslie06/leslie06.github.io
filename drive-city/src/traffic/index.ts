@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { Rng } from '../core/Rng';
+import { CG, groups } from '../core/Physics';
 import type { CarLook, SharedBike, PeopleApi, PlayerApi, RenderApi, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { Routes } from '../city/Routes';
 import { Vehicle } from '../vehicle/Vehicle';
@@ -103,6 +104,18 @@ export async function install(engine: Engine): Promise<void> {
     return car;
   };
   const recycle = (n: Npc) => { const l = spares.get(n.body) ?? []; l.push(n.car); spares.set(n.body, l); };
+  /**
+   * The ground height to drop a car at on link `l` at `s`: 0 on the flat; on an interchange's deck or
+   * ramp its height, but only once the deck's collider is in (the tile has a body), else -1 - a car
+   * put there too early fell through to the road underneath.
+   */
+  const deckAt = (l: { h: Float32Array | null }, s: number, x: number, z: number): number => {
+    if (!l.h) return 0;
+    const h = g.heightAt(l as Parameters<typeof g.heightAt>[0], s);
+    if (h < 0.3) return h;
+    const hit = engine.physics.raycast({ x, y: h + 1.5, z }, { x: 0, y: -1, z: 0 }, 3, groups(CG.CAR, CG.WORLD));
+    return hit && Math.abs(hit.point[1] - h) < 0.6 ? hit.point[1] : -1;
+  };
   const makeNpc = (car: Vehicle, body: BodyType): Npc => ({ car, driver: null, filter: new ControlFilter(), active: false, bike: false, hornT: 0, runner: false, prevPos: new THREE.Vector3(), curPos: new THREE.Vector3(), prevQuat: new THREE.Quaternion(), curQuat: new THREE.Quaternion(),
     upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, body, flipped: 0, parked: false });
   for (const [b, n] of counts) {
@@ -161,8 +174,10 @@ export async function install(engine: Engine): Promise<void> {
       const clear = 14 + len * 0.5;
       if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < clear)) continue;
       if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < 25) continue;
+      const lift = deckAt(l, s, tmp.x, tmp.z);
+      if (lift < 0) continue;
       n.car.body.setEnabled(true);
-      n.car.reset({ x: tmp.x, y: 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
+      n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
       n.car.setMoving(l.speed * (0.75 + 0.2 * rnd()));
       n.driver = new AiDriver(g, sig, id, s, lane, rnd);
       n.filter.reset();
@@ -182,7 +197,7 @@ export async function install(engine: Engine): Promise<void> {
     for (let attempt = 0; attempt < 12; attempt++) {
       const id = ids[Math.floor(rnd() * ids.length)];
       const l = g.links[id];
-      if (l.len < 30 || !BIKE_ROADS.has(l.cls)) continue;
+      if (l.len < 30 || !BIKE_ROADS.has(l.cls) || l.hmax > 0.3) continue;
       const s = 8 + rnd() * (l.len - 16);
       // On the pavement, a metre in from the kerb on the right of travel, pointing along the road.
       g.at(l, s, -(l.hw + 1.1), tmp);
@@ -227,23 +242,25 @@ export async function install(engine: Engine): Promise<void> {
     // Centre-to-centre distance corrected for both bodies: AiDriver takes one car length (4.6 m)
     // off itself, so a 12 m bus in front is not followed as if it were a saloon.
     const selfLen = specLength(c.spec);
-    const consider = (px: number, pz: number, vx: number, vz: number, len = 4.6) => {
+    const consider = (px: number, py: number, pz: number, vx: number, vz: number, len = 4.6) => {
       const rx = px - c.pos.x, rz = pz - c.pos.z;
       const along = rx * c.fwd.x + rz * c.fwd.z;
       if (along < 1 || along > 60) return;
       const lat = Math.abs(rx * c.left.x + rz * c.left.z);
       if (lat > 1.9 + along * 0.03) return;
+      // Not a car on the deck above or the road below (an interchange stacks them in plan).
+      if (Math.abs(py - c.pos.y) > 3) return;
       if (along < bestAlong) { bestAlong = along; best = { gap: Math.max(0.5, along - (len + selfLen) / 2 + 4.6), speed: Math.max(0, vx * c.fwd.x + vz * c.fwd.z) }; }
     };
-    for (const o of pool) if (o !== n && o.active) consider(o.car.pos.x, o.car.pos.z, o.car.vel.x, o.car.vel.z, specLength(o.car.spec));
+    for (const o of pool) if (o !== n && o.active) consider(o.car.pos.x, o.car.pos.y, o.car.pos.z, o.car.vel.x, o.car.vel.z, specLength(o.car.spec));
     const pv = player();
-    if (pv) consider(pv.car.pos.x, pv.car.pos.z, pv.car.vel.x, pv.car.vel.z, specLength(pv.car.spec));
+    if (pv) consider(pv.car.pos.x, pv.car.pos.y, pv.car.pos.z, pv.car.vel.x, pv.car.vel.z, specLength(pv.car.spec));
     // People in the road: drivers brake for the player on foot and for crossing pedestrians.
     const foot = engine.get<PlayerApi>('player')?.foot;
-    if (foot) consider(foot.pos.x, foot.pos.z, 0, 0);
+    if (foot) consider(foot.pos.x, foot.pos.y, foot.pos.z, 0, 0);
     const people = engine.get<PeopleApi>('people');
-    if (people) for (const q of people.inRoad()) consider(q.x, q.z, 0, 0);
-    for (const c of engine.get<WantedApi>('wanted')?.policeCars() ?? []) consider(c.pos.x, c.pos.z, c.vel.x, c.vel.z);
+    if (people) for (const q of people.inRoad()) consider(q.x, 0.5, q.z, 0, 0);
+    for (const c of engine.get<WantedApi>('wanted')?.policeCars() ?? []) consider(c.pos.x, c.pos.y, c.pos.z, c.vel.x, c.vel.z);
     return best;
   };
 
@@ -290,12 +307,14 @@ export async function install(engine: Engine): Promise<void> {
         s = Math.min(s, l.len - 8);
         g.at(l, s, g.laneOffset(l, 0), tmp);
         if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 8)) { bs += 12; continue; }
+        const lift = deckAt(l, s, tmp.x, tmp.z);
+        if (lift < 0) { bs += 12; continue; }
         const body: BodyType = rnd() < 0.5 ? 'hatch' : 'sedan';
         let n = pool.find((p) => !p.active && !p.parked && p.body === body);
         if (!n) { n = makeNpc(newCar(body), body); pool.push(n); }   // a free slot keeps its own car (see spawnBike)
         kitFor(body);
         n.car.body.setEnabled(true);
-        n.car.reset({ x: tmp.x, y: 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
+        n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
         n.car.setMoving(l.speed);
         n.driver = new AiDriver(g, sig, id, s, 0, rnd);
         n.driver.boost = 1.3; n.driver.reckless = true;

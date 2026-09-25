@@ -77,7 +77,8 @@ export async function install(engine: Engine): Promise<void> {
   // Links ending at each node (LaneGraph keeps the ones leaving it).
   const inn: number[][] = g.out.map(() => []);
   for (const l of g.links) inn[l.to].push(l.id);
-  const walkW = (l: Link) => SIDEWALK[l.cls] ?? 0;
+  // Nobody walks an interchange's decks and ramps (they have parapets, not pavements).
+  const walkW = (l: Link) => l.hmax > 0.3 ? 0 : SIDEWALK[l.cls] ?? 0;
   const edgeOf = (id: number) => { const r = g.links[id].rev; return r >= 0 ? Math.min(id, r) : id; };
   /** How far short of `node` the pavement of `l` stops: the widest other road there plus the kerb; 0 where the road just continues. */
   const kerbAt = (l: Link, node: number): number => {
