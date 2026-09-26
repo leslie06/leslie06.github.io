@@ -14,7 +14,7 @@ export const STOP_LINE = 7;
  * that traffic obeys the lights (`.scratch/order.mjs`). A line crossed on amber is legal - that is
  * a driver too close to stop when it changed.
  */
-export const lineStats = { crossed: 0, onRed: 0 };
+export const lineStats = { crossed: 0, onRed: 0, yields: 0 };
 
 /**
  * Drives one traffic car along the lane graph: pure-pursuit steering at a lane-offset point ahead,
@@ -31,6 +31,10 @@ export class AiDriver {
   /** A getaway driver: target speed multiplier, and no stopping for red lights. */
   boost = 1;
   reckless = false;
+  /** Seconds left pulled over to the kerb for a police car with its siren on (set by traffic/). */
+  yieldT = 0;
+  /** Metres moved right of the lane towards the kerb while yielding (eased in and out). */
+  private shift = 0;
   private timer = 0;
   stuck = 0;
   lateral = 0;
@@ -60,8 +64,9 @@ export class AiDriver {
   private along(ahead: number, out: { x: number; z: number; dx: number; dz: number }): void {
     let l = this.g.links[this.link], s = this.s + ahead, i = 0;
     while (s > l.len && i < this.queue.length) { s -= l.len; l = this.g.links[this.queue[i++]]; }
-    const lane = Math.min(this.lane, l.lanes - 1);
-    this.g.at(l, s, this.g.laneOffset(l, lane), out);
+    const lane = Math.min(this.lane, l.lanes - 1), off = this.g.laneOffset(l, lane);
+    // Pulled over: towards the right kerb, never past a car's half width inside it.
+    this.g.at(l, s, Math.max(-l.hw + 1.3, off - this.shift), out);
   }
 
   /** Called when the car hit something hard. */
@@ -101,6 +106,10 @@ export class AiDriver {
     }
     if (this.mode === 'lost') { inp.forward = 0; inp.back = v > 0.5 ? 1 : 0; inp.steer = 0; return inp; }
 
+    // Sirens behind: ease over to the kerb and crawl until they are past (GTA's traffic clears a lane).
+    const yielding = this.yieldT > 0 && !this.reckless;
+    this.yieldT = Math.max(0, this.yieldT - dt);
+    this.shift += ((yielding ? 3.2 : 0) - this.shift) * Math.min(1, dt * 1.6);
     // Steering: pure pursuit on a point ahead at the lane offset.
     const look = Math.max(6, Math.min(24, 4 + v * 0.8));
     this.along(look, this.p);
@@ -111,7 +120,7 @@ export class AiDriver {
     inp.steer = Math.max(-1, Math.min(1, -wheel / Math.max(0.05, car.maxSteerAngle(v))));
 
     // Target speed: road class, the turn within the next ~45 m, then the light at the end.
-    let vt = l.speed * this.boost;
+    let vt = yielding ? Math.min(l.speed, 3.5) : l.speed * this.boost;
     this.along(Math.max(8, v * 1.2), this.q);
     const h0x = this.q.dx, h0z = this.q.dz;
     this.along(Math.max(8, v * 1.2) + 28, this.q);

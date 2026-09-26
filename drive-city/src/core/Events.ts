@@ -19,7 +19,7 @@ export interface GameEvents {
   /** The player's car knocked a bin, a shared bike or a railing flying (city/Knock.ts). */
   'prop:hit': { kind: 'bin' | 'bike' | 'rail'; x: number; y: number; z: number; speed: number };
   /** A move that scores in the street combo (stunts/): a near miss, a drift, a jump... `points` before the multiplier. */
-  'stunt:event': { kind: 'near' | 'drift' | 'air' | 'oncoming' | 'redlight' | 'smash' | 'evade' | 'shortcut'; points: number };
+  'stunt:event': { kind: 'near' | 'drift' | 'air' | 'oncoming' | 'redlight' | 'smash' | 'evade' | 'shortcut' | 'takedown'; points: number };
   /** The combo ended: banked as `cash`, or `lost` in a crash (cash 0). */
   'stunt:bank': { points: number; cash: number; lost: boolean };
   /** A 兔儿爷 collectible was picked up (collect/). */
@@ -28,6 +28,8 @@ export interface GameEvents {
   'wanted:busted': { level: number };
   /** A traffic car blew its horn at (x, z). */
   'traffic:horn': { x: number; z: number };
+  /** A police car was wrecked (police/); `nearPlayer`: the player was right there (a takedown). */
+  'police:wrecked': { x: number; z: number; nearPlayer: boolean };
   /** The wanted level changed (`up`: it rose). */
   'wanted:level': { level: number; up: boolean };
   /** A street race was finished (races/): which start line, the place, seconds from the green light. */

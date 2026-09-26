@@ -24,9 +24,12 @@ export class Pursuit {
   private idx = 0;
   private reverse = 0;
   private lastSteer = 0;
+  /** After a ram connects: seconds of dropping back before the next one (a push is not a hit). */
+  private backoff = 0;
   private a = { x: 0, z: 0 }; private b = { x: 0, z: 0 };
+  private pk = Array.from({ length: 8 }, () => ({ x: 0, z: 0 }));
 
-  reset(): void { this.path = null; this.pathAge = 99; this.idx = 0; this.reverse = 0; this.stuck = 0; }
+  reset(): void { this.path = null; this.pathAge = 99; this.idx = 0; this.reverse = 0; this.stuck = 0; this.backoff = 0; }
 
   /** Point `dist` metres along the path from (x, z), via the vertices after the nearest one. */
   private walk(x: number, z: number, dist: number, out: { x: number; z: number }): void {
@@ -40,7 +43,11 @@ export class Pursuit {
     out.x = p[(n - 1) * 2]; out.z = p[(n - 1) * 2 + 1];
   }
 
-  update(car: Vehicle, goal: Goal, direct: boolean, dt: number, route: Router | null, gentle: boolean, ram = false): DriveInput {
+  /**
+   * `ram`: no speed matching, straight through the player. `pit`: come up on the player's rear
+   * quarter and steer into it (the PIT manoeuvre) - it spins a car out without a head-on crash.
+   */
+  update(car: Vehicle, goal: Goal, direct: boolean, dt: number, route: Router | null, gentle: boolean, ram = false, pit = false): DriveInput {
     const inp = this.input;
     const v = Math.max(0, car.forwardSpeed);
     this.pathAge += dt;
@@ -50,7 +57,7 @@ export class Pursuit {
       return inp;
     }
     const dist = Math.hypot(goal.x - car.pos.x, goal.z - car.pos.z);
-    let ax = goal.x, az = goal.z, vt = this.topSpeed;
+    let ax = goal.x, az = goal.z, vt = this.topSpeed, pitting = false;
     if (!direct && route) {
       if (!this.path || this.pathAge > 1.5 || Math.hypot(goal.x - this.gx, goal.z - this.gz) > 25) {
         this.path = route(car.pos.x, car.pos.z, Math.atan2(car.fwd.x, car.fwd.z), goal.x, goal.z)?.pts ?? null;
@@ -65,13 +72,40 @@ export class Pursuit {
       this.walk(car.pos.x, car.pos.z, look, this.a);
       this.walk(car.pos.x, car.pos.z, look + 25, this.b);
       ax = this.a.x; az = this.a.z;
-      const h1 = Math.atan2(ax - car.pos.x, az - car.pos.z), h2 = Math.atan2(this.b.x - ax, this.b.z - az);
-      let turn = Math.abs(h2 - h1); if (turn > Math.PI) turn = 2 * Math.PI - turn;
-      if (turn > 0.15) vt = Math.min(vt, Math.sqrt(8 * 25 / turn));
+      // Corners out to ~110 m: each bend's speed from its curvature (8 m/s² sideways), then how fast
+      // the car may go now to brake down to it in time (6.5 m/s²). Fast cars need to see far: from
+      // 130 km/h a corner needs 75 m of braking.
+      const pk = this.pk, step = 15;
+      for (let k = 0; k < pk.length; k++) this.walk(car.pos.x, car.pos.z, 4 + k * step, pk[k]);
+      for (let k = 1; k + 1 < pk.length; k++) {
+        const h1 = Math.atan2(pk[k].x - pk[k - 1].x, pk[k].z - pk[k - 1].z), h2 = Math.atan2(pk[k + 1].x - pk[k].x, pk[k + 1].z - pk[k].z);
+        let turn = Math.abs(h2 - h1); if (turn > Math.PI) turn = 2 * Math.PI - turn;
+        if (turn < 0.1) continue;
+        const vc = Math.sqrt(8 * step / turn);
+        vt = Math.min(vt, Math.sqrt(vc * vc + 2 * 6.5 * Math.max(0, 4 + k * step - 6)));
+      }
     } else if (!direct) vt = Math.min(vt, 16);   // no route: straight for it, carefully
     else {
       const lead = Math.min(1.2, dist / Math.max(12, v));
       ax = goal.x + goal.vx * lead; az = goal.z + goal.vz * lead;
+      const gs0 = Math.hypot(goal.vx, goal.vz);
+      if (pit && !ram && gs0 > 7 && dist < 26) {
+        // In the player's frame: f along their motion, p across it, `side` which side of them we are.
+        const fx = goal.vx / gs0, fz = goal.vz / gs0, px = fz, pz = -fx;
+        const rx = car.pos.x - goal.x, rz = car.pos.z - goal.z;
+        const along = rx * fx + rz * fz, side = rx * px + rz * pz >= 0 ? 1 : -1;
+        const t0 = 0.25;
+        if (along < -2.2) {
+          // Behind: line up on the rear quarter, a car's width out, and close on it.
+          ax = goal.x + goal.vx * t0 + px * side * 1.9 - fx * 1.2; az = goal.z + goal.vz * t0 + pz * side * 1.9 - fz * 1.2;
+          vt = Math.min(vt, gs0 + 6);
+        } else {
+          // Alongside the rear wheel: turn into it.
+          ax = goal.x + goal.vx * t0 + fx * 1.5 - px * side * 1.2; az = goal.z + goal.vz * t0 + fz * 1.5 - pz * side * 1.2;
+          vt = Math.min(vt, gs0 + 3);
+        }
+        pitting = true;
+      }
     }
     // Pure pursuit on the aim point (left of the car is +lx; the steer axis is right-positive).
     const rx = ax - car.pos.x, rz = az - car.pos.z;
@@ -85,10 +119,16 @@ export class Pursuit {
       if (ang > 0.35) vt = Math.min(vt, Math.max(9, this.topSpeed * Math.cos(ang)));
     }
     const gs = Math.hypot(goal.vx, goal.vz);
-    // Ramming: no speed matching, straight through the player (they are still boxed in when stopped).
-    if (direct && dist < 16 && !(ram && gs > 4)) vt = Math.min(vt, gs + (gentle ? 1.5 : 6));
+    // Ramming: no speed matching, straight through the player (they are still boxed in when stopped);
+    // once it connects, drop back a few metres and come again.
+    this.backoff = Math.max(0, this.backoff - dt);
+    if (ram && direct && dist < 7 && car.impact > 2) this.backoff = 0.9;
+    if (direct && dist < 16 && (!(ram && gs > 4) || this.backoff > 0) && !pitting) vt = Math.min(vt, this.backoff > 0 ? gs - 3 : gs + (gentle ? 1.5 : 6));
+    // Arrive under control: close no faster than it can shed at 6 m/s² before it gets there. A ram
+    // comes in at 8 m/s over the player's speed - a hit that shoves them, not a cop wrecking itself.
+    if (direct) vt = Math.min(vt, gs + Math.max(ram ? 8 : 2.5, Math.sqrt(12 * Math.max(0, dist - (ram ? 4 : 7)))));
     // Up against a stopped player: stop and box them in (ramming would keep shoving them free).
-    if (direct && dist < 9 && gs < 3) vt = 0;
+    if (direct && dist < 6 && gs < 3) vt = 0;
     if (vt < 0.5) { inp.forward = 0; inp.back = v > 0.5 ? 1 : 0; inp.handbrake = v < 1; inp.steer = steer; this.lastSteer = steer; this.stuck = 0; return inp; }
     if (v < vt - 1) { inp.forward = 1; inp.back = 0; }
     else if (v > vt + 2) { inp.forward = 0; inp.back = clamp((v - vt) / 6, 0.2, 1); }

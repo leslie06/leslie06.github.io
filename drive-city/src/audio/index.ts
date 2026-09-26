@@ -28,7 +28,7 @@ export async function install(engine: Engine): Promise<void> {
   let tyreGain: GainNode, tyreFilter: BiquadFilterNode, squealGain: GainNode, s1: OscillatorNode, s2: OscillatorNode;
   let windGain: GainNode, hornGain: GainNode, nitroGain: GainNode;
   let nitroWas = false;
-  let sirenGain: GainNode, sirenLfo: OscillatorNode;
+  let sirenGain: GainNode, sirenLfo: OscillatorNode, siren2Gain: GainNode, siren2Lfo: OscillatorNode, rotorGain: GainNode, rotorLfo: OscillatorNode;
   let cityGain: GainNode, passGain: GainNode, humGain: GainNode;
   let radio: Radio | null = null;
   let stepDist = 0;
@@ -106,6 +106,28 @@ export async function install(engine: Engine): Promise<void> {
     const sbp = c.createBiquadFilter(); sbp.type = 'bandpass'; sbp.frequency.value = 1150; sbp.Q.value = 0.7;
     so.connect(sbp).connect(sirenGain).connect(master);
     so.start(); sirenLfo.start();
+    // A second siren a little lower and out of step, for when the pack is close: sirens overlapping is the sound of a big chase.
+    siren2Gain = c.createGain(); siren2Gain.gain.value = 0;
+    const so2 = c.createOscillator(); so2.type = 'sawtooth'; so2.frequency.value = 820;
+    siren2Lfo = c.createOscillator(); siren2Lfo.type = 'triangle'; siren2Lfo.frequency.value = 0.41;
+    const sweep2 = c.createGain(); sweep2.gain.value = 300;
+    siren2Lfo.connect(sweep2).connect(so2.frequency);
+    const sbp2 = c.createBiquadFilter(); sbp2.type = 'bandpass'; sbp2.frequency.value = 1000; sbp2.Q.value = 0.7;
+    so2.connect(sbp2).connect(siren2Gain).connect(master);
+    so2.start(); siren2Lfo.start();
+    // Helicopter: low noise chopped by the blade pass (a pulse at ~11 Hz), with a faint turbine whine.
+    rotorGain = c.createGain(); rotorGain.gain.value = 0;
+    const chop = c.createGain(); chop.gain.value = 0.5;
+    rotorLfo = c.createOscillator(); rotorLfo.type = 'square'; rotorLfo.frequency.value = 11;
+    const chopDepth = c.createGain(); chopDepth.gain.value = 0.5;
+    rotorLfo.connect(chopDepth).connect(chop.gain);
+    const rlp = c.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 380; rlp.Q.value = 1.2;
+    noise(c).connect(rlp).connect(chop).connect(rotorGain);
+    const whine = c.createOscillator(); whine.type = 'sine'; whine.frequency.value = 2350;
+    const wg = c.createGain(); wg.gain.value = 0.04;
+    whine.connect(wg).connect(rotorGain);
+    rotorGain.connect(master);
+    rotorLfo.start(); whine.start();
     // City: a low rumble bed, a whoosh from cars passing close, the hum of their engines.
     cityGain = c.createGain(); cityGain.gain.value = 0;
     const cf = c.createBiquadFilter(); cf.type = 'lowpass'; cf.frequency.value = 320;
@@ -296,9 +318,21 @@ export async function install(engine: Engine): Promise<void> {
         if (sp > 0.4 && stepDist > (sp > 4.5 ? 1.25 : sp > 2.5 ? 1.0 : 0.72)) { stepDist = 0; footstep(Math.min(1, sp / 6)); }
       }
       // Siren: louder as the nearest police car comes closer; wail far away, yelp up close.
-      const sd = engine.get<WantedApi>('wanted')?.sirenDistance ?? Infinity;
+      const wanted = engine.get<WantedApi>('wanted');
+      const sd = wanted?.sirenDistance ?? Infinity;
       sirenGain.gain.setTargetAtTime(paused || !Number.isFinite(sd) ? 0 : 0.11 * Math.pow(Math.max(0, 1 - sd / 260), 1.6), t, 0.12);
       sirenLfo.frequency.setTargetAtTime(sd < 45 ? 3.2 : 0.32, t, 0.3);
+      // The second-nearest police car drives the second siren.
+      let s2 = Infinity;
+      if (wanted && Number.isFinite(sd)) {
+        const cam = engine.camera.position;
+        for (const pc of wanted.policeCars()) { const d = Math.hypot(pc.pos.x - cam.x, pc.pos.z - cam.z); if (d > sd + 0.5 && d < s2) s2 = d; }
+      }
+      siren2Gain.gain.setTargetAtTime(paused || !Number.isFinite(s2) ? 0 : 0.08 * Math.pow(Math.max(0, 1 - s2 / 220), 1.6), t, 0.15);
+      siren2Lfo.frequency.setTargetAtTime(s2 < 40 ? 2.7 : 0.41, t, 0.3);
+      const hd = wanted?.heliDistance ?? Infinity;
+      rotorGain.gain.setTargetAtTime(paused || !Number.isFinite(hd) ? 0 : 0.22 * Math.pow(Math.max(0, 1 - hd / 420), 1.4), t, 0.2);
+      rotorLfo.frequency.setTargetAtTime(11 + Math.max(0, 1 - hd / 200) * 1.5, t, 0.5);
     },
   };
   engine.add(api);

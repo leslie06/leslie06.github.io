@@ -200,6 +200,8 @@ export interface WantedApi extends System {
   clear(): void;
   /** Metres from the camera to the nearest police car with its siren on (Infinity: none). */
   readonly sirenDistance: number;
+  /** Metres from the camera to the police helicopter (Infinity: none up). */
+  readonly heliDistance: number;
   /** How far along losing them the player is while out of sight, 0..1 (0 when seen or not wanted). */
   readonly evade: number;
   /** Police cars on the streets (collisions with people, traffic keeping its distance). */

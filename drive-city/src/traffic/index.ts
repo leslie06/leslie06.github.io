@@ -41,7 +41,7 @@ export interface TrafficApi extends TrafficCars {
   /** Signal clock, seconds (for `signals.state`). */
   readonly time: number;
   /** Stop lines traffic has crossed, and how many on red (diagnostics: `.scratch/order.mjs`). */
-  readonly lineStats: { crossed: number; onRed: number };
+  readonly lineStats: { crossed: number; onRed: number; yields: number };
   /** A getaway car for the chase job: spawned on the road 90-200 m from (x, z), fast and blind to red lights, until released. */
   spawnRunner(x: number, z: number, hx: number, hz: number): { car: Vehicle; release(): void } | null;
 }
@@ -350,6 +350,21 @@ export async function install(engine: Engine): Promise<void> {
     fixedUpdate(dt) {
       t += dt;
       spawnT -= dt;
+      // Police with their sirens on: drivers they are coming up behind (or meeting head-on) pull over.
+      const wanted = engine.get<WantedApi>('wanted');
+      if (wanted && wanted.level > 0) {
+        for (const c of wanted.policeCars()) {
+          if (c.speed < 6) continue;
+          for (const n of pool) {
+            if (!n.active || n.parked || !n.driver) continue;
+            const rx = c.pos.x - n.car.pos.x, rz = c.pos.z - n.car.pos.z;
+            if (rx * rx + rz * rz > 55 * 55 || Math.abs(c.pos.y - n.car.pos.y) > 3) continue;
+            const along = rx * n.car.fwd.x + rz * n.car.fwd.z, lat = Math.abs(rx * n.car.left.x + rz * n.car.left.z);
+            const closing = c.vel.x * n.car.fwd.x + c.vel.z * n.car.fwd.z;
+            if (lat < 8 && ((along < -2 && closing > n.car.forwardSpeed + 2) || (along > 4 && closing < -4))) { if (n.driver.yieldT <= 0) lineStats.yields++; n.driver.yieldT = 2.5; }
+          }
+        }
+      }
       if (spawnT <= 0) { spawnT = 0.2; if (driving() < max) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); }
       for (const n of pool) {
         if (!n.active) continue;

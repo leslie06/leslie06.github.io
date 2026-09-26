@@ -144,6 +144,7 @@ export async function install(engine: Engine): Promise<void> {
     if (strength > CRASH && vehicle().occupied) lose();
   });
   engine.events.on('wanted:busted', () => lose());
+  engine.events.on('police:wrecked', ({ nearPlayer }) => { if (nearPlayer && driving()) event('takedown', 300); });
   engine.events.on('player:mode', ({ mode }) => { if (mode === 'onfoot') bank(); });
   engine.events.on('vehicle:reset', () => { bank(); passes.clear(); line = null; });
 
