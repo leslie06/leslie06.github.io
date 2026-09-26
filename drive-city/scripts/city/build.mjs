@@ -313,6 +313,7 @@ for (const w of carWays) {
     } else D.push({ key: String(w._ids[0]), x: w._pts[0][0], z: w._pts[0][1], s: 0 });
   }
   for (let i = 1; i < D.length; i++) link(D[i - 1].key, D[i].key, D[i].s - D[i - 1].s);
+  for (const d of D) { d.x0 = d.x; d.z0 = d.z; }
   w._dense = D;
   const lf = lifted.get(w);
   if (lf) for (const d of D) LB.set(d.key, Math.max(LB.get(d.key) ?? 0, lf.H));
@@ -357,6 +358,7 @@ function denseAt(W, x, z) {
   if (bt * L < 0.6) return p;
   if ((1 - bt) * L < 0.6) return q;
   const nd = { key: `${W.id}_i${inserted++}`, x: p.x + (q.x - p.x) * bt, z: p.z + (q.z - p.z) * bt, s: p.s + L * bt };
+  nd.x0 = nd.x; nd.z0 = nd.z;
   D.splice(bj + 1, 0, nd);
   adj.set(p.key, adj.get(p.key).filter(([k, d]) => !(k === q.key && d > 0)));
   adj.set(q.key, adj.get(q.key).filter(([k, d]) => !(k === p.key && d > 0)));
@@ -731,6 +733,58 @@ let smoothed = 0;
   smoothed = free.length;
   HT = consistent(HT);
 }
+// Last, what is still in the way is moved aside. A ramp beside a road on the ground that the decks need
+// up, with both roads as narrow as their lanes allow, still stood its parapet and embankment in the
+// other's outer lane (or its deck's edge hung over it at bonnet height): the road that gives way -
+// the lower, unless it is a deck - is shifted sideways by the overlap, easing in and out over TAPER m
+// along it, junction nodes and all (every way through a moved node moves with it). The heights stay as
+// they were: a point is the same point, only somewhere else.
+const TAPER = 30, SHIFT_MAX = 4.5;
+let shifted = 0;
+const shiftOf = new Map(); // dense key -> [dx, dz]
+for (let iter = 0; iter < 3; iter++) {
+  const want = new Map(); // way -> [{ s, dx, dz }]
+  for (const r of overlapRows()) {
+    if (!r.along) continue;
+    const [lo, hi, lp] = r.ha < r.hb ? [r.A, r.B, r.a] : [r.B, r.A, r.b];
+    const [M, F, mp] = lifted.has(lo) && !lifted.has(hi) ? [hi, lo, r.ha < r.hb ? r.b : r.a] : [lo, hi, lp];
+    // Away from F's line, by the overlap and a little.
+    let best = null, bd = Infinity;
+    for (let i = 1; i < F._dense.length; i++) {
+      const p = F._dense[i - 1], q = F._dense[i], vx = q.x - p.x, vz = q.z - p.z, L2 = vx * vx + vz * vz || 1;
+      const t = clamp(((mp.x - p.x) * vx + (mp.z - p.z) * vz) / L2, 0, 1), cx = p.x + vx * t, cz = p.z + vz * t, d = Math.hypot(mp.x - cx, mp.z - cz);
+      if (d < bd) { bd = d; best = [cx, cz]; }
+    }
+    if (!best || bd < 0.3) continue;
+    const need = F._road.w / 2 + M._road.w / 2 + 0.45 + 0.2, m = need - bd;
+    if (m <= 0 || m > SHIFT_MAX) continue;
+    const ux = (mp.x - best[0]) / bd, uz = (mp.z - best[1]) / bd;
+    (want.get(M) ?? want.set(M, []).get(M)).push({ s: mp.s, dx: ux * m, dz: uz * m });
+  }
+  if (!want.size) break;
+  for (const [M, list] of want) for (const d of M._dense) {
+    let v = null, vm = 0;
+    for (const w of list) { const f = Math.max(0, 1 - Math.max(0, Math.abs(d.s - w.s) - 5) / TAPER); const m = Math.hypot(w.dx, w.dz) * f; if (m > vm) { vm = m; v = [w.dx * f, w.dz * f]; } }
+    if (!v) continue;
+    const cur = shiftOf.get(d.key) ?? [0, 0];
+    // Added to what earlier rounds moved it by, in the new direction only as far as it is short.
+    if (Math.hypot(v[0], v[1]) > 0.02) { let nx = cur[0] + v[0], nz = cur[1] + v[1]; const m = Math.hypot(nx, nz); if (m > 5) { nx *= 5 / m; nz *= 5 / m; } shiftOf.set(d.key, [nx, nz]); }
+  }
+  // Every way through a moved point takes the move, and the points move for the next round's test.
+  const touched = new Set();
+  for (const w of carWays) for (const d of w._dense) { const v = shiftOf.get(d.key); if (!v) continue; touched.add(w); d.x = d.x0 + v[0]; d.z = d.z0 + v[1]; }
+  for (const w of touched) {
+    // Back into the way's polyline (every dense point a vertex; node ids where they are nodes) and arc lengths.
+    w._pts = w._dense.map((d) => [d.x, d.z]);
+    w._ids = w._dense.map((d) => (/^\d+$/.test(d.key) ? Number(d.key) : `x${d.key}`));
+    let s0 = 0; w._dense.forEach((d, i) => { if (i) s0 += Math.hypot(d.x - w._dense[i - 1].x, d.z - w._dense[i - 1].z); d.s = s0; });
+  }
+  shifted = shiftOf.size;
+  if (process.env.SHIFT_TOP) { const top = [...shiftOf.entries()].map(([k, v]) => [k, Math.hypot(v[0], v[1])]).sort((a, b) => b[1] - a[1]).slice(0, 8); for (const [k, m] of top) for (const w of carWays) { const d = w._dense.find((q) => q.key === k); if (d) { console.log('SHIFT', w.tags.name ?? w._road.cls, d.x.toFixed(0), d.z.toFixed(0), m.toFixed(2)); break; } } }
+  if (process.env.ELEV_CONFLICTS && iter === 0) { const m = [...shiftOf.values()].map((v) => Math.hypot(v[0], v[1])).sort((a, b) => a - b); console.log('shifts', m.length, 'median', m[m.length >> 1]?.toFixed(2), 'max', m.at(-1)?.toFixed(2)); }
+  dgrid.clear();
+  for (const w of carWays) w._dense.forEach((d, i) => { const k = `${Math.floor(d.x / DGRID)},${Math.floor(d.z / DGRID)}`; (dgrid.get(k) ?? dgrid.set(k, []).get(k)).push([w, i]); });
+}
 if (process.env.ELEV_CONFLICTS) {
   const rows = overlapRows();
   if (process.env.CONF_AT) {
@@ -843,7 +897,7 @@ if (process.env.ELEV_DEBUG) {
   console.log('lifted total', Math.round(rows.reduce((s, r) => s + r.L, 0)), 'm');
   for (const { L, w, lf } of rows.slice(0, 25)) console.log(Math.round(L), w.id, w.tags.name ?? w.tags.highway, 'layer', w.tags.layer ?? '-', 'H', lf.H, 'over', lf.over.map((c) => c.o.tags.name ?? c.o.tags.highway).slice(0, 3).join(','), overOf.has(w) ? '' : '(joined)');
 }
-console.log(`elevation: ${deckX.length} deck crossings (${stacked} restacked), ${ties} ties between overlapping roads (${inserted} points spliced in), ${narrowed} ways narrowed, ${overOf.size} bridges over a road or railway, ${demoted} too short to clear it left flat, ${lifted.size} ways lifted, ${pinned.size} points pinned under them, ${hugged} slip-road points held level with a deck, ${groundJ} junctions and ${tiePins} merge points kept on the ground, ${flatJ} junctions off the ground made level, ${crossFix} crossings without a node given room or brought level, ${sideFix} points tied level with a ramp overlapping them, ${rampPins} ramp points brought down beside a road on the ground, ${smoothed} raised points smoothed, ${(elevLen / 1000).toFixed(1)} km of road above ground`);
+console.log(`elevation: ${deckX.length} deck crossings (${stacked} restacked), ${ties} ties between overlapping roads (${inserted} points spliced in), ${narrowed} ways narrowed, ${overOf.size} bridges over a road or railway, ${demoted} too short to clear it left flat, ${lifted.size} ways lifted, ${pinned.size} points pinned under them, ${hugged} slip-road points held level with a deck, ${groundJ} junctions and ${tiePins} merge points kept on the ground, ${flatJ} junctions off the ground made level, ${crossFix} crossings without a node given room or brought level, ${sideFix} points tied level with a ramp overlapping them, ${rampPins} ramp points brought down beside a road on the ground, ${smoothed} raised points smoothed, ${shifted} points moved aside, ${(elevLen / 1000).toFixed(1)} km of road above ground`);
 
 const roadSegs = new Map(); // tile key -> [ax, az, bx, bz, halfWidth]
 function addSeg(ax, az, bx, bz, hw) {
