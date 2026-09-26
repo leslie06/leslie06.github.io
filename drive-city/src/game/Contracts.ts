@@ -77,6 +77,13 @@ export interface SharedBike {
   colour: THREE.Color;
 }
 
+/** city/DeadEnds (system `deadEnds`, city only): the drivable graph's dead-end branches and their 此路不通 signs. */
+export interface DeadEndApi extends System {
+  /** Driving network node `from` -> `to` goes deeper into a dead-end branch. */
+  inward(from: number, to: number): boolean;
+  readonly signs: readonly { x: number; z: number; yaw: number; len: number }[];
+}
+
 export interface WorldApi extends System {
   readonly spawn: { x: number; y: number; z: number; yaw: number };
   /** Loose props (the driving-school yard only). */

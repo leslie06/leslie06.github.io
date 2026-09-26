@@ -49,7 +49,7 @@ css(`
 .hud .toast.on{opacity:1}
 .hud .shout{position:absolute;left:0;top:0;padding:5px 9px;border-radius:5px;background:rgba(244,241,232,.92);color:#15171a;font:800 13px/1 ${F.ui};white-space:nowrap;pointer-events:none;will-change:transform}
 .hud .shout[hidden]{display:none}
-.hud .flipped{position:absolute;left:50%;top:42%;transform:translateX(-50%);padding:12px 20px;border-radius:8px;background:${C.inkGlass};font:700 18px/1 ${F.ui};border-left:3px solid ${C.yellow}}
+.hud .flipped,.hud .stuck{position:absolute;left:50%;top:42%;transform:translateX(-50%);padding:12px 20px;border-radius:8px;background:${C.inkGlass};font:700 18px/1 ${F.ui};border-left:3px solid ${C.yellow}}
 .hud .help{position:absolute;left:var(--hud-x);top:calc(var(--hud-y) + 58px);padding:14px 16px;border-radius:8px;background:${C.inkGlass};font:500 13px/1.9 ${F.ui};min-width:260px}
 /* The radar sits in the top-left corner (see Minimap.ts), so these stack below it. Only when a
    radar exists: the yard has no nav, and would otherwise leave the corner empty. */
@@ -96,6 +96,8 @@ export class Hud implements HudApi {
   private bestNum: HTMLElement;
   private toastEl: HTMLDivElement;
   private flipped: HTMLDivElement;
+  private stuck: HTMLDivElement;
+  private stuckT = 0;
   private help: HTMLDivElement;
   private hintEl!: HTMLDivElement;
   /** Seconds the F1 hint has been on screen. */
@@ -168,6 +170,7 @@ export class Hud implements HudApi {
       b.p.set(x, 1.95, z); b.t = 2.2; b.el.textContent = text; b.el.hidden = false;
     });
     this.flipped = el('div', 'flipped', root); this.flipped.appendChild(L('hud.flipped')); this.flipped.hidden = true;
+    this.stuck = el('div', 'stuck', root); this.stuck.appendChild(L('hud.stuck')); this.stuck.hidden = true;
     this.help = el('div', 'help', root);
     this.help.hidden = true;
     const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.nitro'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['T', 'ctl.phone'], ['Esc', 'ctl.pause']];
@@ -276,6 +279,12 @@ export class Hud implements HudApi {
     this.rideOffEl.hidden = park?.prompt !== 'exit';
     this.promptEl.hidden = !(onFoot && pl?.nearCar) || !!park?.prompt;
     this.flipped.hidden = onFoot || !(car.flippedTime > 1.2);
+    // Pressing on and going nowhere (a dead end with no room to turn, a wedge between posts): R puts
+    // the car on the nearest lane, facing out of a dead end. Shown until the car moves again.
+    const pushing = v.occupied && v.inputEnabled && !v.autopilot && (inp.forward > 0.5 || inp.back > 0.5) && car.speed < 0.8;
+    if (onFoot || car.speed > 2 || inp.resetPressed || !this.flipped.hidden) this.stuckT = 0;
+    else if (pushing) this.stuckT += dt;
+    this.stuck.hidden = !(this.stuckT > 3);
     const cam = this.engine.get<CameraApi>('camera');
     if (cam && cam.mode !== this.lastCam) {
       if (this.lastCam) this.toast(t(`hud.camera.${cam.mode}` as 'hud.camera.chase'));

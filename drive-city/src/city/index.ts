@@ -7,6 +7,8 @@ import { loadCity, type Manifest, type Network, type Skyline } from './Data';
 import { project } from './Geo';
 import { createCityMaterials } from './Materials';
 import { Routes } from './Routes';
+import { findDeadEnds } from './DeadEnds';
+import { placeDeadEndSigns } from './visual/DeadEndSigns';
 import { SkylineLod } from './Skyline';
 import { CityStreamer, spawnTileWorkers } from './Streamer';
 import { undergroundHoles } from '../underground/Layout';
@@ -160,6 +162,8 @@ export async function install(engine: Engine): Promise<void> {
   engine.add(streamer);
   engine.add(streamer.knocks);
   const routes = new Routes(network);
+  // 此路不通 at the mouth of every dead-end branch (「我把车开到了故宫，发现进了死胡同，开不出去了」).
+  placeDeadEndSigns(engine, network, findDeadEnds(network, manifest.bounds), env);
 
   const sp = manifest.spawn;
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);
