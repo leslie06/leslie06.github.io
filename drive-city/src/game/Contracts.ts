@@ -121,6 +121,8 @@ export interface PlayerApi extends System {
   readonly nearCar: boolean;
   /** Everyone drawn as a person (player first, then pedestrians) shares this crowd. */
   readonly crowd: Crowd;
+  /** Settles when the player's own model has loaded (or failed to, or is off with ?hero=0). */
+  readonly heroReady?: Promise<void>;
   /** Leave the car, as if F was pressed (missions, poses). */
   getOut(): void;
   /** 0..100; at 0 the player is wasted and wakes up at hospital. */

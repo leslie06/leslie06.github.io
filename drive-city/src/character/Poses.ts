@@ -3,10 +3,13 @@ import type { Engine, System } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import type { CameraApi, HudApi, PlayerApi, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { UiApi } from '../ui';
+import type { RenderSystem } from '../render/RenderSystem';
 import type { TrafficApi } from '../traffic';
 import { registerPose } from '../debug/PoseRegistry';
 import { Gait, type Action } from './Animator';
 import { randomLook, type Look } from './Body';
+import { Hero } from './hero/Hero';
+import { PLAYER_LOOK } from '../player';
 
 /**
  * Screenshot poses for the people themselves: a line-up of varied looks, face close-ups, the gait
@@ -14,7 +17,7 @@ import { randomLook, type Look } from './Body';
  * and a crowd from 8 to 90 m (both LODs). Extra people are drawn through the player's crowd by a
  * small system that only runs while one of these poses is active.
  */
-interface Extra { pos: THREE.Vector3; yaw: number; gait: Gait; look: Look; speed: number; action: Action; t: number; seed: number }
+interface Extra { pos: THREE.Vector3; yaw: number; gait: Gait; look: Look; speed: number; action: Action; t: number; seed: number; hero?: Hero }
 let extras: Extra[] = [];
 let installed = false;
 
@@ -29,7 +32,7 @@ function install(e: Engine): void {
       for (const x of extras) {
         x.t += dt;
         x.gait.update({ speed: x.speed, action: x.action, t: x.t }, dt, x.seed);
-        crowd.add(x.pos, x.yaw, x.gait, x.look);
+        if (x.hero) x.hero.draw(x.pos, x.yaw, x.gait); else crowd.add(x.pos, x.yaw, x.gait, x.look);
       }
     },
   };
@@ -50,7 +53,20 @@ const CAST: Look[] = [
   { skin: C('#bd8e66'), shirt: C('#56603f'), pants: C('#1b1c1f'), shoes: C('#9a2b2b'), hair: C('#1a1614'), height: 1.73, top: 'tee', hairStyle: 'short', bottom: 'shorts', hem: 0.3, sole: C('#f3f2ee'), build: -0.5 },
 ];
 
+/** Player models for the hero poses (each its own skeleton), loaded once. */
+const heroes: Hero[] = [];
+async function heroPool(e: Engine, n: number): Promise<Hero[]> {
+  while (heroes.length < n) {
+    const h = await Hero.load(`${import.meta.env.BASE_URL}models/hero/`, PLAYER_LOOK);
+    e.get<RenderSystem>('render')?.prepare(h.root);
+    e.scene.add(h.root);
+    heroes.push(h);
+  }
+  return heroes.slice(0, n);
+}
+
 async function prepare(e: Engine) {
+  for (const h of heroes) h.hide();
   const v = e.get<VehicleApi>('vehicle')!, cam = e.get<CameraApi>('camera')!, ui = e.get<UiApi>('ui')!, hud = e.get<HudApi>('hud')!, world = e.get<WorldApi>('world')!;
   install(e);
   extras = [];
@@ -234,6 +250,79 @@ export function registerCharacterPoses(): void {
       advance(5);
       const gy = ground(e, p.x, p.z);
       cam.override = (c) => { c.position.set(p.x - p.dx * 2 + p.ox * 1.2, gy + 1.7, p.z - p.dz * 2 + p.oz * 1.2); c.lookAt(p.x + p.dx * 30 + p.ox * 1.2, gy + 1.1, p.z + p.dz * 30 + p.oz * 1.2); c.fov = 55; c.updateProjectionMatrix(); };
+      for (let i = 0; i < 8; i++) e.tick(1 / 60);
+    },
+  });
+  /** The player's model: idle, walking, on the phone, with the crowd's player look beside it. */
+  registerPose({
+    name: 'char_hero', description: "The player's model at 3.4 m: idle, walking 1.4 m/s, a phone idle, and the crowd body in the same look for comparison.",
+    async apply(e) {
+      const { v, cam, world } = await prepare(e);
+      const hs = await heroPool(e, 3);
+      const p = pavement(e, world);
+      moveCarAway(e, v, p.x - p.ox * 12 + p.dx * 40, p.z - p.oz * 12 + p.dz * 40);
+      const face = Math.atan2(-p.ox, -p.oz);
+      const at = (a: number) => [p.x + p.dx * a, p.z + p.dz * a] as const;
+      extras.push({ ...person(e, ...at(-1.5), face + 0.15, PLAYER_LOOK, 0, 'move', 0, 0.11), hero: hs[0] });
+      extras.push({ ...person(e, ...at(-0.3), face - 0.5, PLAYER_LOOK, 1.4, 'move', 0, 0.37), hero: hs[1] });
+      extras.push({ ...person(e, ...at(0.9), face, PLAYER_LOOK, 0, 'move', 0, 0.142), hero: hs[2] }); // this seed's idle habit is the phone
+      extras.push(person(e, ...at(2.0), face, PLAYER_LOOK, 0, 'move', 0, 0.11));
+      advance(8);
+      const gy = extras[0].pos.y;
+      const eye = { x: p.x - p.ox * 3.6 + p.dx * 0.2, z: p.z - p.oz * 3.6 + p.dz * 0.2 };
+      cam.override = (c) => { c.position.set(eye.x, gy + 1.3, eye.z); c.lookAt(p.x + p.dx * 0.2, gy + 0.92, p.z + p.dz * 0.2); c.fov = 50; c.updateProjectionMatrix(); };
+      for (let i = 0; i < 20; i++) e.tick(1 / 60);
+    },
+  });
+  registerPose({
+    name: 'char_hero_face', description: "The player's head and shoulders at 1.1 m, three-quarter view.",
+    async apply(e) {
+      const { v, cam, world } = await prepare(e);
+      const [h] = await heroPool(e, 1);
+      const p = pavement(e, world);
+      moveCarAway(e, v, p.x - p.ox * 12 + p.dx * 40, p.z - p.oz * 12 + p.dz * 40);
+      const face = Math.atan2(-p.ox, -p.oz);
+      extras.push({ ...person(e, p.x, p.z, face + 0.35, PLAYER_LOOK, 0, 'move', 0, 0.5), hero: h });
+      advance(1.2);
+      const gy = extras[0].pos.y;
+      const eye = { x: p.x - p.ox * 1.1, z: p.z - p.oz * 1.1 };
+      cam.override = (c) => { c.position.set(eye.x, gy + 1.62, eye.z); c.lookAt(p.x, gy + 1.5, p.z); c.fov = 45; c.updateProjectionMatrix(); };
+      for (let i = 0; i < 20; i++) e.tick(1 / 60);
+    },
+  });
+  registerPose({
+    name: 'char_hero_gait', description: "The player's model from the side mid-stride: walk 1.4, jog 3.9, sprint 6.4 m/s, and a punch.",
+    async apply(e) {
+      const { v, cam, world } = await prepare(e);
+      const hs = await heroPool(e, 4);
+      const p = pavement(e, world);
+      moveCarAway(e, v, p.x - p.ox * 12 + p.dx * 40, p.z - p.oz * 12 + p.dz * 40);
+      const along = Math.atan2(p.dx, p.dz);
+      const set: [number, Action, number][] = [[1.4, 'move', 0], [3.9, 'move', 0], [6.4, 'move', 0], [0, 'punch', 0.2]];
+      set.forEach(([sp, act, t], i) => {
+        const a = (i - 1.5) * 1.7;
+        extras.push({ ...person(e, p.x + p.dx * a, p.z + p.dz * a, along, PLAYER_LOOK, sp, act, t, 0.3 + i * 0.21), hero: hs[i] });
+      });
+      advance(2.35);
+      const gy = extras[1].pos.y;
+      const eye = { x: p.x - p.ox * 5.2, z: p.z - p.oz * 5.2 };
+      cam.override = (c) => { c.position.set(eye.x, gy + 1.0, eye.z); c.lookAt(p.x, gy + 0.85, p.z); c.fov = 55; c.updateProjectionMatrix(); };
+      for (let i = 0; i < 8; i++) e.tick(1 / 60);
+    },
+  });
+  registerPose({
+    name: 'char_hero_back', description: "The player's model walking away, from the on-foot camera's distance (3.4 m behind).",
+    async apply(e) {
+      const { v, cam, world } = await prepare(e);
+      const [h] = await heroPool(e, 1);
+      const p = pavement(e, world);
+      moveCarAway(e, v, p.x - p.ox * 12 + p.dx * 40, p.z - p.oz * 12 + p.dz * 40);
+      const along = Math.atan2(p.dx, p.dz);
+      extras.push({ ...person(e, p.x, p.z, along, PLAYER_LOOK, 1.5, 'move', 0, 0.61), hero: h });
+      advance(1.8);
+      const gy = extras[0].pos.y;
+      const eye = { x: p.x - p.dx * 3.3 + p.ox * 0.45, z: p.z - p.dz * 3.3 + p.oz * 0.45 };
+      cam.override = (c) => { c.position.set(eye.x, gy + 2.0, eye.z); c.lookAt(p.x + p.ox * 0.45 + p.dx * 1.2, gy + 1.35, p.z + p.oz * 0.45 + p.dz * 1.2); c.fov = 66; c.updateProjectionMatrix(); };
       for (let i = 0; i < 8; i++) e.tick(1 / 60);
     },
   });

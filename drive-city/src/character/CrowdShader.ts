@@ -213,7 +213,7 @@ void dccShade(out vec3 col, out float rough, out float ao, out vec3 emit) {
     if (top >= 1 && top <= 3 && r.y > 1.455 && !dccNeckSkin(r, top)) g *= 0.9;
     if ((top == 2 || top == 3) && r.z > 0.0 && r.y > hemY) {
       float halfW = 0.03 + 0.055 * smoothstep(1.18, 1.44, r.y);
-      if (abs(r.x) < halfW) { g = innerC; upper = r.y < 1.438 - 0.02 * smoothstep(0.3, 1.0, fc); }
+      if (abs(r.x) < halfW) { g = innerC; upper = r.y < 1.458 - 0.02 * smoothstep(0.3, 1.0, fc); }
       g *= 1.0 - 0.35 * (1.0 - smoothstep(0.0015, 0.004, abs(abs(r.x) - halfW)));
       g *= 1.0 - 0.25 * smoothstep(0.985, 1.0, fc) * step(1.42, r.y);
     }

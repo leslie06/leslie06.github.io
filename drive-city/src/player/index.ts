@@ -14,6 +14,16 @@ import { CameraRig } from './CameraRig';
 import { OnFoot } from './OnFoot';
 import { Crowd, CROWD_CAP } from '../character/Crowd';
 import type { Look } from '../character/Body';
+import { Hero } from '../character/hero/Hero';
+import type { RenderSystem } from '../render/RenderSystem';
+
+/** The player: a Beijing cabbie in a slate jacket over a white tee. */
+export const PLAYER_LOOK: Look = {
+  skin: new THREE.Color('#e2bd98'), shirt: new THREE.Color('#39424e'), pants: new THREE.Color('#1b2536'),
+  shoes: new THREE.Color('#1a1a1a'), hair: new THREE.Color('#141212'),
+  top: 'jacket', inner: new THREE.Color('#e8e6df'), sleeve: 0.53, bottom: 'trousers',
+  hairStyle: 'short', height: 1.78, build: 0.12, age: 0.35, beard: true, sole: new THREE.Color('#2a2a2c'),
+};
 
 const REACH = 4.2;
 /** A shared bike is taken from beside it (they stand 0.62 m apart in a rack). */
@@ -34,13 +44,13 @@ export async function install(engine: Engine): Promise<void> {
   const foot = new OnFoot(engine.physics);
   const crowd = new Crowd(engine.scene, CROWD_CAP[engine.quality.tier]);
   crowd.cam = engine.camera;
-  // The player: a Beijing cabbie in a slate jacket over a white tee.
-  const look: Look = {
-    skin: new THREE.Color('#e2bd98'), shirt: new THREE.Color('#39424e'), pants: new THREE.Color('#1b2536'),
-    shoes: new THREE.Color('#1a1a1a'), hair: new THREE.Color('#141212'),
-    top: 'jacket', inner: new THREE.Color('#e8e6df'), sleeve: 0.53, bottom: 'trousers',
-    hairStyle: 'short', height: 1.78, build: 0.12, age: 0.35, beard: true, sole: new THREE.Color('#2a2a2c'),
-  };
+  const look = PLAYER_LOOK;
+  // The player's own model (character/hero), loaded in the background; until it arrives (or with
+  // ?hero=0) the player is drawn by the crowd like everyone else.
+  let hero: Hero | null = null;
+  const heroReady: Promise<void> = new URLSearchParams(location.search).get('hero') === '0' ? Promise.resolve() : Hero.load(`${import.meta.env.BASE_URL}models/hero/`, look)
+    .then((h) => { engine.get<RenderSystem>('render')?.prepare(h.root); engine.scene.add(h.root); hero = h; })
+    .catch((e) => console.warn('hero model failed to load; drawing the player with the crowd', e));
   let mode: 'driving' | 'onfoot' = 'driving';
   let health = 100, hurtT = 99, wastedT = -1;
   const banner = new Banner();
@@ -178,6 +188,7 @@ export async function install(engine: Engine): Promise<void> {
     get foot() { return mode === 'onfoot' ? footView : null; },
     get nearCar() { return nearCar; },
     crowd,
+    heroReady,
     getOut() { if (mode === 'driving') exitCar(); },
     get health() { return health; },
     hurt,
@@ -294,7 +305,7 @@ export async function install(engine: Engine): Promise<void> {
       if (mode === 'onfoot' && !rideSeat) {
         foot.animate(dt);
         drawFeet.lerpVectors(prevFeet, curFeet, alpha);
-        crowd.add(drawFeet, foot.yaw, foot.gait, look);
+        if (hero) hero.draw(drawFeet, foot.yaw, foot.gait); else crowd.add(drawFeet, foot.yaw, foot.gait, look);
       } else if (mode === 'driving' && twoWheeler()) {
         // The pelvis on the saddle, the saddle leaning with the drawn body, the feet-root under it.
         const two = twoWheeler()!, seat = SEAT[two], lean = v.lean;
@@ -303,8 +314,8 @@ export async function install(engine: Engine): Promise<void> {
         rideMotion.ride = two; rideMotion.lean = lean.roll; rideMotion.speed = v.car.forwardSpeed;
         foot.gait.update(rideMotion, dt, 0.3);
         seatPos.y -= SKELETON[J.pelvis].offset[1] * foot.gait.scale;
-        crowd.add(seatPos, Math.atan2(seatFwd.x, seatFwd.z), foot.gait, look);
-      }
+        if (hero) hero.draw(seatPos, Math.atan2(seatFwd.x, seatFwd.z), foot.gait); else crowd.add(seatPos, Math.atan2(seatFwd.x, seatFwd.z), foot.gait, look);
+      } else hero?.hide();
     },
   };
   engine.add(api);

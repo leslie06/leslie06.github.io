@@ -556,12 +556,17 @@ export function poseWorld(root: THREE.Vector3, yaw: number, scale: number, g: Ga
   poseRaw(root.x, root.y, root.z, yaw, scale, g.rot, g.sway, g.bob - g.drop, g.fwd, W);
 }
 
+/** World transform of every joint in the bind pose (A-pose arms, canonical size, at the origin). */
+export function bindWorld(W: Float64Array): void {
+  const rot = new Float64Array(JOINT_COUNT * 3);
+  BIND_ROT.forEach((e, j) => { rot[j * 3] = e[0]; rot[j * 3 + 1] = e[1]; rot[j * 3 + 2] = e[2]; });
+  poseRaw(0, 0, 0, 0, 1, rot, 0, 0, 0, W);
+}
+
 /** Inverse bind matrices (bind pose: A-pose arms, canonical size, at the origin). */
 const INV_BIND = (() => {
   const B = new Float64Array(JOINT_COUNT * 12), inv = new Float64Array(JOINT_COUNT * 12);
-  const rot = new Float64Array(JOINT_COUNT * 3);
-  BIND_ROT.forEach((e, j) => { rot[j * 3] = e[0]; rot[j * 3 + 1] = e[1]; rot[j * 3 + 2] = e[2]; });
-  poseRaw(0, 0, 0, 0, 1, rot, 0, 0, 0, B);
+  bindWorld(B);
   for (let j = 0; j < JOINT_COUNT; j++) {
     const o = j * 12;
     for (let i = 0; i < 3; i++) for (let k = 0; k < 3; k++) inv[o + i * 4 + k] = B[o + k * 4 + i];

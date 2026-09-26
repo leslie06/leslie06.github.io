@@ -1,4 +1,5 @@
 import type { Engine } from '../core/Engine';
+import type { PlayerApi } from '../game/Contracts';
 import { getPose, listPoses } from './PoseRegistry';
 
 declare global {
@@ -37,6 +38,9 @@ export function installShotMode(engine: Engine): void {
       return { ok: true };
     } catch (e) { return { ok: false, error: String((e as Error)?.stack ?? e) }; }
   };
-  for (let i = 0; i < 3; i++) engine.tick(1 / 60);
-  window.__gameReady = true;
+  // Ready once the player's model is in, so every shot draws the same player.
+  void (engine.get<PlayerApi>('player')?.heroReady ?? Promise.resolve()).then(() => {
+    for (let i = 0; i < 3; i++) engine.tick(1 / 60);
+    window.__gameReady = true;
+  });
 }

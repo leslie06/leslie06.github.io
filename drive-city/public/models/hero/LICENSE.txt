@@ -1,0 +1,2 @@
+Universal Base Characters by Quaternius (https://quaternius.com), CC0 1.0 Universal.
+Textures resized by scripts/hero/extract.mjs.
