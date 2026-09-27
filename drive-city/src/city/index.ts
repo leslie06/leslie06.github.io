@@ -38,14 +38,20 @@ async function loadLandmarks(): Promise<LandmarkDef[]> {
  * Landmarks at their OSM anchors, with colliders; returns their footprints and clear zones in world
  * XZ (flat), and a promise for the ones that load later (glb, see LandmarkDef.load). `?glb=0` leaves
  * the imported glb landmarks out altogether.
+ *
+ * The glb downloads wait for `gate` (the spawn's tiles) and then go nearest `from` first, two at a
+ * time: fetched all at once at boot, 11 MB of them shared GitHub Pages' one HTTP/2 connection with
+ * the tiles, textures and scripts the boot needs, and the live game took 166 s to become playable
+ * instead of 48 (`.scratch/boottime.mjs`).
  */
-function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): { footprints: number[][]; clear: number[][]; loaded: Promise<void> } {
+function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], gate: Promise<void>, from: [number, number]): { footprints: number[][]; clear: number[][]; loaded: Promise<void> } {
   /** ?nostone skips the walkable stone colliders (for measuring what they cost). */
   const params = new URLSearchParams(location.search);
   const noStone = params.has('nostone');
   if (params.get('glb') === '0') defs = defs.filter((d) => !d.load);
   const { R, world } = engine.physics;
-  const footprints: number[][] = [], clear: number[][] = [], pending: Promise<void>[] = [];
+  const footprints: number[][] = [], clear: number[][] = [];
+  const jobs: { d: number; run: () => Promise<void> }[] = [];
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
   /** Same world geometry, but invisible to cars: see ColliderSpec.walkOnly. */
@@ -116,15 +122,21 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
     place(def, model);
     // A glb: the boot has what it needs (the footprint); the model and its colliders come when loaded.
     if (def.load) {
-      const placeholder = model.group;
-      pending.push(def.load(env).then((m) => {
-        engine.get<RenderSystem>('render')?.prepare?.(m.group);
-        engine.scene.remove(placeholder);
-        place(def, m);
-      }).catch((e) => console.warn('[city] landmark', def.id, 'did not load', e)));
+      const placeholder = model.group, load = def.load;
+      jobs.push({
+        d: Math.hypot(x - from[0], z - from[1]),
+        run: () => load(env).then((m) => {
+          engine.get<RenderSystem>('render')?.prepare?.(m.group);
+          engine.scene.remove(placeholder);
+          place(def, m);
+        }).catch((e) => console.warn('[city] landmark', def.id, 'did not load', e)),
+      });
     }
   }
-  return { footprints, clear, loaded: Promise.all(pending).then(() => {}) };
+  jobs.sort((a, b) => a.d - b.d);
+  const worker = async () => { for (let j = jobs.shift(); j; j = jobs.shift()) await j.run(); };
+  const loaded = gate.then(() => Promise.all([worker(), worker()])).then(() => {});
+  return { footprints, clear, loaded };
 }
 
 /**
@@ -178,7 +190,10 @@ export async function install(engine: Engine): Promise<void> {
   groundMesh.name = 'ground';
   scene.add(groundMesh);
 
-  const { footprints, clear, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs);
+  // The spawn's tiles first; the glb landmarks and the Blender trees download after them.
+  let openGate = () => {};
+  const bootDone = new Promise<void>((r) => { openGate = r; });
+  const { footprints, clear, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs, bootDone, [manifest.spawn.x, manifest.spawn.z]);
   clear.push(...shortcutClear(SHORTCUTS));
   const sky = new SkylineLod(skyline, env);
   sky.exclude(footprints);
@@ -194,6 +209,8 @@ export async function install(engine: Engine): Promise<void> {
   const sp = manifest.spawn;
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);
   await streamer.preload(sp.x, sp.z);
+  openGate();
+  streamer.loadTrees();
   const path = routes.ahead(sp.x, sp.z, hx, hz, 3500);
 
   const api: WorldApi & { manifest: Manifest; routes: Routes; streamer: CityStreamer; landmarksLoaded: Promise<void> } = {
