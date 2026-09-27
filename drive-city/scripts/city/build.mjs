@@ -983,6 +983,8 @@ function addBuilding(list, id, tags, ring, holes) {
 }
 for (const w of ways) {
   const t = w.tags; if (!t || !w.geometry || w.geometry.length < 4) continue;
+  // An indoor room (a metro station's halls under 前门) is not a building's shell: it drew as a 18 m block.
+  if (t.indoor === 'room') continue;
   if (t['building:part'] && t['building:part'] !== 'no') addBuilding(parts, w.id, t, proj(w.geometry));
   else if (t.building && t.building !== 'no') addBuilding(outlines, w.id, t, proj(w.geometry));
 }

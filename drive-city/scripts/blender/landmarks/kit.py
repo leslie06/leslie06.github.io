@@ -1,7 +1,8 @@
 # Shared building blocks for the landmark scripts in this folder: a geometry buffer that builds one
 # object per call with material slots, UVs and optional vertex colours; a numpy painter for textures;
-# small parts (baluster posts and panels, tiled copings) and the add-on's markers (colliders, footprint,
-# clear zones). tiananmen.py and national_museum.py use it; common.py has the file and material basics.
+# small parts (baluster posts and panels, tiled copings); the add-on's markers (colliders, footprint,
+# clear zones); rectangular walls and cornice bands. The landmark scripts share it; common.py has the
+# file and material basics.
 
 import math
 
@@ -50,6 +51,14 @@ class Geo:
         for k, f in faces.items():
             if k not in skip:
                 self.poly([c[i] for i in f], key, (uvs or {}).get(k), col=col)
+
+    def add(self, other, m):
+        """Another buffer's faces, moved by matrix m."""
+        base = len(self.v)
+        for p, col in zip(other.v, other.c):
+            self.vert(m @ Vector(p), col)
+        for idx, uvs_, key, smooth in other.f:
+            self.f.append((tuple(i + base for i in idx), uvs_, key, smooth))
 
     def tris(self):
         return sum(len(f[0]) - 2 for f in self.f)
@@ -343,3 +352,57 @@ def flat_marker(coll, name, poly, role):
 
 def rect(x0, x1, y0, y1):
     return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+
+# --- rectangular blocks: walls with UVs in bays and storeys, cornice bands mitred round the corners ---
+
+SIDES = {"w": (-1, 0), "e": (1, 0), "s": (0, -1), "n": (0, 1)}
+
+
+def side_line(x0, x1, y0, y1, side, off=0.0):
+    """The two ends of a side of the rectangle (counter-clockwise), pushed out by `off`."""
+    if side == "s":
+        return Vector((x0 - off, y0 - off)), Vector((x1 + off, y0 - off))
+    if side == "e":
+        return Vector((x1 + off, y0 - off)), Vector((x1 + off, y1 + off))
+    if side == "n":
+        return Vector((x1 + off, y1 + off)), Vector((x0 - off, y1 + off))
+    return Vector((x0 - off, y1 + off)), Vector((x0 - off, y0 - off))
+
+
+def fwall(g, a, b, z0, z1, key, out, bay=5.5, storey=5.5, zref=1.2):
+    """A wall face from plan point a to b, UVs in bays and storeys from the plinth."""
+    L = (b - a).length
+    n = max(1, round(L / bay))
+    g.polyn([(a.x, a.y, z0), (b.x, b.y, z0), (b.x, b.y, z1), (a.x, a.y, z1)], key, (out[0], out[1], 0),
+            uvs=[(0, (z0 - zref) / storey), (n, (z0 - zref) / storey), (n, (z1 - zref) / storey), (0, (z1 - zref) / storey)])
+
+
+def band(g, x0, x1, y0, y1, side, off_a, z_a, off_b, z_b, key, faces):
+    """One side of a ring band from offset off_a at z_a to off_b at z_b, mitred where the next side is there too."""
+    order = ["s", "e", "n", "w"]
+    i = order.index(side)
+    prev_on, next_on = order[i - 1] in faces, order[(i + 1) % 4] in faces
+    a0, b0 = side_line(x0, x1, y0, y1, side, off_a)
+    a1, b1 = side_line(x0, x1, y0, y1, side, off_b)
+    d = (b0 - a0).normalized()
+    # a side with no neighbour stops at the rectangle's own corner instead of the mitre
+    if not prev_on:
+        a0 = a0 + d * off_a
+        a1 = a1 + d * off_b
+    if not next_on:
+        b0 = b0 - d * off_a
+        b1 = b1 - d * off_b
+    ox, oy = SIDES[side]
+    want = (ox, oy, 0) if abs(z_b - z_a) > 1e-6 and abs(off_a - off_b) < 1e-6 else ((ox, oy, 1) if off_b < off_a else (0, 0, -1 if z_b <= z_a else 1))
+    L = (b0 - a0).length
+    g.polyn([(a0.x, a0.y, z_a), (b0.x, b0.y, z_a), (b1.x, b1.y, z_b), (a1.x, a1.y, z_b)], key, want,
+            uvs=[(0, 0), (L / 0.8, 0), (L / 0.8, 1), (0, 1)])
+
+
+def tile_image(name, size=128):
+    """Glazed cornice tiles: ridges down the slope, one row every 0.8 m along the eave."""
+    v, u = np.mgrid[0:size, 0:size] / size
+    ridge = 0.78 + 0.22 * np.cos(2 * np.pi * u) ** 2
+    course = 1 - 0.12 * (((v * 6) % 1) < 0.08)
+    return image(name, srgb("#dca72b") * (ridge * course)[..., None])

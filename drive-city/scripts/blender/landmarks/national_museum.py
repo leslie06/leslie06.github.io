@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import REPO, args, clear_file, collection, ensure_addon, image, material, save_and_export, srgb  # noqa: E402
-from kit import Canvas, Geo, T, collider_box, flat_marker, mesh_of, paving, place, rect  # noqa: E402
+from kit import SIDES, Canvas, Geo, T, band, collider_box, flat_marker, fwall, mesh_of, paving, place, rect, side_line, tile_image  # noqa: E402
 
 import bpy  # noqa: E402
 import numpy as np  # noqa: E402
@@ -96,59 +96,7 @@ def glass_images(size=256):
     return image("NM_Glass", np.flipud(cv.a).copy()), image("NM_GlassNight", np.flipud(glow.a).copy())
 
 
-def tile_image(size=128):
-    """Glazed cornice tiles: ridges down the slope, one row every 0.8 m along the eave."""
-    v, u = np.mgrid[0:size, 0:size] / size
-    ridge = 0.78 + 0.22 * np.cos(2 * np.pi * u) ** 2
-    course = 1 - 0.12 * (((v * 6) % 1) < 0.08)
-    return image("NM_Tiles", srgb("#dca72b") * (ridge * course)[..., None])
-
-
 # --- walls and cornices --------------------------------------------------------------------------------
-
-SIDES = {"w": (-1, 0), "e": (1, 0), "s": (0, -1), "n": (0, 1)}
-
-
-def side_line(x0, x1, y0, y1, side, off=0.0):
-    """The two ends of a side of the rectangle (counter-clockwise), pushed out by `off`."""
-    if side == "s":
-        return Vector((x0 - off, y0 - off)), Vector((x1 + off, y0 - off))
-    if side == "e":
-        return Vector((x1 + off, y0 - off)), Vector((x1 + off, y1 + off))
-    if side == "n":
-        return Vector((x1 + off, y1 + off)), Vector((x0 - off, y1 + off))
-    return Vector((x0 - off, y1 + off)), Vector((x0 - off, y0 - off))
-
-
-def fwall(g, a, b, z0, z1, key, out, bay=BAY, storey=STOREY, zref=PLINTH):
-    """A wall face from plan point a to b, UVs in bays and storeys from the plinth."""
-    L = (b - a).length
-    n = max(1, round(L / bay))
-    g.polyn([(a.x, a.y, z0), (b.x, b.y, z0), (b.x, b.y, z1), (a.x, a.y, z1)], key, (out[0], out[1], 0),
-            uvs=[(0, (z0 - zref) / storey), (n, (z0 - zref) / storey), (n, (z1 - zref) / storey), (0, (z1 - zref) / storey)])
-
-
-def band(g, x0, x1, y0, y1, side, off_a, z_a, off_b, z_b, key, faces):
-    """One side of a ring band from offset off_a at z_a to off_b at z_b, mitred where the next side is there too."""
-    order = ["s", "e", "n", "w"]
-    i = order.index(side)
-    prev_on, next_on = order[i - 1] in faces, order[(i + 1) % 4] in faces
-    a0, b0 = side_line(x0, x1, y0, y1, side, off_a)
-    a1, b1 = side_line(x0, x1, y0, y1, side, off_b)
-    d = (b0 - a0).normalized()
-    # a side with no neighbour stops at the rectangle's own corner instead of the mitre
-    if not prev_on:
-        a0 = a0 + d * off_a
-        a1 = a1 + d * off_b
-    if not next_on:
-        b0 = b0 - d * off_a
-        b1 = b1 - d * off_b
-    ox, oy = SIDES[side]
-    want = (ox, oy, 0) if abs(z_b - z_a) > 1e-6 and abs(off_a - off_b) < 1e-6 else ((ox, oy, 1) if off_b < off_a else (0, 0, -1 if z_b <= z_a else 1))
-    L = (b0 - a0).length
-    g.polyn([(a0.x, a0.y, z_a), (b0.x, b0.y, z_a), (b1.x, b1.y, z_b), (a1.x, a1.y, z_b)], key, want,
-            uvs=[(0, 0), (L / 0.8, 0), (L / 0.8, 1), (0, 1)])
-
 
 def part(g, x0, x1, y0, y1, h, faces, pil, cornice=None):
     """Plinth, walls, the green frieze and the glazed tile cornice, the flat roof; pilaster spots in `pil`."""
@@ -240,7 +188,7 @@ def build():
         column=material("NM_Column", "#e4d8bd", 0.6, props={"wet": "damp"}),
         plinth=material("NM_Plinth", "#a99d86", 0.8, props={"wet": "ground"}),
         frieze=material("NM_Frieze", "#2f6b5c", 0.35, props={"wet": "surface"}),
-        tiles=material("NM_Tiles", "#dca72b", 0.3, tex=tile_image(), props={"wet": "surface"}),
+        tiles=material("NM_Tiles", "#dca72b", 0.3, tex=tile_image("NM_Tiles"), props={"wet": "surface"}),
         roof=material("NM_Roof", "#8c8a84", 0.9, props={"wet": "ground", "glow": "none"}),
         glass=material("NM_Glass", "#262d33", 0.2, metal=0.3, tex=gl, emit_tex=gl_night, props={"wet": "surface", "emit": "night", "glowStrength": 0.4}),
         bronze=material("NM_Bronze", "#7a6243", 0.4, metal=0.7, props={"wet": "surface", "glowStrength": 0.6}),

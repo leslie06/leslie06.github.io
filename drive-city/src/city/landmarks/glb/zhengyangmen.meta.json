@@ -1,0 +1,36 @@
+{
+  "id": "zhengyangmen",
+  "name": {
+    "zh": "正阳门城楼",
+    "en": "Zhengyangmen Gate Tower"
+  },
+  "lat": 39.899184,
+  "lon": 116.391618,
+  "headingDeg": -1.41,
+  "file": "zhengyangmen.glb",
+  "version": "075bbaa5",
+  "footprint": [
+    [-50.6, -16.3],
+    [50.6, -16.3],
+    [50.6, 16.3],
+    [-50.6, 16.3]
+  ],
+  "height": 41.15,
+  "stats": {
+    "triangles": 99892,
+    "farTriangles": 928,
+    "materials": 12,
+    "farMaterials": 5,
+    "colliders": {
+      "solid": 4,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 5,
+    "textures": 5,
+    "maxTexture": 2048,
+    "footprintArea": 3299,
+    "bytes": 946636,
+    "source": "zhengyangmen.glb"
+  }
+}

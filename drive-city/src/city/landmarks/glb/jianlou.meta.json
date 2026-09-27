@@ -1,0 +1,36 @@
+{
+  "id": "jianlou",
+  "name": {
+    "zh": "正阳门箭楼",
+    "en": "Zhengyangmen Arrow Tower"
+  },
+  "lat": 39.8979161,
+  "lon": 116.3916608,
+  "headingDeg": -1.45,
+  "file": "jianlou.glb",
+  "version": "0be4a08d",
+  "footprint": [
+    [-31.6, -26.3],
+    [31.6, -26.3],
+    [31.6, 12.8],
+    [-31.6, 12.8]
+  ],
+  "height": 41.25,
+  "stats": {
+    "triangles": 171406,
+    "farTriangles": 928,
+    "materials": 11,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 5,
+      "walk": 2,
+      "mesh": 0
+    },
+    "instancedMeshes": 8,
+    "textures": 5,
+    "maxTexture": 2048,
+    "footprintArea": 2471,
+    "bytes": 1406672,
+    "source": "jianlou.glb"
+  }
+}

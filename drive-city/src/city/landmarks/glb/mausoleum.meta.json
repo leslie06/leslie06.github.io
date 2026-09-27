@@ -1,0 +1,44 @@
+{
+  "id": "mausoleum",
+  "name": {
+    "zh": "毛主席纪念堂",
+    "en": "Chairman Mao Memorial Hall"
+  },
+  "lat": 39.9010986,
+  "lon": 116.3915493,
+  "headingDeg": -1.85,
+  "file": "mausoleum.glb",
+  "version": "aba82eb1",
+  "footprint": [
+    [-54, -54],
+    [54, -54],
+    [54, 54],
+    [-54, 54]
+  ],
+  "clear": [
+    [
+      [-57, -66],
+      [57, -66],
+      [57, 66],
+      [-57, 66]
+    ]
+  ],
+  "height": 35.4,
+  "stats": {
+    "triangles": 57526,
+    "farTriangles": 54,
+    "materials": 11,
+    "farMaterials": 3,
+    "colliders": {
+      "solid": 52,
+      "walk": 4,
+      "mesh": 0
+    },
+    "instancedMeshes": 3,
+    "textures": 2,
+    "maxTexture": 512,
+    "footprintArea": 11664,
+    "bytes": 382264,
+    "source": "mausoleum.glb"
+  }
+}

@@ -1,5 +1,4 @@
 import type { LandmarkDef } from '../../game/Contracts';
-import { zhengyangmen, jianlou } from './zhengyangmen';
 import { cwtc3 } from './cwtc3';
 import { citic } from './citic';
 import { cctv } from './cctv';
@@ -23,7 +22,7 @@ const GLB = Object.values(import.meta.glob<GlbMeta>('./glb/*.meta.json', { eager
  * adds `colliders`. Each group holds a THREE.LOD named 'lod' (detailed level, far level beyond
  * FAR_LOD_DISTANCE); optional pieces outside the footprint sit in a child group named 'extras'.
  */
-export const LANDMARKS: LandmarkDef[] = [zhengyangmen, jianlou, qiniandian, huanqiu, cwtc3, citic, cctv, monument, station, wumen, taihedian, huangqiongyu, happyValley, myVilla, ...GLB];
+export const LANDMARKS: LandmarkDef[] = [qiniandian, huanqiu, cwtc3, citic, cctv, monument, station, wumen, taihedian, huangqiongyu, happyValley, myVilla, ...GLB];
 
 export { LANDMARK_LIGHTS } from './kit/mats';
 export { FAR_LOD_DISTANCE } from './kit/model';
