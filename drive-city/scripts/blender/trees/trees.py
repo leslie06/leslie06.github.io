@@ -50,6 +50,9 @@ SPECIES = [
 ]
 
 
+VARIANTS = 3      # per species: the game picks one per tree in the vertex shader (BlenderTrees.ts)
+
+
 def B(p):
     """Game (x, y up, z) to Blender (x, y, z up)."""
     return Vector((-p[0], p[2], p[1]))
@@ -186,7 +189,7 @@ def branch(sp, r, at, d, length, rad, depth, segs, tips):
     tips.append((end, d))
 
 
-def build_level(sp, s, lod, segs, tips, r, mats):
+def build_level(sp, s, lod, segs, tips, r, mats, tag=""):
     bark, leaf = Mesh(), Mesh()
     buv, luv = bark_uv(s), leaf_uv(s)
     for a, b, r0, r1, depth in segs:
@@ -209,8 +212,8 @@ def build_level(sp, s, lod, segs, tips, r, mats):
             out = Vector((0, 1, 0))
         nrm = out.normalized() + Vector((r.uniform(-0.5, 0.5), r.uniform(-0.3, 0.6), r.uniform(-0.5, 0.5)))
         leaf.card(q, nrm, size * r.uniform(0.8, 1.2), r.uniform(0, 2 * math.pi), luv)
-    ob_b = bark.object(f"{sp['name']}_{lod}__bark", mats["bark"])
-    ob_l = leaf.object(f"{sp['name']}_{lod}__leaf", mats["leaf"])
+    ob_b = bark.object(f"{sp['name']}_{lod}{tag}__bark", mats["bark"])
+    ob_l = leaf.object(f"{sp['name']}_{lod}{tag}__leaf", mats["leaf"])
     return ob_b, ob_l
 
 
@@ -281,13 +284,18 @@ def main():
     img = bpy.data.images.load(ATLAS)
     mats = dict(bark=atlas_material("bark", img, False), leaf=atlas_material("leaf", img, True))
     meta = {}
-    for s, sp in enumerate(SPECIES):
-        r = random.Random(700 + s * 31)
-        segs, tips = grow(sp, r)
-        near = build_level(sp, s, "near", segs, tips, random.Random(900 + s), mats)
-        build_level(sp, s, "mid", segs, tips, random.Random(950 + s), mats)
-        meta[sp["name"]] = render_impostor(sp, near)
-        print("tree", sp["name"], len(segs), "segments", len(tips), "tips", meta[sp["name"]])
+    for s, base in enumerate(SPECIES):
+        for v in range(VARIANTS):
+            # each variant its own skeleton and a crown a little wider or taller, leaning its own way
+            sp = dict(base, rx=base["rx"] * (1.0, 1.12, 0.9)[v], ry=base["ry"] * (1.0, 0.9, 1.1)[v],
+                      centre=(base["centre"][0], base["centre"][1] * (1.0, 0.96, 1.04)[v], base["centre"][2]))
+            r = random.Random(700 + s * 31 + v * 1009)
+            segs, tips = grow(sp, r)
+            near = build_level(sp, s, "near", segs, tips, random.Random(900 + s + v * 97), mats, f"_v{v}")
+            build_level(sp, s, "mid", segs, tips, random.Random(950 + s + v * 97), mats, f"_v{v}")
+            if v == 0:
+                meta[sp["name"]] = render_impostor(sp, near)
+            print("tree", sp["name"], v, len(segs), "segments", len(tips), "tips")
     for o in sc.objects:
         o.hide_render = False
     with open(os.path.join(DIR, "impostors.json"), "w") as f:

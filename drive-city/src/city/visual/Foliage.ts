@@ -258,11 +258,12 @@ export function treeGeometry(s: number, lod: 'near' | 'mid' | 'far'): THREE.Buff
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setAttribute('aSway', new THREE.Float32BufferAttribute(sway, 1));
+  g.setAttribute('aVariant', new THREE.Float32BufferAttribute(new Float32Array(sway.length).fill(-1), 1));
   g.computeBoundingSphere();
   return g;
 }
 
-const SWAY_PARS = 'attribute float aSway;\nuniform float uTime;';
+const SWAY_PARS = 'attribute float aSway;\nattribute float aVariant;\nuniform float uTime;\nuniform float uTreeVariants;';
 const SWAY = /* glsl */`
 {
 #ifdef USE_INSTANCING
@@ -270,6 +271,10 @@ const SWAY = /* glsl */`
 #else
   vec2 ip = vec2(0.0);
 #endif
+  // One of the geometry's variants per tree (BlenderTrees.ts); the others collapse to a point.
+  // aVariant -1 is drawn by every tree (the procedural trees, the impostors).
+  float tv = floor(fract(sin(dot(ip, vec2(12.9898, 78.233)) + 3.7) * 43758.5453) * uTreeVariants);
+  if (aVariant >= 0.0 && abs(aVariant - tv) > 0.5) transformed = vec3(0.0);
   float ph = uTime * 1.15 + ip.x * 0.21 + ip.y * 0.17;
   float sw = aSway * aSway;
   transformed.x += (sin(ph) * 0.16 + sin(uTime * 2.9 + position.y * 1.7 + ip.x) * 0.045) * sw;
@@ -285,13 +290,16 @@ const MIP_ALPHA = (_size: number) => /* glsl */`
 }`;
 
 /** The shared tree material and its shadow-depth twin (same sway and alpha test). */
-export function foliageMaterials(env: EnvUniforms, size: number): { mat: THREE.MeshStandardMaterial; depth: THREE.MeshDepthMaterial } {
+export function foliageMaterials(env: EnvUniforms, size: number): { mat: THREE.MeshStandardMaterial; depth: THREE.MeshDepthMaterial; variants: { value: number } } {
   const map = leafAtlas(size);
+  // How many variants the geometry holds (1: the procedural trees, whose geometry has no aVariant).
+  const variants = { value: 1 };
   const mat = new THREE.MeshStandardMaterial({ map, vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.82, metalness: 0 });
   mat.userData.wet = true;
   mat.customProgramCacheKey = () => 'city-foliage';
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = env.uTime;
+    sh.uniforms.uTreeVariants = variants;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\n${SWAY_PARS}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${SWAY}`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <map_fragment>', `#include <map_fragment>\n${MIP_ALPHA(size)}`)
@@ -304,10 +312,11 @@ export function foliageMaterials(env: EnvUniforms, size: number): { mat: THREE.M
   depth.customProgramCacheKey = () => 'city-foliage-depth';
   depth.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = env.uTime;
+    sh.uniforms.uTreeVariants = variants;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\n${SWAY_PARS}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${SWAY}`);
     sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>\n${MIP_ALPHA(size)}`);
   };
-  return { mat, depth };
+  return { mat, depth, variants };
 }
 
 /** All four species at a level of detail, merged per species (index = species). */

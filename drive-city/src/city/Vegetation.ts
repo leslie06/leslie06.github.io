@@ -13,7 +13,7 @@ export function treeGeometries(tier: string): { near: THREE.BufferGeometry[]; mi
   return { near: treeSet(tier === 'low' ? 'mid' : 'near'), mid: treeSet(tier === 'low' ? 'far' : 'mid'), far: treeSet('far') };
 }
 
-export function treeMaterials(env: EnvUniforms, tier: string): { mat: THREE.MeshStandardMaterial; depth: THREE.MeshDepthMaterial } {
+export function treeMaterials(env: EnvUniforms, tier: string): { mat: THREE.MeshStandardMaterial; depth: THREE.MeshDepthMaterial; variants: { value: number } } {
   return foliageMaterials(env, tier === 'low' ? 512 : 1024);
 }
 
