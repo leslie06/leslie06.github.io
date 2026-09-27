@@ -1,0 +1,44 @@
+{
+  "id": "nationalmuseum",
+  "name": {
+    "zh": "中国国家博物馆",
+    "en": "National Museum of China"
+  },
+  "lat": 39.9037096,
+  "lon": 116.3954444,
+  "headingDeg": -2.056,
+  "file": "nationalmuseum.glb",
+  "version": "994467ab",
+  "footprint": [
+    [-100.5, -166.5],
+    [93, -166.5],
+    [93, 166.5],
+    [-100.5, 166.5]
+  ],
+  "clear": [
+    [
+      [-103.5, -169.5],
+      [96, -169.5],
+      [96, 169.5],
+      [-103.5, 169.5]
+    ]
+  ],
+  "height": 48.9,
+  "stats": {
+    "triangles": 12608,
+    "farTriangles": 180,
+    "materials": 11,
+    "farMaterials": 2,
+    "colliders": {
+      "solid": 86,
+      "walk": 3,
+      "mesh": 0
+    },
+    "instancedMeshes": 2,
+    "textures": 6,
+    "maxTexture": 512,
+    "footprintArea": 64436,
+    "bytes": 344296,
+    "source": "nationalmuseum.glb"
+  }
+}
