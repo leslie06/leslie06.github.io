@@ -287,13 +287,15 @@ export interface RenderApi extends System {
  * ramp is the case: a wedge shallow enough to walk up is also shallow enough to drive a taxi up
  * onto the terrace, and a ramp narrow enough to exclude a car (track 1.54 m) is too narrow to
  * read as a stair. The physics layer turns this into a group mask; nothing here imports Rapier.
+ * `carOnly` is the other half: only vehicles meet it (city/landmarks/CarStops.ts derives one for
+ * each walk-only ramp, so a car stops at the foot of the steps instead of inside them).
  */
 export type ColliderSpec =
-  | { kind: 'box'; center: [number, number, number]; half: [number, number, number]; yaw?: number; walkOnly?: boolean }
-  | { kind: 'cylinder'; center: [number, number, number]; radius: number; halfHeight: number; walkOnly?: boolean }
-  | { kind: 'hull'; points: number[]; walkOnly?: boolean }
+  | { kind: 'box'; center: [number, number, number]; half: [number, number, number]; yaw?: number; walkOnly?: boolean; carOnly?: boolean }
+  | { kind: 'cylinder'; center: [number, number, number]; radius: number; halfHeight: number; walkOnly?: boolean; carOnly?: boolean }
+  | { kind: 'hull'; points: number[]; walkOnly?: boolean; carOnly?: boolean }
   /** Concave static geometry (a terrace, a sunken court) as triangles: xyz triples and their indices. */
-  | { kind: 'trimesh'; points: number[]; indices: number[]; walkOnly?: boolean };
+  | { kind: 'trimesh'; points: number[]; indices: number[]; walkOnly?: boolean; carOnly?: boolean };
 
 export interface LandmarkModel {
   group: THREE.Group;

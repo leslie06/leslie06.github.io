@@ -19,6 +19,7 @@ import { FAR_LOD_DISTANCE } from '../kit/model';
  *   - Axes: Blender +X east, +Y north, +Z up, metres, origin at the anchor on the ground.
  *   - `COL_*`      solid collider, not drawn. A box with only a yaw becomes a box, anything else its convex hull.
  *   - `WALK_*`     like COL_, but only people collide with it: stair ramps (a ramp you can walk up, a car can drive up).
+ *                  The city adds a car-only block of the same plan (CarStops.ts), so a car stops at its foot.
  *   - `COLMESH_*`  concave collider from its triangles (a terrace, a sunken court), not drawn.
  *   - `LOD1_*`     the far level, drawn past `farDistance`. Without one the far level reuses the detail.
  *   - `LOD0_*`     detail only (unmarked objects are detail too).

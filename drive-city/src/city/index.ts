@@ -9,6 +9,7 @@ import { project } from './Geo';
 import { createCityMaterials } from './Materials';
 import { Routes } from './Routes';
 import { findDeadEnds } from './DeadEnds';
+import { carStops } from './landmarks/CarStops';
 import { placeDeadEndSigns } from './visual/DeadEndSigns';
 import { SkylineLod } from './Skyline';
 import { CityStreamer, spawnTileWorkers } from './Streamer';
@@ -49,6 +50,8 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
   const g = groups(CG.WORLD, CG.ALL);
   /** Same world geometry, but invisible to cars: see ColliderSpec.walkOnly. */
   const gWalk = groups(CG.WORLD, CG.ALL & ~CG.CAR);
+  /** Only vehicles meet it: see ColliderSpec.carOnly and CarStops.ts. */
+  const gCar = groups(CG.WORLD, CG.CAR);
   const place = (def: LandmarkDef, model: LandmarkModel) => {
     const [x, z] = project(def.lat, def.lon);
     const rot = -def.headingDeg * Math.PI / 180;
@@ -84,7 +87,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
         engine.physics.tag(world.createCollider(R.ColliderDesc.trimesh(verts, idx).setCollisionGroups(g).setFriction(0.8), body), { surface: 'concrete', tag: `landmark:${def.id}` });
       });
     }
-    for (const sp of model.colliders) {
+    for (const sp of [...model.colliders, ...carStops(model.colliders)]) {
       let desc: import('@dimforge/rapier3d-compat').ColliderDesc | null = null;
       if (sp.kind === 'box') {
         const [wx, wz] = toWorld(sp.center[0], sp.center[2]);
@@ -98,7 +101,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
         for (let i = 0; i < sp.points.length; i += 3) { const [wx, wz] = toWorld(sp.points[i], sp.points[i + 2]); pts[i] = wx; pts[i + 1] = sp.points[i + 1]; pts[i + 2] = wz; }
         desc = sp.kind === 'trimesh' ? R.ColliderDesc.trimesh(pts, Uint32Array.from(sp.indices)) : R.ColliderDesc.convexHull(pts);
       }
-      if (desc) engine.physics.tag(world.createCollider(desc.setCollisionGroups(sp.walkOnly ? gWalk : g).setFriction(0.6), body), { surface: 'concrete', tag: `landmark:${def.id}` });
+      if (desc) engine.physics.tag(world.createCollider(desc.setCollisionGroups(sp.walkOnly ? gWalk : sp.carOnly ? gCar : g).setFriction(0.6), body), { surface: 'concrete', tag: `landmark:${def.id}` });
     }
   };
   for (const def of defs) {

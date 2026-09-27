@@ -17,11 +17,13 @@ import { describe, expect, it } from 'vitest';
 import { CG, groups } from '../core/Physics';
 import { PathPilot } from '../vehicle/Autopilot';
 import { Rig } from '../vehicle/Rig';
+import { carStops } from '../city/landmarks/CarStops';
 import { DRIVE, EDGE, GATE, PLOT } from './Layout';
 import { buildVillaStatic } from './Villa';
 
 const DT = 1 / 60;
-const colliders = buildVillaStatic().colliders;
+const built = buildVillaStatic().colliders;
+const colliders = [...built, ...carStops(built)];
 /** The middle of the gate opening, on the plot wall's line. */
 const GATE_AT: [number, number] = [-(PLOT.hw - EDGE.inset) + 0.5, GATE.z];
 
@@ -30,7 +32,7 @@ async function rigAt(x: number, z: number, yaw: number): Promise<Rig> {
   const rig = await Rig.create({ at: { x, y: 0.36, z }, yaw });
   const { R, world } = rig.physics;
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
-  const g = groups(CG.WORLD, CG.ALL), gWalk = groups(CG.WORLD, CG.ALL & ~CG.CAR);
+  const g = groups(CG.WORLD, CG.ALL), gWalk = groups(CG.WORLD, CG.ALL & ~CG.CAR), gCar = groups(CG.WORLD, CG.CAR);
   for (const sp of colliders) {
     let desc: ReturnType<typeof R.ColliderDesc.cuboid> | null = null;
     if (sp.kind === 'box') {
@@ -43,7 +45,7 @@ async function rigAt(x: number, z: number, yaw: number): Promise<Rig> {
     } else {
       desc = R.ColliderDesc.convexHull(new Float32Array(sp.points));
     }
-    if (desc) world.createCollider(desc.setCollisionGroups(sp.walkOnly ? gWalk : g).setFriction(0.6), body);
+    if (desc) world.createCollider(desc.setCollisionGroups(sp.walkOnly ? gWalk : sp.carOnly ? gCar : g).setFriction(0.6), body);
   }
   return rig;
 }
