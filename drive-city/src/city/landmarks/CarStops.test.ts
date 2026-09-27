@@ -14,7 +14,7 @@ import { TAXI } from '../../vehicle/Spec';
 import { Rig } from '../../vehicle/Rig';
 import { CAR_STOP, carStops } from './CarStops';
 import { stairWedge } from './kit/hall';
-import { qiniandianParts } from './qiniandian';
+import { huanqiuParts } from './huanqiu';
 
 const DT = 1 / 60;
 /** A 1.35 m tier north of z = 0 and a 12 m flight down to the south of it, 3.06 m deep (the monument's lower one). */
@@ -81,8 +81,8 @@ describe('car stops at the foot of the steps', () => {
     expect(down(RUN / 2, car)).toBeGreaterThan(CAR_STOP);
   });
 
-  it('祈年殿: every flight gets one', () => {
-    const { colliders } = qiniandianParts();
+  it('圜丘: every flight gets one', () => {
+    const { colliders } = huanqiuParts();
     expect(carStops(colliders)).toHaveLength(colliders.filter((c) => c.walkOnly).length);
   });
 });

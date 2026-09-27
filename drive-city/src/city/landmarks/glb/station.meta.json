@@ -1,0 +1,36 @@
+{
+  "id": "station",
+  "name": {
+    "zh": "北京站",
+    "en": "Beijing Railway Station"
+  },
+  "lat": 39.90229,
+  "lon": 116.421031,
+  "headingDeg": -1.19,
+  "file": "station.glb",
+  "version": "d99ed355",
+  "footprint": [
+    [-112, -46],
+    [112, -46],
+    [112, 45],
+    [-112, 45]
+  ],
+  "height": 44.25,
+  "stats": {
+    "triangles": 137216,
+    "farTriangles": 80,
+    "materials": 15,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 8,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 9,
+    "textures": 5,
+    "maxTexture": 2048,
+    "footprintArea": 20384,
+    "bytes": 1771656,
+    "source": "station.glb"
+  }
+}

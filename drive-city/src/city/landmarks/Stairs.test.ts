@@ -11,8 +11,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ColliderSpec } from '../../game/Contracts';
-import { qiniandianParts } from './qiniandian';
-import { taihedianParts } from './taihedian';
+import { huanqiuParts } from './huanqiu';
 
 type Rapier = typeof import('@dimforge/rapier3d-compat');
 let R: Rapier;
@@ -83,23 +82,13 @@ function walkable(colliders: ColliderSpec[], tierH: number): string[] {
 }
 
 describe('the terrace stairs', () => {
-  it('祈年殿: every flight is a ramp you can walk from the ground to its tier', () => {
-    const { colliders } = qiniandianParts();
+  it('圜丘: every flight of the round terrace is a ramp you can walk from the ground to its tier', () => {
+    // 祈年殿 and 太和殿 are Blender landmarks now (WALK_ hulls); 圜丘 is the kit's round-terrace stairs.
+    const { colliders } = huanqiuParts();
     const ramps = colliders.filter((c) => c.kind === 'hull');
-    // Four stairs on each of three tiers, and cars must not get a ramp onto the altar.
+    // Four flights on each of three tiers, walk-only (a car must not drive onto the altar).
     expect(ramps.length).toBe(12);
     for (const r of ramps) expect(r.walkOnly).toBe(true);
-    expect(walkable(colliders, 1.9)).toEqual([]);
-  });
-
-  it('太和殿: the polygon terrace\'s flights too (the other stair code path)', () => {
-    const { colliders } = taihedianParts();
-    const ramps = colliders.filter((c) => c.kind === 'hull');
-    expect(ramps.length).toBeGreaterThanOrEqual(4);
-    for (const r of ramps) expect(r.walkOnly).toBe(true);
-    // Its tiers are TH each; read the height off the first tier box rather than hard-code it.
-    const tier = colliders.find((c) => c.kind === 'box' && c.center[2] === 7 && c.center[1] > 0.5)!;
-    const th = tier.kind === 'box' ? tier.half[1] * 2 : 0;
-    expect(walkable(colliders, th)).toEqual([]);
+    expect(walkable(colliders, 1.72)).toEqual([]);
   });
 });

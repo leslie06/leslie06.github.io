@@ -1,0 +1,39 @@
+{
+  "id": "taihedian",
+  "name": {
+    "zh": "太和殿",
+    "en": "Hall of Supreme Harmony"
+  },
+  "lat": 39.915896,
+  "lon": 116.390814,
+  "headingDeg": -1.52,
+  "file": "taihedian.glb",
+  "version": "754280e1",
+  "footprint": [
+    [-65, -35],
+    [-57, -155],
+    [57, -155],
+    [65, -35],
+    [65, 49],
+    [-65, 49]
+  ],
+  "height": 34.95,
+  "farDistance": 450,
+  "stats": {
+    "triangles": 152932,
+    "farTriangles": 2200,
+    "materials": 10,
+    "farMaterials": 6,
+    "colliders": {
+      "solid": 12,
+      "walk": 12,
+      "mesh": 0
+    },
+    "instancedMeshes": 8,
+    "textures": 7,
+    "maxTexture": 2048,
+    "footprintArea": 25560,
+    "bytes": 1583524,
+    "source": "taihedian.glb"
+  }
+}

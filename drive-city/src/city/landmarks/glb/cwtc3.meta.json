@@ -1,0 +1,44 @@
+{
+  "id": "cwtc3",
+  "name": {
+    "zh": "国贸三期",
+    "en": "China World Trade Center III"
+  },
+  "lat": 39.910975,
+  "lon": 116.452365,
+  "headingDeg": 0,
+  "file": "cwtc3.glb",
+  "version": "54ee5898",
+  "footprint": [
+    [-27.4, -30.3],
+    [27.4, -30.3],
+    [27.4, 30.3],
+    [-27.4, 30.3]
+  ],
+  "clear": [
+    [
+      [-27.9, -30.8],
+      [27.9, -30.8],
+      [27.9, 30.8],
+      [-27.9, 30.8]
+    ]
+  ],
+  "height": 330.6,
+  "stats": {
+    "triangles": 11720,
+    "farTriangles": 70,
+    "materials": 13,
+    "farMaterials": 3,
+    "colliders": {
+      "solid": 26,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 1,
+    "maxTexture": 512,
+    "footprintArea": 3321,
+    "bytes": 305332,
+    "source": "cwtc3.glb"
+  }
+}

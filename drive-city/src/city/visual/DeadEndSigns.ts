@@ -67,19 +67,34 @@ export function placeDeadEndSigns(engine: Engine, net: Network, dead: DeadEnds, 
   mat.userData.wet = 'surface';
   const mesh = new THREE.InstancedMesh(signGeometry(), mat, Math.max(1, signs.length));
   mesh.name = 'deadend-signs';
-  mesh.count = signs.length;
+  mesh.count = 0;
   mesh.castShadow = true; mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
   const { R, world } = engine.physics;
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
-  signs.forEach((s, i) => {
-    mesh.setMatrixAt(i, m.compose(p.set(s.x, 0, s.z), q.setFromAxisAngle(up, s.yaw), one));
+  const mats = signs.map((s) => m.compose(p.set(s.x, 0, s.z), q.setFromAxisAngle(up, s.yaw), one).toArray());
+  signs.forEach((s) => {
     const c = world.createCollider(R.ColliderDesc.cylinder(POST_H / 2, POST_R + 0.02).setTranslation(s.x, POST_H / 2, s.z).setCollisionGroups(g), body);
     engine.physics.tag(c, { surface: 'metal', tag: 'sign' });
   });
-  mesh.computeBoundingSphere();
   engine.scene.add(mesh);
+  // Only the signs within DRAW of the camera are drawn, repacked when it has moved REPACK: one mesh
+  // for all 405 drew every post in the city (6% of a low-tier frame's triangles).
+  const DRAW = 350, REPACK = 30;
+  let packX = Infinity, packZ = Infinity;
+  const repack = (cx: number, cz: number) => {
+    packX = cx; packZ = cz;
+    let k = 0;
+    signs.forEach((s, i) => {
+      if (Math.abs(s.x - cx) > DRAW || Math.abs(s.z - cz) > DRAW) return;
+      mesh.instanceMatrix.array.set(mats[i], k * 16);
+      k++;
+    });
+    mesh.count = k;
+    mesh.instanceMatrix.needsUpdate = true;
+  };
   // Heading in, per directed node pair (node indices fit in 16 bits many times over).
   const inward = new Set<number>();
   net.edges.forEach((e, i) => { const o = dead.out[i]; if (o >= 0) inward.add(o * 65536 + (o === e.a ? e.b : e.a)); });
@@ -87,7 +102,11 @@ export function placeDeadEndSigns(engine: Engine, net: Network, dead: DeadEnds, 
     name: 'deadEnds',
     signs,
     inward: (from, to) => inward.has(from * 65536 + to),
-    update() { mat.emissiveIntensity = 0.35 * env.uNight.value; },
+    update() {
+      mat.emissiveIntensity = 0.35 * env.uNight.value;
+      const c = engine.camera.position;
+      if (Math.abs(c.x - packX) > REPACK || Math.abs(c.z - packZ) > REPACK) repack(c.x, c.z);
+    },
   };
   engine.add(sys);
   return sys;

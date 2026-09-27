@@ -80,8 +80,8 @@ function body(P: Parts, lod: boolean, colliders?: ColliderSpec[]): void {
   }
 }
 
-function build(env: EnvUniforms): LandmarkModel {
-  const mats = landmarkMaterials(env);
+/** The geometry and colliders without materials, so the tests can build them in Node (the kit's round-terrace stairs). */
+export function huanqiuParts(): { P: Parts; F: Parts; colliders: ColliderSpec[] } {
   const P = new Parts(), F = new Parts();
   const flood = floodGlow({ base: 0.3, front: 0.2, under: 0.8, top: 0.1, foot: 0.4, footH: 3 });
   P.ctx.glow = flood; F.ctx.glow = flood;
@@ -91,6 +91,12 @@ function build(env: EnvUniforms): LandmarkModel {
     { kind: 'cylinder', center: [0, 2.58, 0], radius: 11.83, halfHeight: 2.58 },
   ];
   body(P, false, colliders); body(F, true);
+  return { P, F, colliders };
+}
+
+function build(env: EnvUniforms): LandmarkModel {
+  const mats = landmarkMaterials(env);
+  const { P, F, colliders } = huanqiuParts();
   for (const [cx, cz, along] of [[0, HW_OUT, 'x'], [0, -HW_OUT, 'x'], [HW_OUT, 0, 'z'], [-HW_OUT, 0, 'z']] as const) for (const s of [-1, 1]) {
     const mid = s * (GATE_SET / 2 + HW_OUT) / 2, half = (HW_OUT - GATE_SET / 2) / 2;
     colliders.push({ kind: 'box', center: [along === 'x' ? mid : cx, 0.95, along === 'x' ? cz : mid], half: along === 'x' ? [half, 0.95, 0.45] : [0.45, 0.95, half] });

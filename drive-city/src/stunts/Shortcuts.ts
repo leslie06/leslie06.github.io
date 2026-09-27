@@ -68,14 +68,19 @@ export function installShortcuts(engine: Engine): void {
     geo.deleteAttribute('uv');
     return geo;
   };
-  const posts: THREE.BufferGeometry[] = [];
+  // One small mesh per mouth, shown within GATE_DRAW of the camera: merged into one mesh for the
+  // whole city, all 22 gates were drawn from anywhere (4% of a low-tier frame's triangles).
+  const mouths: { x: number; z: number; parts: THREE.BufferGeometry[] }[] = [];
+  let posts: THREE.BufferGeometry[] = [];
   const { R, world } = engine.physics;
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
-  const GATE = 2.3;   // posts either side of the path's line: 4.6 m apart, room for a car
+  const GATE = 2.3, GATE_DRAW = 400;   // posts either side of the path's line: 4.6 m apart, room for a car
   for (const p of paths) for (const e of p.ends) {
     const lx = e.dz, lz = -e.dx;
     // Set a couple of metres into the path, so the gate stands at its mouth rather than on the street.
     const cx = e.x + e.dx * 2, cz = e.z + e.dz * 2;
+    posts = [];
+    mouths.push({ x: cx, z: cz, parts: posts });
     for (const s of [-1, 1]) {
       const x = cx + lx * s * GATE, z = cz + lz * s * GATE;
       posts.push(part(new THREE.CylinderGeometry(0.09, 0.11, 2.9, 6).translate(x, 1.45, z), '#5a3522'));
@@ -100,10 +105,16 @@ export function installShortcuts(engine: Engine): void {
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vGlow * (0.25 + 2.5 * uNight);');
   };
   mat.customProgramCacheKey = () => 'lanterns';
-  const mesh = new THREE.Mesh(mergeGeometries(posts)!, mat);
-  mesh.name = 'shortcut-gates'; mesh.castShadow = true;
-  engine.scene.add(mesh);
-  queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(mesh));
+  const gates = new THREE.Group();
+  gates.name = 'shortcut-gates';
+  const gateMeshes = mouths.map((mo) => {
+    const mesh = new THREE.Mesh(mergeGeometries(mo.parts)!, mat);
+    mesh.castShadow = true;
+    gates.add(mesh);
+    return { mesh, x: mo.x, z: mo.z };
+  });
+  engine.scene.add(gates);
+  queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(gates));
 
   // --- going through ---------------------------------------------------------------------------------
   /** Arc length along path `i` nearest (x, z), and how far off the line. */
@@ -160,6 +171,8 @@ export function installShortcuts(engine: Engine): void {
       }
     },
     update() {
+      const cam = engine.camera.position;
+      for (const g of gateMeshes) g.mesh.visible = Math.abs(g.x - cam.x) < GATE_DRAW && Math.abs(g.z - cam.z) < GATE_DRAW;
       const n = engine.get<NavApi>('nav');
       if (n && !blipsOn) {
         blipsOn = true;

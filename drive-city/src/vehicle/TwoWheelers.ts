@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { LAMP, Mesher, surf, TONE_LOWER, TONE_UPPER, type Surf } from './Mesher';
 import type { BodyParts, BodyType, Detail } from './Bodies';
 import type { VehicleSpec } from './Spec';
+import MOTO_MODEL from './models/moto.json';
 
 /**
  * The two-wheelers: a naked sports motorcycle and a city bicycle, built from primitives rather than
@@ -57,48 +58,42 @@ function spokedWheel(r: number, tyreR: number, spokes: number, hi: boolean, allo
   return m;
 }
 
+/** A body modelled in Blender (scripts/blender/vehicles/*.py -> scripts/vehicles/import.mjs): per surface name,
+ * positions in millimetres, normals in hundredths, indices - all in the body frame. */
+type Model = Record<string, { p: number[]; n: number[]; i: number[] }>;
+
+/** Add a Blender model's surfaces to a mesher, each through the Surf its material name maps to. */
+function addModel(m: Mesher, model: Model, surfs: Record<string, Surf>): void {
+  for (const [name, g] of Object.entries(model)) {
+    const s = surfs[name];
+    if (!s) throw new Error(`vehicle model: no surface for material "${name}"`);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(g.p, (v) => v / 1000), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(g.n, (v) => v / 100), 3));
+    geo.setIndex(g.i);
+    m.geo(s, geo);
+  }
+}
+
+/**
+ * The motorcycle (2026-09-27): a naked sports bike modelled in Blender (scripts/blender/vehicles/moto.py) - a
+ * pillowed tank and shrouds, seat and upswept tail, an aluminium twin-spar frame, an inline four with finned
+ * cylinders, four headers into an upswept silencer, the shock's red spring, upside-down forks, an angular
+ * headlamp under a flyscreen, indicators. It replaced a stack of boxes. The wheels are still built here.
+ */
 function moto(spec: VehicleSpec, detail: Detail): BodyParts {
   const m = new Mesher(), hi = detail === 'high';
-  const paint = surf('paint', '#ffffff', 0.3, 0, TONE_UPPER), paintL = surf('paint', '#ffffff', 0.34, 0, TONE_LOWER);
-  const black = surf('trim', '#141516', 0.6, 0), satin = surf('trim', '#5a5d62', 0.4, 0.8), chrome = surf('trim', '#d5d8db', 0.12, 1);
-  const engine = surf('trim', '#2c2e31', 0.5, 0.6), seat = surf('trim', '#1d1d1f', 0.85, 0);
-  const head = surf('lamp', '#ffffff', 0.08, 0.6, LAMP.head), tail = surf('lamp', '#ffffff', 0.12, 0.1, LAMP.tail);
-  const zf = spec.wheels[0].z, zr = spec.wheels[2].z, r = spec.wheelRadius;
-  const headTop: [number, number, number] = [0, 0.72, 0.42], pivot: [number, number, number] = [0, 0.22, -0.3];
-  // Frame: twin spars from the steering head back to the swingarm pivot, a down tube, the subframe.
-  for (const sx of [-0.07, 0.07]) {
-    tube(m, paintL, [sx, 0.68, 0.38], [sx, 0.28, -0.28], 0.028);
-    tube(m, paintL, [sx, 0.3, -0.3], [sx, 0.52, -0.9], 0.02);
-    tube(m, satin, [sx * 1.4, 0.22, -0.3], [sx * 1.4, 0.0, zr], 0.022);   // swingarm
-  }
-  tube(m, paintL, [0, 0.66, 0.4], [0, 0.06, 0.2], 0.028);
-  // Engine and gearbox block, exhaust down the right and out the back.
-  box(m, engine, [0, 0.2, 0.0], [0.4, 0.34, 0.44]);
-  box(m, black, [0, 0.36, 0.1], [0.34, 0.06, 0.3]);
-  tube(m, chrome, [-0.14, 0.12, 0.2], [-0.2, 0.3, -0.85], 0.038);
-  // Tank, seat, rear cowl, tail lamp and plate.
-  box(m, paint, [0, 0.58, 0.12], [0.36, 0.24, 0.52], 0.12);
-  box(m, seat, [0, 0.61, -0.36], [0.3, 0.09, 0.62]);
-  box(m, paintL, [0, 0.58, -0.78], [0.3, 0.14, 0.34], -0.25);
-  box(m, tail, [0, 0.57, -0.95], [0.16, 0.06, 0.03]);
-  box(m, black, [0, 0.42, -0.92], [0.02, 0.1, 0.16]);
-  // Forks, yokes, bars, headlamp, mirrors, mudguards, pegs.
-  for (const sx of [-0.1, 0.1]) {
-    tube(m, chrome, [sx, 0.02, zf], [sx, 0.62, zf - 0.13], 0.02);
-    tube(m, black, [sx, 0.62, zf - 0.13], [sx, 0.8, zf - 0.17], 0.026);
-    tube(m, black, [sx * 2.2, 0.06, -0.15], [sx * 1.4, 0.06, -0.15], 0.012);   // footpegs
-  }
-  box(m, black, [0, 0.78, 0.47], [0.28, 0.06, 0.1]);
-  tube(m, chrome, [-0.34, 0.86, 0.5], [0.34, 0.86, 0.5], 0.013);
-  for (const sx of [-0.3, 0.3]) { tube(m, black, [sx, 0.87, 0.5], [sx * 1.15, 1.0, 0.44], 0.006); box(m, black, [sx * 1.15, 1.02, 0.43], [0.09, 0.06, 0.012]); }
-  box(m, head, [0, 0.7, zf - 0.12], [0.2, 0.15, 0.05]);
-  box(m, black, [0, 0.7, zf - 0.16], [0.24, 0.19, 0.05]);
-  ring(m, paint, [0, 0, zf], r + 0.03, 0.045, 4, hi ? 14 : 8, 1.7, Math.PI / 2 - 0.85);
-  ring(m, paintL, [0, 0, zr], r + 0.03, 0.045, 4, hi ? 12 : 7, 1.2, Math.PI / 2 - 0.6);
-  headTop[0] = 0;
+  const zf = spec.wheels[0].z, r = spec.wheelRadius;
+  addModel(m, MOTO_MODEL as Model, {
+    paintU: surf('paint', '#ffffff', 0.3, 0, TONE_UPPER), paintL: surf('paint', '#ffffff', 0.34, 0, TONE_LOWER),
+    black: surf('trim', '#141516', 0.6, 0), satin: surf('trim', '#8d9196', 0.35, 0.85), chrome: surf('trim', '#d5d8db', 0.12, 1),
+    engine: surf('trim', '#2c2e31', 0.5, 0.6), seat: surf('trim', '#1d1d1f', 0.85, 0), spring: surf('trim', '#b8322a', 0.4, 0.3),
+    plate: surf('trim', '#e0c23a', 0.5, 0),
+    head: surf('lamp', '#ffffff', 0.08, 0.6, LAMP.head), tail: surf('lamp', '#ffffff', 0.12, 0.1, LAMP.tail), amber: surf('lamp', '#ffffff', 0.2, 0.1, LAMP.amber),
+  });
   return {
     type: 'moto', body: m, wheel: spokedWheel(r, 0.062, 5, hi, true), wheelRear: null, dual: 0, calliper: null,
-    headlamps: [new THREE.Vector3(-0.05, 0.7, zf - 0.09), new THREE.Vector3(0.05, 0.7, zf - 0.09)],
+    headlamps: [new THREE.Vector3(-0.05, 0.655, zf - 0.05), new THREE.Vector3(0.05, 0.655, zf - 0.05)],
     size: { length: 2.1, width: 0.78, height: 1.1 },
   };
 }

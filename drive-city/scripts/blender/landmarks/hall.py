@@ -1,7 +1,7 @@
 # The timber hall of a Beijing gate or palace, shared by the landmark scripts in this folder: its
 # roofs (double-eaved 歇山 with the tile rows in the geometry), bracket sets, painted beams, columns,
 # ridge beasts, and the painted atlas (lattice doors and windows, 和玺 beams, rafters, ceiling, gable).
-# Built for 天安门 (tiananmen.py) and reused for 正阳门 and 箭楼 (zhengyangmen.py).
+# Built for 天安门 (tiananmen.py) and reused for 正阳门 and 箭楼 (zhengyangmen.py) and 午门 (wumen.py).
 #
 # A hall is described by a spec `h` (any object with these attributes):
 #   XS, YS            the outer ring's column lines across and deep (the corners included)
@@ -15,6 +15,11 @@
 #   PITCH, AMP        tile row pitch and height
 #   TRIM, RIDGE       green-edged grey tiles: the eave's first TRIM metres and the ridges take the key "trim"
 #                     (0 and "tile" for all-yellow glazed roofs)
+#   ROWS, END_ROWS, LOWER_ROWS, BRACKET_GAP   optional: tile rows up the upper roof's long faces (14), its
+#                     ends (6), the lower roof (8), and the spacing of bracket sets (1.3 m) - fewer for small halls
+#   KIND              optional: "xieshan" (歇山, the default), "wudian" (庑殿: all four faces run up to the
+#                     main ridge, 午门's hall) or "cuanjian" (攒尖: a square plan's four faces meet at a point
+#                     under a gilt finial, 午门's pavilions)
 
 import math
 
@@ -459,9 +464,17 @@ def column_geo(h, r=0.42):
     return g
 
 
-def bracket_geo():
-    """斗拱, projecting to -Y from the beam: block, crossed arms in two tiers, the beak (昂), gilt edges."""
+def bracket_geo(lite=False):
+    """斗拱, projecting to -Y from the beam: block, crossed arms in two tiers, the beak (昂), gilt edges.
+    `lite`: block, one crossed tier and the beak (for halls with hundreds of sets)."""
     g = Geo(colors=True)
+    if lite:
+        blue, green, dark = linear("#1d4a8c"), linear("#256e53"), linear("#173a2c")
+        g.box(-0.24, 0.24, -0.24, 0.24, 0.0, 0.3, "paint", green, skip=("+y", "-z"))
+        g.box(-0.8, 0.8, -0.09, 0.09, 0.3, 0.6, "paint", blue, skip=("+y", "-z"))
+        g.box(-0.09, 0.09, -1.0, 0.25, 0.3, 0.88, "paint", green, skip=("+y", "-z"))
+        g.box(-0.5, 0.5, -0.67, -0.49, 0.6, 0.8, "paint", blue, skip=("-z",))
+        return g
     blue, green, dark = linear("#1d4a8c"), linear("#256e53"), linear("#173a2c")
     g.box(-0.24, 0.24, -0.24, 0.24, 0.0, 0.2, "paint", green)
     g.box(-0.62, 0.62, -0.09, 0.09, 0.2, 0.38, "paint", blue)
@@ -483,9 +496,15 @@ def bracket_geo():
     return g
 
 
-def beast_geo(immortal=False, glaze="#d9a02a"):
-    """A ridge beast (走兽) sitting on the ridge facing -Y, or the immortal on his hen (仙人)."""
+def beast_geo(immortal=False, glaze="#d9a02a", lite=False):
+    """A ridge beast (走兽) sitting on the ridge facing -Y, or the immortal on his hen (仙人). `lite`: fewer facets."""
     g = Geo(colors=True)
+    if lite and not immortal:
+        yel, dk = linear(glaze), linear("#8a5a12")
+        ell(g, (0, 0.03, 0.14), (0.075, 0.1, 0.12), "paint", yel, 6, 3)
+        ell(g, (0, -0.08, 0.3), (0.065, 0.07, 0.065), "paint", yel, 6, 3)
+        ell(g, (0, -0.15, 0.28), (0.035, 0.05, 0.03), "paint", dk, 4, 2)
+        return g
     yel, grn, dk = linear(glaze), linear("#3c7a3a"), linear("#8a5a12")
     g.box(-0.1, 0.1, -0.14, 0.14, 0.0, 0.06, "paint", yel)
     if immortal:
@@ -535,7 +554,7 @@ def bracket_spots(h, outer, z):
     for rot, D, us in ring_sides(h, outer):
         yaw = rot * math.pi / 2
         for i in range(len(us) - 1):
-            k = max(1, round((us[i + 1] - us[i]) / 1.3))
+            k = max(1, round((us[i + 1] - us[i]) / getattr(h, "BRACKET_GAP", 1.3)))
             for j in range(k):
                 if i == 0 and j == 0:
                     continue
@@ -545,6 +564,55 @@ def bracket_spots(h, outer, z):
     return out
 
 
+def roofs_hip(h, g, hips, RL, lod):
+    """The upper roof of a 庑殿 (four faces to the main ridge) or 攒尖 (four faces to a point), and its ridges."""
+    RU, DU = h.UPPER, h.UPPER["D"]
+    A, D = h.UPPER["A"], h.UPPER["D"]
+    pyramid = h.KIND == "cuanjian"
+    for rot in range(4):
+        Af, De = (A, D) if rot % 2 == 0 else (D, A)
+        top = DU - 0.02
+        long_face = rot % 2 == 0 and not pyramid
+        rows = roof_face(g, RU, DU, rot, Af, De, top, rows=(6 if long_face else 5) if lod else getattr(h, "ROWS", 14), waves=not lod,
+                         cols=12 if long_face else 6, pitch=h.PITCH, amp=h.AMP, trim=h.TRIM)
+        if rot % 2 == 1:
+            hips.append([r[0] for r in rows])
+            hips.append([r[-1] for r in rows])
+        if lod:
+            continue
+        eave_edge(g, rows[0], key=h.RIDGE if h.TRIM else "tile")
+        soffit(g, RU, DU, rot, Af, De, h.UBEAM[3] + 0.08, span=h.OVERHANG)
+    ztop = RU["z"] + RU["H"]
+    if pyramid:
+        # the gilt finial (宝顶) on a round seat
+        cyl(g, 0, 0, ztop - 0.3, ztop + 0.3, 0.75, 0.6, 16, h.RIDGE, caps=(False, True))
+        cyl(g, 0, 0, ztop + 0.3, ztop + 0.7, 0.5, 0.5, 16, "gold", caps=(False, True))
+        ell(g, (0, 0, ztop + 1.45), (0.55, 0.55, 0.8), "gold", nu=14, nv=8)
+        cyl(g, 0, 0, ztop + 2.1, ztop + 2.6, 0.12, 0.04, 8, "gold", caps=(False, True))
+    else:
+        XR = A - D
+        g.box(-XR - 0.3, XR + 0.3, -0.42, 0.42, ztop - 0.3, ztop + 0.75, h.RIDGE)
+        g.box(-XR - 0.3, XR + 0.3, -0.5, 0.5, ztop + 0.5, ztop + 0.62, h.RIDGE)
+        if not lod:
+            for sx in (-1, 1):
+                wen(g, sx * (XR + 0.1), ztop - 0.25, sx, key=h.RIDGE)
+    if lod:
+        return hips
+    zw = RL["z"] + RL["H"] if RL else -100.0
+    if RL:
+        g.box(-h.IX - 0.45, h.IX + 0.45, -h.IY - 0.45, -h.IY + 0.05, zw - 0.2, zw + 0.35, h.RIDGE)
+        g.box(-h.IX - 0.45, h.IX + 0.45, h.IY - 0.05, h.IY + 0.45, zw - 0.2, zw + 0.35, h.RIDGE)
+        g.box(-h.IX - 0.45, -h.IX + 0.05, -h.IY, h.IY, zw - 0.2, zw + 0.35, h.RIDGE)
+        g.box(h.IX - 0.05, h.IX + 0.45, -h.IY, h.IY, zw - 0.2, zw + 0.35, h.RIDGE)
+    for line in hips:
+        sweep(g, line, 0.55, 0.45, key=h.RIDGE)
+        lo = line[0]
+        out = Vector((lo.x, lo.y, 0)).normalized()
+        c = lo + out * 0.25 + Vector((0, 0, -0.2))
+        g.box(c.x - 0.2, c.x + 0.2, c.y - 0.2, c.y + 0.2, c.z - 0.2, c.z + 0.2, h.RIDGE)
+    return hips
+
+
 def roofs(h, g, lod=False):
     """Both roofs: the lower skirt (腰檐) round the upper storey and the 歇山 over it. Returns the hip lines."""
     hips = []
@@ -552,20 +620,23 @@ def roofs(h, g, lod=False):
     RL, DL = h.LOWER, (h.LOWER["D"] - h.IY if h.LOWER else 0.0)
     for rot in range(4 if h.LOWER else 0):
         A, De = (h.LOWER["A"], h.LOWER["D"]) if rot % 2 == 0 else (h.LOWER["D"], h.LOWER["A"])
-        rows = roof_face(g, RL, DL, rot, A, De, DL, rows=4 if lod else 8, waves=not lod, cols=10, pitch=h.PITCH, amp=h.AMP, trim=h.TRIM)
+        rows = roof_face(g, RL, DL, rot, A, De, DL, rows=4 if lod else getattr(h, "LOWER_ROWS", 8), waves=not lod, cols=10, pitch=h.PITCH, amp=h.AMP, trim=h.TRIM)
         if lod:
             continue
         eave_edge(g, rows[0], key=h.RIDGE if h.TRIM else "tile")
         soffit(g, RL, DL, rot, A, De, h.BEAM[3] + 0.08, span=h.OVERHANG)
         hips.append([r[-1] for r in rows])
+    kind = getattr(h, "KIND", "xieshan")
+    if kind != "xieshan":
+        return roofs_hip(h, g, hips, RL, lod)
     # the upper roof: front and back run to the ridge and on past the hips to the gables; the ends stop at the gable foot
     RU, DU = h.UPPER, h.UPPER["D"]
     XP = h.GABLE_X + 0.8
     for rot in range(4):
         if rot % 2 == 0:
-            rows = roof_face(g, RU, DU, rot, h.UPPER["A"], h.UPPER["D"], h.UPPER["D"], cap=XP, rows=6 if lod else 14, waves=not lod, cols=12, pitch=h.PITCH, amp=h.AMP, trim=h.TRIM)
+            rows = roof_face(g, RU, DU, rot, h.UPPER["A"], h.UPPER["D"], h.UPPER["D"], cap=XP, rows=6 if lod else getattr(h, "ROWS", 14), waves=not lod, cols=12, pitch=h.PITCH, amp=h.AMP, trim=h.TRIM)
         else:
-            rows = roof_face(g, RU, DU, rot, h.UPPER["D"], h.UPPER["A"], h.UPPER["A"] - XP, rows=3 if lod else 6, waves=not lod, cols=6, pitch=h.PITCH, amp=h.AMP, trim=h.TRIM)
+            rows = roof_face(g, RU, DU, rot, h.UPPER["D"], h.UPPER["A"], h.UPPER["A"] - XP, rows=3 if lod else getattr(h, "END_ROWS", 6), waves=not lod, cols=6, pitch=h.PITCH, amp=h.AMP, trim=h.TRIM)
             if not lod:
                 hips.append([r[0] for r in rows])
                 hips.append([r[-1] for r in rows])

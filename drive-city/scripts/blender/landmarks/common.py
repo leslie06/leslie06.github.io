@@ -122,5 +122,8 @@ def save_and_export(out, argv):
         bpy.ops.bcity.check()
         for it in bpy.context.scene.bcity_issues:
             print(" ", it.level, it.text)
-        bpy.ops.bcity.export(dry=False)
-        print(bpy.data.texts["B城导入日志"].as_string())
+        try:
+            bpy.ops.bcity.export(dry=False)
+        finally:
+            log = bpy.data.texts.get("B城导入日志")
+            print(log.as_string() if log else "(no import log)")

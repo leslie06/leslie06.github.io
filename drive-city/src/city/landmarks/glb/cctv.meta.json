@@ -1,0 +1,45 @@
+{
+  "id": "cctv",
+  "name": {
+    "zh": "中央电视台总部大楼",
+    "en": "CCTV Headquarters"
+  },
+  "lat": 39.913812,
+  "lon": 116.457966,
+  "headingDeg": 0,
+  "file": "cctv.glb",
+  "version": "74cb9841",
+  "footprint": [
+    [-79.6, -84.5],
+    [79.6, -84.5],
+    [79.6, 84.5],
+    [-79.6, 84.5]
+  ],
+  "clear": [
+    [
+      [-79.6, -84.5],
+      [79.6, -84.5],
+      [79.6, 84.5],
+      [-79.6, 84.5]
+    ]
+  ],
+  "height": 238.5,
+  "farDistance": 1000,
+  "stats": {
+    "triangles": 686,
+    "farTriangles": 52,
+    "materials": 9,
+    "farMaterials": 3,
+    "colliders": {
+      "solid": 6,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 0,
+    "maxTexture": 0,
+    "footprintArea": 26905,
+    "bytes": 39628,
+    "source": "cctv.glb"
+  }
+}

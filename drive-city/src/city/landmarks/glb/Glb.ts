@@ -4,6 +4,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ColliderSpec, EnvUniforms, LandmarkDef, LandmarkModel } from '../../../game/Contracts';
 import { LANDMARK_LIGHTS } from '../kit/mats';
+import { facadeMaterial, type FacadeSpec } from '../kit/facade';
 import { FAR_LOD_DISTANCE } from '../kit/model';
 
 /**
@@ -32,6 +33,10 @@ import { FAR_LOD_DISTANCE } from '../kit/model';
  *   - `glowStrength` scales either (default 1)
  *   - `glowColor` "#rrggbb", or [r, g, b] linear (a Blender colour property; flood default warm #ffcf94)
  *   - `emit` "night": Blender emission shows at night only (lit windows); otherwise it shows all day.
+ *   - `facade` a JSON FacadeSpec (kit/facade.ts, `side` may be "double"): the material becomes the kit's
+ *     curtain wall, drawn in the shader from the UVs in metres (u along the wall, v height): floor
+ *     slabs, mullions, per-pane tint, lit windows at night, diagrid, belt floors, a lit crown. The
+ *     towers' skins: Blender gives the form, the shader the glass at any distance.
  *   - `layer` N: depth layering against the city's ground (city/Materials.ts `layer`: plaza 4, road 5,
  *     paint 7): anything flat within a metre of the ground needs one above them, or at a grazing angle
  *     their polygon offset draws the paving over it (the flower basket's parterre at 0.3 m, 70 m away).
@@ -222,6 +227,21 @@ const patched = new WeakSet<THREE.Material>();
 const FLOOD_SHAPE = { base: 0.2, under: 0.6, top: 0.15, foot: 0.45, footH: 6 };
 const FLOOD = '#ffcf94';
 
+/** The curtain wall a material asks for with its `facade` custom property, if any. */
+export function facadeSpecOf(mat: THREE.Material): FacadeSpec | null {
+  const f = (mat.userData as { facade?: unknown }).facade;
+  if (!f) return null;
+  let spec: Record<string, unknown>;
+  try { spec = typeof f === 'string' ? JSON.parse(f) : { ...(f as object) }; } catch { console.warn(`glb: ${mat.name}: facade is not JSON`); return null; }
+  if (typeof spec.floorH !== 'number' || typeof spec.colW !== 'number' || typeof spec.glass !== 'string' || typeof spec.frame !== 'string') {
+    console.warn(`glb: ${mat.name}: facade needs floorH, colW, glass and frame`);
+    return null;
+  }
+  if (spec.side === 'double') spec.side = THREE.DoubleSide;
+  else if (typeof spec.side !== 'number') delete spec.side;
+  return spec as unknown as FacadeSpec;
+}
+
 /** The game's night and rain looks, from the material's custom properties (glTF extras). */
 export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
   if (patched.has(mat)) return;
@@ -282,6 +302,15 @@ export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
 export function buildGlbModel(scene: THREE.Object3D, env: EnvUniforms, meta: GlbMeta): LandmarkModel {
   scene.updateMatrixWorld(true);
   const detail: THREE.Mesh[] = [], far: THREE.Mesh[] = [], colliders: ColliderSpec[] = [];
+  // Curtain walls: one kit facade material per Blender material, shared by both levels.
+  const facades = new Map<string, THREE.Material>();
+  const facadeOf = (m: THREE.Material): THREE.Material => {
+    const spec = facadeSpecOf(m);
+    if (!spec) return m;
+    let f = facades.get(m.uuid);
+    if (!f) { f = facadeMaterial(env, spec); f.name = m.name; patched.add(f); facades.set(m.uuid, f); }
+    return f;
+  };
   scene.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -292,6 +321,7 @@ export function buildGlbModel(scene: THREE.Object3D, env: EnvUniforms, meta: Glb
       if (c) colliders.push(c);
       return;
     }
+    mesh.material = Array.isArray(mesh.material) ? mesh.material.map(facadeOf) : facadeOf(mesh.material);
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) prepareMaterial(m, env);
     (role === 'far' ? far : detail).push(mesh);
   });

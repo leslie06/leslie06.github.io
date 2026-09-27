@@ -6,10 +6,16 @@ import { kitMaterials, paintMetal, setLampState, type LampArray } from '../vehic
 import { LAMP } from '../vehicle/Mesher';
 import { SPEC_OF, type VehicleSpec } from '../vehicle/Spec';
 import type { Vehicle } from '../vehicle/Vehicle';
+import { simplifyIndex } from '../vehicle/KitLod';
 
 interface WheelSet { mesh: THREE.InstancedMesh; perCar: number; slots: { k: number; dx: number }[] }
 
 const _yFlip = new THREE.Matrix4().makeRotationY(Math.PI);
+
+/** How far past a car's own length a shadow can fall into view from outside it (low sun). */
+const SHADOW_REACH = 8;
+/** The view every kit culls against this frame (`CarKit.view`); null draws every car. */
+const view = { on: false, frustum: new THREE.Frustum(), m: new THREE.Matrix4(), sphere: new THREE.Sphere() };
 
 /**
  * Traffic cars of one body type, drawn as instances of that body's low-detail model: every car of
@@ -22,6 +28,13 @@ const _yFlip = new THREE.Matrix4().makeRotationY(Math.PI);
  *
  * paint, trim and lamp share one instance-matrix buffer. Private cars fold the taxi parts away in
  * the vertex shader (no per-part meshes).
+ *
+ * Two savings (2026-09-27; the cars were 60% of a frame's triangles on high at the spawn, 35% on
+ * low): the paint, trim and wheels are simplified to about a fifth (vehicle/KitLod.ts, under a
+ * centimetre of error on the paint), and `set` leaves out cars outside the camera's view - the
+ * meshes are not frustum culled (their instances span the pool), so before this every car within
+ * 330 m was drawn, behind the camera too, and again into every shadow cascade. Callers still write
+ * `set(0..n-1)` then `commit(n)`; the kit packs the cars it keeps.
  */
 export class CarKit {
   readonly spec: VehicleSpec;
@@ -40,6 +53,18 @@ export class CarKit {
   private _q = new THREE.Quaternion(); private _e = new THREE.Euler(0, 0, 0, 'YXZ'); private _s = new THREE.Vector3(1, 1, 1);
   private _p = new THREE.Vector3();
   private headOn: boolean | null = null;
+  /** Cars kept since the last commit, and the culling radius of one (half its length plus a shadow). */
+  private kept = 0;
+  private readonly cullR: number;
+
+  /** Once a frame, before any kit is written: cull against `camera` (null: draw every car). */
+  static view(camera: THREE.Camera | null): void {
+    view.on = !!camera;
+    if (!camera) return;
+    camera.updateMatrixWorld();
+    view.m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    view.frustum.setFromProjectionMatrix(view.m);
+  }
 
   constructor(scene: THREE.Scene, readonly cap: number, livery: Livery = TAXI_LIVERY, readonly bodyType: BodyType = 'sedan') {
     const spec = this.spec = SPEC_OF[bodyType];
@@ -64,11 +89,14 @@ export class CarKit {
       scene.add(im);
       this.body.push(im);
     };
+    this.cullR = Math.hypot(spec.chassis.reduce((a, c) => Math.max(a, Math.abs(c.at[2]) + c.half[2]), 0), 1.5) + SHADOW_REACH;
     const b = parts.body;
     const paint = b.build('paint');
+    const trim = b.build('trim');
+    for (const g of [paint, trim]) if (g) simplifyIndex(g, 0.2, 0.005);
     if (paint) { paint.setAttribute('instUpper', this.upper); paint.setAttribute('instLower', this.lower); }
     add(paint, mats.paint, true);
-    add(b.build('trim'), mats.trim, true);
+    add(trim, mats.trim, true);
     // Lamps and the taxi-only parts in one mesh; taxi parts carry flag 2 in aux.y.
     const lamp = b.build('lamp'), taxi = b.build('taxi');
     if (taxi) { const a = taxi.getAttribute('aux'); for (let i = 0; i < a.count; i++) a.setY(i, a.getY(i) + 2); }
@@ -79,6 +107,7 @@ export class CarKit {
     // Wheels: front and rear (twin rear tyres are two instances each side).
     this.hubs = spec.wheels.map((w) => new THREE.Vector3(spec.single ? 0 : w.x, 0, w.z));
     const wf = parts.wheel.build('trim')!, wr = parts.wheelRear?.build('trim') ?? null;
+    for (const g of [wf, wr]) if (g) simplifyIndex(g, 0.4, 0.01);
     // A two-wheeler: one wheel per axle at the centre.
     const rearSlots = spec.single ? [{ k: 2, dx: 0 }] : parts.dual > 0 ? [2, 3].flatMap((k) => [{ k, dx: parts.dual / 2 }, { k, dx: -parts.dual / 2 }]) : [{ k: 2, dx: 0 }, { k: 3, dx: 0 }];
     const front = spec.single ? [{ k: 0, dx: 0 }] : [{ k: 0, dx: 0 }, { k: 1, dx: 0 }];
@@ -95,8 +124,15 @@ export class CarKit {
     this.drawCalls = this.body.length + this.wheels.length;
   }
 
-  /** Write car `i`: interpolated pose, per-car colours, taxi or not. Brake and reverse lamps follow the car. */
-  set(i: number, pos: THREE.Vector3, quat: THREE.Quaternion, car: Vehicle, upper: THREE.Color, lower: THREE.Color, taxi: boolean): void {
+  /**
+   * Write the caller's car `_i` (cars are written 0..n-1 each frame, then `commit(n)`): interpolated
+   * pose, per-car colours, taxi or not. Brake and reverse lamps follow the car. A car out of view is
+   * left out, and the ones kept are packed.
+   */
+  set(_i: number, pos: THREE.Vector3, quat: THREE.Quaternion, car: Vehicle, upper: THREE.Color, lower: THREE.Color, taxi: boolean): void {
+    if (this.kept >= this.cap) return;
+    if (view.on && !view.frustum.intersectsSphere(view.sphere.set(pos, this.cullR))) return;
+    const i = this.kept++;
     this._m.compose(pos, quat, this._s);
     this._m.toArray(this.matrix.array, i * 16);
     const u = this.upper.array as Float32Array, l = this.lower.array as Float32Array, f = this.flags.array as Float32Array;
@@ -133,8 +169,10 @@ export class CarKit {
   /** Police light bar (all cars of this kit flash together). */
   setBeacons(red: number, blue: number): void { this.levels[LAMP.beaconR] = red; this.levels[LAMP.beaconB] = blue; }
 
-  /** Commit after writing `n` cars. */
-  commit(n: number): void {
+  /** Commit after writing the frame's cars (`_n` of them; the kit draws the ones it kept). */
+  commit(_n: number): void {
+    const n = this.kept;
+    this.kept = 0;
     for (const im of this.body) im.count = n;
     for (const a of [this.matrix, this.upper, this.lower, this.flags]) {
       a.clearUpdateRanges();

@@ -184,6 +184,31 @@ describe('Blender glb landmarks', () => {
     expect([bed.polygonOffset, bed.polygonOffsetFactor, bed.polygonOffsetUnits]).toEqual([true, -10, -10]);
   });
 
+  it('a `facade` material becomes the kit curtain wall, and keeps its UVs in metres through the import', async () => {
+    const doc = fixture();
+    // a glass wall 40 m long and 60 m high, u and v in metres: untextured, so prune would drop the UVs
+    const glass = doc.createMaterial('Glass').setExtras({ facade: JSON.stringify({ floorH: 4.2, colW: 1.25, glass: '#7e98ae', frame: '#dfe3e6', side: 'double' }) });
+    const buf = doc.getRoot().listBuffers()[0];
+    const pr = doc.createPrimitive()
+      .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(new Float32Array([-20, 0, 20, 20, 0, 20, 20, 60, 20, -20, 60, 20])).setBuffer(buf))
+      .setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(new Float32Array([0, 0, 40, 0, 40, 60, 0, 60])).setBuffer(buf))
+      .setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint32Array([0, 1, 2, 0, 2, 3])).setBuffer(buf))
+      .setMaterial(glass);
+    doc.getRoot().listScenes()[0].addChild(doc.createNode('Skin').setMesh(doc.createMesh('Skin').addPrimitive(pr)));
+    const { model } = await load(doc);
+    let wall: THREE.Mesh | null = null;
+    model.group.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.Material).name === 'Glass' && o.parent?.name === 'detail') wall = m; });
+    expect(wall).not.toBeNull();
+    const mat = wall!.material as THREE.MeshStandardMaterial;
+    expect(mat.customProgramCacheKey()).toBe('lm-facade');
+    expect(mat.side).toBe(THREE.DoubleSide);
+    const uv = wall!.geometry.getAttribute('uv');
+    let umax = 0, vmax = 0;
+    for (let i = 0; i < uv.count; i++) { umax = Math.max(umax, uv.getX(i)); vmax = Math.max(vmax, uv.getY(i)); }
+    expect(umax).toBeCloseTo(40, 3);
+    expect(vmax).toBeCloseTo(60, 3);
+  });
+
   it('without LOD1 the far level draws the detail geometry again, shared', async () => {
     const { model } = await load(fixture(false));
     const lod = model.group.getObjectByName('lod') as THREE.LOD;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import RABBIT_MODEL from './rabbit.json';
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
 import type { Blip, HudApi, MissionApi, NavApi, PlayerApi } from '../game/Contracts';
@@ -44,20 +45,21 @@ export async function install(engine: Engine): Promise<void> {
     geo.deleteAttribute('uv');
     return geo;
   };
-  const figure = mergeGeometries([
-    part(new THREE.CylinderGeometry(0.2, 0.24, 0.1, 12).translate(0, 0.05, 0), '#d9a520', 0.4),
-    part(new THREE.CylinderGeometry(0.1, 0.2, 0.34, 12).translate(0, 0.27, 0), '#c8231d'),
-    part(new THREE.CylinderGeometry(0.13, 0.12, 0.14, 12).translate(0, 0.43, 0), '#e8b62a', 0.5),
-    part(new THREE.SphereGeometry(0.12, 12, 9).scale(1, 1.08, 1).translate(0, 0.6, 0), '#f6f1e6'),
-    part(new THREE.SphereGeometry(0.035, 6, 5).translate(0, 0.62, 0.115), '#e04a6a'),
-    part(new THREE.CapsuleGeometry(0.035, 0.2, 3, 6).rotateZ(0.18).translate(-0.05, 0.84, 0), '#f6f1e6'),
-    part(new THREE.CapsuleGeometry(0.035, 0.2, 3, 6).rotateZ(-0.18).translate(0.05, 0.84, 0), '#f6f1e6'),
-    part(new THREE.BoxGeometry(0.02, 0.16, 0.035).rotateZ(0.18).translate(-0.05, 0.84, 0.03), '#f08aa0'),
-    part(new THREE.BoxGeometry(0.02, 0.16, 0.035).rotateZ(-0.18).translate(0.05, 0.84, 0.03), '#f08aa0'),
-    // A little pennant on the back, as the fairground figures carry.
-    part(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 4).translate(0, 0.6, -0.13), '#6b4a2a'),
-    part(new THREE.BoxGeometry(0.01, 0.14, 0.18).translate(0, 0.78, -0.22), '#2c6fd6', 0.3),
-  ])!;
+  // The figure is modelled in Blender (scripts/blender/props/rabbit.py -> scripts/vehicles/import.mjs): per
+  // material, positions in millimetres, normals in hundredths; here each gets its colour and night glow.
+  const LOOK: Record<string, [string, number]> = {
+    base: ['#d9a520', 0.4], lotus: ['#3c8a4a', 0], robe: ['#c8231d', 0], gold: ['#e8b62a', 0.5], face: ['#f6f1e6', 0], blush: ['#f08aa0', 0],
+    mouth: ['#e04a6a', 0], eyes: ['#1a1a1a', 0], wood: ['#6b4a2a', 0], plume: ['#d81e1e', 0.3],
+    flag1: ['#2c6fd6', 0.3], flag2: ['#2a9d5a', 0.3], flag3: ['#e2b13c', 0.3], flag4: ['#c8231d', 0.3],
+  };
+  const figure = mergeGeometries(Object.entries(RABBIT_MODEL as Record<string, { p: number[]; n: number[]; i: number[] }>).map(([name, g]) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(g.p, (v) => v / 1000), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(g.n, (v) => v / 100), 3));
+    geo.setIndex(g.i);
+    const [hex, glow] = LOOK[name] ?? ['#ff00ff', 0];
+    return part(geo, hex, glow);
+  }))!;
   const env = engine.get<RenderSystem>('render')?.uniforms;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.1 });
   // A soft self-glow (more at night), so a figure reads in a dark lane.
@@ -78,17 +80,24 @@ export async function install(engine: Engine): Promise<void> {
   engine.scene.add(mesh, rings);
   queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(mesh));
 
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), zero = new THREE.Vector3(0, 0, 0);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   let clock = 0;
+  // Only the figures within DRAW of the camera are written (packed): all 25 were drawn from
+  // anywhere in the city, 5% of a low-tier frame's triangles for things a few pixels high.
+  const DRAW = 250;
   const pose = () => {
+    const cam = engine.camera.position;
+    let k = 0;
     for (let i = 0; i < n; i++) {
       const r = RABBITS[i];
-      if (found.has(i)) { m4.compose(p.set(r.x, -50, r.z), q.identity(), zero); mesh.setMatrixAt(i, m4); rings.setMatrixAt(i, m4); continue; }
+      if (found.has(i) || Math.abs(r.x - cam.x) > DRAW || Math.abs(r.z - cam.z) > DRAW) continue;
       m4.compose(p.set(r.x, 0.55 + Math.sin(clock * 2 + i) * 0.08, r.z), q.setFromAxisAngle(up, clock * 1.4 + i), s.set(1.1, 1.1, 1.1));
-      mesh.setMatrixAt(i, m4);
+      mesh.setMatrixAt(k, m4);
       m4.compose(p.set(r.x, 0.07, r.z), q.identity(), s.setScalar(1 + 0.08 * Math.sin(clock * 3 + i)));
-      rings.setMatrixAt(i, m4);
+      rings.setMatrixAt(k, m4);
+      k++;
     }
+    mesh.count = k; rings.count = k;
     mesh.instanceMatrix.needsUpdate = true; rings.instanceMatrix.needsUpdate = true;
   };
 

@@ -1,0 +1,37 @@
+{
+  "id": "wumen",
+  "name": {
+    "zh": "故宫午门",
+    "en": "Meridian Gate"
+  },
+  "lat": 39.912119,
+  "lon": 116.390993,
+  "headingDeg": -1.49,
+  "file": "wumen.glb",
+  "version": "4fb337c3",
+  "footprint": [
+    [-63.3, -56],
+    [63.3, -56],
+    [63.3, 53.6],
+    [-63.3, 53.6]
+  ],
+  "height": 36.95,
+  "farDistance": 400,
+  "stats": {
+    "triangles": 244338,
+    "farTriangles": 5226,
+    "materials": 8,
+    "farMaterials": 5,
+    "colliders": {
+      "solid": 10,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 10,
+    "textures": 4,
+    "maxTexture": 2048,
+    "footprintArea": 13875,
+    "bytes": 1703392,
+    "source": "wumen.glb"
+  }
+}

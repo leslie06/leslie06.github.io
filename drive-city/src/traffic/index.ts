@@ -12,6 +12,7 @@ import { ControlFilter } from '../vehicle/ControlFilter';
 import { LaneGraph } from './LaneGraph';
 import { Signals, SignalHeads } from './Signals';
 import { CarKit } from './CarKit';
+import { readyKitLod } from '../vehicle/KitLod';
 import { AiDriver, lineStats, type Leader } from './AiDriver';
 
 interface Npc {
@@ -67,6 +68,7 @@ const BUS_ROADS = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiar
  * of them can later be taken by the player.
  */
 export async function install(engine: Engine): Promise<void> {
+  await readyKitLod();
   const world = engine.get<WorldApi & { routes?: Routes }>('world');
   if (!world?.routes) return;
   const g = new LaneGraph(world.routes.net);
@@ -400,6 +402,8 @@ export async function install(engine: Engine): Promise<void> {
       }
     },
     update(_dt, alpha) {
+      // Traffic updates before police, races and events: set the view every kit culls against.
+      CarKit.view(engine.camera);
       for (const b of kits.keys()) written.set(b, 0);
       for (const n of pool) {
         if (!n.active) continue;

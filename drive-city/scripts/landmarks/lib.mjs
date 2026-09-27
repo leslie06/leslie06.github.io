@@ -134,9 +134,14 @@ export function inspect(doc) {
   };
 }
 
-/** Dedup, prune, textures to webp within `maxTexture`, meshopt compression. */
+/**
+ * Dedup, prune, textures to webp within `maxTexture`, meshopt compression. A `facade` material (the
+ * kit's curtain wall, drawn from the UVs) has no texture, and prune drops the UVs of untextured
+ * materials: with one in the file the attributes are kept.
+ */
 export async function optimize(doc, { maxTexture = 2048, sharp = null } = {}) {
-  const steps = [dedup(), prune({ keepLeaves: true, keepExtras: true })];
+  const facade = doc.getRoot().listMaterials().some((m) => m.getExtras()?.facade);
+  const steps = [dedup(), prune({ keepLeaves: true, keepExtras: true, keepAttributes: facade })];
   if (sharp && doc.getRoot().listTextures().length) steps.push(textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [maxTexture, maxTexture] }));
   steps.push(meshopt({ encoder: MeshoptEncoder, level: 'medium', quantizePosition: 16 }));
   await doc.transform(...steps);

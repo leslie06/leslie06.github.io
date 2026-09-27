@@ -1,0 +1,45 @@
+{
+  "id": "citic",
+  "name": {
+    "zh": "中国尊",
+    "en": "CITIC Tower"
+  },
+  "lat": 39.911501,
+  "lon": 116.460236,
+  "headingDeg": 0,
+  "file": "citic.glb",
+  "version": "178aaeb0",
+  "footprint": [
+    [-41, -39.5],
+    [41, -39.5],
+    [41, 39],
+    [-41, 39]
+  ],
+  "clear": [
+    [
+      [-46, -44.5],
+      [46, -44.5],
+      [46, 38.5],
+      [-46, 38.5]
+    ]
+  ],
+  "height": 528,
+  "farDistance": 1200,
+  "stats": {
+    "triangles": 4978,
+    "farTriangles": 502,
+    "materials": 10,
+    "farMaterials": 3,
+    "colliders": {
+      "solid": 11,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 0,
+    "maxTexture": 0,
+    "footprintArea": 6437,
+    "bytes": 99752,
+    "source": "citic.glb"
+  }
+}
