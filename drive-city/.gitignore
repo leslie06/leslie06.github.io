@@ -5,3 +5,5 @@ shots
 .cache
 public/textures
 .DS_Store
+scripts/blender/*.zip
+__pycache__/

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "shot": "node scripts/shot.mjs",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "blender-addon": "cd scripts/blender/bcity_landmark && rm -f ../bcity_landmark.zip && zip -qX ../bcity_landmark.zip blender_manifest.toml __init__.py && echo scripts/blender/bcity_landmark.zip"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",

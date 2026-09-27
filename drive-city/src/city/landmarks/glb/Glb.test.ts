@@ -5,7 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { createIO, inspect, optimize } from '../../../../scripts/landmarks/lib.mjs';
 import type { ColliderSpec, EnvUniforms } from '../../../game/Contracts';
-import { buildGlbModel, type GlbMeta } from './Glb';
+import { buildGlbModel, prepareMaterial, type GlbMeta } from './Glb';
 
 /**
  * The Blender pipeline end to end, without Blender: a document shaped like Blender's glTF export
@@ -148,6 +148,13 @@ describe('Blender glb landmarks', () => {
     mats.get('Tile')!.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer);
     expect(shader.fragmentShader).toContain('totalEmissiveRadiance *= uNight;');
     expect(shader.uniforms.uNight).toBe(env.uNight);
+    // a Blender colour property arrives as a linear [r, g, b]
+    const blender = new THREE.MeshStandardMaterial();
+    blender.userData = { glowColor: [0.2, 0.4, 0.6] };
+    prepareMaterial(blender, env);
+    const s2 = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: '', fragmentShader: '#include <common>\n#include <emissivemap_fragment>' };
+    blender.onBeforeCompile(s2 as unknown as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer);
+    expect((s2.uniforms.uGlowColor.value as THREE.Color).toArray()).toEqual([0.2, 0.4, 0.6]);
   });
 
   it('without LOD1 the far level draws the detail geometry again, shared', async () => {

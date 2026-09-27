@@ -13,7 +13,9 @@ import { FAR_LOD_DISTANCE } from '../kit/model';
  * zones, height: the tiles drop the OSM buildings under it); the glb loads in the background and the
  * city places it with its colliders when it arrives.
  *
- * Blender conventions (object names, or the name of any parent empty; case does not matter):
+ * Blender conventions (object names, or the name of any parent empty or collection - the export
+ * writes collections as nodes; case does not matter). scripts/blender/bcity_landmark is an add-on
+ * that sets all of this up and exports straight into the game:
  *   - Axes: Blender +X east, +Y north, +Z up, metres, origin at the anchor on the ground.
  *   - `COL_*`      solid collider, not drawn. A box with only a yaw becomes a box, anything else its convex hull.
  *   - `WALK_*`     like COL_, but only people collide with it: stair ramps (a ramp you can walk up, a car can drive up).
@@ -24,7 +26,7 @@ import { FAR_LOD_DISTANCE } from '../kit/model';
  * Material custom properties (exported as glTF extras, "Include > Custom Properties"):
  *   - `wet`  "surface" (default: glass, glaze, paint) | "ground" (puddles on flat tops) | "damp" | "none"
  *   - `glow` "flood" (default: floodlit at night like every landmark) | "lamp" (self-lit) | "none"
- *   - `glowColor` "#rrggbb" (flood default warm #ffcf94)
+ *   - `glowColor` "#rrggbb", or [r, g, b] linear (a Blender colour property; flood default warm #ffcf94)
  *   - `emit` "night": Blender emission shows at night only (lit windows); otherwise it shows all day.
  * Visible meshes are merged per material into one draw call per level; a mesh linked (Alt+D) six
  * or more times becomes one InstancedMesh.
@@ -214,7 +216,7 @@ const FLOOD = '#ffcf94';
 export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
   if (patched.has(mat)) return;
   patched.add(mat);
-  const x = mat.userData as { wet?: string; glow?: string; glowColor?: string; emit?: string };
+  const x = mat.userData as { wet?: string; glow?: string; glowColor?: string | number[]; emit?: string };
   const wet = x.wet ?? 'surface';
   if (wet === 'none') delete mat.userData.wet;
   else mat.userData.wet = wet === 'damp' ? true : wet;
@@ -224,7 +226,8 @@ export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
   const glow = x.glow === 'lamp' || x.glow === 'none' ? x.glow : 'flood';
   const night = x.emit === 'night';
   if (glow === 'none' && !night) return;
-  const col = new THREE.Color(x.glowColor ?? (glow === 'lamp' ? '#fff3dc' : FLOOD));
+  const gc = x.glowColor;
+  const col = Array.isArray(gc) ? new THREE.Color(gc[0] ?? 1, gc[1] ?? 1, gc[2] ?? 1) : new THREE.Color(gc ?? (glow === 'lamp' ? '#fff3dc' : FLOOD));
   const gain = glow === 'lamp' ? LANDMARK_LIGHTS.lamps : LANDMARK_LIGHTS.flood;
   const hook = (s: THREE.WebGLProgramParametersWithUniforms) => {
     s.uniforms.uNight = env.uNight;
