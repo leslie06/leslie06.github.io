@@ -28,8 +28,8 @@ import subprocess
 import webbrowser
 from itertools import product
 
+import bpy  # before bmesh: the bpy module only provides bmesh once bpy is loaded
 import bmesh
-import bpy
 from bpy.props import BoolProperty, CollectionProperty, EnumProperty, FloatProperty, FloatVectorProperty, IntProperty, PointerProperty, StringProperty
 from mathutils import Matrix, Vector
 
@@ -311,6 +311,19 @@ def _emit_set(self, v):
         self["emit"] = "night"
     elif "emit" in self:
         del self["emit"]
+
+
+def _gs_get(self):
+    v = self.get("glowStrength")
+    return float(v) if isinstance(v, (int, float)) else 1.0
+
+
+def _gs_set(self, v):
+    if abs(v - 1.0) < 1e-6:
+        if "glowStrength" in self:
+            del self["glowStrength"]
+    else:
+        self["glowStrength"] = float(v)
 
 
 def _gc_get(self):
@@ -823,6 +836,7 @@ class BCITY_PT_material(_Panel, bpy.types.Panel):
             row = col.row(align=True)
             row.prop(mat, "bcity_glow_color")
             row.operator("bcity.reset_glow_color", text="", icon="LOOP_BACK")
+            col.prop(mat, "bcity_glow_strength")
         col.prop(mat, "bcity_emit_night")
 
 
@@ -864,11 +878,12 @@ def register():
     bpy.types.Material.bcity_wet = EnumProperty(name="雨天", items=WET, get=_wet_get, set=_wet_set)
     bpy.types.Material.bcity_glow = EnumProperty(name="夜间", items=GLOW, get=_glow_get, set=_glow_set)
     bpy.types.Material.bcity_glow_color = FloatVectorProperty(name="光色", subtype="COLOR", size=3, min=0.0, max=1.0, get=_gc_get, set=_gc_set)
+    bpy.types.Material.bcity_glow_strength = FloatProperty(name="夜间强度", description="泛光或自发光的强弱（1 = 默认）；浅色大墙面嫌亮就调低", min=0.0, soft_max=3.0, get=_gs_get, set=_gs_set)
     bpy.types.Material.bcity_emit_night = BoolProperty(name="自发光只在夜里亮", description="材质的 Emission 白天不显示（亮着的窗户）", get=_emit_get, set=_emit_set)
 
 
 def unregister():
-    for attr in ("bcity_wet", "bcity_glow", "bcity_glow_color", "bcity_emit_night"):
+    for attr in ("bcity_wet", "bcity_glow", "bcity_glow_color", "bcity_glow_strength", "bcity_emit_night"):
         if hasattr(bpy.types.Material, attr):
             delattr(bpy.types.Material, attr)
     del bpy.types.Scene.bcity_issues

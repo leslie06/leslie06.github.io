@@ -147,6 +147,12 @@ describe('Blender glb landmarks', () => {
     const shader = { uniforms: {} as Record<string, unknown>, vertexShader: '', fragmentShader: '#include <common>\n#include <emissivemap_fragment>' };
     mats.get('Tile')!.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer);
     expect(shader.fragmentShader).toContain('totalEmissiveRadiance *= uNight;');
+    // a flood-lit material weights its floodlight per vertex (height and normal), a lamp does not
+    const flood = { uniforms: {} as Record<string, unknown>, vertexShader: '#include <common>\n#include <begin_vertex>', fragmentShader: '#include <common>\n#include <emissivemap_fragment>' };
+    mats.get('Stone')!.onBeforeCompile(flood as unknown as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer);
+    expect(flood.vertexShader).toContain('vLmGlow = max(0.08');
+    expect(flood.fragmentShader).toContain('* vLmGlow');
+    expect(shader.fragmentShader).not.toContain('vLmGlow');
     expect(shader.uniforms.uNight).toBe(env.uNight);
     // a Blender colour property arrives as a linear [r, g, b]
     const blender = new THREE.MeshStandardMaterial();

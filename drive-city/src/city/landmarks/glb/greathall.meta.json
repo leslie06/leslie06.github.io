@@ -1,0 +1,52 @@
+{
+  "id": "greathall",
+  "name": {
+    "zh": "人民大会堂",
+    "en": "Great Hall of the People"
+  },
+  "lat": 39.9034544,
+  "lon": 116.3872832,
+  "headingDeg": -2.056,
+  "file": "greathall.glb",
+  "version": "cc2ff047",
+  "footprint": [
+    [-107.27, -66.4],
+    [-74.34, -170.3],
+    [106.4, -170.27],
+    [108.93, -40.37],
+    [108.93, 40.37],
+    [106.4, 170.27],
+    [-74.34, 170.3],
+    [-107.27, 66.4]
+  ],
+  "clear": [
+    [
+      [-109.87, -67.89],
+      [-75.65, -173],
+      [107.89, -172.87],
+      [111.71, -41.49],
+      [111.71, 41.49],
+      [107.89, 172.87],
+      [-75.65, 173],
+      [-109.87, 67.89]
+    ]
+  ],
+  "height": 58,
+  "stats": {
+    "triangles": 4996,
+    "farTriangles": 86,
+    "materials": 10,
+    "farMaterials": 1,
+    "colliders": {
+      "solid": 20,
+      "walk": 1,
+      "mesh": 0
+    },
+    "instancedMeshes": 2,
+    "textures": 3,
+    "maxTexture": 512,
+    "footprintArea": 69882,
+    "bytes": 126616,
+    "source": "greathall.glb"
+  }
+}

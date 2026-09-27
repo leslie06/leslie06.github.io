@@ -25,7 +25,9 @@ import { FAR_LOD_DISTANCE } from '../kit/model';
  *   - `FOOTPRINT`, `CLEAR_*`  read by the import script only (footprint, ground kept free of street furniture).
  * Material custom properties (exported as glTF extras, "Include > Custom Properties"):
  *   - `wet`  "surface" (default: glass, glaze, paint) | "ground" (puddles on flat tops) | "damp" | "none"
- *   - `glow` "flood" (default: floodlit at night like every landmark) | "lamp" (self-lit) | "none"
+ *   - `glow` "flood" (default: floodlit at night like every landmark - brightest at the foot of a wall
+ *     and under eaves, fading up it, roofs darkest; kit/geo.ts floodGlow's shape) | "lamp" (self-lit) | "none"
+ *   - `glowStrength` scales either (default 1)
  *   - `glowColor` "#rrggbb", or [r, g, b] linear (a Blender colour property; flood default warm #ffcf94)
  *   - `emit` "night": Blender emission shows at night only (lit windows); otherwise it shows all day.
  * Visible meshes are merged per material into one draw call per level; a mesh linked (Alt+D) six
@@ -210,13 +212,15 @@ export function mergeLevel(meshes: THREE.Mesh[], name: string): THREE.Group {
 }
 
 const patched = new WeakSet<THREE.Material>();
+/** Floodlight weight: base, + under a soffit, - on a roof, + at the foot of a wall fading over footH m. */
+const FLOOD_SHAPE = { base: 0.2, under: 0.6, top: 0.15, foot: 0.45, footH: 6 };
 const FLOOD = '#ffcf94';
 
 /** The game's night and rain looks, from the material's custom properties (glTF extras). */
 export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
   if (patched.has(mat)) return;
   patched.add(mat);
-  const x = mat.userData as { wet?: string; glow?: string; glowColor?: string | number[]; emit?: string };
+  const x = mat.userData as { wet?: string; glow?: string; glowColor?: string | number[]; glowStrength?: number; emit?: string };
   const wet = x.wet ?? 'surface';
   if (wet === 'none') delete mat.userData.wet;
   else mat.userData.wet = wet === 'damp' ? true : wet;
@@ -229,15 +233,34 @@ export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
   const gc = x.glowColor;
   const col = Array.isArray(gc) ? new THREE.Color(gc[0] ?? 1, gc[1] ?? 1, gc[2] ?? 1) : new THREE.Color(gc ?? (glow === 'lamp' ? '#fff3dc' : FLOOD));
   const gain = glow === 'lamp' ? LANDMARK_LIGHTS.lamps : LANDMARK_LIGHTS.flood;
+  const strength = typeof x.glowStrength === 'number' ? x.glowStrength : 1;
+  const F = FLOOD_SHAPE;
   const hook = (s: THREE.WebGLProgramParametersWithUniforms) => {
     s.uniforms.uNight = env.uNight;
     s.uniforms.uGlowGain = gain;
     s.uniforms.uGlowColor = { value: col };
+    s.uniforms.uGlowStrength = { value: strength };
+    if (glow === 'flood') {
+      // the floodlight's weight per vertex from its world height and normal (kit/geo.ts floodGlow)
+      s.vertexShader = s.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying float vLmGlow;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+        {
+          vec4 lmP = vec4(transformed, 1.0);
+          vec3 lmN = objectNormal;
+          #ifdef USE_INSTANCING
+          lmP = instanceMatrix * lmP; lmN = mat3(instanceMatrix) * lmN;
+          #endif
+          lmP = modelMatrix * lmP; float ny = normalize(mat3(modelMatrix) * lmN).y;
+          vLmGlow = max(0.08, ${F.base.toFixed(3)} + ${F.under.toFixed(3)} * max(0.0, -ny) - ${F.top.toFixed(3)} * max(0.0, ny)
+            + ${F.foot.toFixed(3)} * exp(-max(0.0, lmP.y) / ${F.footH.toFixed(3)}) * (1.0 - abs(ny)));
+        }`);
+    }
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight;\nuniform float uGlowGain;\nuniform vec3 uGlowColor;')
+      .replace('#include <common>', `#include <common>\nuniform float uNight;\nuniform float uGlowGain;\nuniform vec3 uGlowColor;\nuniform float uGlowStrength;${glow === 'flood' ? '\nvarying float vLmGlow;' : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       ${night ? 'totalEmissiveRadiance *= uNight;' : ''}
-      ${glow === 'none' ? '' : `totalEmissiveRadiance += uNight * uGlowGain * uGlowColor${glow === 'flood' ? ' * diffuseColor.rgb' : ''};`}`);
+      ${glow === 'none' ? '' : `totalEmissiveRadiance += uNight * uGlowGain * uGlowStrength * uGlowColor${glow === 'flood' ? ' * diffuseColor.rgb * vLmGlow' : ''};`}`);
   };
   mat.onBeforeCompile = hook;
   mat.userData.landmarkCompile = hook;
