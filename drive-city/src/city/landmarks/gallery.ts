@@ -124,6 +124,8 @@ function setNight(n: boolean): void {
 const built = new Map<string, LandmarkModel>();
 let current: { def: LandmarkDef; model: LandmarkModel } | null = null;
 let forceFar = q.get('lod') === 'far';
+/** The glb being loaded for the selected landmark (the shot script waits on it). */
+let pendingLoad: Promise<void> = Promise.resolve();
 const box = new THREE.Box3(), sphere = new THREE.Sphere();
 
 function select(id: string): void {
@@ -137,14 +139,25 @@ function select(id: string): void {
     model.group.rotation.y = -def.headingDeg * Math.PI / 180;
     model.group.updateMatrixWorld(true);
     built.set(def.id, model);
+    // a glb (glb/Glb.ts): build gave only the placeholder; show the model once it has loaded
+    if (def.load) {
+      pendingLoad = def.load(env).then((m) => {
+        m.group.userData.buildMs = performance.now() - t0;
+        m.group.rotation.y = -def.headingDeg * Math.PI / 180;
+        m.group.updateMatrixWorld(true);
+        built.set(def.id, m);
+        if (current?.def === def) { select(def.id); frame(lastView); }
+      });
+    }
   }
   scene.add(model.group);
   current = { def, model };
   applyLod();
   // frame the building itself: the optional extras (bridges, columns) would push the camera away
-  const detail = model.group.getObjectByName('detail')!;
+  const detail = model.group.getObjectByName('detail') ?? model.group;
   box.makeEmpty();
   for (const c of detail.children) if (c.name !== 'extras') box.expandByObject(c);
+  if (box.isEmpty()) box.setFromCenterAndSize(new THREE.Vector3(0, model.height / 2, 0), new THREE.Vector3(20, model.height, 20));
   box.getBoundingSphere(sphere);
   fitSun();
   refreshUi();
@@ -164,7 +177,9 @@ function fitSun(): void {
   c.left = -r; c.right = r; c.top = r; c.bottom = -r; c.near = 1; c.far = r * 4 + 120;
   c.updateProjectionMatrix();
 }
+let lastView: View = 'hero';
 function frame(view: View): void {
+  lastView = view;
   const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
   const fov = THREE.MathUtils.degToRad(camera.fov);
   const flatR = Math.hypot(size.x, size.z) / 2;
@@ -235,6 +250,7 @@ window.__lm = {
   async show(id: string, o: { night?: boolean; view?: View; far?: boolean } = {}) {
     forceFar = !!o.far;
     select(id);
+    await pendingLoad;
     setNight(!!o.night);
     frame(o.view ?? 'hero');
     await renderer.compileAsync(scene, camera);

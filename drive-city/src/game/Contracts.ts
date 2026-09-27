@@ -291,7 +291,9 @@ export interface RenderApi extends System {
 export type ColliderSpec =
   | { kind: 'box'; center: [number, number, number]; half: [number, number, number]; yaw?: number; walkOnly?: boolean }
   | { kind: 'cylinder'; center: [number, number, number]; radius: number; halfHeight: number; walkOnly?: boolean }
-  | { kind: 'hull'; points: number[]; walkOnly?: boolean };
+  | { kind: 'hull'; points: number[]; walkOnly?: boolean }
+  /** Concave static geometry (a terrace, a sunken court) as triangles: xyz triples and their indices. */
+  | { kind: 'trimesh'; points: number[]; indices: number[]; walkOnly?: boolean };
 
 export interface LandmarkModel {
   group: THREE.Group;
@@ -313,5 +315,11 @@ export interface LandmarkDef {
   lat: number; lon: number; headingDeg: number;
   /** `env` carries the shared night/wet/time uniforms: floodlights and lit windows follow uNight. */
   build(env: EnvUniforms): LandmarkModel;
+  /**
+   * A model that arrives later (a glb authored in Blender, city/landmarks/glb/). `build` then gives
+   * what the city needs at boot - footprint, clear zones, height - with an empty group, and the city
+   * places the loaded model and its colliders when this resolves. The boot never waits for it.
+   */
+  load?(env: EnvUniforms): Promise<LandmarkModel>;
 }
 

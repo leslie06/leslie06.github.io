@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
-import type { EnvUniforms, LandmarkDef, RenderApi, WorldApi } from '../game/Contracts';
+import type { EnvUniforms, LandmarkDef, LandmarkModel, RenderApi, WorldApi } from '../game/Contracts';
+import type { RenderSystem } from '../render/RenderSystem';
 import { TAXI } from '../vehicle/Spec';
 import { loadCity, type Manifest, type Network, type Skyline } from './Data';
 import { project } from './Geo';
@@ -32,19 +33,23 @@ async function loadLandmarks(): Promise<LandmarkDef[]> {
   catch (e) { console.warn('[city] landmarks unavailable', e); return []; }
 }
 
-/** Landmarks at their OSM anchors, with colliders; returns their footprints and clear zones in world XZ (flat). */
-function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): { footprints: number[][]; clear: number[][] } {
+/**
+ * Landmarks at their OSM anchors, with colliders; returns their footprints and clear zones in world
+ * XZ (flat), and a promise for the ones that load later (glb, see LandmarkDef.load). `?glb=0` leaves
+ * the imported glb landmarks out altogether.
+ */
+function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): { footprints: number[][]; clear: number[][]; loaded: Promise<void> } {
   /** ?nostone skips the walkable stone colliders (for measuring what they cost). */
-  const noStone = new URLSearchParams(location.search).has('nostone');
+  const params = new URLSearchParams(location.search);
+  const noStone = params.has('nostone');
+  if (params.get('glb') === '0') defs = defs.filter((d) => !d.load);
   const { R, world } = engine.physics;
-  const footprints: number[][] = [], clear: number[][] = [];
+  const footprints: number[][] = [], clear: number[][] = [], pending: Promise<void>[] = [];
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
   /** Same world geometry, but invisible to cars: see ColliderSpec.walkOnly. */
   const gWalk = groups(CG.WORLD, CG.ALL & ~CG.CAR);
-  for (const def of defs) {
-    let model;
-    try { model = def.build(env); } catch (e) { console.warn('[city] landmark', def.id, e); continue; }
+  const place = (def: LandmarkDef, model: LandmarkModel) => {
     const [x, z] = project(def.lat, def.lon);
     const rot = -def.headingDeg * Math.PI / 180;
     const c = Math.cos(rot), s = Math.sin(rot);
@@ -54,8 +59,6 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
     model.group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     model.group.name = `landmark ${def.id}`;
     engine.scene.add(model.group);
-    footprints.push(model.footprint.flatMap(([lx, lz]) => toWorld(lx, lz)));
-    for (const zone of model.clear ?? []) clear.push(zone.flatMap(([lx, lz]) => toWorld(lx, lz)));
     // Stone you can stand on. Terraces, steps and bridges are geometry only, so the player used to
     // stand on the ground *under* them and looked buried. Build trimesh colliders from the stone
     // meshes, preferring the far LOD (same shape, a fraction of the triangles).
@@ -93,12 +96,32 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
       } else {
         const pts = new Float32Array(sp.points.length);
         for (let i = 0; i < sp.points.length; i += 3) { const [wx, wz] = toWorld(sp.points[i], sp.points[i + 2]); pts[i] = wx; pts[i + 1] = sp.points[i + 1]; pts[i + 2] = wz; }
-        desc = R.ColliderDesc.convexHull(pts);
+        desc = sp.kind === 'trimesh' ? R.ColliderDesc.trimesh(pts, Uint32Array.from(sp.indices)) : R.ColliderDesc.convexHull(pts);
       }
       if (desc) engine.physics.tag(world.createCollider(desc.setCollisionGroups(sp.walkOnly ? gWalk : g).setFriction(0.6), body), { surface: 'concrete', tag: `landmark:${def.id}` });
     }
+  };
+  for (const def of defs) {
+    let model;
+    try { model = def.build(env); } catch (e) { console.warn('[city] landmark', def.id, e); continue; }
+    const [x, z] = project(def.lat, def.lon);
+    const rot = -def.headingDeg * Math.PI / 180;
+    const c = Math.cos(rot), s = Math.sin(rot);
+    const toWorld = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
+    footprints.push(model.footprint.flatMap(([lx, lz]) => toWorld(lx, lz)));
+    for (const zone of model.clear ?? []) clear.push(zone.flatMap(([lx, lz]) => toWorld(lx, lz)));
+    place(def, model);
+    // A glb: the boot has what it needs (the footprint); the model and its colliders come when loaded.
+    if (def.load) {
+      const placeholder = model.group;
+      pending.push(def.load(env).then((m) => {
+        engine.get<RenderSystem>('render')?.prepare?.(m.group);
+        engine.scene.remove(placeholder);
+        place(def, m);
+      }).catch((e) => console.warn('[city] landmark', def.id, 'did not load', e)));
+    }
   }
-  return { footprints, clear };
+  return { footprints, clear, loaded: Promise.all(pending).then(() => {}) };
 }
 
 /**
@@ -152,7 +175,7 @@ export async function install(engine: Engine): Promise<void> {
   groundMesh.name = 'ground';
   scene.add(groundMesh);
 
-  const { footprints, clear } = placeLandmarks(engine, env, defs);
+  const { footprints, clear, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs);
   clear.push(...shortcutClear(SHORTCUTS));
   const sky = new SkylineLod(skyline, env);
   sky.exclude(footprints);
@@ -170,8 +193,10 @@ export async function install(engine: Engine): Promise<void> {
   await streamer.preload(sp.x, sp.z);
   const path = routes.ahead(sp.x, sp.z, hx, hz, 3500);
 
-  const api: WorldApi & { manifest: Manifest; routes: Routes; streamer: CityStreamer } = {
+  const api: WorldApi & { manifest: Manifest; routes: Routes; streamer: CityStreamer; landmarksLoaded: Promise<void> } = {
     name: 'world',
+    /** Resolves once every glb landmark is in (probes and shots of one wait on it). */
+    landmarksLoaded,
     spawn: { x: sp.x, y: 0.03 + TAXI.wheelRadius + 0.08, z: sp.z, yaw: sp.yaw },
     attract: { path, closed: false, speed: 15, start: { x: sp.x, z: sp.z, yaw: sp.yaw } },
     placeName: (x, z) => routes.nameAt(x, z),
