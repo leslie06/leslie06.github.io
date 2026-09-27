@@ -144,12 +144,13 @@ function findPolygon(pred) {
 const templePoly = findPolygon((t) => /^天坛(公园)?$/.test(t.name || '') && (t.leisure || t.tourism || t.historic || t.landuse || t.amenity));
 const palacePoly = findPolygon((t) => /^(故宫|故宫博物院|紫禁城)$/.test(t.name || ''));
 console.log('zones: temple', !!templePoly, 'palace', !!palacePoly);
-// Without an OSM palace polygon, the imperial core by box. OSM (WGS-84) puts the Tiananmen gate at
-// x = -544, not at the map origin (a GCJ-02 point ~540 m east), so the box follows the OSM axis:
-// the Forbidden City walls (z -1420..-420) plus the gate precinct with 太庙, 社稷坛 and the reviewing
-// stands either side of the gate (z to 225, Chang'an Avenue's north kerb).
+// The imperial core: OSM's palace polygon, and always the box round it. OSM (WGS-84) puts the Tiananmen
+// gate at x = -544, not at the map origin (a GCJ-02 point ~540 m east), so the box follows the OSM
+// axis: the Forbidden City walls (z -1420..-420) plus the gate precinct with 太庙, 社稷坛, the 朝房 and
+// the reviewing stands either side of the gate (z to 225, Chang'an Avenue's north kerb). The polygon
+// alone (故宫博物院) stops at 午门, and the precinct's untagged buildings came out as 18-58 m blocks.
 function zone(x, z) {
-  if (palacePoly ? pip(x, z, palacePoly) : x > -940 && x < -150 && z > -1420 && z < 225) return 'palace';
+  if ((palacePoly && pip(x, z, palacePoly)) || (x > -940 && x < -150 && z > -1420 && z < 225)) return 'palace';
   if (templePoly && pip(x, z, templePoly)) return 'temple';
   if (x > 4650 && x < 6500 && z > -1650 && z < 750) return 'cbd';
   if (x < 2850) return 'old';

@@ -300,6 +300,8 @@ export interface LandmarkModel {
   colliders: ColliderSpec[];
   /** Ground footprint in the local frame (x, z), used to remove the OSM building it replaces. */
   footprint: [number, number][];
+  /** Further pieces of footprint, for a landmark in several parts (天安门 and its reviewing stands). */
+  moreFootprints?: [number, number][][];
   /**
    * Polygons in the local frame the city keeps free of street trees, lamps and kerbside furniture:
    * a drive where it crosses the pavement. The footprint does not do this - it removes buildings only.

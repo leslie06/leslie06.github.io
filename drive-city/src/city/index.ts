@@ -108,7 +108,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[]): 
     const rot = -def.headingDeg * Math.PI / 180;
     const c = Math.cos(rot), s = Math.sin(rot);
     const toWorld = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
-    footprints.push(model.footprint.flatMap(([lx, lz]) => toWorld(lx, lz)));
+    for (const f of [model.footprint, ...(model.moreFootprints ?? [])]) footprints.push(f.flatMap(([lx, lz]) => toWorld(lx, lz)));
     for (const zone of model.clear ?? []) clear.push(zone.flatMap(([lx, lz]) => toWorld(lx, lz)));
     place(def, model);
     // A glb: the boot has what it needs (the footprint); the model and its colliders come when loaded.

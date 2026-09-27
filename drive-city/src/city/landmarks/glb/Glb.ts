@@ -23,6 +23,7 @@ import { FAR_LOD_DISTANCE } from '../kit/model';
  *   - `LOD1_*`     the far level, drawn past `farDistance`. Without one the far level reuses the detail.
  *   - `LOD0_*`     detail only (unmarked objects are detail too).
  *   - `FOOTPRINT`, `CLEAR_*`  read by the import script only (footprint, ground kept free of street furniture).
+ *     Several FOOTPRINT objects are separate pieces, each its own convex hull (a gate and its stands).
  * Material custom properties (exported as glTF extras, "Include > Custom Properties"):
  *   - `wet`  "surface" (default: glass, glaze, paint) | "ground" (puddles on flat tops) | "damp" | "none"
  *   - `glow` "flood" (default: floodlit at night like every landmark - brightest at the foot of a wall
@@ -43,6 +44,7 @@ export interface GlbMeta {
   /** File under public/models/landmarks/ and a content hash for the cache. */
   file: string; version: string;
   footprint: [number, number][];
+  moreFootprints?: [number, number][][];
   clear?: [number, number][][];
   height: number;
   farDistance?: number;
@@ -315,7 +317,7 @@ export function buildGlbModel(scene: THREE.Object3D, env: EnvUniforms, meta: Glb
   }, 0);
   group.userData.stats = { triangles: tris(d), drawCalls: d.children.length, farTriangles: tris(f), farDrawCalls: f.children.length };
   group.updateMatrixWorld(true);
-  return { group, colliders, footprint: meta.footprint, clear: meta.clear, height: meta.height };
+  return { group, colliders, footprint: meta.footprint, moreFootprints: meta.moreFootprints, clear: meta.clear, height: meta.height };
 }
 
 let loader: GLTFLoader | null = null;
@@ -328,7 +330,7 @@ export function glbLandmark(meta: GlbMeta): LandmarkDef {
     build: () => {
       const group = new THREE.Group();
       group.name = meta.id;
-      return { group, colliders: [], footprint: meta.footprint, clear: meta.clear, height: meta.height };
+      return { group, colliders: [], footprint: meta.footprint, moreFootprints: meta.moreFootprints, clear: meta.clear, height: meta.height };
     },
     load: async (env) => {
       loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);

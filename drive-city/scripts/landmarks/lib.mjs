@@ -79,14 +79,14 @@ function triangles(mesh) {
 export function inspect(doc) {
   const root = doc.getRoot();
   const nodes = root.listNodes().filter((n) => n.getMesh());
-  const visible = [], footprintPts = [], clear = [], warnings = [], notes = [];
+  const visible = [], footprintPts = [], pieces = [], clear = [], warnings = [], notes = [];
   const tris = { detail: 0, far: 0 }, colliders = { solid: 0, walk: 0, mesh: 0 };
   const mats = { detail: new Set(), far: new Set() }, meshUse = new Map();
   let minY = Infinity, maxY = -Infinity, hasFar = false;
   for (const node of nodes) {
     const role = roleOf(node), mesh = node.getMesh();
     if (role in colliders) { colliders[role]++; continue; }
-    if (role === 'footprint') { footprintPts.push(...points(node).map(([x, , z]) => [x, z])); continue; }
+    if (role === 'footprint') { const p = points(node).map(([x, , z]) => [x, z]); footprintPts.push(...p); pieces.push(hull2(p)); continue; }
     if (role === 'clear') { clear.push(hull2(points(node).map(([x, , z]) => [x, z])).map(([x, z]) => [r2(x), r2(z)])); continue; }
     const level = role === 'far' ? 'far' : 'detail';
     if (level === 'far') hasFar = true;
@@ -99,7 +99,12 @@ export function inspect(doc) {
     }
   }
   if (!visible.length) throw new Error('no visible meshes (everything is a collider or marker?)');
-  const footprint = hull2(footprintPts.length ? footprintPts : visible).map(([x, z]) => [r2(x), r2(z)]);
+  // Several FOOTPRINT objects are pieces, each hulled on its own (天安门 and its reviewing stands): one
+  // hull round all of them would take the buildings between them too. The largest is `footprint`.
+  pieces.sort((a, b) => area(b) - area(a));
+  const round = (poly) => poly.map(([x, z]) => [r2(x), r2(z)]);
+  const footprint = round(pieces.length ? pieces[0] : hull2(visible));
+  const moreFootprints = pieces.slice(1).map(round);
   const size = footprint.reduce((b, [x, z]) => [Math.min(b[0], x), Math.min(b[1], z), Math.max(b[2], x), Math.max(b[3], z)], [Infinity, Infinity, -Infinity, -Infinity]);
   const span = Math.max(size[2] - size[0], size[3] - size[1]);
 
@@ -119,11 +124,11 @@ export function inspect(doc) {
   for (const t of root.listTextures()) { const s = t.getSize(); if (s) maxTex = Math.max(maxTex, s[0], s[1]); }
   const drawCalls = (level) => [...mats[level]].length;
   return {
-    footprint, clear, height: r2(maxY),
+    footprint, moreFootprints, clear, height: r2(maxY),
     stats: {
       triangles: tris.detail, farTriangles: tris.far, materials: drawCalls('detail'), farMaterials: drawCalls('far'),
       colliders, instancedMeshes: instanced, textures: root.listTextures().length, maxTexture: maxTex,
-      footprintArea: Math.round(area(footprint)),
+      footprintArea: Math.round(area(footprint) + moreFootprints.reduce((n, f) => n + area(f), 0)),
     },
     warnings, notes,
   };

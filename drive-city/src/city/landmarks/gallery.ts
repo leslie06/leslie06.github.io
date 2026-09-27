@@ -247,12 +247,20 @@ if (!shot) renderer.setAnimationLoop(() => { controls.update(); render(); });
 declare global { interface Window { __lm?: unknown } }
 window.__lm = {
   ids: LANDMARKS.map((d) => d.id),
-  async show(id: string, o: { night?: boolean; view?: View; far?: boolean } = {}) {
+  /** `from`/`to` (x, y, z in the preview's world: +X east, +Z south) put the camera anywhere instead of a view. */
+  async show(id: string, o: { night?: boolean; view?: View; far?: boolean; from?: number[]; to?: number[]; fov?: number } = {}) {
     forceFar = !!o.far;
     select(id);
     await pendingLoad;
     setNight(!!o.night);
     frame(o.view ?? 'hero');
+    if (o.from && o.to) {
+      camera.fov = o.fov ?? 42;
+      camera.position.set(o.from[0], o.from[1], o.from[2]);
+      controls.target.set(o.to[0], o.to[1], o.to[2]);
+      camera.near = 0.2; camera.updateProjectionMatrix();
+      controls.update();
+    } else if (camera.fov !== 42) { camera.fov = 42; camera.updateProjectionMatrix(); }
     await renderer.compileAsync(scene, camera);
     render(); render();
     return stats();

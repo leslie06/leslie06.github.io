@@ -5,6 +5,8 @@ export function createIO(): Promise<NodeIO>;
 export function hull2(pts: [number, number][]): [number, number][];
 export interface Inspection {
   footprint: [number, number][];
+  /** Further FOOTPRINT objects, each hulled on its own (the largest is `footprint`). */
+  moreFootprints: [number, number][][];
   clear: [number, number][][];
   height: number;
   stats: {

@@ -96,6 +96,22 @@ describe('Blender glb landmarks', () => {
     expect(info.stats.triangles).toBe(12 * 10);
     expect(info.stats.farTriangles).toBe(12);
     expect(info.warnings).toEqual([]);
+    expect(info.moreFootprints).toEqual([]);
+  });
+
+  it('several FOOTPRINT objects are separate pieces, not one hull round them all', () => {
+    const doc = fixture();
+    const root = doc.getRoot(), scene = root.listScenes()[0];
+    const flat = (x0: number, x1: number, z0: number, z1: number) => doc.createMesh('Stand').addPrimitive(doc.createPrimitive()
+      .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(new Float32Array([x0, 0, z0, x1, 0, z0, x1, 0, z1, x0, 0, z1]))));
+    scene.addChild(doc.createNode('FOOTPRINT.001').setMesh(flat(40, 60, 20, 30)));
+    scene.addChild(doc.createNode('FOOTPRINT.002').setMesh(flat(-60, -40, 20, 30)));
+    const info = inspect(doc);
+    const xs = info.footprint.map((p) => p[0]);
+    expect([Math.min(...xs), Math.max(...xs)]).toEqual([-15, 15]);   // the largest piece
+    expect(info.moreFootprints).toHaveLength(2);
+    for (const f of info.moreFootprints) expect(f).toHaveLength(4);
+    expect(info.stats.footprintArea).toBe(900 + 2 * 200);
   });
 
   it('builds colliders from COL_ / WALK_ / COLMESH_ and draws none of them', async () => {

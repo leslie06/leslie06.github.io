@@ -56,7 +56,7 @@ const s = info.stats;
 console.log(`  近景 ${s.triangles} 三角形，${s.materials} 种材质（合并后约 ${s.materials} 个 draw call）`);
 console.log(`  远景 ${s.farTriangles ? `${s.farTriangles} 三角形，${s.farMaterials} 种材质` : '无（复用近景）'}`);
 console.log(`  碰撞体 COL_ ${s.colliders.solid}，WALK_ ${s.colliders.walk}，COLMESH_ ${s.colliders.mesh}；实例化网格 ${s.instancedMeshes} 个`);
-console.log(`  高 ${info.height} m，占地 ${s.footprintArea} m²（${info.footprint.length} 点），清空区 ${info.clear.length} 个；贴图 ${s.textures} 张，最大 ${s.maxTexture}px`);
+console.log(`  高 ${info.height} m，占地 ${s.footprintArea} m²（${info.footprint.length} 点${info.moreFootprints.length ? `，另有 ${info.moreFootprints.length} 块` : ''}），清空区 ${info.clear.length} 个；贴图 ${s.textures} 张，最大 ${s.maxTexture}px`);
 if (Number.isFinite(lat)) { const [x, z] = project(lat, lon); console.log(`  位置 ${lat.toFixed(6)}, ${lon.toFixed(6)} = 游戏坐标 (${x.toFixed(1)}, ${z.toFixed(1)})，朝向 ${headingDeg}°`); }
 for (const n of info.notes) console.log(`  · ${n}`);
 for (const w of info.warnings) console.log(`  ⚠ ${w}`);
@@ -71,7 +71,7 @@ fs.writeFileSync(glbPath, bytes);
 const meta = {
   id, name, lat: Number(lat.toFixed(7)), lon: Number(lon.toFixed(7)), headingDeg,
   file: `${id}.glb`, version: crypto.createHash('sha1').update(bytes).digest('hex').slice(0, 8),
-  footprint: info.footprint, ...(info.clear.length ? { clear: info.clear } : {}), height: info.height,
+  footprint: info.footprint, ...(info.moreFootprints.length ? { moreFootprints: info.moreFootprints } : {}), ...(info.clear.length ? { clear: info.clear } : {}), height: info.height,
   ...(opt('far') ? { farDistance: Number(opt('far')) } : old?.farDistance ? { farDistance: old.farDistance } : {}),
   stats: { ...info.stats, bytes: bytes.length, source: path.basename(file) },
 };
