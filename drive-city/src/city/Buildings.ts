@@ -139,6 +139,9 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     const ph = !pitched && flatStyle && top - base > 5 ? (F.style === ST.GLASS ? 1.4 : F.style === ST.LOW ? 0.5 : 0.9) : 0;
     const wallTop = top + ph;
 
+    const ps = base < 0.5 ? passagesOf(b) : [];
+    for (const p of ps) passageLining(fb, cv, ci, p, rings, F);
+
     rings.forEach((r, ri) => {
       let u = 0;
       const n = r.length;
@@ -153,17 +156,24 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
         const fl = segFlags[ri][i];
         const N = [nx, 0, nz];
         // Seen from outside, a wall's right-hand end is always A: bays count from B so modules
-        // (and shop signs) are not mirrored.
-        const a0 = fb.vert(ax, base, az, N, u + L, nb, bayW, fl, style, F, F.col);
-        const b0 = fb.vert(bx, base, bz, N, u, 0, bayW, fl, style, F, F.col);
-        const b1 = fb.vert(bx, wallTop, bz, N, u, 0, bayW, fl, style, F, F.col);
-        const a1 = fb.vert(ax, wallTop, az, N, u + L, nb, bayW, fl, style, F, F.col);
-        fb.idx.push(a0, b1, b0, a0, a1, b1);
-        if (base < 2.5) {
-          const k = cv.length / 3;
-          cv.push(ax, 0, az, bx, 0, bz, bx, top, bz, ax, top, az);
-          ci.push(k, k + 2, k + 1, k, k + 3, k + 2);
+        // (and shop signs) are not mirrored. A road through the building opens the wall below its
+        // clearance: the wall is drawn in pieces along t (A = 0, B = 1).
+        const quad = (t0: number, t1: number, y0: number, y1: number) => {
+          const px = (t: number) => ax + dx * t, pz = (t: number) => az + dz * t;
+          const a0 = fb.vert(px(t0), y0, pz(t0), N, u + L * (1 - t0), nb * (1 - t0), bayW, fl, style, F, F.col);
+          const b0 = fb.vert(px(t1), y0, pz(t1), N, u + L * (1 - t1), nb * (1 - t1), bayW, fl, style, F, F.col);
+          const b1 = fb.vert(px(t1), y1, pz(t1), N, u + L * (1 - t1), nb * (1 - t1), bayW, fl, style, F, F.col);
+          const a1 = fb.vert(px(t0), y1, pz(t0), N, u + L * (1 - t0), nb * (1 - t0), bayW, fl, style, F, F.col);
+          fb.idx.push(a0, b1, b0, a0, a1, b1);
+          if (base < 2.5) collide(cv, ci, px(t0), pz(t0), px(t1), pz(t1), y0 <= base ? 0 : y0, top);
+        };
+        let t = 0;
+        for (const [t0, t1, ch] of openings(ps, ax, az, bx, bz)) {
+          if (t0 > t) quad(t, t0, base, wallTop);
+          if (ch < wallTop) quad(t0, t1, ch, wallTop);
+          t = t1;
         }
+        if (t < 1) quad(t, 1, base, wallTop);
         u += L;
       }
       if (ph > 0) parapet(fb, r, top, ph, F);
@@ -183,6 +193,111 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     }
   }
   return { facade: fb.build(), colVerts: new Float32Array(cv), colIdx: new Uint32Array(ci) };
+}
+
+/** A road through a building: start, unit direction and length along it, half width, clearance. */
+interface Passage { ax: number; az: number; dx: number; dz: number; len: number; hw: number; ch: number }
+
+function passagesOf(b: BuildingRec): Passage[] {
+  const out: Passage[] = [];
+  const p = b.ps;
+  if (!p) return out;
+  for (let i = 0; i + 5 < p.length; i += 6) {
+    const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
+    if (L > 0.1) out.push({ ax: p[i], az: p[i + 1], dx: (p[i + 2] - p[i]) / L, dz: (p[i + 3] - p[i + 1]) / L, len: L, hw: p[i + 4], ch: p[i + 5] });
+  }
+  return out;
+}
+
+/** Where a wall A-B crosses the passages: [t0, t1, clearance] runs along it (A = 0, B = 1), merged and sorted. */
+function openings(ps: Passage[], ax: number, az: number, bx: number, bz: number): [number, number, number][] {
+  const out: [number, number, number][] = [];
+  // the t where lo <= f0 + (f1 - f0) t <= hi, clipped to [lo, hi] of t
+  const clip = (f0: number, f1: number, lo: number, hi: number, r: [number, number]) => {
+    const df = f1 - f0;
+    if (Math.abs(df) < 1e-9) { if (f0 < lo || f0 > hi) r[0] = 1, r[1] = 0; return; }
+    let a = (lo - f0) / df, b = (hi - f0) / df;
+    if (a > b) [a, b] = [b, a];
+    r[0] = Math.max(r[0], a); r[1] = Math.min(r[1], b);
+  };
+  for (const p of ps) {
+    const nx = -p.dz, nz = p.dx;
+    const r: [number, number] = [0, 1];
+    clip((ax - p.ax) * nx + (az - p.az) * nz, (bx - p.ax) * nx + (bz - p.az) * nz, -p.hw, p.hw, r);
+    clip((ax - p.ax) * p.dx + (az - p.az) * p.dz, (bx - p.ax) * p.dx + (bz - p.az) * p.dz, 0, p.len, r);
+    if (r[1] - r[0] > 1e-4) out.push([r[0], r[1], p.ch]);
+  }
+  out.sort((a, b) => a[0] - b[0]);
+  for (let i = 1; i < out.length; i++) {
+    if (out[i][0] <= out[i - 1][1]) { out[i - 1][1] = Math.max(out[i - 1][1], out[i][1]); out[i - 1][2] = Math.min(out[i - 1][2], out[i][2]); out.splice(i--, 1); }
+  }
+  return out;
+}
+
+/** Collider quad from (ax, az) to (bx, bz), y0..y1. */
+function collide(cv: number[], ci: number[], ax: number, az: number, bx: number, bz: number, y0: number, y1: number): void {
+  if (y1 - y0 < 0.05) return;
+  const k = cv.length / 3;
+  cv.push(ax, y0, az, bx, y0, bz, bx, y1, bz, ax, y1, az);
+  ci.push(k, k + 2, k + 1, k, k + 3, k + 2);
+}
+
+const inside = (x: number, z: number, r: [number, number][]) => {
+  let c = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [ax, az] = r[i], [bx, bz] = r[j];
+    if ((az > z) !== (bz > z) && x < (bx - ax) * (z - az) / (bz - az) + ax) c = !c;
+  }
+  return c;
+};
+
+/** The spans [s0, s1] along a line (start, direction, 0..len) that lie inside the building. */
+function spansInside(x0: number, z0: number, dx: number, dz: number, len: number, rings: [number, number][][]): [number, number][] {
+  const ss = [0, len];
+  for (const r of rings) {
+    for (let i = 0; i < r.length; i++) {
+      const [ax, az] = r[i], [bx, bz] = r[(i + 1) % r.length];
+      const ex = bx - ax, ez = bz - az, den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-9) continue;
+      const s = ((ax - x0) * ez - (az - z0) * ex) / den, t = ((ax - x0) * dz - (az - z0) * dx) / den;
+      if (t >= 0 && t <= 1 && s > 0 && s < len) ss.push(s);
+    }
+  }
+  ss.sort((a, b) => a - b);
+  const out: [number, number][] = [];
+  for (let i = 0; i + 1 < ss.length; i++) {
+    const m = (ss[i] + ss[i + 1]) / 2;
+    const inAll = inside(x0 + dx * m, z0 + dz * m, rings[0]) && !rings.slice(1).some((h) => inside(x0 + dx * m, z0 + dz * m, h));
+    if (inAll && ss[i + 1] - ss[i] > 0.05) out.push([ss[i], ss[i + 1]]);
+  }
+  return out;
+}
+
+/** The passage's two side walls and ceiling inside the building, facing into it; its sides collide. */
+function passageLining(fb: FacadeBucket, cv: number[], ci: number[], p: Passage, rings: [number, number][][], F: Facade): void {
+  const nx = -p.dz, nz = p.dx;
+  const wall = F.col.clone().multiplyScalar(0.8), ceil = F.col.clone().multiplyScalar(0.55);
+  for (const side of [-1, 1]) {
+    const x0 = p.ax + nx * side * p.hw, z0 = p.az + nz * side * p.hw;
+    for (const [s0, s1] of spansInside(x0, z0, p.dx, p.dz, p.len, rings)) {
+      // wall from A to B faces (dz, -dx) of its direction: order the ends so that is towards the road
+      let ax = x0 + p.dx * s0, az = z0 + p.dz * s0, bx = x0 + p.dx * s1, bz = z0 + p.dz * s1;
+      if ((bz - az) * (-nx * side) + (-(bx - ax)) * (-nz * side) < 0) [ax, az, bx, bz] = [bx, bz, ax, az];
+      const N = [-nx * side, 0, -nz * side], L = s1 - s0;
+      const a0 = fb.vert(ax, 0, az, N, L, 0, L, 0, ST.BLANK, F, wall), b0 = fb.vert(bx, 0, bz, N, 0, 0, L, 0, ST.BLANK, F, wall);
+      const b1 = fb.vert(bx, p.ch, bz, N, 0, 0, L, 0, ST.BLANK, F, wall), a1 = fb.vert(ax, p.ch, az, N, L, 0, L, 0, ST.BLANK, F, wall);
+      fb.idx.push(a0, b1, b0, a0, a1, b1);
+      collide(cv, ci, ax, az, bx, bz, 0, p.ch);
+    }
+  }
+  const D = [0, -1, 0];
+  for (const [s0, s1] of spansInside(p.ax, p.az, p.dx, p.dz, p.len, rings)) {
+    const c = (s: number, side: number) => [p.ax + p.dx * s + nx * side * p.hw, p.az + p.dz * s + nz * side * p.hw];
+    const q = [c(s0, -1), c(s1, -1), c(s1, 1), c(s0, 1)].map(([x, z], i) => fb.vert(x, p.ch, z, D, i === 1 || i === 2 ? s1 - s0 : 0, 0, s1 - s0, 0, ST.BLANK, F, ceil));
+    // facing down: clockwise seen from below
+    const cross = (c(s1, -1)[0] - c(s0, -1)[0]) * (c(s0, 1)[1] - c(s0, -1)[1]) - (c(s1, -1)[1] - c(s0, -1)[1]) * (c(s0, 1)[0] - c(s0, -1)[0]);
+    if (cross > 0) fb.idx.push(q[0], q[1], q[2], q[0], q[2], q[3]); else fb.idx.push(q[0], q[2], q[1], q[0], q[3], q[2]);
+  }
 }
 
 /** Inner face and cap of a parapet around a flat roof, with mitred corners. */

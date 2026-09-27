@@ -1006,6 +1006,39 @@ for (const o of outlines) {
   if (covered < 0.4 * o.area) kept.push(o);
 }
 const buildings = kept.concat(parts);
+// Roads through a building (OSM tunnel=building_passage: a gate, an arch under a block): the building
+// gets a passage - [ax, az, bx, bz, half width, clearance] per segment, the segment carried 4 m past
+// the road's ends so it cuts both walls - and the tile mesher opens its walls there, lines the
+// passage and leaves it out of the collider. Before, 11 car roads (南池子大街 through the imperial
+// wall's gate among them) ran into a solid wall.
+const passageOf = new Map();
+{
+  const ext = 4;
+  for (const w of ways) {
+    if (!w._road?.car || w.tags.tunnel !== 'building_passage' || !w._pts) continue;
+    // as wide as the road but no wider than two lanes a side (4.5 m): a gate is a gateway, not a missing
+    // ground floor - the 12.5 m 南池子 gate on an 11.5 m road kept only a 0.5 m pier
+    const hw = Math.min(4.5, Math.max(1.8, w._road.w / 2)) + 0.25;
+    const P = w._pts;
+    for (let i = 0; i + 1 < P.length; i++) {
+      let [ax, az] = P[i], [bx, bz] = P[i + 1];
+      const L = Math.hypot(bx - ax, bz - az);
+      if (L < 0.2) continue;
+      const dx = (bx - ax) / L, dz = (bz - az) / L;
+      if (i === 0) { ax -= dx * ext; az -= dz * ext; }
+      if (i + 2 === P.length) { bx += dx * ext; bz += dz * ext; }
+      const n = Math.ceil(Math.hypot(bx - ax, bz - az));
+      for (const bd of buildings) {
+        const bb = bd.bb;
+        if (Math.max(ax, bx) + hw < bb[0] || Math.min(ax, bx) - hw > bb[2] || Math.max(az, bz) + hw < bb[1] || Math.min(az, bz) - hw > bb[3]) continue;
+        let hit = false;
+        for (let k = 0; k <= n && !hit; k++) { const t = k / n; hit = pip(ax + (bx - ax) * t, az + (bz - az) * t, bd.ring); }
+        if (hit) (passageOf.get(bd) ?? passageOf.set(bd, []).get(bd)).push(q1(ax), q1(az), q1(bx), q1(bz), q1(hw));
+      }
+    }
+  }
+  console.log(`passages: ${passageOf.size} buildings with a road through them`);
+}
 const ROOF = { flat: 'f', gabled: 'g', hipped: 'h', pyramidal: 'p', skillion: 's', dome: 'd', half_hipped: 'h', round: 'd', onion: 'd' };
 const kinds = {};
 const named = {};
@@ -1052,6 +1085,14 @@ for (const b of buildings) {
   const c = colour(t['building:colour'] || t.colour); if (c) rec.c = c;
   const rc = colour(t['roof:colour']); if (rc) rec.rc = rc;
   if (roof === 'g' || roof === 'h') rec.ob = [q1(o.cx), q1(o.cz), +o.angle.toFixed(4), q1(o.hl), q1(o.hw)];
+  const pas = passageOf.get(b);
+  if (pas && minH < 0.5) {
+    // clearance: 4.5 m, or what the walls allow under a low roof (a hutong house's eaves at 3.4 m)
+    const wallTop = rec.r === 'g' || rec.r === 'h' || rec.r === 'p' ? h - rh : h;
+    const ch = q1(Math.max(2.8, Math.min(4.5, wallTop - 0.6)));
+    rec.ps = [];
+    for (let k = 0; k < pas.length; k += 5) rec.ps.push(...pas.slice(k, k + 5), ch);
+  }
   if (t.name) { rec.n = t.name; named[t.name] = [q1(cx), q1(cz)]; }
   rec.s = +(r2).toFixed(3);
   // A building a deck runs through goes (a ramp of 国贸桥 ran through a kiosk 15 m tall and the car

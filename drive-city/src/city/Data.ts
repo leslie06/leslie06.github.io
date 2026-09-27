@@ -39,6 +39,11 @@ export interface BuildingRec {
   n?: string;
   /** Per-building random 0..1. */
   s: number;
+  /**
+   * Roads through the building (OSM tunnel=building_passage): [ax, az, bx, bz, half width, clearance]
+   * per passage. The walls open there up to the clearance, the passage is lined, and has no collider.
+   */
+  ps?: number[];
 }
 
 export interface AreaRec { k: AreaKind; o: number[]; hs?: number[][] }
