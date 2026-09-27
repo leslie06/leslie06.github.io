@@ -592,8 +592,8 @@ def build():
         fruit=material("FB_Fruit", "#ffffff", 0.38, vertex_colors=True, props={"wet": "surface", "glowStrength": 0.7}),
         leaf=material("FB_Leaf", "#ffffff", 0.5, vertex_colors=True, props={"wet": "surface", "glowStrength": 0.6}),
         core=material("FB_Core", "#3b1612", 1.0, tex=filler_image(), props={"wet": "damp", "glowStrength": 0.5}),
-        bed=material("FB_Bed", "#c8141e", 0.9, tex=bed_image(), props={"wet": "damp", "glowStrength": 0.5}),
-        curb=material("FB_Curb", "#cfc7b6", 0.7, props={"wet": "ground"}),
+        bed=material("FB_Bed", "#c8141e", 0.9, tex=bed_image(), props={"wet": "damp", "glowStrength": 0.5, "layer": 10}),
+        curb=material("FB_Curb", "#cfc7b6", 0.7, props={"wet": "ground", "layer": 10}),
         far=material("FB_Far", "#ffffff", 0.6, vertex_colors=True),
     )
     main = collection("花篮")

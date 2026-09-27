@@ -30,6 +30,9 @@ import { FAR_LOD_DISTANCE } from '../kit/model';
  *   - `glowStrength` scales either (default 1)
  *   - `glowColor` "#rrggbb", or [r, g, b] linear (a Blender colour property; flood default warm #ffcf94)
  *   - `emit` "night": Blender emission shows at night only (lit windows); otherwise it shows all day.
+ *   - `layer` N: depth layering against the city's ground (city/Materials.ts `layer`: plaza 4, road 5,
+ *     paint 7): anything flat within a metre of the ground needs one above them, or at a grazing angle
+ *     their polygon offset draws the paving over it (the flower basket's parterre at 0.3 m, 70 m away).
  * Visible meshes are merged per material into one draw call per level; a mesh linked (Alt+D) six
  * or more times becomes one InstancedMesh.
  */
@@ -220,7 +223,12 @@ const FLOOD = '#ffcf94';
 export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
   if (patched.has(mat)) return;
   patched.add(mat);
-  const x = mat.userData as { wet?: string; glow?: string; glowColor?: string | number[]; glowStrength?: number; emit?: string };
+  const x = mat.userData as { wet?: string; glow?: string; glowColor?: string | number[]; glowStrength?: number; emit?: string; layer?: number };
+  if (typeof x.layer === 'number' && x.layer > 0) {
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -x.layer;
+    mat.polygonOffsetUnits = -x.layer;
+  }
   const wet = x.wet ?? 'surface';
   if (wet === 'none') delete mat.userData.wet;
   else mat.userData.wet = wet === 'damp' ? true : wet;

@@ -8,7 +8,7 @@
   "lon": 116.3913643,
   "headingDeg": -2,
   "file": "flowerbasket.glb",
-  "version": "84c049f5",
+  "version": "7de61f40",
   "footprint": [
     [-24.5, 0],
     [-23.67, -6.34],
@@ -79,7 +79,7 @@
     "textures": 4,
     "maxTexture": 1024,
     "footprintArea": 1864,
-    "bytes": 939476,
+    "bytes": 939496,
     "source": "flowerbasket.glb"
   }
 }

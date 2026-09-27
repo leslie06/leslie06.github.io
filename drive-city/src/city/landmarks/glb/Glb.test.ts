@@ -161,6 +161,11 @@ describe('Blender glb landmarks', () => {
     const s2 = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: '', fragmentShader: '#include <common>\n#include <emissivemap_fragment>' };
     blender.onBeforeCompile(s2 as unknown as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer);
     expect((s2.uniforms.uGlowColor.value as THREE.Color).toArray()).toEqual([0.2, 0.4, 0.6]);
+    // `layer` joins the city's ground layering (polygon offset), so a flat bed near the ground is not drawn over
+    const bed = new THREE.MeshStandardMaterial();
+    bed.userData = { layer: 10 };
+    prepareMaterial(bed, env);
+    expect([bed.polygonOffset, bed.polygonOffsetFactor, bed.polygonOffsetUnits]).toEqual([true, -10, -10]);
   });
 
   it('without LOD1 the far level draws the detail geometry again, shared', async () => {

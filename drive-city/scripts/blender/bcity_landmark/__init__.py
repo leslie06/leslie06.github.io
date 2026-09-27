@@ -326,6 +326,19 @@ def _gs_set(self, v):
         self["glowStrength"] = float(v)
 
 
+def _layer_get(self):
+    v = self.get("layer")
+    return int(v) if isinstance(v, (int, float)) else 0
+
+
+def _layer_set(self, v):
+    if v <= 0:
+        if "layer" in self:
+            del self["layer"]
+    else:
+        self["layer"] = int(v)
+
+
 def _gc_get(self):
     v = self.get("glowColor")
     if v is not None and len(v) >= 3:
@@ -838,6 +851,7 @@ class BCITY_PT_material(_Panel, bpy.types.Panel):
             row.operator("bcity.reset_glow_color", text="", icon="LOOP_BACK")
             col.prop(mat, "bcity_glow_strength")
         col.prop(mat, "bcity_emit_night")
+        col.prop(mat, "bcity_layer")
 
 
 class BCITY_PT_export(_Panel, bpy.types.Panel):
@@ -879,11 +893,12 @@ def register():
     bpy.types.Material.bcity_glow = EnumProperty(name="夜间", items=GLOW, get=_glow_get, set=_glow_set)
     bpy.types.Material.bcity_glow_color = FloatVectorProperty(name="光色", subtype="COLOR", size=3, min=0.0, max=1.0, get=_gc_get, set=_gc_set)
     bpy.types.Material.bcity_glow_strength = FloatProperty(name="夜间强度", description="泛光或自发光的强弱（1 = 默认）；浅色大墙面嫌亮就调低", min=0.0, soft_max=3.0, get=_gs_get, set=_gs_set)
+    bpy.types.Material.bcity_layer = IntProperty(name="贴地层级", description="离地一米内的平面（花坛、地面图案）填 8-10：高于城市地面的层级（广场 4、道路 5、标线 7），否则远处斜看会被铺装盖住。0 = 不用", min=0, max=20, get=_layer_get, set=_layer_set)
     bpy.types.Material.bcity_emit_night = BoolProperty(name="自发光只在夜里亮", description="材质的 Emission 白天不显示（亮着的窗户）", get=_emit_get, set=_emit_set)
 
 
 def unregister():
-    for attr in ("bcity_wet", "bcity_glow", "bcity_glow_color", "bcity_glow_strength", "bcity_emit_night"):
+    for attr in ("bcity_wet", "bcity_glow", "bcity_glow_color", "bcity_glow_strength", "bcity_emit_night", "bcity_layer"):
         if hasattr(bpy.types.Material, attr):
             delattr(bpy.types.Material, attr)
     del bpy.types.Scene.bcity_issues
