@@ -15,14 +15,15 @@ import math
 import os
 import sys
 
-import bpy  # before bmesh: the bpy module only provides bmesh once bpy is loaded
-import bmesh
-import numpy as np
-from mathutils import Matrix, Vector
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import REPO, args, clear_file, collection, ensure_addon, image, material, save_and_export, select, srgb  # noqa: E402
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
-argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+import bpy  # noqa: E402
+import bmesh  # noqa: E402
+import numpy as np  # noqa: E402
+from mathutils import Matrix, Vector  # noqa: E402
+
+argv = args()
 OUT = argv[argv.index("--out") + 1] if "--out" in argv else os.path.join(REPO, "art", "landmarks", "greathall.blend")
 
 # --- the plan (building frame: x east, y north) ------------------------------------------------------
@@ -65,21 +66,6 @@ def offset(poly, d):
 
 # --- textures (drawn with numpy, packed into the .blend) --------------------------------------------
 
-def srgb(hexs):
-    h = hexs.lstrip("#")
-    return np.array([int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)], dtype=np.float32)
-
-
-def image(name, arr):
-    h, w, _ = arr.shape
-    im = bpy.data.images.new(name, w, h, alpha=False)
-    rgba = np.concatenate([np.clip(arr, 0, 1), np.ones((h, w, 1))], axis=2).astype(np.float32)
-    im.pixels.foreach_set(rgba.ravel())
-    im.file_format = "PNG"
-    im.pack()
-    return im
-
-
 def facade_images(size=512):
     """One bay by one storey (6 x 6 m): granite, a tall window with a stone frame, mullion and transom."""
     rng = np.random.default_rng(7)
@@ -107,33 +93,6 @@ def tile_image(size=128):
     ridge = 0.78 + 0.22 * np.cos(2 * np.pi * u) ** 2
     course = 1 - 0.12 * (((v * 6) % 1) < 0.08)
     return image("GH_tiles", srgb("#dca72b") * (ridge * course)[..., None])
-
-
-# --- materials ---------------------------------------------------------------------------------------
-
-def material(name, color, rough=0.7, metal=0.0, tex=None, emit_tex=None, props=None):
-    m = bpy.data.materials.new(name)
-    try:
-        m.use_nodes = True
-    except Exception:
-        pass
-    nt = m.node_tree
-    b = nt.nodes.get("Principled BSDF")
-    b.inputs["Base Color"].default_value = (*[c for c in srgb(color) ** 2.2], 1.0)
-    b.inputs["Roughness"].default_value = rough
-    b.inputs["Metallic"].default_value = metal
-    if tex is not None:
-        t = nt.nodes.new("ShaderNodeTexImage")
-        t.image = tex
-        nt.links.new(t.outputs["Color"], b.inputs["Base Color"])
-    if emit_tex is not None:
-        e = nt.nodes.new("ShaderNodeTexImage")
-        e.image = emit_tex
-        nt.links.new(e.outputs["Color"], b.inputs["Emission Color"])
-        b.inputs["Emission Strength"].default_value = 1.0
-    for k, v in (props or {}).items():
-        m[k] = v
-    return m
 
 
 # --- mesh building -----------------------------------------------------------------------------------
@@ -210,12 +169,6 @@ class Builder:
         return ob
 
 
-def collection(name, parent=None):
-    c = bpy.data.collections.new(name)
-    (parent or bpy.context.scene.collection).children.link(c)
-    return c
-
-
 def box_mesh(name, sx, sy, sz, mat, z0=0.0):
     b = Builder()
     b.box(-sx / 2, sx / 2, -sy / 2, sy / 2, z0, z0 + sz, mat)
@@ -225,21 +178,11 @@ def box_mesh(name, sx, sy, sz, mat, z0=0.0):
     return data
 
 
-def clear_file():
-    for coll in (bpy.data.objects, bpy.data.meshes, bpy.data.materials, bpy.data.images, bpy.data.curves):
-        for x in list(coll):
-            coll.remove(x)
-    for c in list(bpy.data.collections):
-        bpy.data.collections.remove(c)
-
-
 # --- the building ------------------------------------------------------------------------------------
 
 def build():
     clear_file()
     scene = bpy.context.scene
-    scene.unit_settings.system = "METRIC"
-    scene.unit_settings.scale_length = 1.0
     ensure_addon()
 
     fac, fac_night = facade_images()
@@ -429,34 +372,6 @@ def build():
     return dict(pilasters=n_pil, columns=len(columns))
 
 
-def select(objs):
-    vl = bpy.context.view_layer
-    vl.update()   # objects linked since the last update are not in the view layer's list yet
-    for o in vl.objects:
-        if o is not None:
-            o.select_set(False)
-    for o in objs:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = objs[0]
-
-
-def ensure_addon():
-    if hasattr(bpy.types.Scene, "bcity"):
-        return
-    sys.path.insert(0, os.path.join(REPO, "scripts", "blender"))
-    import bcity_landmark
-    bcity_landmark.register()
-
-
 if __name__ == "__main__":
-    info = build()
-    print("built", info)
-    os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(OUT))
-    print("saved", OUT)
-    if "--export" in argv:
-        bpy.ops.bcity.check()
-        for it in bpy.context.scene.bcity_issues:
-            print(" ", it.level, it.text)
-        bpy.ops.bcity.export(dry=False)
-        print(bpy.data.texts["B城导入日志"].as_string())
+    print("built", build())
+    save_and_export(OUT, argv)
