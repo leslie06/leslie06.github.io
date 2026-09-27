@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { BuildingRec, RoadPiece } from './Data';
 import { FLAG_SHOP, FLAG_STREET, ST, WALL_COLOURS, type Style } from './visual/styles';
 import { hashU, h01, rng } from './visual/hash';
+import ROOF_PROPS from './visual/roofprops.json';
 
 /** Per-building facade parameters (see the facade shader in Materials.ts). */
 interface Facade { style: Style; fh: number; bw: number; gh: number; top: number; base: number; seed: number; col: THREE.Color }
@@ -41,6 +42,33 @@ class FacadeBucket {
   }
 }
 
+/** The roof things' vertices (position, normal, colour) in growing typed arrays, and their indices. */
+class PropBucket {
+  pos = new Float32Array(3 * 4096); nor = new Float32Array(3 * 4096); col = new Float32Array(3 * 4096);
+  idx: number[] = [];
+  count = 0;
+  vert(x: number, y: number, z: number, nx: number, ny: number, nz: number, c: THREE.Color): void {
+    if (this.count * 3 + 3 > this.pos.length) {
+      const grow = (a: Float32Array) => { const b = new Float32Array(a.length * 2); b.set(a); return b; };
+      this.pos = grow(this.pos); this.nor = grow(this.nor); this.col = grow(this.col);
+    }
+    const o = this.count++ * 3;
+    this.pos[o] = x; this.pos[o + 1] = y; this.pos[o + 2] = z;
+    this.nor[o] = nx; this.nor[o + 1] = ny; this.nor[o + 2] = nz;
+    this.col[o] = c.r; this.col[o + 1] = c.g; this.col[o + 2] = c.b;
+  }
+  build(): THREE.BufferGeometry | null {
+    if (!this.idx.length) return null;
+    const g = new THREE.BufferGeometry(), n = this.count * 3;
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos.slice(0, n), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(this.nor.slice(0, n), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, n), 3));
+    g.setIndex(new THREE.BufferAttribute(this.count > 65535 ? new Uint32Array(this.idx) : new Uint16Array(this.idx), 1));
+    g.computeBoundingSphere();
+    return g;
+  }
+}
+
 /** Triangle sink for roofs and roof-top objects: [x, y, z, u, v] corners. */
 interface Sink { tri(a: number[], b: number[], c: number[], n: [number, number, number], col: THREE.Color): void }
 const sinkOf = (fb: FacadeBucket, style: number, F: Facade): Sink => ({
@@ -48,8 +76,10 @@ const sinkOf = (fb: FacadeBucket, style: number, F: Facade): Sink => ({
 });
 
 export interface BuildingMeshes {
-  /** Every wall, parapet, gable, roof and roof-top object of the tile: one mesh, one material. */
+  /** Every wall, parapet, gable, roof and stair house of the tile: one mesh, one material. */
   facade: THREE.BufferGeometry | null;
+  /** The roof-top things modelled in Blender (tanks, solar heaters, condensers...), drawn on the near tiles only. */
+  props: THREE.BufferGeometry | null;
   /** Wall triangles for a static trimesh collider (base at ground). */
   colVerts: Float32Array;
   colIdx: Uint32Array;
@@ -112,7 +142,7 @@ function roadInFront(roads: RoadPiece[], mx: number, mz: number, nx: number, nz:
  * removes buildings replaced by landmark models; `roads` decides which walls face a street.
  */
 export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => boolean, roads: RoadPiece[] = []): BuildingMeshes {
-  const fb = new FacadeBucket();
+  const fb = new FacadeBucket(), pb = new PropBucket();
   const cv: number[] = [], ci: number[] = [];
   const roofCol = new THREE.Color();
 
@@ -189,10 +219,10 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     if (pitched) pitchedRoof(rs, fb, b, top, roofCol, F);
     else {
       flatRoof(rs, rings, top, roofCol);
-      if (flatStyle && top - base > 6) clutter(rs, sinkOf(fb, ST.OBJ, F), fb, b, rings, top, F);
+      if (flatStyle && top - base > 6) clutter(rs, pb, fb, b, rings, top, F);
     }
   }
-  return { facade: fb.build(), colVerts: new Float32Array(cv), colIdx: new Uint32Array(ci) };
+  return { facade: fb.build(), props: pb.build(), colVerts: new Float32Array(cv), colIdx: new Uint32Array(ci) };
 }
 
 /** A road through a building: start, unit direction and length along it, half width, clearance. */
@@ -455,8 +485,48 @@ function cylinder(rb: Sink, x: number, z: number, r: number, y0: number, y1: num
   }
 }
 
-/** Beijing roof-top clutter, placed inside the footprint by rejection sampling (seeded per building). */
-function clutter(roof: Sink, rb: Sink, fb: FacadeBucket, b: BuildingRec, rings: [number, number][][], top: number, F: Facade): void {
+/** Colours of the Blender roof things' materials (scripts/blender/props/roof.py). */
+const ROOF_COLOURS: Record<string, THREE.Color> = {
+  steel: C('#8a8d8f'), tank: C('#a9c3d1'), pipe: C('#6e6f6c'), glass: C('#1d2a36'), white: C('#e2e3de'),
+  grille: C('#34383b'), badge: C('#9aa3a8'), louvre: C('#a7aaa4'), red: C('#c0302a'),
+};
+/** Water tank colours (`model`'s tint recolours the 'tank' material). */
+const TANK_TINTS = ['#8fb2c8', '#dde1e0', '#9a9d9a', '#b9c7cf'].map((h) => new THREE.Color(h));
+
+/** Each thing's parts with positions in metres and unit normals, decoded once per worker. */
+type PropPart = { mat: string; col: THREE.Color; p: Float32Array; n: Float32Array; i: Uint16Array };
+const PROPS: Record<string, PropPart[]> = Object.fromEntries(Object.entries(ROOF_PROPS as unknown as Record<string, Record<string, { p: number[]; n: number[]; i: number[] }>>).map(([name, parts]) => [name,
+  Object.entries(parts).map(([mat, g]) => ({ mat, col: ROOF_COLOURS[mat] ?? ROOF_COLOURS.steel, p: Float32Array.from(g.p, (v) => v / 1000), n: Float32Array.from(g.n, (v) => v / 100), i: Uint16Array.from(g.i) }))]));
+
+/**
+ * A Blender roof thing into a bucket: at (x, y, z), turned `yaw` about y, scaled `s`, `tint` recolouring its
+ * 'tank' material. Written straight into the arrays, a vertex per model vertex (the export already splits them
+ * per face), a position, normal and colour each: through the facade's Sink, 21 floats a vertex a triangle at
+ * a time, the roofs made a tile's buildings five times slower to build.
+ */
+function model(fb: PropBucket, name: string, x: number, y: number, z: number, yaw: number, s = 1, tint?: THREE.Color): void {
+  const parts = PROPS[name];
+  if (!parts) return;
+  const ca = Math.cos(yaw), sa = Math.sin(yaw);
+  for (let k = 0; k < parts.length; k++) {
+    const g = parts[k], col = tint && g.mat === 'tank' ? tint : g.col;
+    const base = fb.count;
+    for (let v = 0; v < g.p.length; v += 3) {
+      const lx = g.p[v] * s, lz = g.p[v + 2] * s, nx = g.n[v], nz = g.n[v + 2];
+      const wx = x + lx * ca + lz * sa, wz = z - lx * sa + lz * ca;
+      fb.vert(wx, y + g.p[v + 1] * s, wz, nx * ca + nz * sa, g.n[v + 1], -nx * sa + nz * ca, col);
+    }
+    for (let t = 0; t < g.i.length; t++) fb.idx.push(base + g.i[t]);
+  }
+}
+
+/**
+ * Beijing roof-top clutter, placed inside the footprint by rejection sampling (seeded per building).
+ * Stair and lift houses go into the facade (`roof`, `fb`); every other thing is a Blender model into `pb`,
+ * a mesh of its own drawn on the near tiles only (a condenser is under two pixels from the far ones):
+ * solar heaters in rows facing south and condensers along the parapet on the housing, plant on the offices.
+ */
+function clutter(roof: Sink, pb: PropBucket, fb: FacadeBucket, b: BuildingRec, rings: [number, number][][], top: number, F: Facade): void {
   const outer = rings[0], holes = rings.slice(1);
   const o = obb(outer);
   if (o.hl < 3 || o.hw < 2.2) return;
@@ -474,11 +544,6 @@ function clutter(roof: Sink, rb: Sink, fb: FacadeBucket, b: BuildingRec, rings: 
       if (fits(u, v, hu, hv)) return [u, v];
     }
     return null;
-  };
-  const AX = [ca, 0, sa], AZ = [-sa, 0, ca];
-  const box = (u: number, v: number, hu: number, hv: number, y0: number, y1: number, col: THREE.Color) => {
-    const [x, z] = W(u, v);
-    obox(rb, [x, (y0 + y1) / 2, z], [AX[0] * hu, 0, AX[2] * hu], [0, (y1 - y0) / 2, 0], [AZ[0] * hv, 0, AZ[2] * hv], col);
   };
   const area = o.hl * o.hw * 4;
   const tall = top - F.base;
@@ -505,34 +570,59 @@ function clutter(roof: Sink, rb: Sink, fb: FacadeBucket, b: BuildingRec, rings: 
       }
       const rc = new THREE.Color('#9d9b95');
       flatRoof(roof, [cs], top + hh, rc);
-      if (!office && R() < 0.6) cylinder(rb, ...W(at[0], at[1]), 0.9 + R() * 0.3, top + hh, top + hh + 1.6, new THREE.Color(pick(['#8fb2c8', '#dde1e0', '#9a9d9a'], R())));
+      if (!office && R() < 0.6) { const [x, z] = W(at[0], at[1]); model(pb, 'tank', x, top + hh, z, o.ang, 0.8 + R() * 0.2, TANK_TINTS[Math.floor(R() * 3)]); }
     }
   }
   const housing = F.style === ST.SLAB || F.style === ST.BRICK || F.style === ST.TOWER;
-  // Water tank.
-  if (housing && R() < 0.35) { const at = place(1.4, 1.4); if (at) { const [x, z] = W(at[0], at[1]); box(at[0], at[1], 1.3, 1.3, top, top + 0.45, new THREE.Color('#8d8b86')); cylinder(rb, x, z, 1.1 + R() * 0.3, top + 0.45, top + 2.3, new THREE.Color(pick(['#8fb2c8', '#dde1e0', '#9a9d9a', '#b9c7cf'], R()))); } }
-  // Solar water heaters: rows of tilted collectors facing south with their tanks.
-  if (housing && tall < 34 && R() < 0.55) {
-    const n = 2 + Math.floor(R() * 6);
-    const panel = new THREE.Color('#263444'), tank = new THREE.Color('#e3e5e3'), frameC = new THREE.Color('#aeb2b4');
-    for (let k = 0; k < n; k++) {
-      const at = place(1.0, 1.0, 8);
-      if (!at) continue;
-      const [x, z] = W(at[0], at[1]);
-      // Collector: 2 m wide, 1.6 m long, tilted 40 deg, its low edge to the south (+Z).
-      const t = 0.7, hw = 1.0, hl = 0.8;
-      const dirZ = [0, Math.sin(t), -Math.cos(t)];   // up the slope, towards the north
-      obox(rb, [x, top + 0.35 + Math.sin(t) * hl, z + Math.cos(t) * 0.05], [hw, 0, 0], [0, Math.cos(t) * 0.04, Math.sin(t) * 0.04], [0, dirZ[1] * hl, dirZ[2] * hl], panel);
-      obox(rb, [x, top + 0.45 + Math.sin(t) * hl * 2, z - Math.cos(t) * hl], [hw + 0.1, 0, 0], [0, 0.22, 0], [0, 0, 0.22], tank);
-      obox(rb, [x, top + 0.3, z], [hw, 0, 0], [0, 0.3, 0], [0, 0, 0.05], frameC);
+  // Everything below is a Blender model (scripts/blender/props/roof.py), on the near tiles only.
+  const yawU = o.ang, south = Math.PI;
+  const taken: [number, number, number][] = [];          // (u, v, radius) already used on this roof
+  const free = (u: number, v: number, r: number) => taken.every(([tu, tv, tr]) => Math.hypot(u - tu, v - tv) > r + tr);
+  const put = (name: string, u: number, v: number, r: number, yaw: number, s = 1, tint?: THREE.Color) => {
+    if (!free(u, v, r) || !fits(u, v, r, r, 0.3)) return false;
+    taken.push([u, v, r]);
+    const [x, z] = W(u, v);
+    model(pb, name, x, top, z, yaw, s, tint);
+    return true;
+  };
+  const scatter = (name: string, r: number, n: number, yaw: () => number, tries = 8) => {
+    let k = 0;
+    for (let t = 0; t < n * tries && k < n; t++) {
+      const u = (R() * 2 - 1) * Math.max(0, o.hl - r - 0.6), v = (R() * 2 - 1) * Math.max(0, o.hw - r - 0.6);
+      if (put(name, u, v, r, yaw())) k++;
     }
+  };
+  // A row along the long axis at offset v, from one end: solar heaters, condensers along a parapet.
+  const row = (name: string, v: number, step: number, r: number, yaw: number, frac: number) => {
+    const len = 2 * (o.hl - r - 0.6) * frac, u0 = -len / 2 + (R() - 0.5) * (2 * o.hl - len) * 0.5;
+    for (let u = u0; u <= u0 + len; u += step) put(name, u, v, r, yaw);
+  };
+  if (housing) {
+    // Solar water heaters in rows on the south half, facing south, on most of the old slabs.
+    if (tall < 40 && R() < 0.75) {
+      const rows = o.hw > 6 ? 1 + Math.floor(R() * Math.min(3, o.hw / 5)) : 1;
+      for (let k = 0; k < rows; k++) row('solar', (o.hw - 2.2) * (1 - k * 0.9 / Math.max(1, rows)) * (Math.cos(o.ang) >= 0 ? 1 : -1), 2.5, 1.2, south, 0.4 + R() * 0.55);
+    }
+    // Condensers along the north parapet, a tank or two, dishes.
+    if (R() < 0.8) row('ac', -(o.hw - 1.0) * (Math.cos(o.ang) >= 0 ? 1 : -1), 1.3 + R() * 0.8, 0.5, yawU + south, 0.3 + R() * 0.6);
+    if (R() < 0.5) {
+      const tint = TANK_TINTS[Math.floor(R() * 4)];
+      for (let k = 0, n = 1 + Math.floor(R() * 2), t = 0; k < n && t < 16; t++) {
+        const u = (R() * 2 - 1) * Math.max(0, o.hl - 2), v = (R() * 2 - 1) * Math.max(0, o.hw - 2);
+        if (put('tank', u, v, 1.4, yawU + R() * 0.3, 1, tint)) k++;
+      }
+    }
+    if (R() < 0.35) scatter('dish', 0.6, 1 + Math.floor(R() * 3), () => south + (R() - 0.5) * 0.6);
+  } else if (office) {
+    // Plant: cooling towers, condensers in blocks, exhaust fans.
+    if (area > 300) scatter('cooling', 1.9, 1 + Math.floor(R() * (area > 1500 ? 4 : 2)), () => yawU, 12);
+    for (let b = 0, nb = 1 + Math.floor(R() * 3); b < nb; b++) {
+      const u0 = (R() * 2 - 1) * Math.max(0, o.hl - 4), v0 = (R() * 2 - 1) * Math.max(0, o.hw - 3);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) put('ac', u0 + i * 1.1, v0 + j * 1.4, 0.5, yawU);
+    }
+    scatter('vent', 0.5, 2 + Math.floor(R() * 5), () => yawU);
+  } else if (R() < 0.6) {
+    scatter('ac', 0.5, 2 + Math.floor(R() * 5), () => yawU + (R() < 0.5 ? 0 : south));
   }
-  // AC condensers in a row.
-  if (R() < 0.7) {
-    const n = 2 + Math.floor(R() * (office ? 10 : 6));
-    const ac = new THREE.Color('#d9dad5');
-    for (let k = 0; k < n; k++) { const at = place(0.45, 0.35, 6); if (at) box(at[0], at[1], 0.45, 0.33, top, top + 0.7, ac); }
-  }
-  // Antenna mast.
-  if (R() < 0.25) { const at = place(0.1, 0.1); if (at) box(at[0], at[1], 0.05, 0.05, top, top + 2.5 + R() * 3, new THREE.Color('#86898b')); }
+  if (R() < 0.3) scatter('mast', 0.3, 1, () => R() * 6.28);
 }

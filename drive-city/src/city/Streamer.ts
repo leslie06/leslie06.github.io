@@ -27,12 +27,17 @@ interface Tile {
   /** Lamps on the decks' parapets, [x, y, z, yaw]: drawn and lighting the road like the others, no colliders. */
   deckLamps: number[];
   trees: number[]; lamps: number[];
+  /** On the low tier, whether this is the focus tile (the only one drawing its roof things there). */
+  focus: boolean;
   body: RAPIER_NS.RigidBody | null;
   /** Tiles two or more away drop pavements and paint (a few pixels there): two draw calls each. */
   far: boolean;
 }
 
 /** Instanced pool fed by the loaded tiles: one draw call per part per type, rebuilt when the set changes. */
+/** The Blender roof things on the near tiles (`?roofprops=0` hides them, for A/B). */
+const ROOF_PROPS = typeof location === 'undefined' || new URLSearchParams(location.search).get('roofprops') !== '0';
+
 class InstancePool {
   readonly meshes: THREE.InstancedMesh[];
   constructor(parts: { geo: THREE.BufferGeometry; mat: THREE.Material; shadow: boolean; depth?: THREE.Material }[], private cap: number, scene: THREE.Scene, colours = false, name = 'pool') {
@@ -137,6 +142,7 @@ export class CityStreamer implements System {
   private treeNear: InstancePool[];
   private treeMid: InstancePool[];
   private treeFar: InstancePool[];
+  private lowTier = false;
   /** Resolves when the Blender trees have replaced the procedural ones (or failed to). */
   treesReady: Promise<void> = Promise.resolve();
   /** Distance LOD bands (m from the focus): shadow-casting detail, and the mid band. */
@@ -164,6 +170,7 @@ export class CityStreamer implements System {
     // pool is drawn whole into each shadow cascade, so only the near band casts.
     const tg = treeGeometries(tier), tm = treeMaterials(env, tier);
     const low = tier === 'low';
+    this.lowTier = low;
     this.nearD = low ? 70 : 110; this.midD = low ? 1e9 : 320;
     this.treeNear = tg.near.map((geo) => new InstancePool([{ geo, mat: tm.mat, shadow: true, depth: tm.depth }], low ? 1500 : 3000, scene, true, 'pool:tree-near'));
     this.treeMid = tg.mid.map((geo) => new InstancePool([{ geo, mat: tm.mat, shadow: false }], low ? 4000 : 8000, scene, true, 'pool:tree-mid'));
@@ -240,6 +247,7 @@ export class CityStreamer implements System {
       if (!mat) { g.dispose(); continue; }
       const mesh = new THREE.Mesh(g, mat);
       mesh.name = pg.name;
+      if (pg.name === 'roofprops') mesh.visible = ROOF_PROPS;
       mesh.receiveShadow = true;
       // One shadow caster per tile: the buildings (roofs and roof clutter are in the same mesh).
       mesh.castShadow = kind === 'facade' || kind === 'bridge';
@@ -250,7 +258,7 @@ export class CityStreamer implements System {
     // Patch the materials for shadow cascades / wetness now, not up to 30 frames later.
     this.engine.get<RenderSystem>('render')?.prepare?.(group);
     this.engine.scene.add(group);
-    const t: Tile = { key: res.key, ix, iz, group, colVerts: res.colVerts!, colIdx: res.colIdx!, deckVerts: res.deckVerts, deckIdx: res.deckIdx, deckLamps: res.deckLamps ?? [], trees: res.trees ?? [], lamps: res.lamps ?? [], body: null, far: false };
+    const t: Tile = { key: res.key, ix, iz, group, colVerts: res.colVerts!, colIdx: res.colIdx!, deckVerts: res.deckVerts, deckIdx: res.deckIdx, deckLamps: res.deckLamps ?? [], trees: res.trees ?? [], lamps: res.lamps ?? [], body: null, far: false, focus: true };
     this.tiles.set(res.key, t);
     this.treeLists.set(res.key, this.treeMatrices(t.trees));
     this.lampLists.set(res.key, this.lampMatrices(t.lamps, t.deckLamps));
@@ -422,7 +430,14 @@ export class CityStreamer implements System {
     for (const t of this.tiles.values()) {
       const d = Math.max(Math.abs(t.ix - fx), Math.abs(t.iz - fz));
       const far = d >= 2;
-      if (far !== t.far) { t.far = far; for (const o of t.group.children) if (o.name === 'paint' || o.name === 'sidewalk') o.visible = !far; }
+      if (far !== t.far || (this.lowTier && (d === 0) !== t.focus)) {
+        t.focus = d === 0;
+        t.far = far;
+        for (const o of t.group.children) {
+          if (o.name === 'paint' || o.name === 'sidewalk') o.visible = !far;
+          else if (o.name === 'roofprops') o.visible = ROOF_PROPS && (this.lowTier ? d === 0 : !far);
+        }
+      }
       if (d > this.radius + 1) this.unload(t);
       else if (d <= this.physRadius && !t.body) this.addBody(t);
       else if (d > this.physRadius + 1 && t.body) this.dropBody(t);

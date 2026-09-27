@@ -32,6 +32,8 @@ export interface CityMaterials {
   paint: THREE.MeshStandardMaterial;
   /** An interchange's parapets, deck edges, soffits and piers (vertex tint). */
   bridge: THREE.MeshStandardMaterial;
+  /** The Blender roof-top things (tanks, solar heaters, condensers...): plain vertex colours. */
+  roofprops: THREE.MeshStandardMaterial;
   ground: THREE.MeshStandardMaterial;
   areas: Record<AreaKind, THREE.MeshStandardMaterial>;
 }
@@ -427,6 +429,7 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms): Pro
     sidewalk: skin(std({ roughness: 0.85, color: '#aeaaa2', vertexColors: true }, undefined, 0.75, 0.18, 1, 'ground'), 'square_brick_paving', 2.4, { map: true, normal: true }),
     paint: std({ roughness: 0.6, color: '#ffffff', vertexColors: true }, undefined, 0, 0.12, 7, 'ground'),
     bridge: skin(std({ roughness: 0.92, color: '#b9b6ae', vertexColors: true }, undefined, 0.55, 0.2, 0, 'surface'), 'brushed_concrete', 4, { map: true }),
+    roofprops: (() => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.2 }); m.userData.wet = 'surface'; return m; })(),
     ground,
     areas,
   };
