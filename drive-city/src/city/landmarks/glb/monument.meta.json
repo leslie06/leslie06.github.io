@@ -1,0 +1,44 @@
+{
+  "id": "monument",
+  "name": {
+    "zh": "人民英雄纪念碑",
+    "en": "Monument to the People's Heroes"
+  },
+  "lat": 39.903197,
+  "lon": 116.391425,
+  "headingDeg": -1.74,
+  "file": "monument.glb",
+  "version": "d156e0d5",
+  "footprint": [
+    [-28.76, -34.31],
+    [28.76, -34.31],
+    [28.76, 34.31],
+    [-28.76, 34.31]
+  ],
+  "clear": [
+    [
+      [-30.76, -36.31],
+      [30.76, -36.31],
+      [30.76, 36.31],
+      [-30.76, 36.31]
+    ]
+  ],
+  "height": 37.94,
+  "stats": {
+    "triangles": 23742,
+    "farTriangles": 96,
+    "materials": 6,
+    "farMaterials": 1,
+    "colliders": {
+      "solid": 7,
+      "walk": 8,
+      "mesh": 0
+    },
+    "instancedMeshes": 2,
+    "textures": 5,
+    "maxTexture": 2048,
+    "footprintArea": 3947,
+    "bytes": 242248,
+    "source": "monument.glb"
+  }
+}

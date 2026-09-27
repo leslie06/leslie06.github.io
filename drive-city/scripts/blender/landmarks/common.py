@@ -36,7 +36,7 @@ def image(name, arr):
     return im
 
 
-def material(name, color, rough=0.7, metal=0.0, tex=None, emit_tex=None, vertex_colors=False, props=None):
+def material(name, color, rough=0.7, metal=0.0, tex=None, emit_tex=None, vertex_colors=False, props=None, normal_tex=None, normal_strength=1.0):
     """A Principled material the glTF export understands; `props` become custom properties (glTF extras)."""
     m = bpy.data.materials.new(name)
     try:
@@ -61,6 +61,14 @@ def material(name, color, rough=0.7, metal=0.0, tex=None, emit_tex=None, vertex_
         e.image = emit_tex
         nt.links.new(e.outputs["Color"], b.inputs["Emission Color"])
         b.inputs["Emission Strength"].default_value = 1.0
+    if normal_tex is not None:
+        normal_tex.colorspace_settings.name = "Non-Color"
+        t = nt.nodes.new("ShaderNodeTexImage")
+        t.image = normal_tex
+        nm = nt.nodes.new("ShaderNodeNormalMap")
+        nm.inputs["Strength"].default_value = normal_strength
+        nt.links.new(t.outputs["Color"], nm.inputs["Color"])
+        nt.links.new(nm.outputs["Normal"], b.inputs["Normal"])
     for k, v in (props or {}).items():
         m[k] = v
     return m
