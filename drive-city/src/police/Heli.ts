@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import HELI_MODEL from './heli.json';
 
 /** Cruising height over the street, and how far above a roof it keeps. */
 const ALT = 58, ROOF_CLEAR = 26;
@@ -8,14 +9,26 @@ const TOP = 44;
 /** A police helicopter sees this far (3-D, and only with nothing solid in between). */
 export const HELI_SIGHT = 170;
 
-const tint = (g: THREE.BufferGeometry, hex: string): THREE.BufferGeometry => {
-  const geo = g.index ? g.toNonIndexed() : g, n = geo.getAttribute('position').count, c = new THREE.Color(hex);
-  const col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.deleteAttribute('uv');
-  return geo;
-};
+/** The Blender model's colours (scripts/blender/vehicles/heli.py), by material name. */
+const COLOURS: Record<string, string> = { white: '#f2f3f1', blue: '#1c47a8', dark: '#1b1d20', grey: '#8a8e92', glass: '#0d1a24' };
+type Part = { p: number[]; n: number[]; i: number[] };
+
+/** One group of the model (hull, rotor, fan) as a vertex-coloured geometry, moved by (dx, dy, dz); glass apart. */
+function group(name: 'hull' | 'rotor' | 'fan', dx = 0, dy = 0, dz = 0): { paint: THREE.BufferGeometry; glass: THREE.BufferGeometry | null } {
+  const parts = (HELI_MODEL as unknown as Record<string, Record<string, Part>>)[name];
+  const out: THREE.BufferGeometry[] = [], glass: THREE.BufferGeometry[] = [];
+  for (const [mat, g] of Object.entries(parts)) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(g.p, (v, i) => v / 1000 + (i % 3 === 0 ? dx : i % 3 === 1 ? dy : dz)), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(g.n, (v) => v / 100), 3));
+    const c = new THREE.Color(COLOURS[mat] ?? '#ff00ff'), col = new Float32Array(g.p.length);
+    for (let i = 0; i < col.length; i += 3) col.set([c.r, c.g, c.b], i);
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setIndex(g.i);
+    (mat === 'glass' ? glass : out).push(geo);
+  }
+  return { paint: mergeGeometries(out)!, glass: glass.length ? mergeGeometries(glass) : null };
+}
 
 /** A soft round spot for the searchlight's pool on the ground. */
 function spotTexture(): THREE.Texture {
@@ -30,7 +43,7 @@ function spotTexture(): THREE.Texture {
 }
 
 /**
- * The police helicopter (three stars and up): a white-and-blue light helicopter that flies over the
+ * The police helicopter (three stars and up): a white-and-blue light twin (modelled in Blender) that flies over the
  * chase, keeps the player in its searchlight, and while it can see them the police always know
  * where they are - it is what makes a big chase hard to shake. Out of sight it circles the search
  * area sweeping the light. Kinematic, no collider: it holds ROOF_CLEAR over whatever is below it.
@@ -69,40 +82,26 @@ export class PoliceHeli {
   private static readonly UP = new THREE.Vector3(0, 1, 0);
 
   constructor(scene: THREE.Scene) {
-    const hull = mergeGeometries([
-      tint(new THREE.SphereGeometry(1, 20, 14).scale(1.15, 1.05, 2.1).translate(0, 1.35, 0.3), '#f2f3f1'),
-      tint(new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45).scale(1.17, 1.07, 2.12).translate(0, 1.35, 0.3), '#1c47a8'),
-      tint(new THREE.CylinderGeometry(0.16, 0.34, 5.2, 10).rotateX(Math.PI / 2).translate(0, 1.75, -3.6), '#f2f3f1'),
-      tint(new THREE.BoxGeometry(0.12, 1.3, 0.9).translate(0, 2.3, -6.0), '#1c47a8'),
-      tint(new THREE.BoxGeometry(1.5, 0.08, 0.5).translate(0, 1.75, -5.4), '#1c47a8'),
-      tint(new THREE.CylinderGeometry(0.5, 0.6, 0.45, 12).translate(0, 2.55, 0), '#2a2d31'),
-      tint(new THREE.CylinderGeometry(0.07, 0.07, 3.0, 6).rotateX(Math.PI / 2).translate(0.85, 0.12, 0.2), '#2a2d31'),
-      tint(new THREE.CylinderGeometry(0.07, 0.07, 3.0, 6).rotateX(Math.PI / 2).translate(-0.85, 0.12, 0.2), '#2a2d31'),
-      tint(new THREE.BoxGeometry(0.06, 0.55, 0.06).rotateZ(-0.35).translate(0.72, 0.42, 0.9), '#2a2d31'),
-      tint(new THREE.BoxGeometry(0.06, 0.55, 0.06).rotateZ(0.35).translate(-0.72, 0.42, 0.9), '#2a2d31'),
-      tint(new THREE.BoxGeometry(0.06, 0.55, 0.06).rotateZ(-0.35).translate(0.72, 0.42, -0.6), '#2a2d31'),
-      tint(new THREE.BoxGeometry(0.06, 0.55, 0.06).rotateZ(0.35).translate(-0.72, 0.42, -0.6), '#2a2d31'),
-      // The searchlight pod under the nose.
-      tint(new THREE.CylinderGeometry(0.2, 0.2, 0.4, 10).rotateX(Math.PI / 2).translate(0, 0.35, 1.9), '#2a2d31'),
-    ])!;
+    // The body modelled in Blender (scripts/blender/vehicles/heli.py -> scripts/vehicles/import.mjs --group):
+    // fuselage and glazing, cowling, boom, fenestron, stabiliser, skids, searchlight pod, 警察 POLICE.
     const paint = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.2 });
-    const hullMesh = new THREE.Mesh(hull, paint);
+    const hull = group('hull');
+    const hullMesh = new THREE.Mesh(hull.paint, paint);
     hullMesh.castShadow = true;
-    const glass = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10, -Math.PI * 0.42, Math.PI * 0.84, Math.PI * 0.18, Math.PI * 0.42).scale(1.18, 1.08, 2.14).translate(0, 1.35, 0.32),
-      new THREE.MeshStandardMaterial({ color: '#0d1a24', roughness: 0.08, metalness: 0.6 }));
-    const dark = new THREE.MeshStandardMaterial({ color: '#1b1d20', roughness: 0.6 });
-    // Four blades, and a faint disc for the blur they make at speed.
-    this.rotor = new THREE.Mesh(mergeGeometries([new THREE.BoxGeometry(10.4, 0.05, 0.3), new THREE.BoxGeometry(0.3, 0.05, 10.4)])!, dark);
+    const glass = new THREE.Mesh(hull.glass!, new THREE.MeshStandardMaterial({ color: '#0d1a24', roughness: 0.08, metalness: 0.6 }));
+    // The rotor (four twisted blades and the hub) and the fenestron's fan, moved to their own pivots and spun there.
+    this.rotor = new THREE.Mesh(group('rotor', 0, -2.85, 0).paint, paint);
     this.rotor.position.set(0, 2.85, 0);
+    this.rotor.castShadow = true;
     this.disc = new THREE.Mesh(new THREE.CircleGeometry(5.2, 32).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: '#202326', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
     this.disc.position.set(0, 2.84, 0);
-    this.tail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.5, 0.16), dark);
-    this.tail.position.set(0.12, 2.3, -6.05);
+    this.tail = new THREE.Mesh(group('fan', 0, -2.25, 6.05).paint, paint);
+    this.tail.position.set(0, 2.25, -6.05);
     this.beaconR = new THREE.MeshBasicMaterial({ color: '#ff2020' });
     this.beaconB = new THREE.MeshBasicMaterial({ color: '#2050ff' });
-    const bR = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), this.beaconR); bR.position.set(0.3, 0.4, -1.2);
-    const bB = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), this.beaconB); bB.position.set(-0.3, 0.4, -1.2);
+    const bR = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), this.beaconR); bR.position.set(0.3, 0.78, -1.2);
+    const bB = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), this.beaconB); bB.position.set(-0.3, 0.78, -1.2);
     this.body.add(hullMesh, glass, this.rotor, this.disc, this.tail, bR, bB);
     this.group.add(this.body);
 
