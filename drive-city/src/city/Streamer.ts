@@ -9,6 +9,7 @@ import type { CityMaterials } from './Materials';
 import type { TileResult } from './tileWorker';
 import { TILE, tileOf } from './Geo';
 import { treeGeometries, treeMaterials, lampGeometries, LAMP_REACH } from './Vegetation';
+import { loadBlenderTrees, useTreeMap } from './visual/BlenderTrees';
 import { furnitureGeometries, furnitureMaterials } from './visual/FurnitureGeo';
 import type { Furniture } from './visual/StreetFurniture';
 import { StreetKnocks } from './Knock';
@@ -136,6 +137,8 @@ export class CityStreamer implements System {
   private treeNear: InstancePool[];
   private treeMid: InstancePool[];
   private treeFar: InstancePool[];
+  /** Resolves when the Blender trees have replaced the procedural ones (or failed to). */
+  treesReady: Promise<void> = Promise.resolve();
   /** Distance LOD bands (m from the focus): shadow-casting detail, and the mid band. */
   private nearD: number;
   private midD: number;
@@ -165,6 +168,17 @@ export class CityStreamer implements System {
     this.treeNear = tg.near.map((geo) => new InstancePool([{ geo, mat: tm.mat, shadow: true, depth: tm.depth }], low ? 1500 : 3000, scene, true, 'pool:tree-near'));
     this.treeMid = tg.mid.map((geo) => new InstancePool([{ geo, mat: tm.mat, shadow: false }], low ? 4000 : 8000, scene, true, 'pool:tree-mid'));
     this.treeFar = tg.far.map((geo) => new InstancePool([{ geo, mat: tm.mat, shadow: false }], low ? 1 : 16000, scene, true, 'pool:tree-far'));
+    // The Blender trees replace these when their atlas arrives (visual/BlenderTrees.ts); on low the mid
+    // band draws the far level's geometry, as it did with the procedural trees.
+    if (new URLSearchParams(location.search).get('trees') !== 'old') {
+      this.treesReady = loadBlenderTrees(low ? 4 : 8).then((bt) => {
+        useTreeMap(tm, bt.map, env);
+        const swap = (pools: InstancePool[], geos: THREE.BufferGeometry[]) => pools.forEach((p, i) => { const old = p.meshes[0].geometry; p.meshes[0].geometry = geos[i]; old.dispose(); });
+        swap(this.treeNear, low ? bt.mid : bt.near);
+        swap(this.treeMid, low ? bt.far : bt.mid);
+        swap(this.treeFar, bt.far);
+      }).catch((e) => console.warn('[city] Blender trees did not load; keeping the procedural ones', e));
+    }
     // Street furniture: railings and shelters on the tiles within two of the focus, bins and bikes on the nearest nine.
     const fg = furnitureGeometries(), fm = furnitureMaterials(env);
     this.railPool = new InstancePool([{ geo: fg.rail, mat: fm.rail, shadow: false, depth: fm.railDepth }], low ? 2500 : 6000, scene, true, 'pool:furn-rail');

@@ -275,9 +275,11 @@ const SWAY = /* glsl */`
   transformed.x += (sin(ph) * 0.16 + sin(uTime * 2.9 + position.y * 1.7 + ip.x) * 0.045) * sw;
   transformed.z += (cos(ph * 0.83) * 0.12 + cos(uTime * 3.3 + position.x * 1.9 + ip.y) * 0.045) * sw;
 }`;
-const MIP_ALPHA = (size: number) => /* glsl */`
+// The atlas's size comes from the bound map (the Blender atlas is 2048 x 1024, the canvas one square).
+const MIP_ALPHA = (_size: number) => /* glsl */`
 {
-  vec2 fdx = dFdx(vMapUv) * ${size.toFixed(1)}, fdy = dFdy(vMapUv) * ${size.toFixed(1)};
+  vec2 mapSize = vec2(textureSize(map, 0));
+  vec2 fdx = dFdx(vMapUv) * mapSize, fdy = dFdy(vMapUv) * mapSize;
   float lod = max(0.0, 0.5 * log2(max(dot(fdx, fdx), dot(fdy, fdy))));
   diffuseColor.a *= 1.0 + lod * 0.32;
 }`;
