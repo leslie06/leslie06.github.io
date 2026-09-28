@@ -234,7 +234,7 @@ export function curve(pts: readonly (readonly [number, number])[]): (x: number) 
 export type Model = Record<string, { p: number[]; n: number[]; i: number[]; t?: number[] }>;
 
 /** Add a Blender model's surfaces to a mesher, each through the Surf its material name maps to. */
-export function addModel(m: Mesher, model: Model, surfs: Record<string, Surf>): void {
+export function addModel(m: Mesher, model: Model, surfs: Record<string, Surf>, matrix?: THREE.Matrix4): void {
   for (const [name, g] of Object.entries(model)) {
     const s = surfs[name];
     if (!s) throw new Error(`vehicle model: no surface for material "${name}"`);
@@ -243,7 +243,7 @@ export function addModel(m: Mesher, model: Model, surfs: Record<string, Surf>): 
     geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(g.n, (v) => v / 100), 3));
     if (g.t) geo.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(g.t, (v, i) => (i & 1 ? 1 - v / 4096 : v / 4096)), 2));
     geo.setIndex(g.i);
-    m.geo(s, geo);
+    m.geo(s, geo, matrix);
   }
 }
 

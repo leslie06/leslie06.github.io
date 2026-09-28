@@ -37,6 +37,8 @@ MATS = dict(
     cladding=("#1b1c1e", 0.72, 0.0), grille=("#303236", 0.4, 0.35), intake=("#202124", 0.55, 0.2), plateF=("#2050c0", 0.35, 0.1),
     plateR=("#2050c0", 0.35, 0.1), head=("#e8ecf0", 0.08, 0.6), tail=("#a01010", 0.12, 0.1), reverse=("#e0e0e0", 0.1, 0.2),
     amber=("#e09020", 0.1, 0.2), brake=("#c01010", 0.15, 0.0), badge=("#c0c4c8", 0.15, 0.9), door=("#ffffff", 0.4, 0.0),
+    dest=("#202020", 0.2, 0.0), busHead=("#e0e0e0", 0.08, 0.6), mesh=("#303030", 0.6, 0.2), vent=("#303030", 0.5, 0.1),
+    rearDoor=("#c0c0c0", 0.4, 0.3), sideText=("#ffffff", 0.4, 0.0),
 )
 
 
@@ -123,17 +125,18 @@ def sedan():
     )
 
 
-def car(zR, zF, zD, zRH, zH, zC, windows, blackouts, zs=None, **kw):
+def car(zR, zF, zD, zRH, zH, zC, windows, blackouts, zs=None, gap=0.28, **kw):
     """A body type's figures with the defaults filled in; the stations, unless given, are every window, pillar and
     screen edge, the ends' rounding and enough in between that no gap is over 0.28 m."""
     if zs is None:
         keys = {zR, zR + 0.03, zR + 0.11, zF - 0.12, zF - 0.04, zF, zD, zRH, zH, zC}
         for a, b in windows + blackouts:
             keys |= {a, b}
+        keys |= set(kw.get("extra_zs", ()))
         zs = sorted({round(z, 4) for z in keys})
         out = [zs[0]]
         for z in zs[1:]:
-            n = math.ceil((z - out[-1]) / 0.28)
+            n = math.ceil((z - out[-1]) / gap)
             out += [out[-1] + (z - out[-1]) * i / n for i in range(1, n)] + [z]
         zs = out
     B = dict(zR=zR, zF=zF, zD=zD, zRH=zRH, zH=zH, zC=zC, windows=windows, blackouts=blackouts, zs=zs,
@@ -217,7 +220,327 @@ def mpv():
     )
 
 
-BODIES = dict(sedan=sedan, hatch=hatch, suv=suv, mpv=mpv)
+# ---- the bus: a box with rounded ends, its own rows and materials ------------------------------------------------
+
+BUS_ROWS = [  # name, height at the side / front / rear, inset from the plan width
+    ("bottom", -0.17, -0.17, -0.17, 0.06), ("skirtB", -0.1, -0.1, -0.05, 0.015), ("skirtT", -0.06, 0.02, 0.1, 0.0),
+    ("stripeB", 0.58, 0.1, 0.35, 0.0), ("stripeT", 0.64, 0.3, 1.2, 0.0), ("belt", 0.94, 0.44, 1.42, 0.0),
+    ("winBot", 1.02, 0.52, 1.5, 0.018), ("winMid", 1.65, 1.4, 1.9, 0.024), ("winTop", 2.28, 2.31, 2.26, 0.028),
+    ("roofBand", 2.36, 2.46, 2.4, 0.03), ("shoulder", 2.46, 2.56, 2.5, 0.05),
+]
+BUS_PILLARS = [4.6, 3.29, 1.98, 0.67, -0.64, -1.95, -3.26, -4.57]
+BUS_TOP = [(0.96, 0.0), (0.93, 0.45), (0.87, 0.75), (0.79, 0.9), (0.68, 0.97), (0.55, 0.99), (0.28, 1.0), (0.0, 1.0)]
+
+
+def bus_section(B, z):
+    W = B["W"](z)
+    wf, wr = smooth(B["zF"] - 0.55, B["zF"], z), smooth(B["zR"] + 0.22, B["zR"], z)
+    rows = [(W - ins, side + (front - side) * wf + (rear - side) * wr) for _, side, front, rear, ins in BUS_ROWS]
+    x0, bot = rows[0]
+    floor = [(x0 * f, bot) for f in (0.0, 0.28, 0.55, 0.68, 0.79, 0.87, 0.93)] + [rows[0]]
+    sh = rows[-1][1]
+    top = [(W * f, sh + (B["crown"] - sh) * g) for f, g in BUS_TOP]
+    return floor, rows[1:-1], top
+
+
+def bus_wall(B, part, band, z0, z1):
+    if part == "floor":
+        return "under"
+    if part == "top":
+        return "paintU"
+    zm = (z0 + z1) / 2
+    if band == 3 and z0 < B["zR"] + 0.23:
+        return "paintL"   # the stripe stops at the rear corner, where the tail lamps start
+    if band in (6, 7):
+        if z1 > B["winZ"][1] + 1e-6:
+            return "black"
+        if z0 < B["winZ"][0] - 1e-6:
+            return "paintU"
+        if any(abs(zm - p) < 0.051 for p in BUS_PILLARS):
+            return "black"
+        return "glass"
+    return {0: "black", 1: "black", 2: "paintL", 3: "satin", 4: "paintL", 5: "black", 8: "black", 9: "paintU"}[band]
+
+
+def bus_cap(B, end, i, j, corners):
+    """The bus's front and rear faces: material of cell (column i from the centre, band j) and its corners' UVs."""
+    W = B["W"](B["zF"] if end > 0 else B["zR"])
+    fx = [c[0] / W for c in corners]
+    ys = [c[1] for c in corners]
+    y0, y1 = min(ys), max(ys)
+    uv = lambda u0, u1: [((f - u0) / (u1 - u0), (y - y0) / max(1e-6, y1 - y0)) for f, y in zip(fx, ys)]
+    if j in (0, 1):
+        return "black", None
+    if j == 9:
+        return "paintU", None
+    if end > 0:
+        if j == 8:
+            return ("dest", [(0.5 + 0.5 * f / 0.87, v) for f, (_, v) in zip(fx, uv(0, 1))]) if i <= 5 else ("black", None)
+        if j in (6, 7):
+            return ("glass", None) if i <= 5 else ("black", None)
+        if j == 5:
+            return "black", None
+        if j == 3:
+            return ("busHead", uv(0.68, 0.96)) if i >= 4 else ("black", None)
+        return "paintL", None
+    if j == 8:
+        return ("dest", [(0.5 - 0.5 * f / 0.55, v) for f, (_, v) in zip(fx, uv(0, 1))]) if i <= 2 else ("paintU", None)
+    if j in (6, 7):
+        return ("glassDark", None) if i <= 5 else ("paintU", None)
+    if j == 5:
+        return ("black", None) if i <= 5 else ("paintU", None)
+    if j == 3:
+        return ("tail", uv(0.87, 0.96)) if i >= 5 else ("vent", uv(0.0, 0.79))
+    return "paintL", None
+
+
+def bus_lean(y, end):
+    if end > 0:
+        return 0.14 * smooth(0.45, 2.31, y) - (0.06 if -0.11 <= y <= 0.03 else 0.0)
+    return -(0.06 if -0.06 <= y <= 0.11 else 0.0)
+
+
+def bus_details(B, surf, grp, hi, parts):
+    zF, zR = B["zF"], B["zR"]
+    W = 1.265
+    # the kerb-side (-X) doors: a black frame, two glass leaves, handrails behind them
+    for z0, z1 in ((4.28, 5.26), (-1.2, 0.02)):
+        side = -1
+        parts.append(decal(surf, f"{grp}__doorframe", "black", 6, 6,
+                           lambda s, t, z0=z0, z1=z1: (Vector((side * 3.0, lerp(-0.12, 2.3, t), lerp(z0, z1, s))), Vector((1, 0, 0))),
+                           lambda s, t: (s, t), offset=0.004))
+        mid = (z0 + z1) / 2
+        for a, b in ((z0 + 0.05, mid - 0.02), (mid + 0.02, z1 - 0.05)):
+            parts.append(decal(surf, f"{grp}__doorglass", "glassDark", 3, 4,
+                               lambda s, t, a=a, b=b: (Vector((side * 3.0, lerp(-0.05, 2.24, t), lerp(a, b, s))), Vector((1, 0, 0))),
+                               lambda s, t: (s, t), offset=0.008))
+        if hi:
+            for y in (1.0, 0.35):
+                parts.append(rbox(f"{grp}__doorrail", (side * (W + 0.016), y, mid), (0.02, 0.025, z1 - z0 - 0.12), "satin", bevel=0.006, seg=1))
+    # roof: two air-conditioning pods with their grilles, a hatch
+    for c, size in (((0, 2.74, 1.4), (1.9, 0.26, 2.5)), ((0, 2.71, -3.6), (1.3, 0.2, 1.4))):
+        parts.append(rbox(f"{grp}__ac", c, size, "paintU", bevel=0.08 if hi else 0.04, seg=2 if hi else 1))
+        parts.append(rbox(f"{grp}__acgrille", (c[0], c[1] + size[1] / 2 + 0.002, c[2]), (size[0] * 0.78, 0.01, size[2] * 0.8), "mesh", bevel=0.0))
+    parts.append(rbox(f"{grp}__hatch", (0, 2.64, -1.2), (0.7, 0.06, 0.7), "black", bevel=0.02 if hi else 0.0, seg=1))
+    # mirrors on arms reaching forward from the front corners
+    for sx in (1, -1):
+        root, tip = Vector((sx * 1.18, 2.42, zF - 0.1)), Vector((sx * 1.43, 1.95, zF + 0.18))
+        d = tip - root
+        parts.append(rbox(f"{grp}__marm", (root + tip) / 2, (0.04, 0.04, d.length), "black", bevel=0.0,
+                          rot=(math.atan2(-d.y, math.hypot(d.x, d.z)), math.atan2(d.x, d.z), 0)))
+        parts.append(rbox(f"{grp}__mhead", tip + Vector((0, -0.12, 0)), (0.09, 0.34, 0.08), "black", bevel=0.02 if hi else 0.0, seg=1))
+        parts.append(rbox(f"{grp}__mglass", tip + Vector((0, -0.12, -0.042)), (0.07, 0.3, 0.004), "glassDark", bevel=0.0))
+    # wipers, plates
+    for x, yaw in ((0.45, 0.45), (-0.5, -0.45)):
+        loc, _ = surf.hit((x, 0.62, zF + 2.0), (0, 0, -1))
+        if loc is not None:
+            parts.append(rbox(f"{grp}__wiper", loc + Vector((0, 0, 0.012)), (0.9, 0.02, 0.025), "black", bevel=0.0, rot=(0, 0, yaw)))
+    parts.append(decal(surf, f"{grp}__plateF", "plateF", 2, 1,
+                       lambda s, t: (Vector((lerp(-0.22, 0.22, s), lerp(-0.11, 0.03, t), zF + 2.0)), Vector((0, 0, -1))), lambda s, t: (s, t), offset=0.008))
+    parts.append(decal(surf, f"{grp}__plateR", "plateR", 2, 1,
+                       lambda s, t: (Vector((lerp(0.22, -0.22, s), lerp(0.13, 0.27, t), zR - 2.0)), Vector((0, 0, 1))), lambda s, t: (s, t), offset=0.006))
+    # amber side markers along the skirt
+    if hi:
+        for z in (-4.5, -1.5, 1.5, 4.5):
+            for sx in (1, -1):
+                parts.append(decal(surf, f"{grp}__marker", "amber", 1, 1,
+                                   lambda s, t, z=z, sx=sx: (Vector((sx * 3.0, lerp(0.2, 0.26, t), z + lerp(-0.05, 0.05, s))), Vector((-sx, 0, 0))),
+                                   lambda s, t: (s, t), offset=0.003))
+    # the underside tray between the wells
+    yb = -0.165
+    ar = sorted(B["arches"])
+    uv_, uf = [], []
+    for a, b, w in ((zR + 0.2, ar[0][0] - ar[0][1], W - 0.08), (ar[0][0] - ar[0][1], ar[0][0] + ar[0][1], 0.6),
+                    (ar[0][0] + ar[0][1], ar[1][0] - ar[1][1], W - 0.08), (ar[1][0] - ar[1][1], ar[1][0] + ar[1][1], 0.6), (ar[1][0] + ar[1][1], zF - 0.2, W - 0.08)):
+        n = len(uv_)
+        uv_ += [(w, yb, a), (-w, yb, a), (-w, yb, b), (w, yb, b)]
+        uf.append((n + 3, n + 2, n + 1, n))
+    parts.append(obj_from(f"{grp}__floor", uv_, uf, ["under"] * len(uf)))
+    return parts
+
+
+def bus():
+    zR, zF = -6.35, 5.55
+    return car(
+        zR, zF, zR, zR, zF, zF, [], [], gap=0.7,
+        extra_zs=[p + d for p in BUS_PILLARS for d in (-0.05, 0.05)] + [-5.85, 5.3, zF - 0.55, zF - 0.3, zR + 0.22, zR + 0.4],
+        wheels=(3.0, -3.0), arch=0.6, arches=[(3.0, 0.57), (-3.0, 0.6)], archY=0.02, crown=2.62, winZ=(-5.85, 5.3), nr=len(BUS_ROWS),
+        W=curve([(zR, 1.1), (zR + 0.03, 1.17), (zR + 0.11, 1.22), (zR + 0.35, 1.255), (zR + 0.8, 1.265), (zF - 0.8, 1.265), (zF - 0.35, 1.25), (zF - 0.11, 1.21), (zF - 0.03, 1.15), (zF, 1.08)]),
+        section=bus_section, wall_mat=bus_wall, cap_mat=bus_cap, zlean=bus_lean, cap_bulge=0.0, details=bus_details,
+        creases={13: 0.5, 15: 0.5, 10: 0.4, 11: 0.4}, door=(-2.35, -1.3), doorY=(0.68, 0.9),
+    )
+
+
+# ---- the truck: a cab-over cab from the cage, the cargo box and the chassis as parts --------------------------------
+
+TRUCK_ROWS = [
+    ("bottom", -0.1, -0.1, -0.1, 0.05), ("bumperB", 0.0, -0.06, 0.0, 0.01), ("bumperT", 0.1, 0.1, 0.1, 0.0),
+    ("lampBot", 0.44, 0.18, 0.5, 0.0), ("lampTop", 0.52, 0.42, 0.6, 0.0), ("belt", 0.98, 1.04, 1.24, 0.0),
+    ("winBot", 1.05, 1.12, 1.3, 0.012), ("winMid", 1.45, 1.5, 1.55, 0.014), ("winTop", 1.85, 1.88, 1.82, 0.016),
+    ("roofBand", 1.9, 1.95, 1.9, 0.02), ("shoulder", 1.96, 2.0, 1.96, 0.04),
+]
+TRUCK_COLS = [0.0, 0.2, 0.45, 0.6, 0.75, 0.87, 0.93]
+
+
+def truck_section(B, z):
+    W = B["W"](z)
+    wf, wr = smooth(B["zF"] - 0.3, B["zF"], z), smooth(B["zR"] + 0.08, B["zR"], z)
+    rows = [(W - ins, side + (front - side) * wf + (rear - side) * wr) for _, side, front, rear, ins in TRUCK_ROWS]
+    x0, bot = rows[0]
+    floor = [(x0 * f, bot) for f in TRUCK_COLS] + [rows[0]]
+    sh = rows[-1][1]
+    top = [(W * f, sh + (B["crown"] - sh) * g) for f, g in
+           [(0.96, 0.0), (0.93, 0.4), (0.87, 0.7), (0.75, 0.9), (0.6, 0.97), (0.45, 0.99), (0.2, 1.0), (0.0, 1.0)]]
+    return floor, rows[1:-1], top
+
+
+def truck_wall(B, part, band, z0, z1):
+    if part == "floor":
+        return "under"
+    if part == "top":
+        return "paintU"
+    if band in (6, 7):
+        return "black" if z1 > 2.62 + 1e-6 else ("glass" if z0 >= 1.35 - 1e-6 else "paintU")
+    return {0: "black", 1: "black", 2: "paintU", 3: "paintU", 4: "paintU", 5: "black", 8: "black", 9: "paintU"}[band]
+
+
+def truck_cap(B, end, i, j, corners):
+    W = B["W"](B["zF"] if end > 0 else B["zR"])
+    fx = [c[0] / W for c in corners]
+    ys = [c[1] for c in corners]
+    y0, y1 = min(ys), max(ys)
+    v = [(y - y0) / max(1e-6, y1 - y0) for y in ys]
+    if j in (0, 1):
+        return "black", None
+    if end > 0:
+        if j == 3:
+            if i >= 3:
+                return "head", [((0.96 - f) / 0.36, vv) for f, vv in zip(fx, v)]   # u = 0 at the outer end
+            if i <= 1:
+                return "grille", [((0.45 - f) / 0.45, vv) for f, vv in zip(fx, v)]   # u = 1 on the centre line
+            return "paintU", None
+        if j == 5 or j == 8:
+            return "black", None
+        if j in (6, 7):
+            return ("glass", None) if i <= 5 else ("black", None)
+        return "paintU", None
+    if j in (6, 7) and i <= 2:
+        return "glassDark", None
+    return "paintU", None
+
+
+def truck_lean(y, end):
+    if end > 0:
+        return 0.16 * smooth(1.1, 1.88, y) - (0.06 if -0.07 <= y <= 0.11 else 0.0)
+    return 0.0
+
+
+def quad_obj(name, mat, a, b, c, d, uv=True):
+    """One quad a-b-c-d (counter-clockwise seen from its front) with UVs 0..1."""
+    return obj_from(name, [a, b, c, d], [(0, 1, 2, 3)], [mat], uvs=[(0, 0), (1, 0), (1, 1), (0, 1)] if uv else None)
+
+
+def truck_details(B, surf, grp, hi, parts):
+    zF, zR = B["zF"], B["zR"]
+    z0, z1, BW, yb, yt = -3.05, 1.05, 1.05, 0.62, 2.6
+    # the cargo box: a rounded box, satin rails along its top and bottom edges and up its corners
+    parts.append(rbox(f"{grp}__box", (0, (yb + yt) / 2, (z0 + z1) / 2), (2 * BW, yt - yb, z1 - z0), "paintL", bevel=0.03 if hi else 0.015, seg=2 if hi else 1))
+    for y in (yb + 0.05, yt - 0.06):
+        for sx in (1, -1):
+            parts.append(rbox(f"{grp}__boxrail", (sx * (BW + 0.004), y, (z0 + z1) / 2), (0.02, 0.09, z1 - z0 - 0.04), "satin", bevel=0.0))
+    for z in (z0 + 0.02, z1 - 0.02):
+        for sx in (1, -1):
+            parts.append(rbox(f"{grp}__boxpost", (sx * (BW - 0.02), (yb + yt) / 2, z), (0.06, yt - yb - 0.02, 0.06), "satin", bevel=0.0))
+    # the rear doors (the atlas' door drawing, hinges and locking bars in it) and locking bars proud of them
+    parts.append(quad_obj(f"{grp}__doors", "rearDoor", (BW - 0.05, yb + 0.06, z0 - 0.003), (-BW + 0.05, yb + 0.06, z0 - 0.003),
+                          (-BW + 0.05, yt - 0.06, z0 - 0.003), (BW - 0.05, yt - 0.06, z0 - 0.003)))
+    if hi:
+        for x in (-0.55, -0.15, 0.15, 0.55):
+            parts.append(rbox(f"{grp}__lockbar", (x, (yb + yt) / 2, z0 - 0.02), (0.025, yt - yb - 0.2, 0.025), "satin", bevel=0.0))
+    # the chassis: rails, the fuel tank, side guards, mudguards and flaps over the rear wheels, the under-run bar
+    rz = B["wheels"][1]
+    for sx in (1, -1):
+        parts.append(rbox(f"{grp}__frame", (0.45 * sx, 0.28, -0.95), (0.1, 0.24, 4.1), "black", bevel=0.0))
+        for y in (0.28, 0.46):
+            parts.append(rbox(f"{grp}__guard", (1.0 * sx, y, 0.02), (0.04, 0.04, 2.0), "satin", bevel=0.008 if hi else 0.0, seg=1))
+        parts.append(rbox(f"{grp}__flap", (0.8 * sx, 0.1, rz - 0.52), (0.56, 0.42, 0.02), "rubber", bevel=0.0))
+        parts.append(rbox(f"{grp}__mudguard", (0.8 * sx, 0.57, rz), (0.62, 0.05, 1.1), "black", bevel=0.02 if hi else 0.0, seg=1))
+    tank = bpy.data.meshes.new("tank")
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=20 if hi else 10, radius1=0.22, radius2=0.22, depth=1.1)
+    bmesh.ops.translate(bm, verts=bm.verts, vec=Vector((0.72, 0.12, 0.0)))
+    bm.to_mesh(tank)
+    bm.free()
+    tank.materials.append(M["satin"])
+    for p in tank.polygons:
+        p.use_smooth = len(p.vertices) == 4
+    parts.append(link(bpy.data.objects.new(f"{grp}__tank", tank)))
+    parts.append(rbox(f"{grp}__underrun", (0, -0.02, z0 + 0.1), (2.0, 0.12, 0.1), "black", bevel=0.0))
+    for sx in (1, -1):
+        parts.append(rbox(f"{grp}__lampbar", (0.8 * sx, 0.07, z0 + 0.09), (0.36, 0.12, 0.08), "black", bevel=0.0))
+        for mat, x, w in (("tail", 0.86, 0.16), ("amber", 0.7, 0.07), ("reverse", 0.62, 0.06)):
+            xa, xb = sx * (x - w / 2), sx * (x + w / 2)
+            if sx < 0:
+                xa, xb = xb, xa
+            parts.append(quad_obj(f"{grp}__rl", mat, (xb, 0.025, z0 + 0.045), (xa, 0.025, z0 + 0.045), (xa, 0.115, z0 + 0.045), (xb, 0.115, z0 + 0.045)))
+    parts.append(quad_obj(f"{grp}__plateR", "plateR", (0.22, 0.19, z0 - 0.006), (-0.22, 0.19, z0 - 0.006), (-0.22, 0.33, z0 - 0.006), (0.22, 0.33, z0 - 0.006)))
+    # the cab: mirrors on arms, roof marker lamps, a badge, the grab handle, plates, wipers
+    for sx in (1, -1):
+        root, tip = Vector((sx * 0.92, 1.6, zF - 0.12)), Vector((sx * 1.2, 1.45, zF + 0.05))
+        d = tip - root
+        parts.append(rbox(f"{grp}__marm", (root + tip) / 2, (0.035, 0.035, d.length), "black", bevel=0.0,
+                          rot=(math.atan2(-d.y, math.hypot(d.x, d.z)), math.atan2(d.x, d.z), 0)))
+        parts.append(rbox(f"{grp}__mhead", tip, (0.08, 0.26, 0.07), "black", bevel=0.015 if hi else 0.0, seg=1))
+        parts.append(rbox(f"{grp}__mglass", tip + Vector((0, 0, -0.037)), (0.06, 0.22, 0.004), "glassDark", bevel=0.0))
+        loc, nor = surf.hit((sx * 2.0, 0.92, 1.45), (-sx, 0, 0))
+        if loc is not None and hi:
+            parts.append(rbox(f"{grp}__handle", loc + nor * 0.015, (0.03, 0.03, 0.16), "black", bevel=0.01, seg=1))
+        for pts in ([(1.3, 0.97), (1.3, 0.12)], [(2.62, 0.97), (2.62, 0.12)]):
+            if hi:
+                parts.append(strip(surf, f"{grp}__seam", "seam", [(sx * 2.0, y, z) for z, y in pts], 0.006, lambda p, sx=sx: (-sx, 0, 0)))
+    for x in (-0.35, 0.0, 0.35):
+        loc, _ = surf.hit((x, 3.0, zF - 0.2), (0, -1, 0))
+        if loc is not None:
+            parts.append(rbox(f"{grp}__marker", loc + Vector((0, 0.02, 0)), (0.09, 0.04, 0.05), "amber", bevel=0.0))
+    parts.append(decal(surf, f"{grp}__badge", "badge", 2, 1,
+                       lambda s, t: (Vector((lerp(-0.11, 0.11, s), lerp(0.74, 0.82, t), zF + 2.0)), Vector((0, 0, -1))), lambda s, t: (s, t), offset=0.004))
+    parts.append(decal(surf, f"{grp}__plateF", "plateF", 2, 1,
+                       lambda s, t: (Vector((lerp(-0.22, 0.22, s), lerp(-0.05, 0.09, t), zF + 2.0)), Vector((0, 0, -1))), lambda s, t: (s, t), offset=0.01))
+    for x, yaw in ((0.3, 0.35), (-0.35, -0.35)):
+        loc, _ = surf.hit((x, 1.16, zF + 2.0), (0, 0, -1))
+        if loc is not None:
+            parts.append(rbox(f"{grp}__wiper", loc + Vector((0, 0.01, 0.012)), (0.6, 0.018, 0.022), "black", bevel=0.0, rot=(0, 0, yaw)))
+    # the cab's underside
+    parts.append(quad_obj(f"{grp}__floor", "under", (-0.94, -0.095, zR + 0.05), (0.94, -0.095, zR + 0.05), (0.94, -0.095, zF - 0.1), (-0.94, -0.095, zF - 0.1), uv=False))
+    return parts
+
+
+def truck_door(B, surf):
+    """The truck's livery lettering is on the cargo box: flat strips, the +X side read front to back."""
+    for grp in ("doorLow", "doorHigh"):
+        for sx in (1, -1):
+            x = sx * 1.054
+            a, b = -2.7, 0.7
+            # +X: u = 0 at the front (z = b); -X: u = 0 at the back
+            if sx > 0:
+                quad = ((x, 1.35, b), (x, 1.35, a), (x, 1.95, a), (x, 1.95, b))
+            else:
+                quad = ((x, 1.35, a), (x, 1.35, b), (x, 1.95, b), (x, 1.95, a))
+            quad_obj(f"{grp}__{sx}", "sideText", *quad)
+
+
+def truck():
+    zR, zF = 1.12, 2.92
+    return car(
+        zR, zF, zR, zR, zF, zF, [], [], gap=0.3, extra_zs=[1.35, 2.62, zF - 0.3, zR + 0.08],
+        wheels=(1.8, -1.5), arch=0.5, arches=[(1.8, 0.5)], archY=0.02, crown=2.1, nr=len(TRUCK_ROWS),
+        W=curve([(zR, 0.96), (zR + 0.03, 0.985), (zR + 0.11, 0.99), (2.62, 0.99), (2.8, 0.975), (2.88, 0.93), (zF, 0.86)]),
+        section=truck_section, wall_mat=truck_wall, cap_mat=truck_cap, zlean=truck_lean, cap_bulge=0.0, details=truck_details,
+        creases={12: 0.5, 13: 0.5, 15: 0.5}, door_fn=truck_door,
+    )
+
+
+BODIES = dict(sedan=sedan, hatch=hatch, suv=suv, mpv=mpv, bus=bus, truck=truck)
 
 
 # ---- the cage ------------------------------------------------------------------------------------------------
@@ -231,7 +554,10 @@ def in_green(B, z):
 
 
 def section(B, z):
-    """The ring at station z: floor (centre -> corner), side (rows 1..5), top (shoulder -> centre); (x, y) pairs."""
+    """The ring at station z: floor (centre -> corner), side (rows 1..NR-2), top (shoulder -> centre); (x, y) pairs.
+    A body type may bring its own (`B["section"]`, with `B["nr"]` side rows: the bus has eleven)."""
+    if "section" in B:
+        return B["section"](B, z)
     W, SH, BOT = B["W"](z), B["SH"](z), B["BOT"](z)
     yD, crown = B["DECK"](z), B["CROWN"](z)
     split = min(B["SPLIT"](z), SH - 0.14)
@@ -265,6 +591,8 @@ def section(B, z):
 
 def zlean(B, y, end):
     """How far a point at height y on the end ring sits back from the station: the nose and tail lean in at the top."""
+    if "zlean" in B:
+        return B["zlean"](y, end)
     if end > 0:
         return curve([(-0.2, 0.05), (-0.05, 0.0), (0.2, 0.0), (0.34, 0.015), (0.44, 0.05)])(y)
     return curve([(-0.2, 0.06), (-0.08, 0.0), (0.16, -0.012), (0.3, 0.0), (0.45, 0.02), (0.62, 0.09)])(y)
@@ -276,9 +604,12 @@ def build_cage(B):
     K = len(zs)
     verts, faces, fmat = [], [], []
     rings = []
+    nr = B.get("nr", NR)
+    L = 2 * NC + nr - 2          # floor 0..7 (7 the corner), side rows, top from the shoulder (TS) to the centre (L - 1)
+    TS = NC + nr - 2
     for k, z in enumerate(zs):
         floor, side, top = section(B, z)
-        ring2 = floor + side + top   # 8 + 5 + 8 = 21 points
+        ring2 = floor + side + top
         end = 1 if k == K - 1 else (-1 if k == 0 else 0)
         near = 1 if k == K - 2 else (-1 if k == 1 else 0)
         pts = []
@@ -291,12 +622,13 @@ def build_cage(B):
             pts.append((x, y, zz))
         rings.append(len(verts))
         verts += pts
-    L = 21
 
     def ring_mat(k, i):
         """Material of the quad between stations k, k+1 and ring points i, i+1."""
         z0, z1 = zs[k], zs[k + 1]
-        zm = (z0 + z1) / 2
+        if "wall_mat" in B:
+            part, band = ("floor", i) if i < 7 else (("side", i - 7) if i < TS else ("top", L - 1 - i))
+            return B["wall_mat"](B, part, band, z0, z1)
         if i < 7:
             return "under"
         if i < 13:   # side wall bands: 7 (rocker underside) .. 12 (char line to shoulder)
@@ -326,11 +658,13 @@ def build_cage(B):
             return "glassDark"
         return "paintU"
 
+    fuv = []
     for k in range(K - 1):
         a, b = rings[k], rings[k + 1]
         for i in range(L - 1):
             faces.append((a + i, b + i, b + i + 1, a + i + 1))
             fmat.append(ring_mat(k, i))
+            fuv.append(None)
 
     # end caps: an 8 x 7 grid (columns centre -> side, rows floor -> top) by a Coons patch of the ring
     for end in (1, -1):
@@ -338,40 +672,48 @@ def build_cage(B):
         base = rings[k]
         R = [Vector(verts[base + i]) for i in range(L)]
         F = R[0:8]                           # floor, centre -> corner
-        S = [R[7]] + R[8:13] + [R[13]]       # side rows 0..6 (corner .. shoulder)
-        T = list(reversed(R[13:21]))         # top, centre -> shoulder
-        C = [Vector((0.0, lerp(F[0].y, T[0].y, j / 6), lerp(F[0].z, T[0].z, j / 6))) for j in range(NR)]
+        S = [R[7]] + R[8:TS] + [R[TS]]       # side rows 0..nr-1 (corner .. shoulder)
+        T = list(reversed(R[TS:L]))          # top, centre -> shoulder
+        top = nr - 1
+        C = [Vector((0.0, lerp(F[0].y, T[0].y, j / top), lerp(F[0].z, T[0].z, j / top))) for j in range(nr)]
         # centre line heights follow the side rows' spacing
-        for j in range(1, NR - 1):
-            t = (S[j].y - S[0].y) / (S[6].y - S[0].y)
+        for j in range(1, nr - 1):
+            t = (S[j].y - S[0].y) / (S[top].y - S[0].y)
             C[j] = Vector((0.0, lerp(F[0].y, T[0].y, t), S[j].z + (lerp(F[0].z, T[0].z, t) - lerp(S[0].z, S[6].z, t))))
         grid = {}
         for i in range(NC):
-            for j in range(NR):
+            for j in range(nr):
                 if j == 0:
                     grid[i, j] = base + i
-                elif j == NR - 1:
-                    grid[i, j] = base + 20 - i
+                elif j == top:
+                    grid[i, j] = base + L - 1 - i
                 elif i == NC - 1:
                     grid[i, j] = base + 7 + j
                 else:
                     s = i / (NC - 1)
-                    tt = (S[j].y - S[0].y) / (S[6].y - S[0].y)
+                    tt = (S[j].y - S[0].y) / (S[top].y - S[0].y)
                     p = (F[i] * (1 - tt) + T[i] * tt) + (C[j] * (1 - s) + S[j] * s) \
                         - ((F[0] * (1 - s) + F[7] * s) * (1 - tt) + (T[0] * (1 - s) + T[7] * s) * tt)
                     # the fascia bulges out a little between the corners
-                    p.z += end * 0.015 * math.sin(math.pi * tt) * (1 - s * s)
+                    p.z += end * B.get("cap_bulge", 0.015) * math.sin(math.pi * tt) * (1 - s * s)
                     grid[i, j] = len(verts)
                     verts.append(tuple(p))
         for i in range(NC - 1):
-            for j in range(NR - 1):
+            for j in range(nr - 1):
                 q = (grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1])
-                faces.append(q if end > 0 else tuple(reversed(q)))
+                q = q if end > 0 else tuple(reversed(q))
+                faces.append(q)
+                if "cap_mat" in B:
+                    m, uv = B["cap_mat"](B, end, i, j, [verts[v] for v in q])
+                    fmat.append(m)
+                    fuv.append(uv)
+                    continue
+                fuv.append(None)
                 y = (verts[q[0]][1] + verts[q[2]][1]) / 2
                 split = min(B["SPLIT"](B["zF"] if end > 0 else B["zR"]), B["SH"](B["zF"] if end > 0 else B["zR"]) - 0.14)
                 low = "cladding" if B["cladding"] else "black"
                 fmat.append(low if j == 0 or ((end < 0 or B["cladding"]) and j == 1) else ("paintL" if y < split else "paintU"))
-    return verts, faces, fmat
+    return verts, faces, fmat, fuv
 
 
 # ---- Blender plumbing ----------------------------------------------------------------------------------------
@@ -382,7 +724,7 @@ def link(ob):
     return ob
 
 
-def obj_from(name, verts, faces, mats, uvs=None, smooth_shade=True):
+def obj_from(name, verts, faces, mats, uvs=None, smooth_shade=True, loop_uvs=None):
     me = bpy.data.meshes.new(name)
     me.from_pydata([tuple(v) for v in verts], [], [tuple(f) for f in faces])
     names = sorted(set(mats), key=list(MATS).index)
@@ -396,6 +738,13 @@ def obj_from(name, verts, faces, mats, uvs=None, smooth_shade=True):
         for p in me.polygons:
             for li, vi in zip(p.loop_indices, p.vertices):
                 lay.data[li].uv = uvs[vi]
+    elif loop_uvs is not None:
+        # per face corner (a face's corners in the order it was given), None for an untextured face
+        lay = me.uv_layers.new(name="UVMap")
+        for p, fu in zip(me.polygons, loop_uvs):
+            if fu is not None:
+                for li, uv in zip(p.loop_indices, fu):
+                    lay.data[li].uv = uv
     else:
         me.uv_layers.new(name="UVMap")
     me.validate()
@@ -439,7 +788,21 @@ def crease(ob, B):
     cl = bm.edges.layers.float.get("crease_edge") or bm.edges.layers.float.new("crease_edge")
     bm.verts.ensure_lookup_table()
     K = len(B["zs"])
-    ring = lambda k, i: k * 21 + i
+    L = 2 * NC + B.get("nr", NR) - 2
+    ring = lambda k, i: k * L + i
+    if "creases" in B:
+        # a body type's own: ring point -> crease along the length
+        lines = {}
+        for k in range(K - 1):
+            for i, w in B["creases"].items():
+                lines[frozenset((ring(k, i), ring(k + 1, i)))] = w
+        for e in bm.edges:
+            key = frozenset((e.verts[0].index, e.verts[1].index))
+            if key in lines:
+                e[cl] = lines[key]
+        bm.to_mesh(ob.data)
+        bm.free()
+        return
     want = {12: 0.75, 15: 0.45, 11: 0.35}   # ring point -> crease: char line, deck edge (glass base), colour split
     lines = {}
     for k in range(K - 1):
@@ -500,8 +863,8 @@ def boolean(ob, cutters):
     bpy.data.collections.remove(col)
 
 
-def arch_cutter(B, zw, seg):
-    r, yc = B["arch"], B["archY"]
+def arch_cutter(B, zw, seg, r=None):
+    r, yc = r or B["arch"], B["archY"]
     verts, faces = [], []
     for s in (1.4, -1.4):
         for k in range(seg):
@@ -567,7 +930,7 @@ class Surface:
     def hit(self, p, d):
         d = Vector(d).normalized()
         o = Vector(p) - d * 3.0
-        loc, nor, _, _ = self.tree.ray_cast(o, d, 6.0)
+        loc, nor, _, _ = self.tree.ray_cast(o, d, 16.0)
         return (loc, nor) if loc is not None else (None, None)
 
 
@@ -679,8 +1042,8 @@ def rbox(name, c, size, mat, bevel=0.01, seg=2, rot=(0.0, 0.0, 0.0)):
 
 def build_level(B, grp, level):
     hi = grp == "hi"
-    verts, faces, fmat = build_cage(B)
-    body = obj_from(f"{grp}__body", verts, faces, fmat)
+    verts, faces, fmat, fuv = build_cage(B)
+    body = obj_from(f"{grp}__body", verts, faces, fmat, loop_uvs=fuv if any(fuv) else None)
     fix_normals(body)
     crease(body, B)
     mm = body.modifiers.new("mirror", "MIRROR")
@@ -693,12 +1056,23 @@ def build_level(B, grp, level):
     sd.boundary_smooth = "PRESERVE_CORNERS"
     bake(body)
     fix_normals(body)
+    if "cap_mat" in B:
+        # the mirrored half of a sign that reads across the centre line takes the other half of its texture
+        lay = body.data.uv_layers.active
+        signs = {i for i, m in enumerate(body.data.materials) if m.name in ("dest",)}
+        for p in body.data.polygons:
+            if p.material_index in signs and p.center.x < 0:   # mesh coordinates are the game's: the mirrored -X half
+                for li in p.loop_indices:
+                    u, v = lay.data[li].uv
+                    lay.data[li].uv = (1 - u, v)
     inset_glass(body, B)
     # wheel arches, the grille and the lower intake: the cutters' faces become the wells and the pocket floors
     zF, zR = B["zF"], B["zR"]
-    cut = [arch_cutter(B, zw, 40 if hi else 20) for zw in B["wheels"]]
-    cut.append(prism_cutter("grille", B["grille"], zF + 0.5, zF - 0.075, "grille", "black", 1))
-    cut.append(prism_cutter("intake", B["intake"], zF + 0.5, zF - 0.08, "intake", "black", 1))
+    cut = [arch_cutter(B, zw, 40 if hi else 20, r) for zw, r in B.get("arches", [(zw, B["arch"]) for zw in B["wheels"]])]
+    if "grille" in B:
+        cut.append(prism_cutter("grille", B["grille"], zF + 0.5, zF - 0.075, "grille", "black", 1))
+    if "intake" in B:
+        cut.append(prism_cutter("intake", B["intake"], zF + 0.5, zF - 0.08, "intake", "black", 1))
     boolean(body, cut)
     # the floor was only there to close the shell for the booleans: a flat underside takes its place
     bm = bmesh.new()
@@ -712,6 +1086,13 @@ def build_level(B, grp, level):
     body.data.set_sharp_from_angle(angle=math.radians(38))
     surf = Surface(body)
     parts = [body]
+    B.get("details", car_details)(B, surf, grp, hi, parts)
+    return parts, surf
+
+
+def car_details(B, surf, grp, hi, parts):
+    """A car's lamps, plates, seams, trim, mirrors, handles, rails and the underside tray."""
+    zF, zR = B["zF"], B["zR"]
 
     # lamps: grids in (angle round a point on the centre line, height), cast from outside inwards
     def around(zc, rear):
@@ -845,18 +1226,25 @@ def build_level(B, grp, level):
             w = 2 * (B["W"](B["zRH"]) - B["RIN"](B["zRH"])) - 0.12
             parts.append(rbox(f"{grp}__spoiler", loc + Vector((0, -0.004, -0.06)), (w, 0.03, 0.15), "paintU", bevel=0.01 if hi else 0.0, seg=1, rot=(0.1, 0, 0)))
     parts.append(rbox(f"{grp}__exhaust", (-0.52, B["BOT"](zR + 0.05) + 0.04, zR + 0.03), (0.1, 0.05, 0.12), "satin", bevel=0.02, seg=2 if hi else 1))
-    return parts, surf
+    return parts
 
 
 def build_door(B, surf):
     """The livery's door lettering: a strip conforming to the doors, low (taxi) and high (police)."""
+    if "door_fn" in B:
+        return B["door_fn"](B, surf)
     z0, z1 = B["door"]
-    split = B["SPLIT"](0.0)
-    for grp, y0 in (("doorLow", (split - 0.07) / 2 - 0.035), ("doorHigh", split + 0.03)):
+    if "doorY" in B:
+        ys = [(g, B["doorY"][0]) for g in ("doorLow", "doorHigh")]
+    else:
+        split = B["SPLIT"](0.0)
+        ys = [("doorLow", (split - 0.07) / 2 - 0.035), ("doorHigh", split + 0.03)]
+    h = B["doorY"][1] - B["doorY"][0] if "doorY" in B else 0.14
+    for grp, y0 in ys:
         for side in (1, -1):
             # +X (left) side reads front to back: u = 0 at the front
             decal(surf, f"{grp}__{side}", "door", 16, 4,
-                  lambda s, t, side=side, y0=y0: (Vector((side * 2.0, lerp(y0, y0 + 0.14, t), lerp(z1, z0, s) if side > 0 else lerp(z0, z1, s))), Vector((-side, 0, 0))),
+                  lambda s, t, side=side, y0=y0: (Vector((side * 3.0, lerp(y0, y0 + h, t), lerp(z1, z0, s) if side > 0 else lerp(z0, z1, s))), Vector((-side, 0, 0))),
                   lambda s, t: (s, t), offset=0.004)
 
 

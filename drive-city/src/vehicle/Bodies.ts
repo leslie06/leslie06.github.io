@@ -747,6 +747,26 @@ function wheel(r: number, width: number, detail: Detail, style: WheelStyle): Mes
   return m;
 }
 
+/** The Blender wheels' surfaces (scripts/blender/vehicles/wheel.py), all in the wheel's one trim mesh. */
+const WHEEL_SURFS: Record<string, Surf> = {
+  tyre: surf('trim', '#1a1a1b', 0.88, 0), wall: surf('trim', '#232324', 0.8, 0), alloy: surf('trim', '#c7cace', 0.26, 1),
+  lip: surf('trim', '#e2e5e8', 0.12, 1), dark: surf('trim', '#2b2c2e', 0.55, 0.5), disc: surf('trim', '#55585c', 0.35, 0.85),
+  cap: surf('trim', '#d9dcdf', 0.12, 1), steel: surf('trim', '#8e9297', 0.45, 0.7), nut: surf('trim', '#b4b8bc', 0.3, 0.9),
+};
+/** Each Blender wheel's nominal radius and width (what wheel.py models it at). */
+const WHEEL_SIZE = { alloy: [0.32, 0.21], steel: [0.48, 0.28] } as const;
+
+/** A wheel: the Blender model of its style scaled to the spec's radius and width, else the code's. */
+function modelWheel(r: number, width: number, detail: Detail, style: WheelStyle): Mesher {
+  const kind = style.steel ? 'steel' : 'alloy';
+  const data = MODEL_DATA.wheels?.[`${kind}_${detail === 'high' ? 'hi' : 'lo'}`];
+  if (!data || OLD_CARS) return wheel(r, width, detail, style);
+  const m = new Mesher();
+  const [r0, w0] = WHEEL_SIZE[kind];
+  addModel(m, data, WHEEL_SURFS, new THREE.Matrix4().makeScale(width / w0, r / r0, r / r0));
+  return m;
+}
+
 function calliper(r: number, width: number): Mesher {
   const m = new Mesher();
   const s = surf('trim', '#9b1b1e', 0.4, 0.3);
@@ -764,8 +784,8 @@ export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, 
     case 'hatch': return OLD_CARS || !MODEL_DATA.hatch ? buildCarBody(type, hatchParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
     case 'suv': return OLD_CARS || !MODEL_DATA.suv ? buildCarBody(type, suvParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
     case 'mpv': return OLD_CARS || !MODEL_DATA.mpv ? buildCarBody(type, mpvParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
-    case 'bus': return buildBus(spec, opts, detail);
-    case 'truck': return buildTruck(spec, opts, detail);
+    case 'bus': return OLD_CARS || !MODEL_DATA.bus ? buildBus(spec, opts, detail) : buildModelBody('bus', spec, opts, detail);
+    case 'truck': return OLD_CARS || !MODEL_DATA.truck ? buildTruck(spec, opts, detail) : buildModelBody('truck', spec, opts, detail);
     case 'moto': case 'bike': return buildTwoWheeler(type, spec, detail);
     default: return OLD_CARS || !MODEL_DATA.sedan ? buildCarBody(type, sedanParams(spec), spec, opts, detail) : buildModelBody('sedan', spec, opts, detail);
   }
@@ -774,21 +794,30 @@ export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, 
 /** `?cars=old` in a page: the procedural bodies for the types that have a Blender model (A/B). */
 const OLD_CARS = typeof location !== 'undefined' && new URLSearchParams(location.search).get('cars') === 'old';
 
-type CarModelType = 'sedan' | 'hatch' | 'suv' | 'mpv';
+type CarModelType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck';
 
 /** Where each Blender car body's roof sign and light bar stand (z), and which atlas graphics it wears. */
-const MODELS: Record<CarModelType, { zRoof: number; zBar: number; style: Parameters<typeof palette>[0] }> = {
+interface ModelInfo {
+  zRoof: number; zBar: number; style: Parameters<typeof palette>[0];
+  /** Steel wheels, twin rear tyres this far apart (0: single), and the surface the headlamps are. */
+  steel?: boolean; dual?: number; head?: string;
+}
+const MODELS: Record<CarModelType, ModelInfo> = {
   sedan: { zRoof: -0.46, zBar: -0.39, style: { grille: 'grille', head: 'head', tail: 'tail' } },
   hatch: { zRoof: -0.88, zBar: -0.81, style: { grille: 'grilleSlim', head: 'head2', tail: 'tail2' } },
   suv: { zRoof: -0.98, zBar: -0.91, style: { grille: 'grilleBars', head: 'head2', tail: 'tail' } },
   mpv: { zRoof: -1.23, zBar: -1.16, style: { grille: 'grilleWave', head: 'head', tail: 'tail2' } },
+  bus: { zRoof: -1, zBar: -1, style: undefined, steel: true, dual: 0.3, head: 'busHead' },
+  truck: { zRoof: -1, zBar: -1, style: { grille: 'grilleBars', head: 'head', tail: 'tail' }, steel: true, dual: 0.24 },
 };
 
 /** The bodies' geometry, their own chunks (~160 KB gzipped each): `readyBodies()` fills this. */
-const MODEL_DATA: Partial<Record<CarModelType, Record<string, Model>>> = {};
-const SOURCES: Record<CarModelType, () => Promise<{ default: unknown }>> = {
+const MODEL_DATA: Partial<Record<CarModelType | 'wheels', Record<string, Model>>> = {};
+const SOURCES: Record<CarModelType | 'wheels', () => Promise<{ default: unknown }>> = {
   sedan: () => import('./models/sedan.json'), hatch: () => import('./models/hatch.json'),
-  suv: () => import('./models/suv.json'), mpv: () => import('./models/mpv.json'),
+  suv: () => import('./models/suv.json'), mpv: () => import('./models/mpv.json'), bus: () => import('./models/bus.json'),
+  truck: () => import('./models/truck.json'),
+  wheels: () => import('./models/wheels.json'),
 };
 let bodiesReady: Promise<void> | null = null;
 
@@ -797,7 +826,7 @@ let bodiesReady: Promise<void> | null = null;
  * that did not arrive after its retries is built the old procedural way, so the game still has cars.
  */
 export function readyBodies(): Promise<void> {
-  return bodiesReady ??= Promise.all((Object.keys(SOURCES) as CarModelType[]).map(async (k) => {
+  return bodiesReady ??= Promise.all((Object.keys(SOURCES) as (keyof typeof SOURCES)[]).map(async (k) => {
     try { MODEL_DATA[k] = (await retry(`car body ${k}`, SOURCES[k])).default as Record<string, Model>; }
     catch (e) { console.warn(`[vehicle] car body ${k} did not load; building it procedurally`, e); }
   })).then(() => undefined);
@@ -809,7 +838,7 @@ export function readyBodies(): Promise<void> {
  * the model has at `zRoof` / `zBar`; the wheels are the code's.
  */
 function buildModelBody(type: CarModelType, spec: VehicleSpec, opts: BodyOptions, detail: Detail): BodyParts {
-  const { style, ...at } = MODELS[type];
+  const { style, steel, dual = 0, head = 'head', ...at } = MODELS[type];
   const model = MODEL_DATA[type]!;
   const pal = palette(style);
   const surfs = pal as unknown as Record<string, Surf>;
@@ -837,18 +866,18 @@ function buildModelBody(type: CarModelType, spec: VehicleSpec, opts: BodyOptions
   if (opts.roofSign) roofSign(m, roofAt(at.zRoof), pal, at.zRoof);
   if (opts.beacons) lightBar(m, roofAt(at.zBar), pal, at.zBar);
   // Headlamp centres for the night beams: the middle of the head lamps' vertices on each side.
-  const hp = hi.head.p;
+  const hp = hi[head].p;
   const c = new THREE.Vector3();
   let n = 0;
   for (let i = 0; i < hp.length; i += 3) if (hp[i] > 0) { c.x += hp[i]; c.y += hp[i + 1]; c.z += hp[i + 2]; n++; }
   c.divideScalar(n * 1000);
-  const wheelStyle: WheelStyle = { spokes: 5, double: true, steel: false, dish: 0.02 };
+  const wheelStyle: WheelStyle = steel ? { spokes: 0, double: false, steel: true, dish: 0.03 } : { spokes: 5, double: true, steel: false, dish: 0.02 };
   const fw = spec.wheels[0].x;
   return {
     type, body: m,
-    wheel: wheel(spec.wheelRadius, spec.wheelWidth, detail, wheelStyle),
-    wheelRear: null, dual: 0,
-    calliper: detail === 'high' ? calliper(spec.wheelRadius, spec.wheelWidth) : null,
+    wheel: modelWheel(spec.wheelRadius, spec.wheelWidth, detail, wheelStyle),
+    wheelRear: null, dual,
+    calliper: detail === 'high' && !steel ? calliper(spec.wheelRadius, spec.wheelWidth) : null,
     headlamps: [c.clone(), new THREE.Vector3(-c.x, c.y, c.z)],
     size: { length: (z1 - z0) / 1000, width: Math.max(2 * (fw + spec.wheelWidth / 2), (x1 - x0) / 1000), height: y1 / 1000 + spec.wheelRadius },
   };
@@ -884,7 +913,7 @@ function buildCarBody(type: BodyType, p: CarParams, spec: VehicleSpec, opts: Bod
   const fw = spec.wheels[0].x;
   return {
     type, body: m,
-    wheel: wheel(spec.wheelRadius, spec.wheelWidth, detail, style),
+    wheel: modelWheel(spec.wheelRadius, spec.wheelWidth, detail, style),
     wheelRear: null, dual: 0,
     calliper: hi ? calliper(spec.wheelRadius, spec.wheelWidth) : null,
     headlamps: [new THREE.Vector3(hs.x, hs.y, hs.z), new THREE.Vector3(-hs.x, hs.y, hs.z)],
@@ -1044,7 +1073,7 @@ function buildBus(spec: VehicleSpec, opts: BodyOptions, detail: Detail): BodyPar
   const hl = shell.endAt(1, 0.85, 0.2);
   return {
     type: 'bus', body: m,
-    wheel: wheel(spec.wheelRadius, spec.wheelWidth, detail, wheelStyle),
+    wheel: modelWheel(spec.wheelRadius, spec.wheelWidth, detail, wheelStyle),
     wheelRear: null, dual: 0.3,
     calliper: null,
     headlamps: [new THREE.Vector3(hl.x, hl.y, hl.z), new THREE.Vector3(-hl.x, hl.y, hl.z)],
@@ -1169,7 +1198,7 @@ function buildTruck(spec: VehicleSpec, opts: BodyOptions, detail: Detail): BodyP
   const hl = cabShell.endAt(1, 0.78, 0.3);
   return {
     type: 'truck', body: m,
-    wheel: wheel(spec.wheelRadius, spec.wheelWidth, detail, style),
+    wheel: modelWheel(spec.wheelRadius, spec.wheelWidth, detail, style),
     wheelRear: null, dual: 0.24,
     calliper: null,
     headlamps: [new THREE.Vector3(hl.x, hl.y, hl.z), new THREE.Vector3(-hl.x, hl.y, hl.z)],
