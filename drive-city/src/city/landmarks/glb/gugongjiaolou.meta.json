@@ -1,0 +1,37 @@
+{
+  "id": "gugongjiaolou",
+  "name": {
+    "zh": "故宫东南角楼",
+    "en": "Forbidden City Southeast Corner Tower"
+  },
+  "lat": 39.912651,
+  "lon": 116.3952295,
+  "headingDeg": -1.7,
+  "file": "gugongjiaolou.glb",
+  "version": "9ef6c79a",
+  "footprint": [
+    [-14.55, -14.55],
+    [14.55, -14.55],
+    [14.55, 14.55],
+    [-14.55, 14.55]
+  ],
+  "height": 27.5,
+  "farDistance": 500,
+  "stats": {
+    "triangles": 34933,
+    "farTriangles": 1744,
+    "materials": 10,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 3,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 3,
+    "textures": 5,
+    "maxTexture": 2048,
+    "footprintArea": 847,
+    "bytes": 976636,
+    "source": "gugongjiaolou.glb"
+  }
+}
