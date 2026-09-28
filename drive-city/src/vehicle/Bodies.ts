@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { addModel, clamp, curve, F_CUTOUT, LAMP, latheX, Mesher, smooth, surf, TONE_FIXED, TONE_LOWER, TONE_UPPER, type Model, type Surf } from './Mesher';
+import { MeshoptDecoder } from 'meshoptimizer';
+import { addModel, unpackModel, clamp, curve, F_CUTOUT, LAMP, latheX, Mesher, smooth, surf, TONE_FIXED, TONE_LOWER, TONE_UPPER, type Model, type Surf } from './Mesher';
 import { Shell, type CapFace, type ShellDef, type WallFace, type WallRow } from './Shell';
 import { uv } from './Atlas';
 import type { VehicleSpec } from './Spec';
@@ -811,14 +812,25 @@ const MODELS: Record<CarModelType, ModelInfo> = {
   truck: { zRoof: -1, zBar: -1, style: { grille: 'grilleBars', head: 'head', tail: 'tail' }, steel: true, dual: 0.24 },
 };
 
-/** The bodies' geometry, their own chunks (~160 KB gzipped each): `readyBodies()` fills this. */
+/** The bodies' geometry, packed files under public/models/vehicles (~135 KB gzipped each): `readyBodies()` fills this. */
 const MODEL_DATA: Partial<Record<CarModelType | 'wheels', Record<string, Model>>> = {};
-const SOURCES: Record<CarModelType | 'wheels', () => Promise<{ default: unknown }>> = {
-  sedan: () => import('./models/sedan.json'), hatch: () => import('./models/hatch.json'),
-  suv: () => import('./models/suv.json'), mpv: () => import('./models/mpv.json'), bus: () => import('./models/bus.json'),
-  truck: () => import('./models/truck.json'),
-  wheels: () => import('./models/wheels.json'),
-};
+const SOURCES = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'wheels'] as const;
+
+/** A packed model (public/models/vehicles/<name>.bin, scripts/vehicles/pack.mjs): fetched in a page, read from disk in Node. */
+async function loadPacked(name: string): Promise<Record<string, Model>> {
+  let buf: ArrayBuffer;
+  if (typeof window === 'undefined') {
+    const fs = await import(/* @vite-ignore */ 'node:fs');
+    const b = fs.readFileSync(`public/models/vehicles/${name}.bin`);
+    buf = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+  } else {
+    const res = await fetch(`${import.meta.env.BASE_URL}models/vehicles/${name}.bin`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    buf = await res.arrayBuffer();
+  }
+  await MeshoptDecoder.ready;
+  return unpackModel(buf, MeshoptDecoder);
+}
 let bodiesReady: Promise<void> | null = null;
 
 /**
@@ -826,8 +838,8 @@ let bodiesReady: Promise<void> | null = null;
  * that did not arrive after its retries is built the old procedural way, so the game still has cars.
  */
 export function readyBodies(): Promise<void> {
-  return bodiesReady ??= Promise.all((Object.keys(SOURCES) as (keyof typeof SOURCES)[]).map(async (k) => {
-    try { MODEL_DATA[k] = (await retry(`car body ${k}`, SOURCES[k])).default as Record<string, Model>; }
+  return bodiesReady ??= Promise.all(SOURCES.map(async (k) => {
+    try { MODEL_DATA[k] = await retry(`car body ${k}`, () => loadPacked(k)); }
     catch (e) { console.warn(`[vehicle] car body ${k} did not load; building it procedurally`, e); }
   })).then(() => undefined);
 }

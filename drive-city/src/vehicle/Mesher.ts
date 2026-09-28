@@ -233,6 +233,33 @@ export function curve(pts: readonly (readonly [number, number])[]): (x: number) 
  * surface is textured - all in the body frame. */
 export type Model = Record<string, { p: number[]; n: number[]; i: number[]; t?: number[] }>;
 
+/**
+ * A packed model file (scripts/vehicles/pack.mjs: a JSON header, then meshopt-encoded vertex and index buffers) back into
+ * groups of Models, in the same integer units as the JSON. `decoder` is meshoptimizer's MeshoptDecoder, ready.
+ */
+export function unpackModel(buf: ArrayBuffer, decoder: { decodeVertexBuffer(t: Uint8Array, n: number, s: number, src: Uint8Array): void; decodeIndexBuffer(t: Uint8Array, n: number, s: number, src: Uint8Array): void }): Record<string, Model> {
+  const hl = new DataView(buf).getUint32(0, true);
+  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl)).replace(/\0+$/, '')) as [string, string, number, number, number, number, number][];
+  const out: Record<string, Model> = {};
+  let o = 4 + hl;
+  const up4 = (n: number) => (n + 3) & ~3;
+  for (const [g, m, nv, ni, hasUv, vl, il] of header) {
+    const vt = new Uint8Array(nv * 16);
+    decoder.decodeVertexBuffer(vt, nv, 16, new Uint8Array(buf, o, vl));
+    o += up4(vl);
+    const it = new Uint32Array(ni);
+    decoder.decodeIndexBuffer(new Uint8Array(it.buffer), ni, 4, new Uint8Array(buf, o, il));
+    o += up4(il);
+    const dv = new DataView(vt.buffer), p = new Array<number>(nv * 3), n = new Array<number>(nv * 3), t = hasUv ? new Array<number>(nv * 2) : undefined;
+    for (let v = 0; v < nv; v++) {
+      for (let k = 0; k < 3; k++) { p[v * 3 + k] = dv.getInt16(v * 16 + k * 2, true); n[v * 3 + k] = dv.getInt8(v * 16 + 8 + k) / 1.27; }
+      if (t) { t[v * 2] = dv.getUint16(v * 16 + 12, true); t[v * 2 + 1] = dv.getUint16(v * 16 + 14, true); }
+    }
+    (out[g] ??= {})[m] = { p, n, i: Array.from(it), ...(t ? { t } : {}) };
+  }
+  return out;
+}
+
 /** Add a Blender model's surfaces to a mesher, each through the Surf its material name maps to. */
 export function addModel(m: Mesher, model: Model, surfs: Record<string, Surf>, matrix?: THREE.Matrix4): void {
   for (const [name, g] of Object.entries(model)) {
