@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LAMP, Mesher, surf, TONE_LOWER, TONE_UPPER, type Surf } from './Mesher';
+import { addModel, LAMP, Mesher, surf, TONE_LOWER, TONE_UPPER, type Model, type Surf } from './Mesher';
 import type { BodyParts, BodyType, Detail } from './Bodies';
 import type { VehicleSpec } from './Spec';
 import MOTO_MODEL from './models/moto.json';
@@ -56,23 +56,6 @@ function spokedWheel(r: number, tyreR: number, spokes: number, hi: boolean, allo
   m.geo(hub, new THREE.CylinderGeometry(alloy ? 0.07 : 0.035, alloy ? 0.07 : 0.035, alloy ? 0.14 : 0.08, 10), _m.clone());
   if (alloy) { _m.makeRotationZ(Math.PI / 2).setPosition(0.045, 0, 0); m.geo(disc, new THREE.CylinderGeometry(0.14, 0.14, 0.008, hi ? 24 : 12), _m.clone()); }
   return m;
-}
-
-/** A body modelled in Blender (scripts/blender/vehicles/*.py -> scripts/vehicles/import.mjs): per surface name,
- * positions in millimetres, normals in hundredths, indices - all in the body frame. */
-type Model = Record<string, { p: number[]; n: number[]; i: number[] }>;
-
-/** Add a Blender model's surfaces to a mesher, each through the Surf its material name maps to. */
-function addModel(m: Mesher, model: Model, surfs: Record<string, Surf>): void {
-  for (const [name, g] of Object.entries(model)) {
-    const s = surfs[name];
-    if (!s) throw new Error(`vehicle model: no surface for material "${name}"`);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(g.p, (v) => v / 1000), 3));
-    geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(g.n, (v) => v / 100), 3));
-    geo.setIndex(g.i);
-    m.geo(s, geo);
-  }
 }
 
 /**

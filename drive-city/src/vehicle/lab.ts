@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildCar, defaultLivery, POLICE_LIVERY, TAXI_LIVERY, type Livery } from './CarModel';
-import { BODY_TYPES, type BodyType } from './Bodies';
+import { BODY_TYPES, readyBodies, type BodyType } from './Bodies';
 import { SPEC_OF } from './Spec';
 import { CarKit } from '../traffic/CarKit';
 import { readyKitLod } from './KitLod';
@@ -11,10 +11,11 @@ import type { Vehicle } from './Vehicle';
  * Body lab (dev only, `/src/vehicle/lab.html`): the car models on a plain lot, without the city,
  * for fast iteration on shapes and materials. `?view=hero|rear|side|chase|top|lineup|lineupRear`,
  * `?type=sedan`, `?night=1`, `?livery=taxi|police|private`. Sets `window.__labReady` when drawn.
- * The kit view takes `?lod=0` (the traffic kits unsimplified) and `?cam=fx,fy,fz>tx,ty,tz`.
+ * The kit view takes `?lod=0` (the traffic kits unsimplified); any view takes `?cam=fx,fy,fz>tx,ty,tz`.
  */
 const q = new URLSearchParams(location.search);
 if (q.get('lod') !== '0') await readyKitLod();
+await readyBodies();
 const view = q.get('view') ?? 'hero';
 const night = q.has('night');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -90,8 +91,6 @@ if (view === 'kit' || view === 'kitRear') {
   const back = view === 'kitRear' ? -1 : 1;
   camera.position.set(8, 4.5, back * 16);
   camera.lookAt(0, 0.8, back * -2);
-  const cam = q.get('cam')?.split('>').map((v) => v.split(',').map(Number));
-  if (cam) { camera.position.set(cam[0][0], cam[0][1], cam[0][2]); camera.lookAt(cam[1][0], cam[1][1], cam[1][2]); }
 } else if (view === 'lineup' || view === 'lineupRear') {
   const types = (q.get('types')?.split(',') as BodyType[] | undefined) ?? BODY_TYPES.filter((t) => SPEC_OF[t]);
   let x = 0;
@@ -116,6 +115,8 @@ if (view === 'kit' || view === 'kitRear') {
   camera.updateProjectionMatrix();
   camera.lookAt(at);
 }
+const cam = q.get('cam')?.split('>').map((v) => v.split(',').map(Number));
+if (cam) { camera.position.set(cam[0][0], cam[0][1], cam[0][2]); camera.lookAt(cam[1][0], cam[1][1], cam[1][2]); }
 camera.updateProjectionMatrix();
 let frames = 0;
 renderer.setAnimationLoop(() => {

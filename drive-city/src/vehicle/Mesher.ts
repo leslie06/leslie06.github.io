@@ -228,6 +228,25 @@ export function curve(pts: readonly (readonly [number, number])[]): (x: number) 
   };
 }
 
+/** A body modelled in Blender (scripts/blender/vehicles/*.py -> scripts/vehicles/import.mjs): per surface name,
+ * positions in millimetres, normals in hundredths, indices, and UVs (`t`, 1/4096ths, glTF-style v down) where the
+ * surface is textured - all in the body frame. */
+export type Model = Record<string, { p: number[]; n: number[]; i: number[]; t?: number[] }>;
+
+/** Add a Blender model's surfaces to a mesher, each through the Surf its material name maps to. */
+export function addModel(m: Mesher, model: Model, surfs: Record<string, Surf>): void {
+  for (const [name, g] of Object.entries(model)) {
+    const s = surfs[name];
+    if (!s) throw new Error(`vehicle model: no surface for material "${name}"`);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(g.p, (v) => v / 1000), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(g.n, (v) => v / 100), 3));
+    if (g.t) geo.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(g.t, (v, i) => (i & 1 ? 1 - v / 4096 : v / 4096)), 2));
+    geo.setIndex(g.i);
+    m.geo(s, geo);
+  }
+}
+
 export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 export const smooth = (a: number, b: number, v: number) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;

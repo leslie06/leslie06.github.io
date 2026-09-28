@@ -7,7 +7,10 @@
 //   node scripts/vehicles/import.mjs .scratch/blender/moto.glb src/vehicle/models/moto.json
 // With --group, objects named "<group>__<anything>" land under out[group][material] (the trees: one group per
 // species and level). UVs, when a primitive has them, are kept as `t` in 1/4096ths, glTF-style (v down from the top).
+// --simplify hi=0.5,lo=0.8 thins a group's larger surfaces with meshoptimizer, each on its own with its borders locked
+// (the edges where one material meets another, sharp edges and UV seams), so a colour split or a glass edge stays put.
 import fs from 'node:fs';
+import { MeshoptSimplifier } from 'meshoptimizer';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 
@@ -50,6 +53,32 @@ for (const node of doc.getRoot().listNodes()) {
       if (flip) S.i.push(base + ix[i], base + ix[i + 2], base + ix[i + 1]);
       else S.i.push(base + ix[i], base + ix[i + 1], base + ix[i + 2]);
       tris++;
+    }
+  }
+}
+const si = process.argv.indexOf('--simplify');
+if (si > 0) {
+  await MeshoptSimplifier.ready;
+  const want = Object.fromEntries(process.argv[si + 1].split(',').map((kv) => kv.split('=')).map(([k, v]) => [k, +v]));
+  for (const [g, ratio] of Object.entries(want)) {
+    for (const [name, S] of Object.entries(out[g] ?? {})) {
+      const nt = S.i.length / 3;
+      if (nt < 400) continue;
+      const nv = S.p.length / 3;
+      const pos = Float32Array.from(S.p, (v) => v / 1000), nor = Float32Array.from(S.n, (v) => v / 100);
+      const [idx] = MeshoptSimplifier.simplifyWithAttributes(new Uint32Array(S.i), pos, 3, nor, 3, [0.6, 0.6, 0.6], null, Math.floor(nt * ratio) * 3, 0.0025, ['LockBorder']);
+      // keep only the vertices still used
+      const map = new Int32Array(nv).fill(-1), p = [], n = [], t = S.t ? [] : null, i = [];
+      for (const v of idx) {
+        if (map[v] < 0) {
+          map[v] = p.length / 3;
+          p.push(S.p[v * 3], S.p[v * 3 + 1], S.p[v * 3 + 2]); n.push(S.n[v * 3], S.n[v * 3 + 1], S.n[v * 3 + 2]);
+          if (t) t.push(S.t[v * 2], S.t[v * 2 + 1]);
+        }
+        i.push(map[v]);
+      }
+      tris -= nt - i.length / 3;
+      Object.assign(S, { p, n, i }, t ? { t } : {});
     }
   }
 }

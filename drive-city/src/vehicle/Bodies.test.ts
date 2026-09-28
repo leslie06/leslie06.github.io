@@ -4,13 +4,13 @@
  * accelerates, stops straight, changes lanes at 60 km/h without lifting a wheel or flipping, and
  * its models fit the triangle budgets. Numbers land in `.scratch/bodies-report.txt`.
  */
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import fs from 'node:fs';
 import { Rig } from './Rig';
 import { PathPilot } from './Autopilot';
 import type { DriveInput } from './ControlFilter';
 import { SPEC_OF } from './Spec';
-import { BODY_TYPES, buildBody, type BodyType } from './Bodies';
+import { BODY_TYPES, buildBody, readyBodies, type BodyType } from './Bodies';
 
 const DT = 1 / 60, KMH = 3.6;
 const deg = (r: number) => r * 180 / Math.PI;
@@ -31,6 +31,8 @@ const EXPECT: Record<BodyType, { v: number; within: number; brakeFrom: number; s
 };
 
 const rigFor = (t: BodyType) => Rig.create({ spec: SPEC_OF[t], at: { x: 0, y: SPEC_OF[t].wheelRadius + 0.05, z: 0 } });
+
+beforeAll(() => readyBodies());
 
 afterAll(() => {
   const keys = [...new Set([...report.values()].flatMap((r) => Object.keys(r)))];

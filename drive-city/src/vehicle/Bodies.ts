@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { clamp, curve, F_CUTOUT, LAMP, latheX, Mesher, smooth, surf, TONE_FIXED, TONE_LOWER, TONE_UPPER, type Surf } from './Mesher';
+import { addModel, clamp, curve, F_CUTOUT, LAMP, latheX, Mesher, smooth, surf, TONE_FIXED, TONE_LOWER, TONE_UPPER, type Model, type Surf } from './Mesher';
 import { Shell, type CapFace, type ShellDef, type WallFace, type WallRow } from './Shell';
 import { uv } from './Atlas';
 import type { VehicleSpec } from './Spec';
 import { buildTwoWheeler } from './TwoWheelers';
+import { retry } from '../core/Retry';
 
 /**
  * Body shapes. Each type is a Shell definition (see Shell.ts) plus the parts that are not panels:
@@ -617,9 +618,8 @@ function plates(m: Mesher, shell: Shell, pal: Pal, fy: number, ry: number): void
   endQuad(m, pal.plateR, { x: 0, y: ry, z: r.z - 0.012 }, 0.44, 0.14, -1);
 }
 
-function roofSign(m: Mesher, shell: Shell, pal: Pal, z: number): void {
-  const p = shell.capAt(z, 1);
-  const y0 = p.y + 0.012;
+function roofSign(m: Mesher, roofY: number, pal: Pal, z: number): void {
+  const y0 = roofY + 0.012;
   // Trapezoid box: 0.64 wide, 0.2 deep at the foot, 0.16 at the top, 0.16 tall.
   const W = 0.32, D0 = 0.11, D1 = 0.075, H = 0.165;
   box(m, pal.signFoot, 0.5, 0.03, 0.18, { x: 0, y: y0, z });
@@ -634,9 +634,8 @@ function roofSign(m: Mesher, shell: Shell, pal: Pal, z: number): void {
   q(pal.signBody, { x: -W, y: yb, z: z - D0 }, { x: -W, y: yb, z: z + D0 }, { x: -W, y: yt, z: z + D1 }, { x: -W, y: yt, z: z - D1 });
 }
 
-function lightBar(m: Mesher, shell: Shell, pal: Pal, z: number, w = 0.52): void {
-  const p = shell.capAt(z, 1);
-  const y0 = p.y + 0.015;
+function lightBar(m: Mesher, roofY: number, pal: Pal, z: number, w = 0.52): void {
+  const y0 = roofY + 0.015;
   box(m, pal.black, w * 2 + 0.06, 0.05, 0.3, { x: 0, y: y0 + 0.02, z }, undefined, 0.02);
   const lens = (s: Surf, x: number) => {
     const g = new RoundedBoxGeometry(w - 0.02, 0.085, 0.26, SEG + 1, 0.035);
@@ -762,14 +761,97 @@ function calliper(r: number, width: number): Mesher {
 export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, detail: Detail): BodyParts {
   SEG = detail === 'high' ? 2 : 1;
   switch (type) {
-    case 'hatch': return buildCarBody(type, hatchParams(spec), spec, opts, detail);
-    case 'suv': return buildCarBody(type, suvParams(spec), spec, opts, detail);
-    case 'mpv': return buildCarBody(type, mpvParams(spec), spec, opts, detail);
+    case 'hatch': return OLD_CARS || !MODEL_DATA.hatch ? buildCarBody(type, hatchParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
+    case 'suv': return OLD_CARS || !MODEL_DATA.suv ? buildCarBody(type, suvParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
+    case 'mpv': return OLD_CARS || !MODEL_DATA.mpv ? buildCarBody(type, mpvParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
     case 'bus': return buildBus(spec, opts, detail);
     case 'truck': return buildTruck(spec, opts, detail);
     case 'moto': case 'bike': return buildTwoWheeler(type, spec, detail);
-    default: return buildCarBody(type, sedanParams(spec), spec, opts, detail);
+    default: return OLD_CARS || !MODEL_DATA.sedan ? buildCarBody(type, sedanParams(spec), spec, opts, detail) : buildModelBody('sedan', spec, opts, detail);
   }
+}
+
+/** `?cars=old` in a page: the procedural bodies for the types that have a Blender model (A/B). */
+const OLD_CARS = typeof location !== 'undefined' && new URLSearchParams(location.search).get('cars') === 'old';
+
+type CarModelType = 'sedan' | 'hatch' | 'suv' | 'mpv';
+
+/** Where each Blender car body's roof sign and light bar stand (z), and which atlas graphics it wears. */
+const MODELS: Record<CarModelType, { zRoof: number; zBar: number; style: Parameters<typeof palette>[0] }> = {
+  sedan: { zRoof: -0.46, zBar: -0.39, style: { grille: 'grille', head: 'head', tail: 'tail' } },
+  hatch: { zRoof: -0.88, zBar: -0.81, style: { grille: 'grilleSlim', head: 'head2', tail: 'tail2' } },
+  suv: { zRoof: -0.98, zBar: -0.91, style: { grille: 'grilleBars', head: 'head2', tail: 'tail' } },
+  mpv: { zRoof: -1.23, zBar: -1.16, style: { grille: 'grilleWave', head: 'head', tail: 'tail2' } },
+};
+
+/** The bodies' geometry, their own chunks (~160 KB gzipped each): `readyBodies()` fills this. */
+const MODEL_DATA: Partial<Record<CarModelType, Record<string, Model>>> = {};
+const SOURCES: Record<CarModelType, () => Promise<{ default: unknown }>> = {
+  sedan: () => import('./models/sedan.json'), hatch: () => import('./models/hatch.json'),
+  suv: () => import('./models/suv.json'), mpv: () => import('./models/mpv.json'),
+};
+let bodiesReady: Promise<void> | null = null;
+
+/**
+ * Load the Blender car bodies; await once before the first car is built (main.ts does, before the world). A body
+ * that did not arrive after its retries is built the old procedural way, so the game still has cars.
+ */
+export function readyBodies(): Promise<void> {
+  return bodiesReady ??= Promise.all((Object.keys(SOURCES) as CarModelType[]).map(async (k) => {
+    try { MODEL_DATA[k] = (await retry(`car body ${k}`, SOURCES[k])).default as Record<string, Model>; }
+    catch (e) { console.warn(`[vehicle] car body ${k} did not load; building it procedurally`, e); }
+  })).then(() => undefined);
+}
+
+/**
+ * A body modelled in Blender (scripts/blender/vehicles/car.py): groups `hi` (full detail) and `lo` (traffic), and
+ * the door lettering strips `doorLow` / `doorHigh`. The roof sign and light bar are still built here, on the roof
+ * the model has at `zRoof` / `zBar`; the wheels are the code's.
+ */
+function buildModelBody(type: CarModelType, spec: VehicleSpec, opts: BodyOptions, detail: Detail): BodyParts {
+  const { style, ...at } = MODELS[type];
+  const model = MODEL_DATA[type]!;
+  const pal = palette(style);
+  const surfs = pal as unknown as Record<string, Surf>;
+  const m = new Mesher();
+  const hi = model[detail === 'high' ? 'hi' : 'lo'];
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const k of ['paintU', 'paintL']) {
+    const p = hi[k].p;
+    for (let i = 0; i < p.length; i += 3) {
+      x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]); y0 = Math.min(y0, p[i + 1]); y1 = Math.max(y1, p[i + 1]); z0 = Math.min(z0, p[i + 2]); z1 = Math.max(z1, p[i + 2]);
+    }
+  }
+  const bottom = y0 / 1000;
+  m.shade = (_x, y) => 0.6 + 0.4 * smooth(bottom, bottom + 0.32, y);
+  addModel(m, hi, surfs);
+  if (opts.doorText) addModel(m, model[opts.doorTextHigh ? 'doorHigh' : 'doorLow'], surfs);
+  m.shade = null;
+  /** The roof's height on the centre line at z (the highest full-detail paint vertex near it: `lo` is too sparse). */
+  const roofAt = (z: number) => {
+    const p = model.hi.paintU.p;
+    let y = -Infinity;
+    for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i]) < 80 && Math.abs(p[i + 2] - z * 1000) < 90) y = Math.max(y, p[i + 1]);
+    return y / 1000;
+  };
+  if (opts.roofSign) roofSign(m, roofAt(at.zRoof), pal, at.zRoof);
+  if (opts.beacons) lightBar(m, roofAt(at.zBar), pal, at.zBar);
+  // Headlamp centres for the night beams: the middle of the head lamps' vertices on each side.
+  const hp = hi.head.p;
+  const c = new THREE.Vector3();
+  let n = 0;
+  for (let i = 0; i < hp.length; i += 3) if (hp[i] > 0) { c.x += hp[i]; c.y += hp[i + 1]; c.z += hp[i + 2]; n++; }
+  c.divideScalar(n * 1000);
+  const wheelStyle: WheelStyle = { spokes: 5, double: true, steel: false, dish: 0.02 };
+  const fw = spec.wheels[0].x;
+  return {
+    type, body: m,
+    wheel: wheel(spec.wheelRadius, spec.wheelWidth, detail, wheelStyle),
+    wheelRear: null, dual: 0,
+    calliper: detail === 'high' ? calliper(spec.wheelRadius, spec.wheelWidth) : null,
+    headlamps: [c.clone(), new THREE.Vector3(-c.x, c.y, c.z)],
+    size: { length: (z1 - z0) / 1000, width: Math.max(2 * (fw + spec.wheelWidth / 2), (x1 - x0) / 1000), height: y1 / 1000 + spec.wheelRadius },
+  };
 }
 
 function buildCarBody(type: BodyType, p: CarParams, spec: VehicleSpec, opts: BodyOptions, detail: Detail): BodyParts {
@@ -789,8 +871,8 @@ function buildCarBody(type: BodyType, p: CarParams, spec: VehicleSpec, opts: Bod
   if (p.cladding) for (const a of p.arches) archTrim(m, shell, pal.cladding, a, 0.075, detail);
   if (p.roofRails) roofRails(m, shell, pal, p.header - 0.05, p.rearHeader + 0.08);
   if (p.spoiler) spoiler(m, shell, pal, p.rearHeader);
-  if (opts.roofSign) roofSign(m, shell, pal, (p.header + p.rearHeader) / 2 - 0.05);
-  if (opts.beacons) lightBar(m, shell, pal, (p.header + p.rearHeader) / 2 + 0.02);
+  if (opts.roofSign) { const z = (p.header + p.rearHeader) / 2 - 0.05; roofSign(m, shell.capAt(z, 1).y, pal, z); }
+  if (opts.beacons) { const z = (p.header + p.rearHeader) / 2 + 0.02; lightBar(m, shell.capAt(z, 1).y, pal, z); }
   if (opts.doorText) both((sx) => {
     const y0 = opts.doorTextHigh ? p.split + 0.03 : (p.split + p.doorBottom) / 2 - 0.035;
     sideDecal(m, shell, pal.door, -0.2, 0.74, y0, y0 + 0.14, 0.004, sx);

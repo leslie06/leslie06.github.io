@@ -10,6 +10,7 @@ import * as city from './city';
 import { registerCityPoses } from './city/Poses';
 import { registerTrafficPoses } from './traffic/Poses';
 import * as vehicle from './vehicle';
+import { readyBodies } from './vehicle/Bodies';
 import * as player from './player';
 import * as damage from './damage';
 import * as traffic from './traffic';
@@ -51,11 +52,15 @@ async function boot() {
   const loading = document.getElementById('loading');
   if (loading) loading.querySelector('b')!.textContent = t('title.loading');
   const engine = new Engine(container);
+  // The Blender car bodies are their own chunks: fetched alongside the physics and render setup, needed from the
+  // world on (the yard parks a coach).
+  const bodies = readyBodies();
   await engine.physics.init();
   await render.install(engine);
   await weather.install(engine);
   // Central Beijing from OSM by default; ?world=yard is the M0 driving-school yard (handling sandbox).
   const worldName = new URLSearchParams(location.search).get('world') ?? 'city';
+  await bodies;
   if (worldName === 'city') await city.install(engine); else await world.install(engine);
   await vehicle.install(engine);
   await player.install(engine);
