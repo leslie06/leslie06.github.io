@@ -52,16 +52,17 @@ async function boot() {
   const loading = document.getElementById('loading');
   if (loading) loading.querySelector('b')!.textContent = t('title.loading');
   const engine = new Engine(container);
-  // The Blender car bodies are their own chunks: fetched alongside the physics and render setup, needed from the
-  // world on (the yard parks a coach).
+  // The Blender car bodies are their own chunks (~1.3 MB gzipped): fetched alongside the physics, render and city
+  // setup, needed from the vehicle on (and by the yard's parked coach). Awaiting them before the city serialised
+  // the two downloads: +12 s to playable at 500 KB/s.
   const bodies = readyBodies();
   await engine.physics.init();
   await render.install(engine);
   await weather.install(engine);
   // Central Beijing from OSM by default; ?world=yard is the M0 driving-school yard (handling sandbox).
   const worldName = new URLSearchParams(location.search).get('world') ?? 'city';
+  if (worldName === 'city') await city.install(engine); else { await bodies; await world.install(engine); }
   await bodies;
-  if (worldName === 'city') await city.install(engine); else await world.install(engine);
   await vehicle.install(engine);
   await player.install(engine);
   await damage.install(engine);
