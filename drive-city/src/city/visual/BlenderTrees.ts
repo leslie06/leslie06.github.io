@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { EnvUniforms } from '../../game/Contracts';
+import { retry } from '../../core/Retry';
 
 /**
  * The street trees grown in Blender (2026-09-27; scripts/blender/trees/): per species a branching
@@ -110,8 +111,8 @@ export interface BlenderTrees { near: THREE.BufferGeometry[]; mid: THREE.BufferG
 export async function loadBlenderTrees(anisotropy: number): Promise<BlenderTrees> {
   const base = `${import.meta.env.BASE_URL}models/trees/`;
   const [map, trees] = await Promise.all([
-    new THREE.TextureLoader().loadAsync(`${base}foliage.webp`),
-    fetch(`${base}trees.json`).then((r) => { if (!r.ok) throw new Error(`trees.json: HTTP ${r.status}`); return r.json() as Promise<Trees>; }),
+    retry('tree atlas', () => new THREE.TextureLoader().loadAsync(`${base}foliage.webp`)),
+    retry('trees.json', () => fetch(`${base}trees.json`).then((r) => { if (!r.ok) throw new Error(`trees.json: HTTP ${r.status}`); return r.json() as Promise<Trees>; })),
   ]);
   map.colorSpace = THREE.SRGBColorSpace;
   map.flipY = false;               // the models' UVs are glTF's (v down)

@@ -6,6 +6,7 @@ import type { ColliderSpec, EnvUniforms, LandmarkDef, LandmarkModel } from '../.
 import { LANDMARK_LIGHTS } from '../kit/mats';
 import { facadeMaterial, type FacadeSpec } from '../kit/facade';
 import { FAR_LOD_DISTANCE } from '../kit/model';
+import { retry } from '../../../core/Retry';
 
 /**
  * Landmarks authored in Blender. `node scripts/landmarks/import.mjs model.glb --id ...` optimises the
@@ -365,7 +366,8 @@ export function glbLandmark(meta: GlbMeta): LandmarkDef {
     },
     load: async (env) => {
       loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-      const gltf = await loader.loadAsync(url);
+      const l = loader;
+      const gltf = await retry(`landmark ${meta.id}`, () => l.loadAsync(url));
       return buildGlbModel(gltf.scene, env, meta);
     },
   };

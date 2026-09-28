@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { retry } from '../../core/Retry';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ANKLE_H, BALL, BASE_HEIGHT, J, JOINT_COUNT, type Look } from '../Body';
 import { bindWorld, poseWorld, type Gait } from '../Animator';
@@ -206,8 +207,17 @@ export class Hero {
 
   /** Load and dress the model. `base` is the directory holding `body.gltf` and `hair.gltf`. */
   static async load(base: string, look: Look): Promise<Hero> {
-    const loader = new GLTFLoader();
-    const [body, hair] = await Promise.all([loader.loadAsync(`${base}body.gltf`), loader.loadAsync(`${base}hair.gltf`)]);
+    // A texture that fails only warns inside GLTFLoader (the model comes back without it): count the
+    // manager's errors and treat any as a failed attempt, so the whole file is fetched again.
+    const once = (file: string) => async () => {
+      let failed = '';
+      const manager = new THREE.LoadingManager();
+      manager.onError = (url) => { failed ||= url; };
+      const gltf = await new GLTFLoader(manager).loadAsync(`${base}${file}`);
+      if (failed) throw new Error(`${file}: ${failed} did not load`);
+      return gltf;
+    };
+    const [body, hair] = await Promise.all([retry('hero body', once('body.gltf')), retry('hero hair', once('hair.gltf'))]);
     return Hero.build(body.scene, hair.scene, look);
   }
 
