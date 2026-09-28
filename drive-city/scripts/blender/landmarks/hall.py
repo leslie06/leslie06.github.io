@@ -403,25 +403,27 @@ def sweep(g, pts, wd, ht, key="tile", sink=0.15, cap_ends=True):
         g.poly(secs[-1], key)
 
 
-def wen(g, x, zt, facing, key="tile"):
-    """正吻: the ridge-end dragon - jaws open round the ridge, a back of fins, the tail curling up and out."""
+def wen(g, x, zt, facing, key="tile", k=1.0):
+    """正吻: the ridge-end dragon - jaws open round the ridge, a back of fins, the tail curling up and out; `k` scales
+    it (a small roof's is smaller)."""
     prof = [(-0.95, 0.0), (0.6, 0.0), (0.7, 0.4), (0.72, 0.9), (0.8, 1.3), (0.98, 1.7), (1.1, 2.05), (1.0, 2.35), (0.75, 2.45),
             (0.5, 2.35), (0.42, 2.12), (0.55, 1.95), (0.4, 1.85), (0.2, 2.0), (0.05, 1.85), (-0.1, 2.02), (-0.25, 1.85),
             (-0.4, 1.95), (-0.5, 1.7), (-0.62, 1.45), (-0.85, 1.3), (-0.95, 1.05), (-0.6, 0.95), (-0.75, 0.6), (-0.95, 0.45)]
-    t = 0.28
+    prof = [(px * k, pz * k) for px, pz in prof]
+    t = 0.28 * k
     front = [Vector((x + facing * px, -t, zt + pz)) for px, pz in prof]
     back = [Vector((x + facing * px, t, zt + pz)) for px, pz in prof]
     g.polyn(front, key, (0, -1, 0))
     g.polyn(back, key, (0, 1, 0))
     cx = sum(p.x for p in front) / len(front)
     for i in range(len(prof)):
-        k = (i + 1) % len(prof)
-        mid = (front[i] + front[k]) / 2
-        g.polyn([front[i], front[k], back[k], back[i]], key, (mid.x - cx, 0, mid.z - (zt + 1.2)))
+        j = (i + 1) % len(prof)
+        mid = (front[i] + front[j]) / 2
+        g.polyn([front[i], front[j], back[j], back[i]], key, (mid.x - cx, 0, mid.z - (zt + 1.2 * k)))
     # the curl of the tail, a boss on each side; the sword handle (剑把) stuck in its back
     for sy in (-1, 1):
-        cyl_y(g, x + facing * 0.78, sy * t, zt + 2.15, 0.2, sy * 0.08, key)
-    g.box(x + facing * 0.1 - 0.07, x + facing * 0.1 + 0.07, -0.09, 0.09, zt + 1.9, zt + 2.6, key)
+        cyl_y(g, x + facing * 0.78 * k, sy * t, zt + 2.15 * k, 0.2 * k, sy * 0.08 * k, key)
+    g.box(x + facing * 0.1 * k - 0.07 * k, x + facing * 0.1 * k + 0.07 * k, -0.09 * k, 0.09 * k, zt + 1.9 * k, zt + 2.6 * k, key)
 
 
 def cyl_y(g, x, y, z, r, dy, key, segs=10):
@@ -595,7 +597,7 @@ def roofs_hip(h, g, hips, RL, lod):
         g.box(-XR - 0.3, XR + 0.3, -0.5, 0.5, ztop + 0.5, ztop + 0.62, h.RIDGE)
         if not lod:
             for sx in (-1, 1):
-                wen(g, sx * (XR + 0.1), ztop - 0.25, sx, key=h.RIDGE)
+                wen(g, sx * (XR + 0.1), ztop - 0.25, sx, key=h.RIDGE, k=getattr(h, "WEN", 1.0))
     if lod:
         return hips
     zw = RL["z"] + RL["H"] if RL else -100.0
