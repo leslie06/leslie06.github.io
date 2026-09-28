@@ -1,0 +1,38 @@
+{
+  "id": "jiaolou",
+  "name": {
+    "zh": "北京城东南角楼",
+    "en": "Southeast Corner Tower"
+  },
+  "lat": 39.9001469,
+  "lon": 116.429102,
+  "headingDeg": -2,
+  "file": "jiaolou.glb",
+  "version": "55d638a5",
+  "footprint": [
+    [-16.75, 3.9],
+    [2.5, -14.5],
+    [14.93, -14.5],
+    [14.93, 16.3],
+    [-16.75, 16.3]
+  ],
+  "height": 32.15,
+  "farDistance": 500,
+  "stats": {
+    "triangles": 73308,
+    "farTriangles": 1436,
+    "materials": 11,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 4,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 4,
+    "textures": 5,
+    "maxTexture": 2048,
+    "footprintArea": 799,
+    "bytes": 1303432,
+    "source": "jiaolou.glb"
+  }
+}
