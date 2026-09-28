@@ -21,14 +21,22 @@ export class SkylineLod {
   private p = new THREE.Vector3();
   private s = new THREE.Vector3();
   private hidden = new Set<string>();
+  /** Per packed instance, its kind (packed with the matrices and colours). */
+  private kinds: THREE.InstancedBufferAttribute;
+  private cols: THREE.Color[] = [];
 
   constructor(sky: Skyline, env: EnvUniforms) {
     this.data = sky.b;
     const n = this.data.length / 8;
-    const geo = new THREE.BoxGeometry(2, 1, 2).translate(0, 0.5, 0);
-    const kinds = new Float32Array(n);
-    for (let i = 0; i < n; i++) kinds[i] = this.data[i * 8 + 6];
-    geo.setAttribute('aKind', new THREE.InstancedBufferAttribute(kinds, 1));
+    // No bottom face (it stands on the ground): 10 triangles, not 12.
+    const box = new THREE.BoxGeometry(2, 1, 2).translate(0, 0.5, 0);
+    const geo = new THREE.BufferGeometry();
+    for (const k of ['position', 'normal', 'uv'] as const) geo.setAttribute(k, box.getAttribute(k));
+    const bi = box.getIndex()!.array;
+    geo.setIndex(Array.from(bi).filter((_, t) => Math.floor(t / 6) !== 3));      // BoxGeometry's faces: +x -x +y -y +z -z
+    box.dispose();
+    this.kinds = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+    geo.setAttribute('aKind', this.kinds);
     const mat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 });
     mat.customProgramCacheKey = () => 'skyline2';
     mat.onBeforeCompile = (sh) => {
@@ -72,6 +80,7 @@ export class SkylineLod {
       const o = i * 8;
       this.tiles.push(`${Math.floor(this.data[o] / TILE)}_${Math.floor(this.data[o + 1] / TILE)}`);
       c.set(COL[this.data[o + 6]] ?? COL[1]).offsetHSL(0, 0, (this.data[o + 7] - 0.5) * 0.08);
+      this.cols.push(c.clone());
       this.mesh.setColorAt(i, c);
     }
     this.write();
@@ -105,16 +114,30 @@ export class SkylineLod {
     this.write();
   }
 
+  /**
+   * Write the boxes to draw, packed (2026-09-28): the hidden ones - every tile drawn in detail, every
+   * landmark footprint - used to stay in the mesh scaled to nothing, so all 5301 boxes were drawn every
+   * frame, 15% of a low-tier frame's triangles at the spawn.
+   */
   private write(): void {
-    const d = this.data;
+    const d = this.data, kinds = this.kinds.array as Float32Array;
+    let k = 0;
     for (let i = 0; i < this.tiles.length; i++) {
+      if (this.hidden.has(this.tiles[i]) || this.excluded.has(i)) continue;
       const o = i * 8;
-      if (this.hidden.has(this.tiles[i]) || this.excluded.has(i)) this.s.set(0, 0, 0);
-      else this.s.set(d[o + 3], d[o + 5], d[o + 4]);
-      this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -d[o + 2]);
+      this.s.set(d[o + 3], d[o + 5], d[o + 4]);
+      this.q.setFromAxisAngle(SkylineLod.UP, -d[o + 2]);
       this.p.set(d[o], 0, d[o + 1]);
-      this.mesh.setMatrixAt(i, this.m.compose(this.p, this.q, this.s));
+      this.mesh.setMatrixAt(k, this.m.compose(this.p, this.q, this.s));
+      this.mesh.setColorAt(k, this.cols[i]);
+      kinds[k] = d[o + 6];
+      k++;
     }
+    this.mesh.count = k;
     this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    this.kinds.needsUpdate = true;
   }
+
+  private static readonly UP = new THREE.Vector3(0, 1, 0);
 }
