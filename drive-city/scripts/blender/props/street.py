@@ -32,7 +32,8 @@ M = roof.M
 COLOURS = dict(frame="#ffffff", dark="#1b1c1d", tyre="#141414", hub="#8f9398", seat="#262626", lock="#3a3d40",
                qr="#e8e8e2", reflector="#b3261e", binGreen="#2f7b48", binGreenLid="#276a3d", binGrey="#6c7277",
                binGreyLid="#5a6065", label="#f2f2f2", steel="#8d9296", canopy="#d3d6d8", soffit="#f0efe9",
-               glass="#34424a", ad="#86c2e6", adbox="#dedfd9", board="#1e5eaa", boardFace="#f2f2f2", bench="#9aa0a4")
+               glass="#34424a", ad="#86c2e6", adbox="#dedfd9", board="#1e5eaa", boardFace="#f2f2f2", bench="#9aa0a4",
+               lampPole="#8e9398", lampBase="#7a7f84", lampHead="#c5c9cc", sigPole="#2b2f33", sigBlack="#141516", sigWhite="#e8e8e2")
 
 
 def tube(p, pts, r, mat, sides=5):
@@ -231,6 +232,62 @@ def arch_slab(p, mat, x0, x1, ys, zs, t):
         bm.faces.new((top[k][0], top[k][1], bot[k][1], bot[k][0]))
 
 
+def lamp_near():
+    """The main-road lamp close up (city/Vegetation.ts LAMP_REACH 1.6: the lens is the game's, 0.3 x 0.62 at y 8.0 and
+    1.6 m out along +z): an eight-sided tapered pole on a base with its access door, a curved arm, a streamlined head."""
+    p = Part("lampNear")
+    p.cyl((0, 0.0, 0), (0, 0.75, 0), 0.24, "lampBase", sides=8, caps=(False, True), r2=0.2)
+    p.box((0, 0.42, 0.205), (0.08, 0.16, 0.01), "lampBase")
+    p.cyl((0, 0.75, 0), (0, 7.7, 0), 0.13, "lampPole", sides=8, caps=(False, False), r2=0.08)
+    # the arm: up the last of the pole and out over the road in a curve
+    pts = [(0, 7.6, 0.0), (0, 8.0, 0.1), (0, 8.2, 0.45), (0, 8.22, 0.9), (0, 8.17, 1.3)]
+    for a, b in zip(pts, pts[1:]):
+        p.cyl(a, b, 0.055, "lampPole", sides=6, caps=(False, False))
+    p.disc((0, 7.7, 0), 0.08, "lampPole", sides=8)
+    # the head: a shallow boat over the lens (its underside stops short of the lens, which shows)
+    bm = p._bm("lampHead")
+    rings = []
+    for z, w, top, bot in ((1.2, 0.05, 8.15, 8.12), (1.3, 0.16, 8.19, 8.06), (1.6, 0.2, 8.2, 8.04), (1.9, 0.17, 8.17, 8.05), (2.0, 0.08, 8.12, 8.08)):
+        rings.append([bm.verts.new(v) for v in ((-w, bot, z), (w, bot, z), (w, top, z), (-w, top, z))])
+    for a, b in zip(rings, rings[1:]):
+        for i in range(4):
+            j = (i + 1) % 4
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    bm.faces.new(rings[0][::-1])
+    bm.faces.new(rings[-1])
+    return p
+
+
+# the signal head (traffic/Signals.ts HOUSING: along 0.42, h 1.2, across 0.32, out 1.05, y 4.95; its lamps on the local +x
+# face at y + 0.38, y, y - 0.38)
+H_ALONG, H_H, H_ACROSS, H_OUT, H_Y = 0.42, 1.2, 0.32, 1.05, 4.95
+
+
+def signal():
+    p = Part("signal")
+    p.cyl((0, 0.0, 0), (0, 0.4, 0), 0.2, "sigPole", sides=8, caps=(False, True), r2=0.16)
+    p.cyl((0, 0.4, 0), (0, 5.7, 0), 0.11, "sigPole", sides=8, caps=(False, True), r2=0.085)
+    # the arm to the housing, a brace under it
+    p.cyl((0, 5.35, 0), (0, 5.35, H_OUT), 0.05, "sigPole", sides=6)
+    p.cyl((0, 4.85, 0.05), (0, 5.3, 0.6), 0.03, "sigPole", sides=5)
+    p.box((0, H_Y, H_OUT), (H_ALONG / 2, H_H / 2, H_ACROSS / 2), "sigBlack")
+    p.box((0, H_Y + H_H / 2 + 0.04, H_OUT), (H_ALONG / 2 + 0.02, 0.04, H_ACROSS / 2 + 0.02), "sigPole")
+    # the back plate round the housing: black with a white border
+    p.box((-0.02, H_Y, H_OUT), (0.012, H_H / 2 + 0.16, H_ACROSS / 2 + 0.2), "sigWhite")
+    p.box((-0.005, H_Y, H_OUT), (0.012, H_H / 2 + 0.12, H_ACROSS / 2 + 0.16), "sigBlack")
+    # a visor over each lamp, open below
+    for k in range(3):
+        y = H_Y + 0.38 - k * 0.38
+        bm = p._bm("sigBlack")
+        r, n = 0.17, 7
+        arc = [(r * math.cos(math.pi * i / (n - 1)), r * math.sin(math.pi * i / (n - 1))) for i in range(n)]
+        a = [bm.verts.new((H_ALONG / 2, y + sy * 0.95, H_OUT + sz)) for sz, sy in arc]
+        b = [bm.verts.new((H_ALONG / 2 + 0.24, y + sy * 0.95 - 0.02, H_OUT + sz)) for sz, sy in arc]
+        for i in range(n - 1):
+            bm.faces.new((a[i], a[i + 1], b[i + 1], b[i]))
+    return p
+
+
 def lerp(a, b, t):
     return a + (b - a) * t
 
@@ -239,7 +296,7 @@ def build():
     clear_file()
     for k, col in COLOURS.items():
         M[k] = material(k, col, 0.6)
-    things = [bike(), bike(ride=True), bike_wheel(), bin_pair(), shelter()]
+    things = [bike(), bike(ride=True), bike_wheel(), bin_pair(), shelter(), lamp_near(), signal()]
     for t in things:
         t.objects()
     return len(things)

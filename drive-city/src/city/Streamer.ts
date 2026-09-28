@@ -229,7 +229,7 @@ export class CityStreamer implements System {
     // Every street has lamps: up to ~1350 on the 5x5 tiles round the densest spot, ~2200 on 7x7.
     this.lampPool = new InstancePool([{ geo: lg.post, mat: postMat, shadow: false }], tier === 'low' ? 700 : 1500, scene, false, 'pool:lamp');
     this.lampHeads = new InstancePool([{ geo: lg.head, mat: this.lampHead, shadow: false }], tier === 'low' ? 700 : 2400, scene, false, 'pool:lamp-head');
-    this.lampNear = new InstancePool([{ geo: lg.post, mat: postMat, shadow: true }], 200, scene, false, 'pool:lamp-near');
+    this.lampNear = new InstancePool([{ geo: lg.near, mat: postMat, shadow: true }], 200, scene, false, 'pool:lamp-near');
   }
 
   /** Tiles drawn in detail right now. */

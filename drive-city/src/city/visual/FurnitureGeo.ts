@@ -64,9 +64,11 @@ const STREET_LOOK: Record<string, [string, number]> = {
   qr: ['#e8e8e2', 0], reflector: ['#b3261e', 0], binGreen: ['#2f7b48', 0], binGreenLid: ['#276a3d', 0], binGrey: ['#6c7277', 0],
   binGreyLid: ['#5a6065', 0], label: ['#f2f2f2', 0], steel: ['#8d9296', 0], canopy: ['#d3d6d8', 0], soffit: ['#f0efe9', 0.35],
   glass: ['#34424a', 0], ad: ['#86c2e6', 1], adbox: ['#dedfd9', 0], board: ['#1e5eaa', 0.45], boardFace: ['#f2f2f2', 0.6], bench: ['#9aa0a4', 0],
+  lampPole: ['#8e9398', 0], lampBase: ['#7a7f84', 0], lampHead: ['#c5c9cc', 0], sigPole: ['#2b2f33', 0], sigBlack: ['#141516', 0], sigWhite: ['#e8e8e2', 0],
 };
 
-function streetGeometry(name: 'bike' | 'bin' | 'shelter'): THREE.BufferGeometry {
+/** A Blender street thing's geometry: position, normal, colour, `aGlow`, `aSolid` (the furniture pools' layout). */
+export function streetGeometry(name: 'bike' | 'bin' | 'shelter' | 'lampNear' | 'signal'): THREE.BufferGeometry {
   const parts = (STREET as unknown as Record<string, Record<string, { p: number[]; n: number[]; i: number[] }>>)[name];
   return mergeGeometries(Object.entries(parts).map(([mat, g]) => {
     const geo = new THREE.BufferGeometry();

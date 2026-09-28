@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { streetGeometry } from '../city/visual/FurnitureGeo';
 import type { LaneGraph, Link } from './LaneGraph';
 
 /** 0 green, 1 amber, 2 red. */
@@ -269,11 +270,10 @@ export class SignalHeads {
    * while one 250 m away had its lights: a car stopping at a red nobody could see.
    */
   constructor(scene: THREE.Scene, private g: LaneGraph, private sig: Signals, private cap = 240) {
-    const pole = new THREE.CylinderGeometry(0.09, 0.11, 5.6, 8).translate(0, 2.8, 0);
-    const arm = new THREE.BoxGeometry(0.1, 0.1, 1).translate(0, 5.3, 0.5);
-    const housing = new THREE.BoxGeometry(HOUSING.along, HOUSING.h, HOUSING.across).translate(0, HOUSING.y, HOUSING.out);
-    const g0 = mergeAll([pole, arm, housing]);
-    this.poles = new THREE.InstancedMesh(g0, new THREE.MeshStandardMaterial({ color: '#2b2f33', roughness: 0.6, metalness: 0.5 }), cap);
+    // Blender's pole (scripts/blender/props/street.py `signal`): a tapered pole on a base, the arm and its brace, the housing
+    // at HOUSING with a white-bordered back plate and a visor over each lamp.
+    const g0 = streetGeometry('signal');
+    this.poles = new THREE.InstancedMesh(g0, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 }), cap);
     // Three lamps per head: one instanced mesh, per-instance colour (lit colours are HDR for bloom).
     const lamp = new THREE.CircleGeometry(0.13, 16).rotateY(Math.PI).translate(0, 0, 0);
     this.lamps = new THREE.InstancedMesh(lamp, new THREE.MeshBasicMaterial({ color: '#ffffff' }), cap * 3);
@@ -332,16 +332,4 @@ export class SignalHeads {
     this.poles.instanceMatrix.needsUpdate = true;
     this.lamps.instanceMatrix.needsUpdate = true;
   }
-}
-
-function mergeAll(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const parts = list.map((g) => (g.index ? g.toNonIndexed() : g));
-  const n = parts.reduce((a, g) => a + g.getAttribute('position').count, 0);
-  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
-  let o = 0;
-  for (const g of parts) { pos.set(g.getAttribute('position').array as Float32Array, o * 3); nor.set(g.getAttribute('normal').array as Float32Array, o * 3); o += g.getAttribute('position').count; }
-  const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-  return out;
 }

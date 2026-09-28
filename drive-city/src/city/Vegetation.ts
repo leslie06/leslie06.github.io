@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { EnvUniforms } from '../game/Contracts';
 import { foliageMaterials, treeSet } from './visual/Foliage';
+import { streetGeometry } from './visual/FurnitureGeo';
 
 /**
  * Four street trees of Beijing: 国槐 scholar tree (broad rounded crown, the most common street
@@ -24,7 +25,9 @@ export function treeMaterials(env: EnvUniforms, tier: string): { mat: THREE.Mesh
 /** How far the head sits out over the road from the pole (local +z). */
 export const LAMP_REACH = 1.6;
 
-export function lampGeometries(): { post: THREE.BufferGeometry; head: THREE.BufferGeometry } {
+/** `near` is Blender's (scripts/blender/props/street.py `lampNear`: an eight-sided pole on a base, a curved arm, a streamlined head
+ * round the same lens), for the lamps nearest the camera. */
+export function lampGeometries(): { post: THREE.BufferGeometry; near: THREE.BufferGeometry; head: THREE.BufferGeometry } {
   const tint = (g: THREE.BufferGeometry, hex: string) => {
     const geo = g.index ? g.toNonIndexed() : g, n = geo.getAttribute('position').count, c = new THREE.Color(hex), a = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
@@ -38,5 +41,5 @@ export function lampGeometries(): { post: THREE.BufferGeometry; head: THREE.Buff
     tint(new THREE.BoxGeometry(0.36, 0.11, 0.72).translate(0, 8.07, LAMP_REACH), '#c5c9cc'),
   ])!;
   const head = new THREE.BoxGeometry(0.3, 0.04, 0.62).translate(0, 8.0, LAMP_REACH);
-  return { post, head };
+  return { post, near: streetGeometry('lampNear'), head };
 }
