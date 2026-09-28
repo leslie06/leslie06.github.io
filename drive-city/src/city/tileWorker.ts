@@ -55,12 +55,14 @@ self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints:
     pack('facade', bm.facade, geoms, transfer);
     pack('roofprops', bm.props, geoms, transfer);
     const deck: number[] = [], deckLamps: number[] = [];
-    const rm = buildRoads(data.roads, data.crossings, deck, deckLamps, data.ctx);
+    // tree pits under the street trees the clear zones leave standing
+    const street = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, clear);
+    const rm = buildRoads(data.roads, data.crossings, deck, deckLamps, data.ctx, street.trees);
     for (const [k, g] of Object.entries(rm)) pack(k, g as THREE.BufferGeometry | null, geoms, transfer);
     for (const [k, g] of buildAreas(data.areas)) pack(`area:${k}`, g, geoms, transfer);
     transfer.push(bm.colVerts.buffer, bm.colIdx.buffer);
     // A footprint removes buildings; a landmark's clear zones remove what the street put in its way.
-    const { trees, lamps, furniture } = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, clear);
+    const { trees, lamps, furniture } = street;
     const msg: TileResult = { key, geoms, colVerts: bm.colVerts, colIdx: bm.colIdx, trees, lamps, signals: data.signals, stops: data.stops, furniture };
     if (deckLamps.length) msg.deckLamps = deckLamps;
     if (deck.length) {

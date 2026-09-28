@@ -179,6 +179,68 @@ function arrow(st: Strip, l: Line, s: number, o: number, dir: number, kind: Arro
   if (kind === 'leftOnly') { seg(-2.3, 0, -0.2, 0, false); seg(-0.28, -0.05, 0.5, 0.85, true); }
 }
 
+const PIT_SOIL = new THREE.Color('#4a3a2b'), PIT_RIM = new THREE.Color('#c9c5bc'), PIT_GRATE = new THREE.Color('#1c1d1f');
+
+/**
+ * 树池: the square pit round a street tree set in the pavement - a granite kerb round dark soil, half of it under a cast-iron
+ * grate - turned to the road (ux, uz along it). Drawn as paint on the pavement.
+ */
+function treePit(st: Strip, x: number, z: number, ux: number, uz: number, y: number): void {
+  const vx = -uz, vz = ux;
+  const P = (a: number, b: number) => [x + ux * a + vx * b, y, z + uz * a + vz * b, 0, 0];
+  // (a, b) turns the same way as (x, z), which is clockwise seen from above: each rectangle is wound b-first to face up
+  const rect = (a0: number, b0: number, a1: number, b1: number, c: THREE.Color) => st.quad(P(a0, b0), P(a0, b1), P(a1, b1), P(a1, b0), UP, c);
+  const r0 = 0.5, r1 = 0.62;
+  rect(-r0, -r0, r0, r0, PIT_SOIL);
+  for (const [a0, b0, a1, b1] of [[-r1, -r1, r1, -r0], [-r1, r0, r1, r1], [-r1, -r0, -r0, r0], [r0, -r0, r1, r0]]) rect(a0, b0, a1, b1, PIT_RIM);
+  // the grate: two cast-iron halves round the trunk, bars across them
+  for (const [b0, b1] of [[-r0, -0.18], [0.18, r0]]) {
+    rect(-r0, b0, r0, b0 + 0.04, PIT_GRATE); rect(-r0, b1 - 0.04, r0, b1, PIT_GRATE);
+    for (let k = 0; k < 7; k++) { const a = -r0 + 0.04 + k * 0.155; rect(a, b0, a + 0.05, b1, PIT_GRATE); }
+  }
+}
+
+/**
+ * The street trees standing in a car road's pavement (between the kerb and the pavement's back edge), each with the road's
+ * direction there: the tiles do not say which trees are street trees and which stand in parks, but the ones in a pavement are.
+ */
+export function pavementTrees(pieces: RoadPiece[], trees: number[]): { x: number; z: number; ux: number; uz: number }[] {
+  const out: { x: number; z: number; ux: number; uz: number }[] = [];
+  const segs: { ax: number; az: number; bx: number; bz: number; hw: number; sw: number }[] = [];
+  for (const r of pieces) {
+    const sw = SIDEWALK[r.c] ?? 0;
+    if (!sw || !isCar(r.c) || (r.h && r.h.some((h) => h > 0.5))) continue;
+    for (let i = 0; i + 3 < r.p.length; i += 2) segs.push({ ax: r.p[i], az: r.p[i + 1], bx: r.p[i + 2], bz: r.p[i + 3], hw: r.w / 2, sw });
+  }
+  // segments bucketed on a 16 m grid by their bounding box grown by the widest pavement reach (~16 m), so a tree only
+  // looks at its own cell's
+  const C = 16, grid = new Map<number, typeof segs>();
+  const key = (cx: number, cz: number) => cx * 100003 + cz;
+  for (const s of segs) {
+    const r = s.hw + s.sw + 0.5;
+    for (let cx = Math.floor((Math.min(s.ax, s.bx) - r) / C); cx <= Math.floor((Math.max(s.ax, s.bx) + r) / C); cx++)
+      for (let cz = Math.floor((Math.min(s.az, s.bz) - r) / C); cz <= Math.floor((Math.max(s.az, s.bz) + r) / C); cz++) {
+        const k = key(cx, cz);
+        let l = grid.get(k);
+        if (!l) grid.set(k, (l = []));
+        l.push(s);
+      }
+  }
+  for (let i = 0; i < trees.length; i += 4) {
+    const x = trees[i], z = trees[i + 1];
+    let best = Infinity, bu: [number, number] = [1, 0], ok = false;
+    for (const s of grid.get(key(Math.floor(x / C), Math.floor(z / C))) ?? []) {
+      const dx = s.bx - s.ax, dz = s.bz - s.az, L2 = dx * dx + dz * dz;
+      if (L2 < 1e-6) continue;
+      const t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / L2));
+      const d = Math.hypot(x - (s.ax + dx * t), z - (s.az + dz * t));
+      if (d < best) { best = d; const L = Math.sqrt(L2); bu = [dx / L, dz / L]; ok = d > s.hw + 0.4 && d < s.hw + s.sw + 0.3 && t > 0 && t < 1; }
+    }
+    if (ok) out.push({ x, z, ux: bu[0], uz: bu[1] });
+  }
+  return out;
+}
+
 function manhole(st: Strip, x: number, z: number, y: number): void {
   const n = 10;
   for (let i = 0; i < n; i++) {
@@ -460,7 +522,7 @@ function box(st: Strip, col: Soup | null, x: number, z: number, tx: number, tz: 
  * junctions, zebra crossings, the yellow tactile strip on pavements, manhole covers. Pavements and
  * lines stop where the crossing road begins, so junction corners stay open.
  */
-export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number[] = [], deckLamps: number[] = [], ctx: RoadPiece[] = []): RoadMeshes {
+export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number[] = [], deckLamps: number[] = [], ctx: RoadPiece[] = [], trees: number[] = []): RoadMeshes {
   const road = new Strip(true), walk = new Strip(true), curb = walk, paint = new Strip(true), bridge = new Strip(true);
   const J = junctions(pieces);
   // Every carriageway with its line, for the piers: none may stand on a road below its deck.
@@ -593,5 +655,7 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
       paint.quad(p(-2, v + 0.5), p(2, v + 0.5), p(2, v), p(-2, v), UP, WHITE);
     }
   }
+  // the neighbours' carriageways too (ctx): a tree on this tile often lines a road the next tile holds
+  for (const t of pavementTrees([...pieces, ...ctx], trees)) treePit(paint, t.x, t.z, t.ux, t.uz, Y.walk + 0.006);
   return { road: road.build(), sidewalk: walk.build(), paint: paint.build(), bridge: bridge.build() };
 }
