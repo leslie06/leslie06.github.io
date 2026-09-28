@@ -309,6 +309,11 @@ export interface LandmarkModel {
    * a drive where it crosses the pavement. The footprint does not do this - it removes buildings only.
    */
   clear?: [number, number][][];
+  /**
+   * Trees the city's pools draw (the street trees' models, LOD and shadows) in the local frame: [x, z, species, scale]
+   * per tree, species 0 国槐 1 杨树 2 柏树 3 银杏. For a landmark's grounds (欢乐谷's avenues), rather than its own.
+   */
+  trees?: number[];
   height: number;
 }
 

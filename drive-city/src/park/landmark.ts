@@ -13,7 +13,7 @@ import { buildParkFar, buildParkStatic, parkMaterials } from './Rides';
  */
 function build(env: EnvUniforms): LandmarkModel {
   const s = buildParkStatic();
-  return assemble({
+  const model = assemble({
     name: 'happyvalley',
     detail: s.parts,
     far: buildParkFar(),
@@ -23,6 +23,7 @@ function build(env: EnvUniforms): LandmarkModel {
     height: s.height,
     farDistance: 1600,
   });
+  return { ...model, trees: s.trees };
 }
 
 export const happyValley: LandmarkDef = {

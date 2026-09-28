@@ -44,13 +44,13 @@ async function loadLandmarks(): Promise<LandmarkDef[]> {
  * the tiles, textures and scripts the boot needs, and the live game took 166 s to become playable
  * instead of 48 (`.scratch/boottime.mjs`).
  */
-function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], gate: Promise<void>, from: [number, number]): { footprints: number[][]; clear: number[][]; loaded: Promise<void> } {
+function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], gate: Promise<void>, from: [number, number]): { footprints: number[][]; clear: number[][]; trees: number[]; loaded: Promise<void> } {
   /** ?nostone skips the walkable stone colliders (for measuring what they cost). */
   const params = new URLSearchParams(location.search);
   const noStone = params.has('nostone');
   if (params.get('glb') === '0') defs = defs.filter((d) => !d.load);
   const { R, world } = engine.physics;
-  const footprints: number[][] = [], clear: number[][] = [];
+  const footprints: number[][] = [], clear: number[][] = [], trees: number[] = [];
   const jobs: { d: number; run: () => Promise<void> }[] = [];
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
@@ -119,6 +119,8 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
     const toWorld = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
     for (const f of [model.footprint, ...(model.moreFootprints ?? [])]) footprints.push(f.flatMap(([lx, lz]) => toWorld(lx, lz)));
     for (const zone of model.clear ?? []) clear.push(zone.flatMap(([lx, lz]) => toWorld(lx, lz)));
+    const tr = model.trees ?? [];
+    for (let i = 0; i < tr.length; i += 4) trees.push(...toWorld(tr[i], tr[i + 1]), tr[i + 2], tr[i + 3]);
     place(def, model);
     // A glb: the boot has what it needs (the footprint); the model and its colliders come when loaded.
     if (def.load) {
@@ -136,7 +138,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
   jobs.sort((a, b) => a.d - b.d);
   const worker = async () => { for (let j = jobs.shift(); j; j = jobs.shift()) await j.run(); };
   const loaded = gate.then(() => Promise.all([worker(), worker()])).then(() => {});
-  return { footprints, clear, loaded };
+  return { footprints, clear, trees, loaded };
 }
 
 /**
@@ -193,12 +195,12 @@ export async function install(engine: Engine): Promise<void> {
   // The spawn's tiles first; the glb landmarks and the Blender trees download after them.
   let openGate = () => {};
   const bootDone = new Promise<void>((r) => { openGate = r; });
-  const { footprints, clear, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs, bootDone, [manifest.spawn.x, manifest.spawn.z]);
+  const { footprints, clear, trees: landmarkTrees, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs, bootDone, [manifest.spawn.x, manifest.spawn.z]);
   clear.push(...shortcutClear(SHORTCUTS));
   const sky = new SkylineLod(skyline, env);
   sky.exclude(footprints);
   scene.add(sky.mesh);
-  const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear);
+  const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear, landmarkTrees);
   streamer.onDetailChange = (keys) => sky.setDetailed(keys);
   engine.add(streamer);
   engine.add(streamer.knocks);

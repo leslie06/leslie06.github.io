@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sandstone } from '../world/Textures';
 import type { ColliderSpec, EnvUniforms } from '../game/Contracts';
 import { Parts, box, cyl, flat, prism, rectPoly, tube, type V3 } from '../city/landmarks/kit/geo';
 import { landmarkMaterials, nightGlow } from '../city/landmarks/kit/mats';
@@ -167,6 +168,15 @@ export function advanceTrain(st: TrainState, dt: number, ending = false): boolea
 const cache = new WeakMap<EnvUniforms, Record<string, THREE.Material>>();
 
 /** The landmark kit's materials plus the park's own: painted steel, planks, water, greenery. */
+/** The rock's textures (world/Textures.ts `sandstone`), made once; null in Node (the tests build the park there). */
+function sandstoneMaps(): { map?: THREE.Texture; bumpMap?: THREE.Texture } {
+  if (typeof document === 'undefined') return {};
+  const { map, bump } = sandstone(512, 41);
+  // the mountain's UVs are metres round and up (Rides.mountain): a repeat every 12 m, the beds ~1.3 m apart
+  for (const t of [map, bump]) t.repeat.set(1 / 12, 1 / 12);
+  return { map, bumpMap: bump };
+}
+
 export function parkMaterials(env: EnvUniforms): Record<string, THREE.Material> {
   const hit = cache.get(env);
   if (hit) return hit;
@@ -203,7 +213,7 @@ export function parkMaterials(env: EnvUniforms): Record<string, THREE.Material> 
     canopy: std({ color: '#d24b3f', roughness: 0.7, side: THREE.DoubleSide }, 'lamp', '#ffca7a'),
     platform: std({ color: '#b9b3a6', roughness: 0.85 }, 'flood', '#ffe9c8', true),
     fence: std({ color: '#3f4a53', metalness: 0.4, roughness: 0.6 }),
-    rock: std({ color: '#b8ac97', roughness: 0.95 }, 'flood', '#ffe4b8', true),
+    rock: std({ color: '#ffffff', roughness: 0.92, ...sandstoneMaps(), bumpScale: 2.5 }, 'flood', '#ffe4b8', true),
     water: layer(std({ color: '#2b4a52', roughness: 0.08, metalness: 0.1 }, null, '#fff', false), 2),
     lawn: layer(std({ color: '#6f8c55', roughness: 0.95 }, null, '#fff', true), 1.2),
     leaf: std({ color: '#5f7f48', roughness: 0.92 }, null, '#fff', true),
@@ -430,6 +440,8 @@ export interface ParkStatic {
   colliders: ColliderSpec[];
   footprint: [number, number][];
   height: number;
+  /** The avenues' trees for the city's pools (Props.ts). */
+  trees: number[];
 }
 
 /** The whole park as static geometry, ready for the landmark assembler. */
@@ -438,7 +450,8 @@ export function buildParkStatic(): ParkStatic {
   const colliders: ColliderSpec[] = [];
   colliders.push(...grounds(P));
   colliders.push(...mountain(P));
-  colliders.push(...buildProps(P));
+  const props = buildProps(P);
+  colliders.push(...props.colliders);
   colliders.push(...coasterTrack(P));
   const coaster = RIDES[0], fire = RIDES[1], ship = RIDES[2];
   colliders.push(...station(P, coaster.x + 24, coaster.z, coaster.yaw, 34, 7, 'rail'));
@@ -452,6 +465,7 @@ export function buildParkStatic(): ParkStatic {
     // The real boundary, not its bounding box: the city drops the OSM buildings inside this.
     footprint: OUTLINE.map(([x, z]) => [x, z] as [number, number]),
     height: MOUNTAIN.h,
+    trees: props.trees,
   };
 }
 

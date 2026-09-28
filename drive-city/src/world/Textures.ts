@@ -125,6 +125,51 @@ export function concrete(size = 512, seed = 21, tint = [178, 176, 170]): THREE.C
   return toTex(c, true);
 }
 
+/**
+ * Sculpted theme-park rock (欢乐谷's 水晶圣城): warm sandstone in bedded layers that wander, darker cracks between the beds
+ * and down the faces, lichen and weathering stains; tileable. `bump` is the matching height for a bump map.
+ */
+export function sandstone(size = 512, seed = 41): { map: THREE.CanvasTexture; bump: THREE.CanvasTexture } {
+  const rng = new Rng(seed);
+  const [c, g] = make(size, size), [cb, gb] = make(size, size);
+  const L = [4, 8, 16, 32, 64].map((n) => new TileNoise(n, rng));
+  const warp = [3, 6].map((n) => new TileNoise(n, rng));
+  const stain = [2, 5, 11].map((n) => new TileNoise(n, rng));
+  const img = g.createImageData(size, size), bimg = gb.createImageData(size, size);
+  const beds = 9;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const u = x / size, v = y / size;
+    const w = fbm(warp, u, v);
+    // bedding: bands along u, warped; a crack at each band's lower edge
+    const bv = v * beds + (w - 0.5) * 1.6;
+    const f = bv - Math.floor(bv);
+    const crack = Math.max(0, 1 - f / 0.07) + Math.max(0, 1 - (1 - f) / 0.025);
+    const n = fbm(L, u, v);
+    // vertical joints, now and then
+    const jv = fbm(L.slice(1, 3), u * 1.0, v * 0.2);
+    const joint = Math.max(0, 1 - Math.abs(jv - 0.5) / 0.012) * (f > 0.15 ? 1 : 0);
+    const bandTone = 0.9 + 0.2 * (Math.sin(Math.floor(bv) * 12.9898) * 0.5 + 0.5);
+    let k = bandTone * (0.86 + 0.28 * n) * (1 - 0.45 * Math.min(1, crack)) * (1 - 0.4 * joint);
+    // 0 = warm sand, 1 = grey-green lichen, dark streaks where water ran
+    const st = fbm(stain, u, v);
+    const lichen = Math.max(0, (st - 0.58) * 3.2);
+    const streak = Math.max(0, fbm(L.slice(0, 2), u * 3.0, v * 0.25) - 0.62) * 2.2;
+    k *= 1 - 0.25 * streak;
+    const i = (y * size + x) * 4;
+    const r = 196 * k, gg = 176 * k, b = 146 * k;
+    img.data[i] = r * (1 - lichen * 0.35) + 118 * lichen * 0.35 * k;
+    img.data[i + 1] = gg * (1 - lichen * 0.35) + 128 * lichen * 0.35 * k;
+    img.data[i + 2] = b * (1 - lichen * 0.35) + 104 * lichen * 0.35 * k;
+    img.data[i + 3] = 255;
+    const h = 255 * (0.35 + 0.5 * n * (1 - 0.7 * Math.min(1, crack)) + 0.15 * (1 - f) - 0.3 * joint);
+    bimg.data[i] = bimg.data[i + 1] = bimg.data[i + 2] = Math.max(0, Math.min(255, h)); bimg.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0); gb.putImageData(bimg, 0, 0);
+  const map = toTex(c, true), bump = toTex(cb, false);
+  for (const t of [map, bump]) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return { map, bump };
+}
+
 /** Dry autumn grass, the colour of a Beijing verge in September. */
 export function grass(size = 512, seed = 31): THREE.CanvasTexture {
   const rng = new Rng(seed);

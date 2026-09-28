@@ -198,7 +198,16 @@ export class CityStreamer implements System {
   private _m = new THREE.Matrix4(); private _q = new THREE.Quaternion(); private _p = new THREE.Vector3(); private _s = new THREE.Vector3();
   onDetailChange?: (keys: Set<string>) => void;
 
-  constructor(private engine: Engine, private manifest: Manifest, private mats: CityMaterials, private env: EnvUniforms, private footprints: number[][], workers?: Worker[], private clear: number[][] = []) {
+  /** Landmarks' trees ([x, z, species, scale] in world metres), handed to the tile they stand on as it loads. */
+  private extraTrees = new Map<string, number[]>();
+
+  constructor(private engine: Engine, private manifest: Manifest, private mats: CityMaterials, private env: EnvUniforms, private footprints: number[][], workers?: Worker[], private clear: number[][] = [], trees: number[] = []) {
+    for (let i = 0; i < trees.length; i += 4) {
+      const [ix, iz] = tileOf(trees[i], trees[i + 1]), k = `${ix}_${iz}`;
+      let l = this.extraTrees.get(k);
+      if (!l) this.extraTrees.set(k, (l = []));
+      l.push(trees[i], trees[i + 1], trees[i + 2], trees[i + 3]);
+    }
     const tier = engine.quality.tier;
     this.radius = tier === 'low' ? 2 : tier === 'medium' ? 3 : 4;
     this.vegRadius = tier === 'low' ? 1 : tier === 'medium' ? 2 : 3;
@@ -297,7 +306,7 @@ export class CityStreamer implements System {
     // Patch the materials for shadow cascades / wetness now, not up to 30 frames later.
     this.engine.get<RenderSystem>('render')?.prepare?.(group);
     this.engine.scene.add(group);
-    const t: Tile = { key: res.key, ix, iz, group, colVerts: res.colVerts!, colIdx: res.colIdx!, deckVerts: res.deckVerts, deckIdx: res.deckIdx, deckLamps: res.deckLamps ?? [], trees: res.trees ?? [], lamps: res.lamps ?? [], body: null, far: false, focus: true };
+    const t: Tile = { key: res.key, ix, iz, group, colVerts: res.colVerts!, colIdx: res.colIdx!, deckVerts: res.deckVerts, deckIdx: res.deckIdx, deckLamps: res.deckLamps ?? [], trees: [...(res.trees ?? []), ...(this.extraTrees.get(res.key) ?? [])], lamps: res.lamps ?? [], body: null, far: false, focus: true };
     this.tiles.set(res.key, t);
     this.treeLists.set(res.key, this.treeMatrices(t.trees));
     this.lampLists.set(res.key, this.lampMatrices(t.lamps, t.deckLamps));

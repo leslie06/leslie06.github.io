@@ -149,19 +149,14 @@ function kiosk(P: Parts, x: number, z: number, yaw: number): void {
   });
 }
 
-/** One tree: a trunk and two crown cones. */
-function tree(P: Parts, x: number, z: number, s: number): void {
-  cyl(P.get('trunk'), x, 0, z, 0.22 * s, 0.16 * s, 2.6 * s, 5);
-  cyl(P.get('leaf'), x, 2.1 * s, z, 2.4 * s, 1.5 * s, 3.2 * s, 7, { bottom: true });
-  cyl(P.get('leaf'), x, 4.4 * s, z, 1.7 * s, 0.1 * s, 2.8 * s, 7);
-}
 
 /**
- * Everything above, placed. Returns the colliders for the solid pieces; the trees are scenery and
- * get none (the city's own trees do not have them either).
+ * Everything above, placed. Returns the colliders for the solid pieces, and the avenues' trees as [x, z, species, scale]
+ * for the city's tree pools (2026-09-29: they were two green cones on a stick each, next to the city's Blender trees; the
+ * pools draw them with the street trees' models, LOD, shadows and trunk colliders): mostly 国槐, a poplar or a ginkgo.
  */
-export function buildProps(P: Parts): ColliderSpec[] {
-  const out: ColliderSpec[] = [];
+export function buildProps(P: Parts): { colliders: ColliderSpec[]; trees: number[] } {
+  const out: ColliderSpec[] = [], trees: number[] = [];
   const rides = RIDES.map((r) => [r.x, r.z] as const);
   const clearOfRides = (x: number, z: number, d: number) => rides.every(([rx, rz]) => Math.hypot(x - rx, z - rz) > d);
 
@@ -209,11 +204,12 @@ export function buildProps(P: Parts): ColliderSpec[] {
           if (inWater(tx, tz)) continue;
           if (!clearOfRides(tx, tz, 18)) continue;
           if (Math.hypot(tx - MOUNTAIN.x, tz - MOUNTAIN.z) < MOUNTAIN.r) continue;
-          tree(P, tx, tz, 0.8 + r * 0.9);
+          const k = hash(tx * 0.37 + tz * 1.3);
+          trees.push(+tx.toFixed(1), +tz.toFixed(1), k < 0.6 ? 0 : k < 0.8 ? 1 : 3, +(0.85 + r * 0.6).toFixed(2));
           n++;
         }
       }
     }
   }
-  return out;
+  return { colliders: out, trees };
 }
