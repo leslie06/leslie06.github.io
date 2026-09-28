@@ -38,6 +38,9 @@ interface Tile {
 /** The Blender roof things on the near tiles (`?roofprops=0` hides them, for A/B). */
 const ROOF_PROPS = typeof location === 'undefined' || new URLSearchParams(location.search).get('roofprops') !== '0';
 
+/** Railings nearer the focus than this are the full model, the rest the flat one. */
+const RAIL_NEAR = 90;
+
 class InstancePool {
   readonly meshes: THREE.InstancedMesh[];
   constructor(parts: { geo: THREE.BufferGeometry; mat: THREE.Material; shadow: boolean; depth?: THREE.Material }[], private cap: number, scene: THREE.Scene, colours = false, name = 'pool') {
@@ -135,6 +138,8 @@ export class CityStreamer implements System {
   private furnAt = { mid: [] as string[], near: [] as string[], x: 0, z: 0 };
   private furnLists = new Map<string, { rail: Float32Array; railC: Float32Array; shelter: Float32Array; bin: Float32Array; bike: Float32Array; bikeC: Float32Array }>();
   private railPool: InstancePool;
+  /** Railings past RAIL_NEAR: the flat 6-triangle version. */
+  private railFarPool: InstancePool;
   private shelterPool: InstancePool;
   private binPool: InstancePool;
   private bikePool: InstancePool;
@@ -199,7 +204,8 @@ export class CityStreamer implements System {
     this.treeSwap = { tm, env, low };
     // Street furniture: railings and shelters on the tiles within two of the focus, bins and bikes on the nearest nine.
     const fg = furnitureGeometries(), fm = furnitureMaterials(env);
-    this.railPool = new InstancePool([{ geo: fg.rail, mat: fm.rail, shadow: false, depth: fm.railDepth }], low ? 2500 : 6000, scene, true, 'pool:furn-rail');
+    this.railPool = new InstancePool([{ geo: fg.rail, mat: fm.rail, shadow: false, depth: fm.railDepth }], low ? 1000 : 2000, scene, true, 'pool:furn-rail');
+    this.railFarPool = new InstancePool([{ geo: fg.railFar, mat: fm.rail, shadow: false }], low ? 2500 : 6000, scene, true, 'pool:furn-rail-far');
     this.shelterPool = new InstancePool([{ geo: fg.shelter, mat: fm.props, shadow: true }], 400, scene, false, 'pool:furn-shelter');
     this.binPool = new InstancePool([{ geo: fg.bin, mat: fm.props, shadow: true }], low ? 300 : 800, scene, false, 'pool:furn-bin');
     this.bikePool = new InstancePool([{ geo: fg.bike, mat: fm.props, shadow: true }], low ? 400 : 1500, scene, true, 'pool:furn-bike');
@@ -324,7 +330,11 @@ export class CityStreamer implements System {
     const F = (k: string) => this.furnLists.get(k)!;
     const within = (r: number) => (x: number, z: number) => (x - ox) * (x - ox) + (z - oz) * (z - oz) < r * r;
     const standing = (kind: 'rail' | 'bin' | 'bike', r: number) => { const w = within(r); return kn.anyHidden ? (x: number, z: number) => w(x, z) && !kn.isHidden(kind, x, z) : w; };
-    this.railPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), standing('rail', 360));
+    // Full railings within RAIL_NEAR, flat ones from there to 360 m (the refill runs every 20 m of travel).
+    const rail = standing('rail', 360), near2 = RAIL_NEAR * RAIL_NEAR;
+    const d2 = (x: number, z: number) => (x - ox) * (x - ox) + (z - oz) * (z - oz);
+    this.railPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), (x, z) => d2(x, z) < near2 && rail(x, z));
+    this.railFarPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), (x, z) => d2(x, z) >= near2 && rail(x, z));
     this.shelterPool.set(mid.map((k) => F(k).shelter), undefined, within(420));
     this.binPool.set(near.map((k) => F(k).bin), undefined, standing('bin', 150));
     this.bikePool.set(near.map((k) => F(k).bike), near.map((k) => F(k).bikeC), standing('bike', 170));

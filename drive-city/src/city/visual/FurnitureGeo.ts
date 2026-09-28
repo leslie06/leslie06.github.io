@@ -37,6 +37,23 @@ function railGeometry(): THREE.BufferGeometry {
   ])!;
 }
 
+/**
+ * The same railing past RAIL_NEAR metres: the baluster panel, the top rail and the post as flat bands
+ * (6 triangles; the material is double-sided). The full one is 50 triangles, and ~1450 of them within
+ * 360 m were 17% of a low-tier frame's triangles.
+ */
+function railFarGeometry(): THREE.BufferGeometry {
+  const U: [number, number] = [0.5, 0.5];
+  const panel = new THREE.PlaneGeometry(3, 0.78).translate(1.5, 0.61, 0);
+  const uv = panel.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 18);
+  return mergeGeometries([
+    part(new THREE.PlaneGeometry(3, 0.1).translate(1.5, 1.03, 0), '#e9e9e4', 0, 1, U),
+    part(new THREE.PlaneGeometry(0.08, 1.06).translate(0, 0.53, 0), '#e9e9e4', 0, 1, U),
+    part(panel, '#f2f2ee', 0, 0),
+  ])!;
+}
+
 /** Bus shelter, 7.2 m along +x, the road in front (+z): canopy, glass back, lightbox, route board, bench. */
 function shelterGeometry(): THREE.BufferGeometry {
   const P: THREE.BufferGeometry[] = [];
@@ -80,8 +97,8 @@ function bikeGeometry(): THREE.BufferGeometry {
   ])!;
 }
 
-export function furnitureGeometries(): { rail: THREE.BufferGeometry; shelter: THREE.BufferGeometry; bin: THREE.BufferGeometry; bike: THREE.BufferGeometry } {
-  return { rail: railGeometry(), shelter: shelterGeometry(), bin: binGeometry(), bike: bikeGeometry() };
+export function furnitureGeometries(): { rail: THREE.BufferGeometry; railFar: THREE.BufferGeometry; shelter: THREE.BufferGeometry; bin: THREE.BufferGeometry; bike: THREE.BufferGeometry } {
+  return { rail: railGeometry(), railFar: railFarGeometry(), shelter: shelterGeometry(), bin: binGeometry(), bike: bikeGeometry() };
 }
 
 /** Balusters: one opaque bar per repeat, white everywhere so mips do not darken. */
