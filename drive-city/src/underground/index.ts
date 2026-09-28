@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Engine, System } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { t } from '../core/I18n';
 import type { Blip, HudApi, MissionApi, NavApi, PlayerApi, WantedApi } from '../game/Contracts';
 import type { RenderSystem } from '../render/RenderSystem';
 import { AT, U, toLocal, toWorld } from './Layout';
+import { propGeometry, propMaterials, propMeshes } from '../stunts/Props';
 
 /** The bag at the back of the hall, once. */
 export const STASH = 500;
@@ -34,66 +34,17 @@ export async function install(engine: Engine): Promise<void> {
   try { taken = localStorage.getItem(KEY) === '1'; } catch { /* private mode */ }
 
   const D = U.depth, len = U.ramp + U.hall, hw = U.hallW / 2, rw = U.rampW / 2;
-  // --- model (local frame, then placed) --------------------------------------------------------------
-  const part = (g: THREE.BufferGeometry, hex: string, glow = 0) => {
-    const geo = g.index ? g.toNonIndexed() : g, n = geo.getAttribute('position').count, c = new THREE.Color(hex);
-    const col = new Float32Array(n * 3), gl = new Float32Array(n).fill(glow);
-    for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    geo.setAttribute('aGlow', new THREE.BufferAttribute(gl, 1));
-    geo.deleteAttribute('uv');
-    return geo;
-  };
-  const box = (w: number, h: number, d: number, x: number, y: number, z: number, hex: string, glow = 0) => part(new THREE.BoxGeometry(w, h, d).translate(x, y, z), hex, glow);
-  const slope = Math.atan2(D, U.ramp), run = Math.hypot(D, U.ramp);
-  const P: THREE.BufferGeometry[] = [];
-  const concrete = '#8f8c86', dark = '#4a4b4d', floor = '#5d5f62', paint = '#e7e3d8';
-  // Ramp: its deck, walls up both sides (retaining the street), a kerb and railing above.
-  P.push(part(new THREE.BoxGeometry(U.rampW, 0.2, run).rotateX(slope).translate(0, -D / 2 - 0.1, U.ramp / 2), floor));
-  for (const s of [-1, 1]) {
-    P.push(box(0.4, D + 1, U.ramp, s * (rw + 0.2), -D / 2 + 0.5, U.ramp / 2, concrete));
-    P.push(box(0.1, 1, U.ramp, s * (rw + 0.35), 0.55, U.ramp / 2, '#c9ccce'));
-  }
-  // Hall: floor with bays, walls, roof slab (underside dark), pillars, light strips.
-  P.push(box(U.hallW, 0.2, U.hall, 0, -D - 0.1, U.ramp + U.hall / 2, floor));
-  for (let k = 0; k < 6; k++) for (const s of [-1, 1]) {
-    // Bays either side of the aisle: white lines across.
-    P.push(box(5.5, 0.02, 0.12, s * (hw - 3), -D + 0.01, U.ramp + 5 + k * 6, paint));
-  }
-  P.push(box(0.15, 0.02, U.hall - 4, 0, -D + 0.01, U.ramp + U.hall / 2, '#e2b021'));
-  P.push(box(U.hallW, 0.1, U.hall, 0, -U.slab - 0.05, U.ramp + U.hall / 2, dark));
-  P.push(box(U.hallW + 1.2, 0.35, 0.6, 0, -U.slab - 0.3, U.ramp, concrete));   // the portal beam (限高)
-  P.push(box(U.rampW, 0.25, 0.08, 0, -U.slab - 0.62, U.ramp - 0.35, '#f2b705'));
-  for (const s of [-1, 1]) P.push(box(0.6, D, U.hall, s * (hw + 0.3), -D / 2, U.ramp + U.hall / 2, concrete));
-  P.push(box(U.hallW, D, 0.6, 0, -D / 2, len + 0.3, concrete));
-  for (const s of [-1, 1]) P.push(box(hw - rw, D, 0.6, s * (rw + (hw - rw) / 2), -D / 2, U.ramp - 0.3, concrete));
-  // A yellow-and-black stripe along the foot of the walls.
-  for (const s of [-1, 1]) P.push(box(0.05, 0.5, U.hall, s * (hw - 0.02), -D + 0.25, U.ramp + U.hall / 2, '#e2b021'));
+  // --- model: Blender's (stunts/Props.ts 'carpark', in this local frame), the lamps always lit -------------------
+  const g = propGeometry('carpark');
+  const model = new THREE.Group();
+  model.name = 'underground';
+  for (const mesh of propMeshes('underground', g.matte ? [g.matte] : [], g.metal ? [g.metal] : [], propMaterials(env, 'underground', 1.0, 0.5))) model.add(mesh);
+  model.position.set(AT.x, 0.03, AT.z);
+  model.rotation.y = AT.yaw;
+  engine.scene.add(model);
+  queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(model));
   const pillars: [number, number][] = [];
   for (const px of [-7.5, 7.5]) for (let k = 1; k <= 3; k++) pillars.push([px, U.ramp + k * 10]);
-  for (const [px, pz] of pillars) P.push(box(0.8, D - U.slab, 0.8, px, -D + (D - U.slab) / 2, pz, '#b9b6ae'));
-  for (let k = 0; k < 4; k++) for (const s of [-1, 0, 1]) P.push(box(0.25, 0.06, 3, s * 9, -U.slab - 0.13, U.ramp + 6 + k * 10, '#fff4dc', 1.6));
-  // The sign at the top of the ramp: a blue P on a post.
-  P.push(box(0.1, 3, 0.1, rw + 1.3, 1.5, -0.8, '#8e9398'));
-  P.push(box(1.1, 1.1, 0.1, rw + 1.3, 3.2, -0.8, '#1d5fd1', 0.5));
-  P.push(box(0.5, 0.7, 0.02, rw + 1.3, 3.2, -0.86, '#ffffff', 0.5));
-  const geo = mergeGeometries(P)!;
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.05, side: THREE.DoubleSide });
-  mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uNight = env?.uNight ?? { value: 0 };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGlow;\nvarying float vGlow;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = aGlow;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying float vGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vGlow * 1.5;');
-  };
-  mat.customProgramCacheKey = () => 'underground';
-  mat.userData.wet = 'surface';
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.name = 'underground';
-  mesh.position.set(AT.x, 0.03, AT.z);
-  mesh.rotation.y = AT.yaw;
-  mesh.castShadow = true; mesh.receiveShadow = true;
-  engine.scene.add(mesh);
-  queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(mesh));
 
   // --- colliders ------------------------------------------------------------------------------------
   const { R, world } = engine.physics;

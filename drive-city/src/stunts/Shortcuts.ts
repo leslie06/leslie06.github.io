@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { propGeometry } from './Props';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Engine, System } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
@@ -86,10 +87,9 @@ export function installShortcuts(engine: Engine): void {
       posts.push(part(new THREE.CylinderGeometry(0.09, 0.11, 2.9, 6).translate(x, 1.45, z), '#5a3522'));
       posts.push(part(new THREE.BoxGeometry(0.06, 0.06, 0.5).translate(0, 0, 0.25).rotateY(Math.atan2(-lx * s, -lz * s)).translate(x, 2.75, z), '#5a3522'));
       const hx = x - lx * s * 0.45, hz = z - lz * s * 0.45;
-      posts.push(part(new THREE.SphereGeometry(0.26, 10, 8).scale(1, 1.2, 1).translate(hx, 2.3, hz), '#d8201c', 1.4));
-      posts.push(part(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 10).translate(hx, 2.63, hz), '#e8b62a', 0.6));
-      posts.push(part(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 10).translate(hx, 1.97, hz), '#e8b62a', 0.6));
-      posts.push(part(new THREE.CylinderGeometry(0.02, 0.02, 0.35, 4).translate(hx, 1.77, hz), '#e8b62a', 0.4));
+      // the lantern: Blender's (stunts/Props.ts), ribbed, gilt caps and a tassel, hanging from the arm
+      const lan = propGeometry('lantern').matte!;
+      posts.push(lan.translate(hx, 2.3, hz).toNonIndexed());
       const c = world.createCollider(R.ColliderDesc.cylinder(1.45, 0.12).setTranslation(x, 1.45, z).setCollisionGroups(groups(CG.WORLD, CG.ALL)), body);
       engine.physics.tag(c, { surface: 'concrete', tag: 'lantern' });
     }
