@@ -235,11 +235,11 @@ export class CityStreamer implements System {
     this.railPool = new InstancePool([{ geo: fg.rail, mat: fm.rail, shadow: false, depth: fm.railDepth }], low ? 1000 : 2000, scene, true, 'pool:furn-rail');
     this.railFarPool = new InstancePool([{ geo: fg.railFar, mat: fm.rail, shadow: false }], low ? 2500 : 6000, scene, true, 'pool:furn-rail-far');
     this.shelterPool = new InstancePool([{ geo: fg.shelter, mat: fm.props, shadow: true }], 120, scene, false, 'pool:furn-shelter');
-    this.shelterFarPool = new InstancePool([{ geo: fg.shelterFar, mat: fm.props, shadow: true }], 400, scene, false, 'pool:furn-shelter-far');
+    this.shelterFarPool = new InstancePool([{ geo: fg.shelterFar, mat: fm.props, shadow: false }], 400, scene, false, 'pool:furn-shelter-far');
     this.binPool = new InstancePool([{ geo: fg.bin, mat: fm.props, shadow: true }], low ? 120 : 300, scene, false, 'pool:furn-bin');
-    this.binFarPool = new InstancePool([{ geo: fg.binFar, mat: fm.props, shadow: true }], low ? 300 : 800, scene, false, 'pool:furn-bin-far');
+    this.binFarPool = new InstancePool([{ geo: fg.binFar, mat: fm.props, shadow: false }], low ? 300 : 800, scene, false, 'pool:furn-bin-far');
     this.bikePool = new InstancePool([{ geo: fg.bike, mat: fm.props, shadow: true }], low ? 250 : 600, scene, true, 'pool:furn-bike');
-    this.bikeFarPool = new InstancePool([{ geo: fg.bikeFar, mat: fm.props, shadow: true }], low ? 400 : 1500, scene, true, 'pool:furn-bike-far');
+    this.bikeFarPool = new InstancePool([{ geo: fg.bikeFar, mat: fm.props, shadow: false }], low ? 400 : 1500, scene, true, 'pool:furn-bike-far');
     this.knocks = new StreetKnocks(engine, {
       geo: { bin: fg.bin, bike: fg.bike, rail: fg.rail }, mat: { bin: fm.props, bike: fm.props, rail: fm.rail }, depth: { rail: fm.railDepth },
       bikeColours: BIKE_COLOURS, railColours: RAIL_COLOURS,
@@ -366,7 +366,8 @@ export class CityStreamer implements System {
     const d2 = (x: number, z: number) => (x - ox) * (x - ox) + (z - oz) * (z - oz);
     this.railPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), (x, z) => d2(x, z) < near2 && rail(x, z));
     this.railFarPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), (x, z) => d2(x, z) >= near2 && rail(x, z));
-    // Blender's bikes and shelters near, the old boxes beyond.
+    // Blender's bikes and shelters near, the old boxes beyond (casting no shadow: past 45-160 m a bin's is a few pixels,
+    // and the far pools casting too cost the low tier three more draw calls).
     const shelter = within(420), sn2 = SHELTER_NEAR * SHELTER_NEAR, bike = standing('bike', 170), bn2 = BIKE_NEAR * BIKE_NEAR;
     this.shelterPool.set(mid.map((k) => F(k).shelter), undefined, (x, z) => d2(x, z) < sn2 && shelter(x, z));
     this.shelterFarPool.set(mid.map((k) => F(k).shelter), undefined, (x, z) => d2(x, z) >= sn2 && shelter(x, z));

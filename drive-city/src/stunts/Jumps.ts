@@ -20,6 +20,8 @@ const MIN_FLIGHT = 10;
 /** The world runs this slow while a launched car is in the air. */
 const SLOW = 0.45;
 const KEY = 'drivecity.jumps.v1';
+/** Stunt structures further than this (m, on either axis) from the camera are not drawn. */
+const STUNT_DRAW = 600;
 
 export interface JumpApi extends System {
   readonly done: number;
@@ -45,11 +47,23 @@ export function installJumps(engine: Engine): void {
 
   // --- the ramps: Blender's model per ramp (stunts/Props.ts), one fixed body with a hull per ramp -----------
   const env = engine.get<RenderSystem>('render')?.uniforms;
-  const matte: THREE.BufferGeometry[] = [], metal: THREE.BufferGeometry[] = [];
+  const mats = propMaterials(env, 'ramps', 0.2, 1.5);
+  const stunts = new THREE.Group();
+  stunts.name = 'stunt-ramps';
+  /**
+   * One group per structure, frustum culled and shown within STUNT_DRAW of the camera: merged into one mesh for the city,
+   * the ten ramps, three overpasses and their mounds were drawn from anywhere (34k triangles in a low-tier frame).
+   */
+  const sites: { g: THREE.Group; x: number; z: number }[] = [];
   const place = (name: string, m: THREE.Matrix4) => {
-    const g = propGeometry(name);
-    if (g.matte) matte.push(g.matte.applyMatrix4(m));
-    if (g.metal) metal.push(g.metal.applyMatrix4(m));
+    const g = propGeometry(name), site = new THREE.Group();
+    for (const mesh of propMeshes('stunt-ramps', g.matte ? [g.matte.applyMatrix4(m)] : [], g.metal ? [g.metal.applyMatrix4(m)] : [], mats)) {
+      mesh.geometry.computeBoundingSphere();
+      site.add(mesh);
+    }
+    const c = new THREE.Vector3().setFromMatrixPosition(m);
+    stunts.add(site);
+    sites.push({ g: site, x: c.x, z: c.z });
   };
   const { R, world } = engine.physics;
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
@@ -98,9 +112,6 @@ export function installJumps(engine: Engine): void {
     hull([W(-w2, 0, L0), W(w2, 0, L0), W(-w2, O.landH, a), W(w2, O.landH, a), W(-w2, O.landH, b), W(w2, O.landH, b), W(-w2, 0, b + O.land), W(w2, 0, b + O.land)], 'mound');
   }
 
-  const stunts = new THREE.Group();
-  stunts.name = 'stunt-ramps';
-  for (const mesh of propMeshes('stunt-ramps', matte, metal, propMaterials(env, 'ramps', 0.2, 1.5))) stunts.add(mesh);
   engine.scene.add(stunts);
   queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(stunts));
 
@@ -163,6 +174,8 @@ export function installJumps(engine: Engine): void {
       }
     },
     update() {
+      const cam = engine.camera.position;
+      for (const s of sites) s.g.visible = Math.abs(s.x - cam.x) < STUNT_DRAW && Math.abs(s.z - cam.z) < STUNT_DRAW;
       const n = engine.get<NavApi>('nav');
       if (n && !blipsOn) {
         blipsOn = true;

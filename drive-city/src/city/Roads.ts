@@ -196,7 +196,7 @@ function treePit(st: Strip, x: number, z: number, ux: number, uz: number, y: num
   // the grate: two cast-iron halves round the trunk, bars across them
   for (const [b0, b1] of [[-r0, -0.18], [0.18, r0]]) {
     rect(-r0, b0, r0, b0 + 0.04, PIT_GRATE); rect(-r0, b1 - 0.04, r0, b1, PIT_GRATE);
-    for (let k = 0; k < 7; k++) { const a = -r0 + 0.04 + k * 0.155; rect(a, b0, a + 0.05, b1, PIT_GRATE); }
+    for (let k = 0; k < 4; k++) { const a = -r0 + 0.12 + k * 0.23; rect(a, b0, a + 0.06, b1, PIT_GRATE); }
   }
 }
 

@@ -74,7 +74,9 @@ export class StreetKnocks implements System {
     for (const k of KINDS) {
       const m = new THREE.InstancedMesh(parts.geo[k], parts.mat[k], MAX_DYN);
       m.name = `knock:${k}`;
-      m.count = MAX_DYN; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true;
+      // Drawn up to the highest slot in use (`fitCount`): 16 empty Blender bikes scaled to nothing were still 29k triangles
+      // a frame, knocked or not.
+      m.count = 0; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true;
       if (parts.depth[k]) m.customDepthMaterial = parts.depth[k]!;
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_DYN * 3).fill(1), 3);
@@ -187,6 +189,7 @@ export class StreetKnocks implements System {
       this.meshes[kind].setColorAt(slot, colour);
       this.meshes[kind].instanceColor!.needsUpdate = true;
       this.dyn.push({ kind, body, slot, age: 0, colour: colour.clone() });
+      this.fitCount(kind);
     }
     // The car loses what it gave away (a light thing barely slows it, which is right).
     const m = sh.mass * 0.8;
@@ -228,6 +231,14 @@ export class StreetKnocks implements System {
     this.meshes[d.kind].instanceMatrix.needsUpdate = true;
     this.free[d.kind].push(d.slot);
     this.dyn.splice(this.dyn.indexOf(d), 1);
+    this.fitCount(d.kind);
+  }
+
+  /** Draw a kind's mesh up to its highest slot in use (the free ones below it are scaled to nothing). */
+  private fitCount(kind: KnockKind): void {
+    let n = 0;
+    for (const d of this.dyn) if (d.kind === kind) n = Math.max(n, d.slot + 1);
+    this.meshes[kind].count = n;
   }
 
   private tidy(dt: number): void {
