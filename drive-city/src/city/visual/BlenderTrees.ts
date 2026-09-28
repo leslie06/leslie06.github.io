@@ -134,3 +134,23 @@ export function useTreeMap(mats: { mat: THREE.MeshStandardMaterial; depth: THREE
   mats.depth.map = map; mats.depth.needsUpdate = true;
   mats.variants.value = TREE_VARIANTS;
 }
+
+/**
+ * One variant of a level's geometry (the triangles whose `aVariant` is v or -1), marked -1 throughout so the shader keeps
+ * all of it: the high tier gives each variant its own pool (Streamer.ts), so a tree's vertex stage runs over one
+ * variant's triangles, not all three collapsed but two (the Temple of Heaven's park drew 6.4M triangles a frame).
+ */
+export function variantGeometry(g: THREE.BufferGeometry, v: number): THREE.BufferGeometry {
+  const av = g.getAttribute('aVariant');
+  const out = g.clone();
+  if (!av) return out;
+  const idx = g.index ? (g.index.array as ArrayLike<number>) : Array.from({ length: av.count }, (_, i) => i);
+  const keep: number[] = [];
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = av.getX(idx[t]);
+    if (a < 0 || Math.abs(a - v) < 0.5) keep.push(idx[t], idx[t + 1], idx[t + 2]);
+  }
+  out.setIndex(keep);
+  out.setAttribute('aVariant', new THREE.Float32BufferAttribute(new Float32Array(av.count).fill(-1), 1));
+  return out;
+}

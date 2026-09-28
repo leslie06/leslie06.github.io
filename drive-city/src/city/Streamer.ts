@@ -9,7 +9,7 @@ import type { CityMaterials } from './Materials';
 import type { TileResult } from './tileWorker';
 import { TILE, tileOf } from './Geo';
 import { treeGeometries, treeMaterials, lampGeometries, LAMP_REACH } from './Vegetation';
-import { loadBlenderTrees, useTreeMap } from './visual/BlenderTrees';
+import { loadBlenderTrees, TREE_VARIANTS, useTreeMap, variantGeometry } from './visual/BlenderTrees';
 import { furnitureGeometries, furnitureMaterials } from './visual/FurnitureGeo';
 import type { Furniture } from './visual/StreetFurniture';
 import { StreetKnocks } from './Knock';
@@ -42,6 +42,12 @@ const ROOF_PROPS = typeof location === 'undefined' || new URLSearchParams(locati
 const RAIL_NEAR = 90;
 /** Shared bikes, bins and bus shelters are Blender's models within these (m), the old boxes beyond. */
 const BIKE_NEAR = 50, SHELTER_NEAR = 160, BIN_NEAR = 45;
+
+/** Which of n variants the tree at (x, z) is: a hash of its position, the same every refill. */
+function variantOf(x: number, z: number, n: number): number {
+  const h = Math.sin(x * 12.9898 + z * 78.233 + 3.7) * 43758.5453;
+  return Math.floor((h - Math.floor(h)) * n);
+}
 
 class InstancePool {
   readonly meshes: THREE.InstancedMesh[];
@@ -149,8 +155,9 @@ export class CityStreamer implements System {
   private binPool: InstancePool;
   private bikePool: InstancePool;
   private vegKey = '';
-  private treeNear: InstancePool[];
-  private treeMid: InstancePool[];
+  /** Per species, per variant (one pool on low, TREE_VARIANTS on the others: `variantOf` picks a tree's). */
+  private treeNear: InstancePool[][];
+  private treeMid: InstancePool[][];
   private treeFar: InstancePool[];
   private lowTier = false;
   /** Resolves when the Blender trees have replaced the procedural ones (or failed to). */
@@ -169,9 +176,15 @@ export class CityStreamer implements System {
     this.treesReady = loadBlenderTrees(low ? 4 : 8).then((bt) => {
       useTreeMap(tm, bt.map, env);
       const swap = (pools: InstancePool[], geos: THREE.BufferGeometry[]) => pools.forEach((p, i) => { const old = p.meshes[0].geometry; p.meshes[0].geometry = geos[i]; old.dispose(); });
-      swap(this.treeNear, low ? bt.mid : bt.near);
-      swap(this.treeMid, low ? bt.far : bt.mid);
+      // Split pools take one variant's triangles each; a single pool keeps them all and the shader picks
+      const swapV = (pools: InstancePool[][], geos: THREE.BufferGeometry[]) => pools.forEach((vs, i) => {
+        if (vs.length === 1) swap(vs, [geos[i]]);
+        else vs.forEach((p, v) => swap([p], [variantGeometry(geos[i], v)]));
+      });
+      swapV(this.treeNear, low ? bt.mid : bt.near);
+      swapV(this.treeMid, low ? bt.far : bt.mid);
       swap(this.treeFar, bt.far);
+      if (!low) tm.variants.value = 1;          // every pool now holds one variant, marked -1: nothing to collapse
     }).catch((e) => console.warn('[city] Blender trees did not load; keeping the procedural ones', e));
   }
   /** Distance LOD bands (m from the focus): shadow-casting detail, and the mid band. */
@@ -201,8 +214,9 @@ export class CityStreamer implements System {
     const low = tier === 'low';
     this.lowTier = low;
     this.nearD = low ? 70 : 110; this.midD = low ? 1e9 : 320;
-    this.treeNear = tg.near.map((geo) => new InstancePool([{ geo, mat: tm.mat, shadow: true, depth: tm.depth }], low ? 1500 : 3000, scene, true, 'pool:tree-near'));
-    this.treeMid = tg.mid.map((geo) => new InstancePool([{ geo, mat: tm.mat, shadow: false }], low ? 4000 : 8000, scene, true, 'pool:tree-mid'));
+    const nv = low ? 1 : TREE_VARIANTS;
+    this.treeNear = tg.near.map((geo) => Array.from({ length: nv }, () => new InstancePool([{ geo, mat: tm.mat, shadow: true, depth: tm.depth }], low ? 1500 : 3000, scene, true, 'pool:tree-near')));
+    this.treeMid = tg.mid.map((geo) => Array.from({ length: nv }, () => new InstancePool([{ geo, mat: tm.mat, shadow: false }], low ? 4000 : 8000, scene, true, 'pool:tree-mid')));
     this.treeFar = tg.far.map((geo) => new InstancePool([{ geo, mat: tm.mat, shadow: false }], low ? 1 : 16000, scene, true, 'pool:tree-far'));
     // The Blender trees replace these once loadTrees fetches them (visual/BlenderTrees.ts); on low the mid
     // band draws the far level's geometry, as it did with the procedural trees.
@@ -499,8 +513,12 @@ export class CityStreamer implements System {
       const isFar = (x: number, z: number) => d2(x, z) >= m2;
       const T = (k: string) => this.treeLists.get(k)!;
       const fill = (pools: InstancePool[], keys: string[], keep: (x: number, z: number) => boolean) => pools.forEach((pool, type) => pool.set(keys.map((k) => T(k).m[type]), keys.map((k) => T(k).c[type]), keep));
-      fill(this.treeNear, near, isNear);
-      fill(this.treeMid, vk, isMid);
+      const fillV = (pools: InstancePool[][], keys: string[], keep: (x: number, z: number) => boolean) => pools.forEach((vs, type) => vs.forEach((pool, v) => {
+        const k = vs.length === 1 ? keep : (x: number, z: number) => keep(x, z) && variantOf(x, z, vs.length) === v;
+        pool.set(keys.map((kk) => T(kk).m[type]), keys.map((kk) => T(kk).c[type]), k);
+      }));
+      fillV(this.treeNear, near, isNear);
+      fillV(this.treeMid, vk, isMid);
       fill(this.treeFar, vk, isFar);
       this.lampPool.set(mid.map((k) => this.lampLists.get(k)!), undefined, (x, z) => !isNear(x, z));
       this.lampHeads.set(vk.map((k) => this.lampLists.get(k)!));
