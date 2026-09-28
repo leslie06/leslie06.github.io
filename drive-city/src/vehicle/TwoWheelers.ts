@@ -3,6 +3,7 @@ import { addModel, LAMP, Mesher, surf, TONE_LOWER, TONE_UPPER, type Model, type 
 import type { BodyParts, BodyType, Detail } from './Bodies';
 import type { VehicleSpec } from './Spec';
 import MOTO_MODEL from './models/moto.json';
+import STREET from '../city/visual/street.json';
 
 /**
  * The two-wheelers: a naked sports motorcycle and a city bicycle, built from primitives rather than
@@ -81,47 +82,29 @@ function moto(spec: VehicleSpec, detail: Detail): BodyParts {
   };
 }
 
-function bike(spec: VehicleSpec, detail: Detail): BodyParts {
-  const m = new Mesher(), hi = detail === 'high';
-  const paint = surf('paint', '#ffffff', 0.32, 0, TONE_UPPER);
-  const black = surf('trim', '#161718', 0.7, 0), steel = surf('trim', '#b9bcc0', 0.3, 0.9), saddle = surf('trim', '#1e1e20', 0.9, 0);
-  const zf = spec.wheels[0].z, zr = spec.wheels[2].z, r = spec.wheelRadius;
-  const bb: [number, number, number] = [0, -0.06, 0.02], seatTop: [number, number, number] = [0, 0.64, -0.2];
-  const headTop: [number, number, number] = [0, 0.6, 0.36], headBot: [number, number, number] = [0, 0.44, 0.42];
-  // The diamond frame.
-  tube(m, paint, headTop, seatTop, 0.017);
-  tube(m, paint, headBot, bb, 0.019);
-  tube(m, paint, bb, seatTop, 0.017);
-  tube(m, paint, headTop, headBot, 0.02);
-  for (const sx of [-0.05, 0.05]) {
-    tube(m, paint, [sx, -0.05, 0.02], [sx, 0, zr], 0.01);     // chain stays
-    tube(m, paint, [sx * 0.6, 0.62, -0.2], [sx, 0, zr], 0.01);   // seat stays
-    tube(m, steel, [sx * 0.8, 0.42, 0.43], [sx, 0, zf], 0.011);  // fork
-  }
-  // Saddle on its post, stem and bars.
-  tube(m, steel, seatTop, [0, 0.72, -0.22], 0.012);
-  box(m, saddle, [0, 0.73, -0.24], [0.15, 0.05, 0.27]);
-  tube(m, steel, headTop, [0, 0.7, 0.4], 0.014);
-  tube(m, black, [0, 0.7, 0.4], [0, 0.72, 0.5], 0.012);
-  tube(m, black, [-0.27, 0.72, 0.48], [0.27, 0.72, 0.48], 0.012);
-  // Crank, chainring, pedals, chain.
-  tube(m, steel, [-0.08, -0.06, 0.02], [0.08, -0.06, 0.02], 0.012, 6);
-  _m.makeRotationZ(Math.PI / 2).setPosition(-0.055, -0.06, 0.02);
-  m.geo(steel, new THREE.CylinderGeometry(0.09, 0.09, 0.006, hi ? 24 : 10), _m.clone());
-  for (const s of [-1, 1]) {
-    tube(m, black, [s * 0.09, -0.06, 0.02], [s * 0.09, -0.06 + s * 0.16, 0.02 + s * 0.02], 0.009, 6);
-    box(m, black, [s * 0.13, -0.06 + s * 0.16, 0.02 + s * 0.02], [0.08, 0.02, 0.06]);
-  }
-  tube(m, black, [-0.055, 0.03, 0.02], [-0.045, 0.03, zr], 0.005, 4);
-  tube(m, black, [-0.055, -0.15, 0.02], [-0.045, -0.03, zr], 0.005, 4);
-  // Mudguards, a rear rack and a reflector.
-  ring(m, black, [0, 0, zf], r + 0.02, 0.035, 3, hi ? 12 : 7, 1.6, Math.PI / 2 - 0.9);
-  ring(m, black, [0, 0, zr], r + 0.02, 0.035, 3, hi ? 12 : 7, 1.6, Math.PI / 2 - 0.7);
-  box(m, black, [0, 0.5, -0.58], [0.14, 0.012, 0.3]);
-  box(m, surf('trim', '#c8281f', 0.4, 0.2), [0, 0.5, -0.74], [0.05, 0.04, 0.01]);
+/**
+ * The bicycle (2026-09-28): the street's shared bike modelled in Blender (scripts/blender/props/street.py `bikeRide`:
+ * a step-through frame, front basket, mudguards, chain cover, the smart lock and QR plate, crank and pedals, the
+ * saddle and bars where the rider's rig puts the pelvis and hands) and its moulded wheel (`bikeWheel`), both turned
+ * from the model's frame (along +x, ground at y 0) into the body frame (+Z forward, y 0 at the hubs).
+ */
+function bike(spec: VehicleSpec, _detail: Detail): BodyParts {
+  const r = spec.wheelRadius;
+  const toBody = new THREE.Matrix4().set(0, 0, -1, 0, 0, 1, 0, -r, 1, 0, 0, 0, 0, 0, 0, 1);
+  const turn = new THREE.Matrix4().set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1);
+  const black = surf('trim', '#161718', 0.7, 0), steel = surf('trim', '#b9bcc0', 0.3, 0.9);
+  const surfs: Record<string, Surf> = {
+    frame: surf('paint', '#ffffff', 0.32, 0, TONE_UPPER), dark: black, tyre: surf('trim', '#1a1a1b', 0.88, 0), hub: steel,
+    seat: surf('trim', '#1e1e20', 0.9, 0), lock: surf('trim', '#3a3d40', 0.5, 0.3), qr: surf('trim', '#e8e8e2', 0.5, 0),
+    reflector: surf('trim', '#c8281f', 0.4, 0.2),
+  };
+  const m = new Mesher(), wheel = new Mesher();
+  const street = STREET as unknown as Record<string, Model>;
+  addModel(m, street.bikeRide, surfs, toBody);
+  addModel(wheel, street.bikeWheel, surfs, turn);
   return {
-    type: 'bike', body: m, wheel: spokedWheel(r, 0.022, 16, hi, false), wheelRear: null, dual: 0, calliper: null,
-    headlamps: [], size: { length: 1.75, width: 0.56, height: 1.05 },
+    type: 'bike', body: m, wheel, wheelRear: null, dual: 0, calliper: null,
+    headlamps: [], size: { length: 1.75, width: 0.6, height: 1.05 },
   };
 }
 

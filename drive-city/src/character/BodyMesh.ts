@@ -47,7 +47,7 @@ export const NEAR: LodSpec = {
   hole0: 8, holeRings: 3, holeCols: 2,
   armT: 0.05, armU: [0.1, 0.25, 0.29, 0.33, 0.43, 0.535], handU: [0.58, 0.63, 0.675],
   legT: 0.125, legY: [0.76, 0.575, 0.5, 0.44, 0.33, 0.2, 0.13, 0.1],
-  headCols: 20, headRings: 10,
+  headCols: 32, headRings: 18,
   shoeK: 8, shoeZ: [-0.068, -0.045, 0.0, 0.07, 0.14, 0.192],
   hairCols: 16, hairRows: 5, curtainRows: 2,
   tailK: 6, tailRings: 4,

@@ -40,6 +40,8 @@ const ROOF_PROPS = typeof location === 'undefined' || new URLSearchParams(locati
 
 /** Railings nearer the focus than this are the full model, the rest the flat one. */
 const RAIL_NEAR = 90;
+/** Shared bikes, bins and bus shelters are Blender's models within these (m), the old boxes beyond. */
+const BIKE_NEAR = 50, SHELTER_NEAR = 160, BIN_NEAR = 45;
 
 class InstancePool {
   readonly meshes: THREE.InstancedMesh[];
@@ -141,6 +143,9 @@ export class CityStreamer implements System {
   /** Railings past RAIL_NEAR: the flat 6-triangle version. */
   private railFarPool: InstancePool;
   private shelterPool: InstancePool;
+  private shelterFarPool: InstancePool;
+  private bikeFarPool: InstancePool;
+  private binFarPool: InstancePool;
   private binPool: InstancePool;
   private bikePool: InstancePool;
   private vegKey = '';
@@ -206,9 +211,12 @@ export class CityStreamer implements System {
     const fg = furnitureGeometries(), fm = furnitureMaterials(env);
     this.railPool = new InstancePool([{ geo: fg.rail, mat: fm.rail, shadow: false, depth: fm.railDepth }], low ? 1000 : 2000, scene, true, 'pool:furn-rail');
     this.railFarPool = new InstancePool([{ geo: fg.railFar, mat: fm.rail, shadow: false }], low ? 2500 : 6000, scene, true, 'pool:furn-rail-far');
-    this.shelterPool = new InstancePool([{ geo: fg.shelter, mat: fm.props, shadow: true }], 400, scene, false, 'pool:furn-shelter');
-    this.binPool = new InstancePool([{ geo: fg.bin, mat: fm.props, shadow: true }], low ? 300 : 800, scene, false, 'pool:furn-bin');
-    this.bikePool = new InstancePool([{ geo: fg.bike, mat: fm.props, shadow: true }], low ? 400 : 1500, scene, true, 'pool:furn-bike');
+    this.shelterPool = new InstancePool([{ geo: fg.shelter, mat: fm.props, shadow: true }], 120, scene, false, 'pool:furn-shelter');
+    this.shelterFarPool = new InstancePool([{ geo: fg.shelterFar, mat: fm.props, shadow: true }], 400, scene, false, 'pool:furn-shelter-far');
+    this.binPool = new InstancePool([{ geo: fg.bin, mat: fm.props, shadow: true }], low ? 120 : 300, scene, false, 'pool:furn-bin');
+    this.binFarPool = new InstancePool([{ geo: fg.binFar, mat: fm.props, shadow: true }], low ? 300 : 800, scene, false, 'pool:furn-bin-far');
+    this.bikePool = new InstancePool([{ geo: fg.bike, mat: fm.props, shadow: true }], low ? 250 : 600, scene, true, 'pool:furn-bike');
+    this.bikeFarPool = new InstancePool([{ geo: fg.bikeFar, mat: fm.props, shadow: true }], low ? 400 : 1500, scene, true, 'pool:furn-bike-far');
     this.knocks = new StreetKnocks(engine, {
       geo: { bin: fg.bin, bike: fg.bike, rail: fg.rail }, mat: { bin: fm.props, bike: fm.props, rail: fm.rail }, depth: { rail: fm.railDepth },
       bikeColours: BIKE_COLOURS, railColours: RAIL_COLOURS,
@@ -335,9 +343,15 @@ export class CityStreamer implements System {
     const d2 = (x: number, z: number) => (x - ox) * (x - ox) + (z - oz) * (z - oz);
     this.railPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), (x, z) => d2(x, z) < near2 && rail(x, z));
     this.railFarPool.set(mid.map((k) => F(k).rail), mid.map((k) => F(k).railC), (x, z) => d2(x, z) >= near2 && rail(x, z));
-    this.shelterPool.set(mid.map((k) => F(k).shelter), undefined, within(420));
-    this.binPool.set(near.map((k) => F(k).bin), undefined, standing('bin', 150));
-    this.bikePool.set(near.map((k) => F(k).bike), near.map((k) => F(k).bikeC), standing('bike', 170));
+    // Blender's bikes and shelters near, the old boxes beyond.
+    const shelter = within(420), sn2 = SHELTER_NEAR * SHELTER_NEAR, bike = standing('bike', 170), bn2 = BIKE_NEAR * BIKE_NEAR;
+    this.shelterPool.set(mid.map((k) => F(k).shelter), undefined, (x, z) => d2(x, z) < sn2 && shelter(x, z));
+    this.shelterFarPool.set(mid.map((k) => F(k).shelter), undefined, (x, z) => d2(x, z) >= sn2 && shelter(x, z));
+    const bin = standing('bin', 150), in2 = BIN_NEAR * BIN_NEAR;
+    this.binPool.set(near.map((k) => F(k).bin), undefined, (x, z) => d2(x, z) < in2 && bin(x, z));
+    this.binFarPool.set(near.map((k) => F(k).bin), undefined, (x, z) => d2(x, z) >= in2 && bin(x, z));
+    this.bikePool.set(near.map((k) => F(k).bike), near.map((k) => F(k).bikeC), (x, z) => d2(x, z) < bn2 && bike(x, z));
+    this.bikeFarPool.set(near.map((k) => F(k).bike), near.map((k) => F(k).bikeC), (x, z) => d2(x, z) >= bn2 && bike(x, z));
   }
 
   /** The furniture on the tile under (x, z) and its eight neighbours. */

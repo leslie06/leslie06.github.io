@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { EnvUniforms } from '../../game/Contracts';
+import STREET from './street.json';
 
 /**
  * Geometry and materials for the street furniture pools (placement: StreetFurniture.ts). Every part
@@ -54,7 +55,31 @@ function railFarGeometry(): THREE.BufferGeometry {
   ])!;
 }
 
-/** Bus shelter, 7.2 m along +x, the road in front (+z): canopy, glass back, lightbox, route board, bench. */
+/**
+ * The Blender street things (scripts/blender/props/street.py -> street.json: per thing, per material name, positions in
+ * mm, normals in hundredths): colour and night glow per material. 'frame' is white, so a bike takes its instance colour.
+ */
+const STREET_LOOK: Record<string, [string, number]> = {
+  frame: ['#ffffff', 0], dark: ['#1b1c1d', 0], tyre: ['#141414', 0], hub: ['#8f9398', 0], seat: ['#262626', 0], lock: ['#3a3d40', 0],
+  qr: ['#e8e8e2', 0], reflector: ['#b3261e', 0], binGreen: ['#2f7b48', 0], binGreenLid: ['#276a3d', 0], binGrey: ['#6c7277', 0],
+  binGreyLid: ['#5a6065', 0], label: ['#f2f2f2', 0], steel: ['#8d9296', 0], canopy: ['#d3d6d8', 0], soffit: ['#f0efe9', 0.35],
+  glass: ['#34424a', 0], ad: ['#86c2e6', 1], adbox: ['#dedfd9', 0], board: ['#1e5eaa', 0.45], boardFace: ['#f2f2f2', 0.6], bench: ['#9aa0a4', 0],
+};
+
+function streetGeometry(name: 'bike' | 'bin' | 'shelter'): THREE.BufferGeometry {
+  const parts = (STREET as unknown as Record<string, Record<string, { p: number[]; n: number[]; i: number[] }>>)[name];
+  return mergeGeometries(Object.entries(parts).map(([mat, g]) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(g.p, (v) => v / 1000), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(g.n, (v) => v / 100), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((g.p.length / 3) * 2).fill(0.5), 2));
+    geo.setIndex(g.i);
+    const [col, glow] = STREET_LOOK[mat] ?? ['#ff00ff', 0];
+    return part(geo, col, glow);
+  }))!;
+}
+
+/** Bus shelter past SHELTER_NEAR, 7.2 m along +x, the road in front (+z): canopy, glass back, lightbox, route board, bench. */
 function shelterGeometry(): THREE.BufferGeometry {
   const P: THREE.BufferGeometry[] = [];
   for (const x of [-3.3, 0, 3.3]) P.push(part(box(0.1, 2.62, 0.1, x, 1.31, -0.7), '#8d9296'));
@@ -71,7 +96,7 @@ function shelterGeometry(): THREE.BufferGeometry {
   return mergeGeometries(P)!;
 }
 
-/** Two sorting bins side by side (green recyclables, grey other waste). */
+/** Two sorting bins side by side past BIN_NEAR (green recyclables, grey other waste). */
 function binGeometry(): THREE.BufferGeometry {
   return mergeGeometries([
     part(box(0.5, 0.84, 0.42, -0.28, 0.42, 0), '#2f7b48'), part(box(0.54, 0.08, 0.46, -0.28, 0.88, 0), '#276a3d'),
@@ -80,7 +105,7 @@ function binGeometry(): THREE.BufferGeometry {
   ])!;
 }
 
-/** A shared bike along +x (frame colour comes from the instance colour). */
+/** A shared bike past BIKE_NEAR, along +x (frame colour comes from the instance colour). */
 function bikeGeometry(): THREE.BufferGeometry {
   const wheel = (x: number) => part(new THREE.CylinderGeometry(0.33, 0.33, 0.05, 8).rotateX(Math.PI / 2).translate(x, 0.33, 0), '#1b1c1d');
   const tube = (x0: number, y0: number, x1: number, y1: number, t: number, col: string) => {
@@ -97,8 +122,17 @@ function bikeGeometry(): THREE.BufferGeometry {
   ])!;
 }
 
-export function furnitureGeometries(): { rail: THREE.BufferGeometry; railFar: THREE.BufferGeometry; shelter: THREE.BufferGeometry; bin: THREE.BufferGeometry; bike: THREE.BufferGeometry } {
-  return { rail: railGeometry(), railFar: railFarGeometry(), shelter: shelterGeometry(), bin: binGeometry(), bike: bikeGeometry() };
+export interface FurnitureGeometries {
+  rail: THREE.BufferGeometry; railFar: THREE.BufferGeometry; shelter: THREE.BufferGeometry; shelterFar: THREE.BufferGeometry;
+  bin: THREE.BufferGeometry; binFar: THREE.BufferGeometry; bike: THREE.BufferGeometry; bikeFar: THREE.BufferGeometry;
+}
+
+/** The near versions are Blender's (2026-09-28); the far ones the old boxes. */
+export function furnitureGeometries(): FurnitureGeometries {
+  return {
+    rail: railGeometry(), railFar: railFarGeometry(), shelter: streetGeometry('shelter'), shelterFar: shelterGeometry(),
+    bin: streetGeometry('bin'), binFar: binGeometry(), bike: streetGeometry('bike'), bikeFar: bikeGeometry(),
+  };
 }
 
 /** Balusters: one opaque bar per repeat, white everywhere so mips do not darken. */

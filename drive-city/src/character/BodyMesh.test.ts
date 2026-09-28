@@ -8,7 +8,8 @@ import { makeGeometry, NEAR, FAR, PART, type GeoStats } from './BodyMesh';
  */
 const report: string[] = [];
 describe('body mesh', () => {
-  for (const [name, L, budget] of [['near', NEAR, 2600], ['far', FAR, 800]] as const) {
+  // near: 3300 since the head went from 20 x 10 to 32 x 18 (2026-09-28: the face features in the field were lost in a coarse grid)
+  for (const [name, L, budget] of [['near', NEAR, 3300], ['far', FAR, 800]] as const) {
     it(`${name} LOD fits the budget and is well formed`, () => {
       const st: GeoStats = { vertices: 0, triangles: 0, ms: 0 };
       const g = makeGeometry(L, st);
