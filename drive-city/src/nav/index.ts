@@ -9,6 +9,7 @@ import { LaneGraph } from '../traffic/LaneGraph';
 import { Router } from './Router';
 import { MapData } from './MapData';
 import { routeTurns, type Turn, type TurnKind } from './Turns';
+import { bridgesOf, loadPlaces, roadChains, type Bridge, type Place, type RoadChain } from './Places';
 
 /** The live GPS route and where the player is along it. */
 export interface Gps {
@@ -42,7 +43,10 @@ export interface NavSystem extends NavApi {
   player(out: { x: number; z: number; heading: number }): { x: number; z: number; heading: number };
   /** The next thing the GPS route asks of the driver and how far off it is, or null with no route. */
   readonly nextTurn: { kind: TurnKind; dist: number; road: string } | null;
+  /** The full map's labels: OSM places (empty until places.json arrives), interchanges, road chains. Built on first use. */
+  labels(): MapLabels;
 }
+export interface MapLabels { places: readonly Place[]; bridges: readonly Bridge[]; roads: readonly RoadChain[] }
 
 /** Recompute when the player is this far off the route (beyond the start's own off-road distance)... */
 const STRAY = 25;
@@ -74,6 +78,10 @@ export async function install(engine: Engine): Promise<void> {
   const router = new Router(graph);
   const map = new MapData(graph);
   const landmarks = await loadLandmarks();
+  // Not awaited: the map draws without them until they arrive.
+  const places: Place[] = [];
+  void loadPlaces().then((p) => { places.push(...p); map.version++; });
+  let labels: MapLabels | null = null;
   const m = world.manifest;
   const bounds = m?.bounds ?? { x0: -1000, z0: -1000, x1: 1000, z1: 1000 };
   const shot = new URLSearchParams(location.search).has('shot');
@@ -149,6 +157,10 @@ export async function install(engine: Engine): Promise<void> {
   const api: NavSystem = {
     name: 'nav',
     router, map, graph, landmarks, bounds,
+    labels() {
+      const net = world.routes?.net;
+      return labels ??= { places, bridges: net ? bridgesOf(net) : [], roads: roadChains(graph, net?.en) };
+    },
     attribution: m?.attribution ?? '© OpenStreetMap contributors (ODbL)',
     searchArea: null,
     get target() { return target; },

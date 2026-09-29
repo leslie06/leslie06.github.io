@@ -8,7 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pinyin } from 'pinyin-pro';
+import { pinyinOf } from './pinyin.mjs';
 import { REGIONS, TILE, project } from './region.mjs';
 
 const RAW = path.resolve('.cache/osm');
@@ -1442,24 +1442,7 @@ for (const [name, h] of brHits) {
   for (const p of [...h.pts, ...h.stops]) if (!P.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 40)) P.push(p);
   for (const p of P) bridgeNames.push([q1(p[0]), q1(p[1]), name]);
 }
-// The second line of every sign, as Beijing's bilingual signs write it: the proper name in pinyin run
-// together, the generic part after it (建国门外大街 Jianguomenwai Dajie, 朝阳公园桥 Chaoyanggongyuan
-// Qiao), ring roads in English (东四环中路 E 4th Ring Rd M). OSM's own name:en is too patchy for that
-// (a third of the names, and 双新桥's is the ring road's).
-const GENERIC = [['高速公路', 'Expwy'], ['快速路', 'Expwy'], ['大街', 'Dajie'], ['胡同', 'Hutong'], ['辅路', 'Fulu'], ['大道', 'Dadao'],
-  ['北路', 'Beilu'], ['南路', 'Nanlu'], ['东路', 'Donglu'], ['西路', 'Xilu'], ['中路', 'Zhonglu'], ['北街', 'Beijie'], ['南街', 'Nanjie'],
-  ['东街', 'Dongjie'], ['西街', 'Xijie'], ['中街', 'Zhongjie'], ['路', 'Lu'], ['街', 'Jie'], ['巷', 'Xiang'], ['桥', 'Qiao'], ['里', 'Li']];
-const RING_N = { 二: '2nd', 三: '3rd', 四: '4th', 五: '5th' }, SIDE = { 东: 'E', 西: 'W', 南: 'S', 北: 'N', 中: 'M' };
-function pinyinOf(name) {
-  const ring = name.match(/^([东西南北])([二三四五])环([东西南北中])?路?(辅路)?$/);
-  if (ring) return `${SIDE[ring[1]]} ${RING_N[ring[2]]} Ring Rd${ring[3] ? ' ' + SIDE[ring[3]] : ''}${ring[4] ? ' Fulu' : ''}`;
-  if (!/^[一-鿿]+$/.test(name)) return '';
-  let proper = name, generic = '';
-  for (const [zh, en] of GENERIC) if (name.endsWith(zh) && name.length > zh.length) { proper = name.slice(0, -zh.length); generic = en; break; }
-  const syl = pinyin(proper, { toneType: 'none', type: 'array' });
-  const word = syl.map((q, i) => (i && /^[aoe]/.test(q) ? "'" + q : q)).join('');
-  return word[0].toUpperCase() + word.slice(1) + (generic ? ' ' + generic : '');
-}
+// The second line of every sign in pinyin/English (pinyin.mjs).
 const roadEn = {};
 for (const w of ways) if (w._road?.car && w._road.name && !(w._road.name in roadEn)) { const en = pinyinOf(w._road.name); if (en) roadEn[w._road.name] = en; }
 for (const b of bridgeNames) if (!(b[2] in roadEn)) roadEn[b[2]] = pinyinOf(b[2]);
@@ -1559,3 +1542,5 @@ console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lam
 console.log('spawn', spawn);
 // The guide signs are placed from the network just written (TypeScript shared with the game).
 execFileSync('npx', ['tsx', 'scripts/city/signs.mts'], { stdio: 'inherit' });
+// The map's place labels (needs the places export of extract-pbf.mjs; skipped without it).
+execFileSync('node', ['scripts/city/places.mjs'], { stdio: 'inherit' });

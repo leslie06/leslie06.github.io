@@ -4,12 +4,14 @@
 // (https://download.geofabrik.de/asia/china/beijing-latest.osm.pbf). Data © OpenStreetMap contributors, ODbL.
 // Usage: node scripts/city/extract-pbf.mjs [file.osm.pbf]
 // Each box of REGIONS becomes one file: chunk-0-0.json (the main box), chunk-<tag>0-0.json (corridors).
+// Also places.geojsonseq: named stations, parks, hospitals, schools, malls, hotels, 小区, areas and the
+// like for the map's labels (places.mjs turns it into public/city/places.json).
 // Overpass chunks already in .cache/osm are moved to .cache/osm-overpass/ first.
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { BBOX, EXTRA } from './region.mjs';
+import { BBOX, EXTRA, REGIONS } from './region.mjs';
 
 const PBF = path.resolve(process.argv[2] ?? 'data/beijing-latest.osm.pbf');
 const OUT = path.resolve('.cache/osm');
@@ -113,4 +115,18 @@ if (old.some((f) => !head(f).includes('osmium extract'))) {
 console.log(`${path.basename(PBF)}, data as of ${stamp}`);
 await convert('', BBOX);
 for (const box of EXTRA) await convert(box.tag, box);
+// The map's places: points and areas (osmium assembles the multipolygons), over the regions' box.
+const POI = [
+  'n/railway=station,halt', 'nwr/public_transport=station',
+  'nwr/amenity=hospital,school,university,college,cinema,theatre,library,police,townhall,embassy',
+  'nwr/shop=mall,department_store', 'nwr/tourism=hotel,attraction,museum,theme_park,zoo,gallery',
+  'wr/leisure=park,stadium,sports_centre,garden', 'nwr/historic', 'n/place=suburb,quarter,neighbourhood',
+  'wr/landuse=residential', 'nwr/office', 'wr/building=office,commercial,hotel,retail',
+];
+const box = [Math.min(...REGIONS.map((r) => r.w)), Math.min(...REGIONS.map((r) => r.s)), Math.max(...REGIONS.map((r) => r.e)), Math.max(...REGIONS.map((r) => r.n))];
+const poi = path.join(TMP, 'poi.osm.pbf'), poiBox = path.join(TMP, 'poi-box.osm.pbf');
+osmium('tags-filter', PBF, ...POI, '-o', poi, '-O');
+osmium('extract', '-b', box.join(','), '-s', 'smart', poi, '-o', poiBox, '-O');
+osmium('export', poiBox, '-f', 'geojsonseq', '--geometry-types=point,polygon', '-o', path.join(OUT, 'places.geojsonseq'), '-O');
+console.log('places.geojsonseq written');
 console.log('done');

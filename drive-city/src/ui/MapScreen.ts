@@ -6,6 +6,7 @@ import { TIERS, type AreaCell, type RoadCell } from '../nav/MapData';
 import { INK, drawBlip, drawPlayer, screenAngle, type MarkKind } from '../nav/Draw';
 import type { UiApi } from '.';
 import { fmtDist } from './Minimap';
+import { CHAIN_STEP, type Place, type PlaceCat, type RoadChain } from '../nav/Places';
 import { C, F, css, el } from './theme';
 import { L } from './lang';
 
@@ -40,10 +41,23 @@ css(`
 
 // North-up palette: a little brighter than the radar, since nothing else competes with it here.
 const OUTSIDE = '#0b0e10', GROUND = '#12171a', GREEN = '#182b20', WATER = '#15303f', PLAZA = '#182024', BLD = '#212a2f';
-const ROAD = ['#2c3439', '#3c454b', '#525b62', '#6c747a', '#8a9093'];
+// Expressways and ring roads amber (the map apps' convention), the rest greys by class.
+const ROAD = ['#2c3439', '#3c454b', '#525b62', '#6c747a', '#9c7b47'];
 /** Road widths: metres at street zoom, and the thinnest they get in px. */
 const ROAD_M = [5, 8, 13, 20, 28], ROAD_MIN = [0.6, 0.9, 1.4, 2, 2.6];
 const S_MIN = 0.1, S_MAX = 5, S_OPEN = 0.42;
+/** Place icons: colour and glyph per category ('+' draws a cross); '' for a text-only label. */
+const PLACE_ICON: Record<PlaceCat, [string, string]> = {
+  metro: ['#2f6fe4', '铁'], rail: ['#1f4fa8', '站'], park: ['#2f9459', '园'], hospital: ['#e0463c', '+'], school: ['#8a5ad0', '学'],
+  mall: ['#e0802a', '购'], hotel: ['#c24f9a', '宿'], sight: ['#1b9a96', '景'], gov: ['#55698f', '政'], office: ['#66737e', '楼'],
+  resid: ['#6a7b6c', '区'], area: ['', ''],
+};
+const PLACE_TEXT: Partial<Record<PlaceCat, string>> = { metro: '#a9c6ff', rail: '#a9c6ff', park: '#98d8ad', hospital: '#ffa39b', sight: '#8fd8d2', mall: '#f5c08e' };
+/** The zoom (px per m) a place of each rank shows from; area names also stop at AREA_MAX. */
+const RANK_S = [0.08, 0.2, 0.5, 1.05], AREA_MAX = 2.4;
+/** Road names by tier: the zoom they show from. Tier 4 (expressways, rings) are shields. */
+const ROAD_S = [Infinity, 0.9, 0.42, 0.17, 0.08];
+interface MapHit { sx: number; sy: number; x: number; z: number; label: string }
 const smooth = (a: number, b: number, x: number) => { const u = Math.max(0, Math.min(1, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
 
 /**
@@ -97,11 +111,12 @@ export class MapScreen implements System {
   private readonly roads: RoadCell[] = [];
   private readonly areas: AreaCell[] = [];
   private readonly boxes: number[] = [];
-  private labelStamp = new Uint32Array(0);
-  private stamp = 0;
   private readonly widths = new Map<string, number>();
   private readonly tmp = { x: 0, z: 0, dx: 0, dz: 0 };
-  private readonly cand: { id: number; rank: number }[] = [];
+  /** Places and interchanges drawn in the last frame, for clicking one as the waypoint. */
+  private readonly hits: MapHit[] = [];
+  private readonly placedRoads: { name: string; sx: number; sy: number }[] = [];
+  private landmarkNames: Set<string> | null = null;
 
   constructor(private engine: Engine, container: HTMLElement) {
     const root = this.root = el('div', 'navmap', container);
@@ -270,6 +285,10 @@ export class MapScreen implements System {
     const tg = nav.target;
     // The pin's head sits ~15 px above its tip (the waypoint itself).
     if (tg?.kind === 'waypoint' && Math.hypot(this.w / 2 + (tg.x - this.cx) * this.s - sx, this.h / 2 + (tg.z - this.cz) * this.s - 15 - sy) < 16) { nav.clearTarget('waypoint'); return; }
+    // A place or interchange under the cursor: the waypoint goes there, with its name.
+    let hit: MapHit | null = null, hd = 13;
+    for (const h of this.hits) { const d = Math.hypot(h.sx - sx, h.sy - sy); if (d < hd) { hd = d; hit = h; } }
+    if (hit) { nav.setTarget({ x: hit.x, z: hit.z, kind: 'waypoint', label: hit.label }); return; }
     const [x, z] = this.toWorld(sx, sy);
     nav.setTarget({ x, z, kind: 'waypoint' });
   }
@@ -453,7 +472,7 @@ export class MapScreen implements System {
       const name = lm.name[lg], w = ctx.measureText(name).width;
       if (this.label(sx + 10, sy - 9, sx + 14 + w, sy + 9)) this.halo(name, sx + 11, sy, C.paper, 'left');
     }
-    if (s >= 1) this.streetNames(nav, X, Y, W, H, x0, z0, x1, z1);
+    this.mapLabels(nav, X, Y, W, H, x0, z0, x1, z1);
 
     for (const bl of nav.blips()) {
       const sx = X(bl.x), sy = Y(bl.z);
@@ -477,44 +496,144 @@ export class MapScreen implements System {
     st.n++; st.mean += (ms - st.mean) / Math.min(st.n, 120); st.max = Math.max(st.max, ms);
   }
 
-  /** Street names along their roads, biggest roads first, never overlapping or repeating nearby. */
-  private streetNames(nav: NavSystem, X: (x: number) => number, Y: (z: number) => number, W: number, H: number, x0: number, z0: number, x1: number, z1: number): void {
-    const ctx = this.ctx, graph = nav.graph, s = this.s;
-    if (this.labelStamp.length !== graph.links.length) this.labelStamp = new Uint32Array(graph.links.length);
-    const st = ++this.stamp, cand = this.cand;
-    cand.length = 0;
-    for (const c of nav.map.roadCells(x0, z0, x1, z1, false, this.roads)) for (const id of c.named) {
-      if (this.labelStamp[id] === st) continue;
-      this.labelStamp[id] = st;
-      const l = graph.links[id];
-      if (l.len * s < 110) continue;
-      cand.push({ id, rank: -(l.hw * 4 + l.len * 0.02) });
+  /**
+   * The map's labels the way the map apps layer them: the big places, ring-road shields, the
+   * interchanges, stations and districts, then road names and smaller places as the zoom allows.
+   * Earlier layers win the space (`label`).
+   */
+  private mapLabels(nav: NavSystem, X: (x: number) => number, Y: (z: number) => number, W: number, H: number, x0: number, z0: number, x1: number, z1: number): void {
+    const s = this.s, lb = nav.labels(), lg = lang();
+    this.hits.length = 0;
+    this.placedRoads.length = 0;
+    const lm = this.landmarkNames ??= new Set(nav.landmarks.map((l) => l.name.zh));
+    const places = (rank: number) => {
+      if (s < RANK_S[rank]) return;
+      for (const p of lb.places) {
+        if (p.rank !== rank || p.x < x0 - 50 || p.x > x1 + 50 || p.z < z0 - 50 || p.z > z1 + 50) continue;
+        if (p.cat === 'area' && s > AREA_MAX) continue;
+        if (lm.has(p.name.zh) || (p.cat === 'sight' && nav.landmarks.some((l) => Math.abs(l.x - p.x) < 120 && Math.abs(l.z - p.z) < 120))) continue;
+        this.place(p, X(p.x), Y(p.z), lg);
+      }
+    };
+    places(0);
+    // Interchanges and stations before the shields: a shield can sit anywhere along its ring.
+    if (s >= 0.17) for (const b of lb.bridges) {
+      if (b.x < x0 || b.x > x1 || b.z < z0 || b.z > z1) continue;
+      this.bridge(b.name[lg], b.x, b.z, X(b.x), Y(b.z));
     }
-    cand.sort((a, b) => a.rank - b.rank || a.id - b.id);
-    const font = `600 ${s > 2.5 ? 13 : 12}px ${F.ui}`;
-    ctx.font = font;
-    const placed: [string, number, number][] = [];
+    places(1);
+    this.roadNames(lb.roads, 4, X, Y, W, H, x0, z0, x1, z1, lg);
+    this.roadNames(lb.roads, 3, X, Y, W, H, x0, z0, x1, z1, lg);
+    places(2);
+    this.roadNames(lb.roads, 2, X, Y, W, H, x0, z0, x1, z1, lg);
+    this.roadNames(lb.roads, 1, X, Y, W, H, x0, z0, x1, z1, lg);
+    places(3);
+  }
+
+  /** A place: its icon and name to the right (or the left if that is taken); nothing if neither fits. */
+  private place(p: Place, sx: number, sy: number, lg: 'zh' | 'en'): void {
+    const ctx = this.ctx, [col, glyph] = PLACE_ICON[p.cat], name = p.name[lg];
+    if (!col) {
+      // District names: text only, quiet and spaced.
+      const font = `600 ${p.rank <= 1 ? 14 : 12}px ${F.ui}`;
+      ctx.font = font;
+      const w = this.width(name, font);
+      if (!this.label(sx - w / 2 - 4, sy - 9, sx + w / 2 + 4, sy + 9)) return;
+      this.halo(name, sx, sy, 'rgba(196,202,208,0.62)', 'center', font);
+      return;
+    }
+    const font = `${p.rank === 0 ? 700 : 600} ${p.rank === 0 ? 13 : 12}px ${F.ui}`;
+    const w = this.width(name, font);
+    if (!this.label(sx - 8, sy - 8, sx + 8, sy + 8)) return;
+    const right = this.label(sx + 10, sy - 8, sx + 14 + w, sy + 8), left = !right && this.label(sx - 14 - w, sy - 8, sx - 10, sy + 8);
+    if (!right && !left) { this.boxes.length -= 4; return; }
+    const ctx2 = ctx;
+    ctx2.beginPath(); ctx2.arc(sx, sy, 7, 0, Math.PI * 2);
+    ctx2.fillStyle = col; ctx2.fill();
+    ctx2.lineWidth = 1.5; ctx2.strokeStyle = 'rgba(9,11,13,0.9)'; ctx2.stroke();
+    if (glyph === '+') {
+      ctx2.fillStyle = '#fff'; ctx2.fillRect(sx - 1.3, sy - 4, 2.6, 8); ctx2.fillRect(sx - 4, sy - 1.3, 8, 2.6);
+    } else {
+      ctx2.font = `700 9px ${F.ui}`; ctx2.fillStyle = '#fff'; ctx2.textAlign = 'center'; ctx2.textBaseline = 'middle';
+      ctx2.fillText(glyph, sx, sy + 0.5);
+    }
+    this.halo(name, right ? sx + 11 : sx - 11, sy, PLACE_TEXT[p.cat] ?? 'rgba(232,229,220,0.9)', right ? 'left' : 'right', font);
+    this.hits.push({ sx, sy, x: p.x, z: p.z, label: name });
+  }
+
+  /** An interchange: a small bridge glyph and its name. */
+  private bridge(name: string, x: number, z: number, sx: number, sy: number): void {
+    const ctx = this.ctx, font = `700 12px ${F.ui}`, w = this.width(name, font);
+    if (!this.label(sx - 8, sy - 8, sx + 14 + w, sy + 8)) return;
+    ctx.beginPath(); ctx.roundRect(sx - 7, sy - 7, 14, 14, 3);
+    ctx.fillStyle = '#2b3136'; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = '#d7b779'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx - 4.5, sy + 3); ctx.lineTo(sx - 4.5, sy); ctx.quadraticCurveTo(sx, sy - 5, sx + 4.5, sy); ctx.lineTo(sx + 4.5, sy + 3);
+    ctx.moveTo(sx - 5, sy - 1); ctx.lineTo(sx + 5, sy - 1);
+    ctx.strokeStyle = '#f0d9a6'; ctx.lineWidth = 1.2; ctx.stroke();
+    this.halo(name, sx + 11, sy, '#f0d9a6', 'left', font);
+    this.hits.push({ sx, sy, x, z, label: name });
+  }
+
+  /**
+   * Names along the roads of one tier: at every ~250 px of a chain where the road runs straight
+   * under the whole name, turned to it and kept upright; a name not repeated within 300 px.
+   * Expressways and rings get a shield instead (their short name, 东三环, zoomed out).
+   */
+  private roadNames(roads: readonly RoadChain[], tier: number, X: (x: number) => number, Y: (z: number) => number, W: number, H: number, x0: number, z0: number, x1: number, z1: number, lg: 'zh' | 'en'): void {
+    const s = this.s, ctx = this.ctx;
+    if (s < ROAD_S[tier]) return;
+    const shield = tier === 4;
+    const font = shield ? `700 12px ${F.ui}` : `600 ${tier === 3 ? 13 : tier === 2 ? 12 : 11}px ${F.ui}`;
+    const color = tier === 3 ? 'rgba(240,237,228,0.92)' : tier === 2 ? 'rgba(232,229,220,0.8)' : 'rgba(220,217,208,0.66)';
+    const gap = shield ? 420 : 300, every = Math.max(2, Math.round((shield ? 330 : 250) / (s * CHAIN_STEP)));
     let n = 0;
-    for (const { id } of cand) {
-      if (n >= 60) break;
-      const l = graph.links[id];
-      const p = graph.at(l, l.len / 2, 0, this.tmp);
-      const sx = X(p.x), sy = Y(p.z);
-      if (sx < 30 || sx > W - 30 || sy < 20 || sy > H - 20) continue;
-      let w = this.widths.get(l.name);
-      if (w === undefined) { w = ctx.measureText(l.name).width; this.widths.set(l.name, w); }
-      if (w + 30 > l.len * s) continue;
-      if (placed.some(([nm, x, y]) => nm === l.name && Math.hypot(x - sx, y - sy) < 320)) continue;
-      let ang = Math.atan2(p.dz, p.dx);
-      if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
-      const c = Math.abs(Math.cos(ang)), sn = Math.abs(Math.sin(ang)), hx = c * w / 2 + sn * 8, hy = sn * w / 2 + c * 8;
-      if (!this.label(sx - hx, sy - hy, sx + hx, sy + hy)) continue;
-      ctx.save(); ctx.translate(sx, sy); ctx.rotate(ang);
-      this.halo(l.name, 0, 0, 'rgba(244,241,232,0.82)', 'center', font);
-      ctx.restore();
-      placed.push([l.name, sx, sy]);
-      n++;
+    for (const c of roads) {
+      if (c.tier !== tier) continue;
+      if (c.x1 < x0 || c.x0 > x1 || c.z1 < z0 || c.z0 > z1) continue;
+      const name = shield && s < 0.45 ? c.short[lg] : c.name[lg];
+      const w = this.width(name, font);
+      const half = (w / 2 + 10) / s, k = shield ? 1 : Math.ceil(half / CHAIN_STEP);
+      const P = c.pts, m = P.length / 2;
+      if (m < 2 * k + 1) continue;
+      for (let i = k + Math.floor(every / 2) % Math.max(1, m - 2 * k); i < m - k; i += every) {
+        const sx = X(P[i * 2]), sy = Y(P[i * 2 + 1]);
+        if (sx < 40 || sx > W - 40 || sy < 28 || sy > H - 28) continue;
+        if (this.placedRoads.some((q) => q.name === name && Math.hypot(q.sx - sx, q.sy - sy) < gap)) continue;
+        if (shield) {
+          const hw = w / 2 + 7;
+          if (!this.label(sx - hw, sy - 10, sx + hw, sy + 10)) continue;
+          ctx.beginPath(); ctx.roundRect(sx - hw, sy - 9, hw * 2, 18, 4);
+          ctx.fillStyle = '#c98a2b'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(9,11,13,0.85)'; ctx.stroke();
+          ctx.font = font; ctx.fillStyle = '#1b1206'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(name, sx, sy + 0.5);
+        } else {
+          // Straight enough under the whole name: every sample within 3 px of the chord.
+          const ax = P[(i - k) * 2], az = P[(i - k) * 2 + 1], bx = P[(i + k) * 2], bz = P[(i + k) * 2 + 1];
+          const cl = Math.hypot(bx - ax, bz - az);
+          if (cl < half * 1.8) continue;
+          const ux = (bx - ax) / cl, uz = (bz - az) / cl;
+          let bent = false;
+          for (let j = i - k + 1; j < i + k && !bent; j++) bent = Math.abs((P[j * 2] - ax) * uz - (P[j * 2 + 1] - az) * ux) * s > 3;
+          if (bent) continue;
+          let ang = Math.atan2(uz, ux);
+          if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
+          const cs = Math.abs(Math.cos(ang)), sn = Math.abs(Math.sin(ang)), hx = cs * w / 2 + sn * 8, hy = sn * w / 2 + cs * 8;
+          if (!this.label(sx - hx, sy - hy, sx + hx, sy + hy)) continue;
+          ctx.save(); ctx.translate(sx, sy); ctx.rotate(ang);
+          this.halo(name, 0, 0, color, 'center', font);
+          ctx.restore();
+        }
+        this.placedRoads.push({ name, sx, sy });
+        if (++n >= 90) return;
+      }
     }
+  }
+
+  private width(text: string, font: string): number {
+    const key = font + '|' + text;
+    let w = this.widths.get(key);
+    if (w === undefined) { this.ctx.font = font; w = this.ctx.measureText(text).width; this.widths.set(key, w); }
+    return w;
   }
 
   /** Reserve a screen box for a label; false if it overlaps one already placed. */
