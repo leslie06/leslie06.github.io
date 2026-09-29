@@ -1,4 +1,4 @@
-// Turn the cached OSM chunks (.cache/osm, from fetch-osm.mjs) into the streamed city the game loads:
+// Turn the cached OSM chunks (.cache/osm, from extract-pbf.mjs or fetch-osm.mjs) into the streamed city the game loads:
 //   public/city/manifest.json   bounds, tile index, spawn, named places
 //   public/city/network.json    drivable road graph (traffic, GPS, minimap)
 //   public/city/t_<ix>_<iz>.json one 256 m tile: road pieces, buildings, ground areas, trees, lamps,

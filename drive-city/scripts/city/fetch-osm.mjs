@@ -1,6 +1,8 @@
 // Fetch the OSM data for the playable Beijing area into .cache/osm/, one Overpass request per chunk.
 // Idempotent: chunks already on disk are skipped. Data © OpenStreetMap contributors, ODbL.
 // Usage: node scripts/city/fetch-osm.mjs
+// The city is built from Geofabrik's Beijing extract since 2026-09-29 (extract-pbf.mjs); this is the
+// fallback without osmium. Do not mix the two: clear .cache/osm/chunk-* before switching.
 import fs from 'node:fs';
 import path from 'node:path';
 import { BBOX, CHUNKS, EXTRA } from './region.mjs';

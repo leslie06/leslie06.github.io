@@ -29,7 +29,9 @@ export function placeFurniture(pieces: RoadPiece[], crossings: number[], stops: 
     let best: { r: RoadPiece; s: number; lat: number; e: number } | null = null;
     for (const [r, l] of lines) {
       const p = project(l, stops[i], stops[i + 1]);
-      const e = Math.abs(p.lat) - r.w / 2;
+      // By distance, not the lateral offset: past a line's end the offset is ~0, and a stop 80 m away in
+      // line with a short driveway went there - its shelter stood in that road (东四环北路 at 东风北桥).
+      const e = p.d - r.w / 2;
       if (e < 14 && (!best || e < best.e)) best = { r, s: p.s, lat: p.lat, e };
     }
     if (!best) continue;
@@ -67,10 +69,17 @@ export function placeFurniture(pieces: RoadPiece[], crossings: number[], stops: 
     // Curb railings on some main roads, open at crossings, stops and the odd gate.
     if (RAILED.has(r.c) && R(1, 1) < 0.6) for (const side of sides) railRow(block(3, 4, 14, side), side * (hw + 0.09), Y.curb, 1, 0.07);
     // Bus shelters on the pavement, facing the road.
+    // None where the pavement's place is another carriageway (a side road alongside, a slip road), nor
+    // twice at one spot (a stop each way on one piece).
+    const placed: number[] = [];
     for (const q of st) {
       const [x, z, nx, nz, tx, tz] = at(l, Math.max(0.5, Math.min(l.len - 0.5, q.s)));
-      const o = q.side * (hw + Math.max(2.4, sw * 0.6));
-      out.shelter.push(x + nx * o, Y.walk, z + nz * o, q.side > 0 ? yawOf(tx, tz) : yawOf(-tx, -tz));
+      const o = q.side * (hw + Math.max(2.4, sw * 0.6)), cx = x + nx * o, cz = z + nz * o;
+      if (placed.some((p, i) => i % 2 === 0 && Math.hypot(p - cx, placed[i + 1] - cz) < 8)) continue;
+      const blocked = [-3.7, 0, 3.7].some((u) => [...lines].some(([r2, l2]) => r2 !== r && project(l2, cx + tx * u, cz + tz * u).d < r2.w / 2 + 0.8));
+      if (blocked) continue;
+      placed.push(cx, cz);
+      out.shelter.push(cx, Y.walk, cz, q.side > 0 ? yawOf(tx, tz) : yawOf(-tx, -tz));
     }
     if (!sw) continue;
     const walkSp = block(1, 0, 0);
