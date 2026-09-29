@@ -3,7 +3,7 @@
 // Usage: node scripts/city/fetch-osm.mjs
 import fs from 'node:fs';
 import path from 'node:path';
-import { BBOX, CHUNKS } from './region.mjs';
+import { BBOX, CHUNKS, EXTRA } from './region.mjs';
 
 const MIRRORS = [
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
@@ -39,8 +39,8 @@ out geom;`;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function fetchChunk(i, j, s, w, n, e) {
-  const file = path.join(OUT, `chunk-${i}-${j}.json`);
+async function fetchChunk(i, j, s, w, n, e, tag = '') {
+  const file = path.join(OUT, `chunk-${tag}${i}-${j}.json`);
   if (fs.existsSync(file) && fs.statSync(file).size > 1000) { console.log(`skip ${i},${j}`); return; }
   for (let attempt = 0; attempt < 8; attempt++) {
     const url = MIRRORS[attempt % MIRRORS.length];
@@ -62,10 +62,11 @@ async function fetchChunk(i, j, s, w, n, e) {
   throw new Error(`chunk ${i},${j} failed on every mirror`);
 }
 
-const { s, w, n, e } = BBOX;
-const dLat = (n - s) / CHUNKS, dLon = (e - w) / CHUNKS;
-for (let i = 0; i < CHUNKS; i++) for (let j = 0; j < CHUNKS; j++) {
-  await fetchChunk(i, j, +(s + i * dLat).toFixed(5), +(w + j * dLon).toFixed(5), +(s + (i + 1) * dLat).toFixed(5), +(w + (j + 1) * dLon).toFixed(5));
-  await sleep(3000);
+for (const { s, w, n, e, chunks, tag } of [{ ...BBOX, chunks: CHUNKS, tag: '' }, ...EXTRA]) {
+  const dLat = (n - s) / chunks, dLon = (e - w) / chunks;
+  for (let i = 0; i < chunks; i++) for (let j = 0; j < chunks; j++) {
+    await fetchChunk(i, j, +(s + i * dLat).toFixed(5), +(w + j * dLon).toFixed(5), +(s + (i + 1) * dLat).toFixed(5), +(w + (j + 1) * dLon).toFixed(5), tag);
+    await sleep(3000);
+  }
 }
 console.log('done');

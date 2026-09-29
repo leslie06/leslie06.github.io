@@ -8,6 +8,7 @@ import type { TrafficApi } from '../traffic';
 import { LaneGraph } from '../traffic/LaneGraph';
 import { Router } from './Router';
 import { MapData } from './MapData';
+import { routeTurns, type Turn, type TurnKind } from './Turns';
 
 /** The live GPS route and where the player is along it. */
 export interface Gps {
@@ -19,6 +20,8 @@ export interface Gps {
   i: number; x: number; z: number; s: number;
   /** How far the player was from the route's start when it was computed (off-road starts are not strays). */
   snap: number;
+  /** Its turn-by-turn directions (nav/Turns.ts). */
+  turns: Turn[];
 }
 
 export interface LandmarkPin { id: string; name: { zh: string; en: string }; x: number; z: number }
@@ -37,6 +40,8 @@ export interface NavSystem extends NavApi {
   setMapOpen(open: boolean): void;
   /** Where the player is (interpolated while driving) and which way they face, atan2(x, z). */
   player(out: { x: number; z: number; heading: number }): { x: number; z: number; heading: number };
+  /** The next thing the GPS route asks of the driver and how far off it is, or null with no route. */
+  readonly nextTurn: { kind: TurnKind; dist: number; road: string } | null;
 }
 
 /** Recompute when the player is this far off the route (beyond the start's own off-road distance)... */
@@ -92,6 +97,7 @@ export async function install(engine: Engine): Promise<void> {
   const providers: (() => Iterable<Blip>)[] = [];
   const blipsOut: Blip[] = [];
   const me = { x: 0, z: 0, heading: 0 };
+  const turnOut: { kind: TurnKind; dist: number; road: string } = { kind: 'S', dist: 0, road: '' };
 
   const where = (out: { x: number; z: number; heading: number }, render: boolean) => {
     const pl = engine.get<PlayerApi>('player'), v = engine.get<VehicleApi>('vehicle');
@@ -117,7 +123,7 @@ export async function install(engine: Engine): Promise<void> {
     if (!r) { gps = null; routeLeft = Math.hypot(target.x - me.x, target.z - me.z); return; }
     const n = r.pts.length / 2, cum = new Float32Array(n);
     for (let k = 1; k < n; k++) cum[k] = cum[k - 1] + Math.hypot(r.pts[k * 2] - r.pts[k * 2 - 2], r.pts[k * 2 + 1] - r.pts[k * 2 - 1]);
-    gps = { pts: r.pts, cum, len: r.len, i: 0, x: r.pts[0], z: r.pts[1], s: 0, snap: Math.hypot(r.pts[0] - me.x, r.pts[1] - me.z) };
+    gps = { pts: r.pts, cum, len: r.len, i: 0, x: r.pts[0], z: r.pts[1], s: 0, snap: Math.hypot(r.pts[0] - me.x, r.pts[1] - me.z), turns: routeTurns(graph, r.pts, r.links) };
     routeLeft = r.len;
   };
 
@@ -148,6 +154,14 @@ export async function install(engine: Engine): Promise<void> {
     get target() { return target; },
     get routeLeft() { return routeLeft; },
     get gps() { return gps; },
+    get nextTurn() {
+      if (!gps || !target) return null;
+      const g = gps;
+      const tn = g.turns.find((q) => q.s > g.s + 4);
+      if (!tn) return null;
+      turnOut.kind = tn.kind; turnOut.road = tn.road; turnOut.dist = tn.s - g.s;
+      return turnOut;
+    },
     get mapOpen() { return mapOpen; },
     setMapOpen(open) { mapOpen = open; if (open) startCrawl(); },
     route(fromX, fromZ, heading, toX, toZ) {

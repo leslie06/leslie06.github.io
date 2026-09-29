@@ -5,17 +5,22 @@
 //                                signals, crossings, bus stops
 // Local metres, +X east, +Z south (region.mjs). Outer rings have positive signed area in (x, z),
 // holes negative. Data © OpenStreetMap contributors, ODbL.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { BBOX, TILE, project } from './region.mjs';
+import { pinyin } from 'pinyin-pro';
+import { REGIONS, TILE, project } from './region.mjs';
 
 const RAW = path.resolve('.cache/osm');
 const OUT = path.resolve('public/city');
 
 // ---------------------------------------------------------------------------------- load
 const els = new Map();
-for (const f of fs.readdirSync(RAW).filter((f) => /^chunk-\d+-\d+\.json$/.test(f))) {
-  for (const e of JSON.parse(fs.readFileSync(path.join(RAW, f), 'utf8')).elements) els.set(e.type[0] + e.id, e);
+// The main box's chunks first (digits sort before the corridors' tags), and an element already read is
+// kept: a corridor fetched later may carry a newer edit of a way the main box has, and taking it would
+// move things in the city already built.
+for (const f of fs.readdirSync(RAW).filter((f) => /^chunk-[a-z]?\d+-\d+\.json$/.test(f)).sort()) {
+  for (const e of JSON.parse(fs.readFileSync(path.join(RAW, f), 'utf8')).elements) if (!els.has(e.type[0] + e.id)) els.set(e.type[0] + e.id, e);
 }
 const ways = [], rels = [], nodes = [];
 for (const e of els.values()) (e.type === 'way' ? ways : e.type === 'relation' ? rels : nodes).push(e);
@@ -119,9 +124,13 @@ function colour(v) {
 }
 
 // ---------------------------------------------------------------------------------- region & tiles
-const [RX0, RZ0] = project(BBOX.n, BBOX.w);
-const [RX1, RZ1] = project(BBOX.s, BBOX.e);
-const inRegion = (x, z) => x >= RX0 && x <= RX1 && z >= RZ0 && z <= RZ1;
+// The playable area is a union of boxes (region.mjs REGIONS): the main one and the corridors.
+const RECTS = REGIONS.map((b) => [...project(b.n, b.w), ...project(b.s, b.e)]);
+const RX0 = Math.min(...RECTS.map((r) => r[0])), RZ0 = Math.min(...RECTS.map((r) => r[1]));
+const RX1 = Math.max(...RECTS.map((r) => r[2])), RZ1 = Math.max(...RECTS.map((r) => r[3]));
+const inRect = (r, x, z) => x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3];
+const inRegion = (x, z) => RECTS.some((r) => inRect(r, x, z));
+const inMain = (x, z) => inRect(RECTS[0], x, z);
 const tiles = new Map();
 const tileOf = (x, z) => [Math.floor(x / TILE), Math.floor(z / TILE)];
 function tile(ix, iz) {
@@ -131,8 +140,15 @@ function tile(ix, iz) {
   return t;
 }
 function eachTile(bb, fn) {
-  const [a, b] = tileOf(Math.max(bb[0], RX0), Math.max(bb[1], RZ0)), [c, d] = tileOf(Math.min(bb[2], RX1), Math.min(bb[3], RZ1));
-  for (let ix = a; ix <= c; ix++) for (let iz = b; iz <= d; iz++) fn(ix, iz);
+  let seen = null;
+  for (const R of RECTS) {
+    if (bb[0] > R[2] || bb[2] < R[0] || bb[1] > R[3] || bb[3] < R[1]) continue;
+    const [a, b] = tileOf(Math.max(bb[0], R[0]), Math.max(bb[1], R[1])), [c, d] = tileOf(Math.min(bb[2], R[2]), Math.min(bb[3], R[3]));
+    for (let ix = a; ix <= c; ix++) for (let iz = b; iz <= d; iz++) {
+      if (RECTS.length > 1) { const k = ix * 65536 + iz; if ((seen ??= new Set()).has(k)) continue; seen.add(k); }
+      fn(ix, iz);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------- zones
@@ -901,10 +917,17 @@ if (process.env.ELEV_DEBUG) {
 console.log(`elevation: ${deckX.length} deck crossings (${stacked} restacked), ${ties} ties between overlapping roads (${inserted} points spliced in), ${narrowed} ways narrowed, ${overOf.size} bridges over a road or railway, ${demoted} too short to clear it left flat, ${lifted.size} ways lifted, ${pinned.size} points pinned under them, ${hugged} slip-road points held level with a deck, ${groundJ} junctions and ${tiePins} merge points kept on the ground, ${flatJ} junctions off the ground made level, ${crossFix} crossings without a node given room or brought level, ${sideFix} points tied level with a ramp overlapping them, ${rampPins} ramp points brought down beside a road on the ground, ${smoothed} raised points smoothed, ${shifted} points moved aside, ${(elevLen / 1000).toFixed(1)} km of road above ground`);
 
 const roadSegs = new Map(); // tile key -> [ax, az, bx, bz, halfWidth]
-function addSeg(ax, az, bx, bz, hw) {
+const carSegs = new Map();  // the same for the carriageways on the ground, for keeping lamp posts out of them
+function addSeg(ax, az, bx, bz, hw, car = false) {
   eachTile([Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw], (ix, iz) => {
     const k = `${ix}_${iz}`; (roadSegs.get(k) ?? roadSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw]);
+    if (car) (carSegs.get(k) ?? carSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw]);
   });
+}
+/** Whether (x, z) is on a carriageway on the ground (or within `margin` of one). */
+function inCarriageway(x, z, margin) {
+  for (const [ax, az, bx, bz, hw] of carSegs.get(tileOf(x, z).join('_')) ?? []) if (segDist(x, z, ax, az, bx, bz) < hw + margin) return true;
+  return false;
 }
 let roadPieces = 0;
 for (const w of ways) {
@@ -934,7 +957,7 @@ for (const w of ways) {
   };
   for (let i = 0; i < P.length - 1; i++) {
     const mx = (P[i][0] + P[i + 1][0]) / 2, mz = (P[i][1] + P[i + 1][1]) / 2;
-    addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2);
+    addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2, info.car && heightAlong(w, (PS[i] + PS[i + 1]) / 2) < 2);
     if (!inRegion(mx, mz)) { flush(); cur = null; continue; }
     const [ix, iz] = tileOf(mx, mz);
     if (!cur || cur.ix !== ix || cur.iz !== iz) { flush(); cur = { ix, iz, p: [P[i]], j: [J[i]], s: [PS[i]], a: i > 0 ? P[i - 1] : null, b: null }; }
@@ -956,15 +979,26 @@ const nodeIdx = (id, p) => { let i = netIndex.get(id); if (i === undefined) { i 
 for (const w of ways) {
   const info = w._road; if (!info || !info.car) continue;
   if (!w._pts.some(([x, z]) => inRegion(x, z))) continue;
-  let start = 0;
   const vs = [0];
   for (let i = 1; i < w._pts.length; i++) vs.push(vs[i - 1] + Math.hypot(w._pts[i][0] - w._pts[i - 1][0], w._pts[i][1] - w._pts[i - 1][1]));
-  for (let i = 1; i < w._ids.length; i++) {
-    if (i === w._ids.length - 1 || (degCar.get(w._ids[i]) || 0) >= 3) {
-      const h = vs.slice(start, i + 1).map((s) => q1(heightAlong(w, s)));
-      edges.push({ a: nodeIdx(w._ids[start], w._pts[start]), b: nodeIdx(w._ids[i], w._pts[i]), p: flat(w._pts.slice(start, i + 1)), c: info.cls, o: info.oneway, l: info.lanes, w: q1(info.w), n: info.name || undefined, br: info.bridge || undefined, ...(h.some((v) => v > 0.05) ? { h } : {}) });
-      start = i;
+  // Only the stretches drawn (a segment is in when its midpoint is, as for the tiles' pieces): whole
+  // ways used to go in, and 东五环 or the airport expressway ran on for kilometres past the data's
+  // edge - traffic drove where no road was drawn, and the router's seed links (the longest, fastest)
+  // were those stubs, so its giant component came out one link and no route was found anywhere.
+  const segIn = (i) => inRegion((w._pts[i - 1][0] + w._pts[i][0]) / 2, (w._pts[i - 1][1] + w._pts[i][1]) / 2);
+  for (let r0 = 0; r0 < w._ids.length - 1;) {
+    if (!segIn(r0 + 1)) { r0++; continue; }
+    let r1 = r0 + 1;
+    while (r1 < w._ids.length - 1 && segIn(r1 + 1)) r1++;
+    let start = r0;
+    for (let i = r0 + 1; i <= r1; i++) {
+      if (i === r1 || (degCar.get(w._ids[i]) || 0) >= 3) {
+        const h = vs.slice(start, i + 1).map((s) => q1(heightAlong(w, s)));
+        edges.push({ a: nodeIdx(w._ids[start], w._pts[start]), b: nodeIdx(w._ids[i], w._pts[i]), p: flat(w._pts.slice(start, i + 1)), c: info.cls, o: info.oneway, l: info.lanes, w: q1(info.w), n: info.name || undefined, br: info.bridge || undefined, ...(h.some((v) => v > 0.05) ? { h } : {}) });
+        start = i;
+      }
     }
+    r0 = r1;
   }
 }
 
@@ -1005,7 +1039,113 @@ for (const o of outlines) {
   eachTile(o.bb, (ix, iz) => { for (const p of partsByTile.get(`${ix}_${iz}`) || []) if (p.c[0] >= o.bb[0] && p.c[0] <= o.bb[2] && p.c[1] >= o.bb[1] && p.c[1] <= o.bb[3] && pip(p.c[0], p.c[1], o.ring)) covered += p.area; });
   if (covered < 0.4 * o.area) kept.push(o);
 }
-const buildings = kept.concat(parts);
+// Blocks OSM has not drawn, in the corridors (2026-09-29): 东四环's east side from 朝阳公园桥 to 东风北桥
+// is mapped as residential land with almost no buildings in it, and the ring ran between empty paved
+// fields. A residential or commercial polygon there with next to nothing drawn in it (< 6% covered) is
+// filled the way Beijing builds a 小区: rows of slab blocks with their long sides to the south, set back
+// from the streets, spaced for the winter sun - six-storey walk-ups, mid-rise slabs or towers, one style
+// a polygon - and a few office blocks on commercial land. Only in the corridors: the main box is drawn,
+// and everything placed there (the stunts' spots) was placed round what is drawn.
+const filled = [];
+{
+  const corridor = (x, z) => !inMain(x, z) && inRegion(x, z);
+  const exIndex = new Map();
+  const index = (b) => eachTile(b.bb, (ix, iz) => { const k = `${ix}_${iz}`; (exIndex.get(k) ?? exIndex.set(k, []).get(k)).push(b); });
+  for (const b of kept) index(b);
+  for (const b of parts) index(b);
+  const inExisting = (x, z, m) => { for (const b of exIndex.get(tileOf(x, z).join('_')) ?? []) if (x > b.bb[0] - m && x < b.bb[2] + m && z > b.bb[1] - m && z < b.bb[3] + m && (m === 0 ? pip(x, z, b.ring) : true)) return true; return false; };
+  // Ground that must stay open: water, parks, pitches, woods, car parks, railways, squares.
+  const open = [];
+  const lands = [];
+  const ringsOf = (e) => e.type === 'way' ? (e.geometry && e.geometry.length >= 4 ? [openRing(proj(e.geometry))] : []) : assemble(e.members.filter((m) => m.type === 'way' && m.geometry && m.role !== 'inner').map((m) => proj(m.geometry)));
+  for (const e of [...ways, ...rels]) {
+    const t = e.tags; if (!t || e._road || t.building) continue;
+    const lk = /^(residential|commercial|retail)$/.test(t.landuse ?? '') ? t.landuse : null;
+    const ak = !lk && areaKind(t);
+    if (!lk && !ak) continue;
+    for (const r of ringsOf(e)) {
+      if (r.length < 3) continue;
+      const bb = bboxOf(r);
+      if (![[bb[0], bb[1]], [bb[2], bb[3]], [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2]].some(([x, z]) => corridor(x, z))) continue;
+      (lk ? lands : open).push({ id: e.id, kind: lk ?? ak, ring: r, bb });
+    }
+  }
+  const inOpen = (x, z) => open.some((o) => x >= o.bb[0] && x <= o.bb[2] && z >= o.bb[1] && z <= o.bb[3] && pip(x, z, o.ring));
+  const free = (x, z) => corridor(x, z) && !nearRoad(x, z, 5) && !inExisting(x, z, 0) && !inOpen(x, z);
+  let fid = 9e12;
+  for (const L of lands) {
+    const a = Math.abs(signedArea(L.ring));
+    if (a < 6000) continue;
+    // Coverage by what OSM has, on an 8 m grid.
+    let n = 0, hit = 0;
+    for (let x = L.bb[0]; x < L.bb[2]; x += 8) for (let z = L.bb[1]; z < L.bb[3]; z += 8) { if (!pip(x, z, L.ring)) continue; n++; if (inExisting(x, z, 0)) hit++; }
+    if (!n || hit / n > 0.06) continue;
+    const r = rnd(L.id, 31);
+    const res = L.kind === 'residential';
+    // [length, depth, row gap, column gap, height range]
+    const style = !res ? [42, 30, 26, 22, [24, 60]] : r < 0.45 ? [58, 12, 22, 12, [16.5, 19.5]] : r < 0.8 ? [66, 15, 36, 16, [33, 55]] : [30, 24, 48, 26, [62, 92]];
+    const [len, dep, rowGap, colGap, [h0, h1]] = style;
+    const x0 = L.bb[0] + 10, z0 = L.bb[1] + 10;
+    let row = 0;
+    for (let z = z0; z + dep < L.bb[3] - 6; z += dep + rowGap, row++) {
+      const shift = (rnd(L.id, 40 + row) - 0.5) * 16;
+      for (let x = x0 + shift; x + 10 < L.bb[2] - 6; ) {
+        // The longest block up to `len` that fits: every point of it on a 5 m grid inside the polygon and free.
+        const fits = (w) => {
+          for (let u = 0; u <= w; u += 5) for (let v = 0; v <= dep; v += 4) { const px = x + Math.min(u, w), pz = z + Math.min(v, dep); if (!pip(px, pz, L.ring) || !free(px, pz)) return false; }
+          // ... and a margin round it clear of what is drawn.
+          for (const [px, pz] of [[x - 4, z - 4], [x + w + 4, z - 4], [x - 4, z + dep + 4], [x + w + 4, z + dep + 4]]) if (inExisting(px, pz, 0)) return false;
+          return true;
+        };
+        let w = len;
+        while (w >= 18 && !fits(w)) w -= 8;
+        if (w < 18) { x += 10; continue; }
+        const id = fid++;
+        const h = h0 + (h1 - h0) * rnd(id, 5);
+        const ring = [[x, z], [x + w, z], [x + w, z + dep], [x, z + dep]];
+        const levels = Math.max(2, Math.round(h / 3.1));
+        filled.push({ id, tags: res ? { building: 'apartments', 'building:levels': String(levels) } : { building: 'commercial', height: String(Math.round(h)) }, ring, holes: [], area: w * dep, c: [x + w / 2, z + dep / 2], bb: [x, z, x + w, z + dep] });
+        index(filled[filled.length - 1]);
+        x += w + colGap;
+      }
+    }
+  }
+  // Building sites get their hoarding (围挡): 2.5 m blue panels round the edge, 0.6 m in, broken wherever
+  // a road or path crosses the line (a site's own service roads go in and out through it) - as walls
+  // (kind 'wall', coloured), so they are solid like any other.
+  let hoard = 0;
+  for (const o of open) {
+    if (o.kind !== 'site' || Math.abs(signedArea(o.ring)) < 3000) continue;
+    const R = o.ring, inward = signedArea(R) > 0 ? 1 : -1;
+    for (let i = 0; i < R.length; i++) {
+      const [ax, az] = R[i], [bx, bz] = R[(i + 1) % R.length];
+      const L = Math.hypot(bx - ax, bz - az);
+      if (L < 4) continue;
+      const dx = (bx - ax) / L, dz = (bz - az) / L;
+      // Inward normal for a ring of positive signed area in (x, z) is (-dz, dx).
+      const nx = -dz * inward * 0.6, nz = dx * inward * 0.6;
+      let run0 = -1;
+      const flush = (s1) => {
+        if (run0 < 0 || s1 - run0 < 6) { run0 = -1; return; }
+        const p0 = [ax + dx * run0 + nx, az + dz * run0 + nz], p1 = [ax + dx * s1 + nx, az + dz * s1 + nz], t = 0.12;
+        const ring = [[p0[0] - dz * t, p0[1] + dx * t], [p1[0] - dz * t, p1[1] + dx * t], [p1[0] + dz * t, p1[1] - dx * t], [p0[0] + dz * t, p0[1] - dx * t]];
+        const id = fid++;
+        filled.push({ id, tags: { building: 'wall', height: '2.5', 'building:colour': '#35679f' }, ring, holes: [], area: (s1 - run0) * 2 * t, c: [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2], bb: bboxOf(ring) });
+        hoard++;
+        run0 = -1;
+      };
+      for (let sd = 0; sd <= L; sd += 2) {
+        const x = ax + dx * sd + nx, z = az + dz * sd + nz;
+        const ok = corridor(x, z) && !nearRoad(x, z, 2) && !inExisting(x, z, 0);
+        if (ok && run0 < 0) run0 = sd;
+        if (!ok) flush(sd - 2);
+      }
+      flush(Math.floor(L / 2) * 2);
+    }
+  }
+  console.log(`filled: ${filled.length - hoard} blocks in ${lands.length} residential/commercial polygons of the corridors, ${hoard} lengths of hoarding round the building sites`);
+}
+const buildings = kept.concat(parts, filled);
 // Roads through a building (OSM tunnel=building_passage: a gate, an arch under a block): the building
 // gets a passage - [ax, az, bx, bz, half width, clearance] per segment, the segment carried 4 m past
 // the road's ends so it cuts both walls - and the tile mesher opens its walls there, lines the
@@ -1121,6 +1261,8 @@ function areaKind(t) {
   if (t.landuse === 'grass' || t.natural === 'grass' || t.landuse === 'meadow' || t.landuse === 'flowerbed') return 'grass';
   if (t.amenity === 'parking' && t.parking !== 'underground' && t.parking !== 'multi-storey') return 'parking';
   if (t.landuse === 'railway') return 'rail';
+  // Cleared and building land (much of 东四环's east side between 朝阳公园桥 and 东风北桥 is being rebuilt).
+  if (/^(construction|brownfield|greenfield|landfill)$/.test(t.landuse ?? '')) return 'site';
   return null;
 }
 const areaPolys = [];
@@ -1163,10 +1305,14 @@ function addTree(x, z, kind, drop = false) {
   if (!inRegion(x, z) || inBuilding(x, z, 0.8) || nearRoad(x, z, 1.2)) return;
   // Off the decks and out from under them - still using up its seed, so every other tree in the
   // city keeps the species and size it had before the interchanges were lifted.
-  if (drop || underDeck(x, z)) { treeSeed++; return; }
+  // In the corridors a tree's seed is its position, so the main box's trees keep theirs.
+  const main = inMain(x, z);
+  if (drop || underDeck(x, z)) { if (main) treeSeed++; return; }
+  const seed = main ? treeSeed : 1e7 + Math.round(x * 10) * 7919 + Math.round(z * 10);
   const t = tile(...tileOf(x, z));
-  t.trees.push(q1(x), q1(z), kind ?? treeType(x, z, treeSeed), +(0.8 + 0.45 * rnd(treeSeed, 9)).toFixed(2));
-  treeSeed++; nTrees++;
+  t.trees.push(q1(x), q1(z), kind ?? treeType(x, z, seed), +(0.8 + 0.45 * rnd(seed, 9)).toFixed(2));
+  if (main) treeSeed++;
+  nTrees++;
 }
 for (const n of nodes) if (n.tags?.natural === 'tree') { const [x, z] = project(n.lat, n.lon); addTree(x, z); }
 for (const w of ways) if (w.tags?.natural === 'tree_row' && w.geometry) {
@@ -1223,7 +1369,9 @@ for (const w of ways) {
       // taking it after pointed every two-way street's arms away from the road.
       const yaw = Math.atan2(-nx * side, -nz * side);
       side = info.oneway ? 1 : -side;
-      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2) || underDeck(lx, lz)) continue;
+      // Nor in another road's carriageway: a lamp at one road's kerb stood in the lanes of a driveway,
+      // a slip road or a side road running alongside (2.5k of them, 7%), and cars met them head on.
+      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2) || underDeck(lx, lz) || inCarriageway(lx, lz, 0.3)) continue;
       tile(...tileOf(lx, lz)).lamps.push(q1(lx), q1(lz), +yaw.toFixed(3));
       nLamps++;
     }
@@ -1255,6 +1403,68 @@ for (const n of nodes) {
     if (r) { t.stops.push(q1(x), q1(z), +r.ang.toFixed(3)); nStops++; }
   }
 }
+// ---------------------------------------------------------------------------------- names for the signs
+// Interchanges by name (for the guide signs: 「东四环 北 ↑ 双新桥 东风北桥」): OSM names a bridge on its
+// ways (bridge=yes, bridge:name), on a node (a signal or a plain point), or only through the bus stops
+// round it (东风北桥南, 东风北桥东...). A name counts when it is near a main road - 朝阳公园's footbridges
+// and the railway's numbered bridges are not what a driver steers by. The point is the mean of the
+// ways and nodes, or of the stops when that is all there is.
+const MAJOR = new Set(['motorway', 'trunk', 'primary', 'secondary', 'motorway_link', 'trunk_link', 'primary_link', 'secondary_link']);
+const majorGrid = new Map();
+for (const e of edges) if (MAJOR.has(e.c)) for (let i = 0; i < e.p.length; i += 2) { const k = `${Math.floor(e.p[i] / 100)}_${Math.floor(e.p[i + 1] / 100)}`; (majorGrid.get(k) ?? majorGrid.set(k, []).get(k)).push(e.p[i], e.p[i + 1]); }
+const nearMajor = (x, z, r) => {
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const l = majorGrid.get(`${Math.floor(x / 100) + i}_${Math.floor(z / 100) + j}`); if (l) for (let k = 0; k < l.length; k += 2) if (Math.hypot(l[k] - x, l[k + 1] - z) < r) return true; }
+  return false;
+};
+const brHits = new Map();
+for (const e of els.values()) {
+  const t = e.tags; if (!t?.name) continue;
+  // A named point alone is not enough (东风桥 is a culvert beside 东风北桥): a car bridge, a signal or
+  // a motorway junction by that name, or its bus stops.
+  let name = null, stop = false;
+  if (t['bridge:name'] && /桥$/.test(t['bridge:name']) && CAR.has(t.highway)) name = t['bridge:name'];
+  else if (/桥$/.test(t.name) && (t.bridge && t.bridge !== 'no' ? CAR.has(t.highway) : ['traffic_signals', 'motorway_junction'].includes(t.highway))) name = t.name;
+  else if ((t.highway === 'bus_stop' || t.public_transport) && /桥[东西南北]$/.test(t.name)) { name = t.name.slice(0, -1); stop = true; }
+  // Not footbridges, railway bridges, the bus-only bridge at 四惠 or 天安门's 金水桥.
+  if (!name || /天桥|\d号桥|特大桥|专用桥|金水桥|石桥/.test(name)) continue;
+  const c = e.type === 'node' ? e : e.geometry?.[Math.floor(e.geometry.length / 2)];
+  if (!c) continue;
+  const [x, z] = project(c.lat, c.lon);
+  if (!inRegion(x, z) || !nearMajor(x, z, 150)) continue;
+  const h = brHits.get(name) ?? brHits.set(name, { pts: [], stops: [] }).get(name);
+  (stop ? h.stops : h.pts).push([x, z]);
+}
+// Every point kept (40 m apart), not their mean: an interchange is a few hundred metres across and its
+// stops stand round the outside, so a mean can be 150 m off the road that passes through it.
+const bridgeNames = [];
+for (const [name, h] of brHits) {
+  const P = [];
+  for (const p of [...h.pts, ...h.stops]) if (!P.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 40)) P.push(p);
+  for (const p of P) bridgeNames.push([q1(p[0]), q1(p[1]), name]);
+}
+// The second line of every sign, as Beijing's bilingual signs write it: the proper name in pinyin run
+// together, the generic part after it (建国门外大街 Jianguomenwai Dajie, 朝阳公园桥 Chaoyanggongyuan
+// Qiao), ring roads in English (东四环中路 E 4th Ring Rd M). OSM's own name:en is too patchy for that
+// (a third of the names, and 双新桥's is the ring road's).
+const GENERIC = [['高速公路', 'Expwy'], ['快速路', 'Expwy'], ['大街', 'Dajie'], ['胡同', 'Hutong'], ['辅路', 'Fulu'], ['大道', 'Dadao'],
+  ['北路', 'Beilu'], ['南路', 'Nanlu'], ['东路', 'Donglu'], ['西路', 'Xilu'], ['中路', 'Zhonglu'], ['北街', 'Beijie'], ['南街', 'Nanjie'],
+  ['东街', 'Dongjie'], ['西街', 'Xijie'], ['中街', 'Zhongjie'], ['路', 'Lu'], ['街', 'Jie'], ['巷', 'Xiang'], ['桥', 'Qiao'], ['里', 'Li']];
+const RING_N = { 二: '2nd', 三: '3rd', 四: '4th', 五: '5th' }, SIDE = { 东: 'E', 西: 'W', 南: 'S', 北: 'N', 中: 'M' };
+function pinyinOf(name) {
+  const ring = name.match(/^([东西南北])([二三四五])环([东西南北中])?路?(辅路)?$/);
+  if (ring) return `${SIDE[ring[1]]} ${RING_N[ring[2]]} Ring Rd${ring[3] ? ' ' + SIDE[ring[3]] : ''}${ring[4] ? ' Fulu' : ''}`;
+  if (!/^[一-鿿]+$/.test(name)) return '';
+  let proper = name, generic = '';
+  for (const [zh, en] of GENERIC) if (name.endsWith(zh) && name.length > zh.length) { proper = name.slice(0, -zh.length); generic = en; break; }
+  const syl = pinyin(proper, { toneType: 'none', type: 'array' });
+  const word = syl.map((q, i) => (i && /^[aoe]/.test(q) ? "'" + q : q)).join('');
+  return word[0].toUpperCase() + word.slice(1) + (generic ? ' ' + generic : '');
+}
+const roadEn = {};
+for (const w of ways) if (w._road?.car && w._road.name && !(w._road.name in roadEn)) { const en = pinyinOf(w._road.name); if (en) roadEn[w._road.name] = en; }
+for (const b of bridgeNames) if (!(b[2] in roadEn)) roadEn[b[2]] = pinyinOf(b[2]);
+console.log(`names: ${brHits.size} interchanges (${bridgeNames.length} points), ${Object.keys(roadEn).length} roads in pinyin/English`);
+
 // Signalised network nodes (for traffic lights): nearest graph node within 30 m of a signal.
 const sig = new Uint8Array(netXZ.length / 2);
 for (const n of nodes) if (n.tags?.highway?.includes('traffic_signals')) {
@@ -1333,11 +1543,11 @@ for (const [k, t] of tiles) {
   index[k] = [t.buildings.length, t.roads.length, t.trees.length / 4];
   bytes += s.length;
 }
-const net = JSON.stringify({ nodes: netXZ, sig: Array.from(sig), edges });
+const net = JSON.stringify({ nodes: netXZ, sig: Array.from(sig), edges, br: bridgeNames, en: roadEn });
 fs.writeFileSync(path.join(OUT, 'network.json'), net);
 const manifest = {
   version: 1, tile: TILE, origin: { lat: 39.90883, lon: 116.39757 },
-  bounds: { x0: q1(RX0), z0: q1(RZ0), x1: q1(RX1), z1: q1(RZ1) }, tiles: index, spawn, named,
+  bounds: { x0: q1(RX0), z0: q1(RZ0), x1: q1(RX1), z1: q1(RZ1) }, regions: RECTS.map((r) => r.map(q1)), tiles: index, spawn, named,
   attribution: 'Map data © OpenStreetMap contributors (ODbL)',
 };
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest));
@@ -1347,3 +1557,5 @@ console.log(`tiles ${Object.keys(index).length}, ${(bytes / 1e6).toFixed(1)} MB;
 console.log(`buildings ${buildings.length} (outlines kept ${kept.length}/${outlines.length}, parts ${parts.length})`, kinds);
 console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lamps ${nLamps}, signals ${nSignals}, crossings ${nCross}, stops ${nStops}`);
 console.log('spawn', spawn);
+// The guide signs are placed from the network just written (TypeScript shared with the game).
+execFileSync('npx', ['tsx', 'scripts/city/signs.mts'], { stdio: 'inherit' });

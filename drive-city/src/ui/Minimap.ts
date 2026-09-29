@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
-import { t } from '../core/I18n';
+import { t, type TKey } from '../core/I18n';
 import type { PlayerApi, VehicleApi } from '../game/Contracts';
 import type { NavSystem } from '../nav';
 import { TIERS, type AreaCell, type RoadCell } from '../nav/MapData';
+import type { TurnKind } from '../nav/Turns';
 import { BLIP_COLOR, INK, drawBlip, drawEdgeArrow, drawPlayer, screenAngle, type MarkKind } from '../nav/Draw';
 import { C, F, css, el } from './theme';
 
@@ -16,13 +17,33 @@ css(`
 .minimap .bar{display:flex;align-items:baseline;gap:8px;margin-top:7px;height:18px;padding-left:2px;text-shadow:0 1px 6px rgba(0,0,0,.7)}
 .minimap .bar[hidden]{display:none}
 .minimap .bar .d{font:800 16px/1 ${F.num};font-variant-numeric:tabular-nums;letter-spacing:.02em;color:${C.yellow}}
+.minimap .turn{position:absolute;left:0;right:0;bottom:0;height:40px;display:flex;align-items:center;gap:9px;padding:0 10px;background:linear-gradient(0deg,rgba(8,10,12,.92),rgba(8,10,12,.7));box-shadow:0 -1px 0 rgba(244,241,232,.08)}
+.minimap .turn[hidden]{display:none}
+.minimap .turn svg{flex:none;width:26px;height:26px;stroke:${C.paper};stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.minimap .turn .t{display:flex;flex-direction:column;gap:3px;min-width:0}
+.minimap .turn .a{font:800 14px/1 ${F.ui};color:${C.paper};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.minimap .turn .a b{font:800 15px/1 ${F.num};font-variant-numeric:tabular-nums;color:${C.yellow};margin-right:6px}
+.minimap .turn .r{font:600 11px/1 ${F.ui};color:${C.muted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.minimap .turn .r:empty{display:none}
 .minimap .bar .l{font:700 11px/1 ${F.ui};letter-spacing:.14em;color:${C.muted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
 `);
+
+/** Arrows for the turn strip (24 px box, stroked). */
+const TURN_ICON: Record<TurnKind, string> = {
+  S: 'M12 21V4M6 10l6-6 6 6',
+  L: 'M16 21v-8a4 4 0 0 0-4-4H5M9 4.5 4.5 9 9 13.5',
+  R: 'M8 21v-8a4 4 0 0 1 4-4h7M15 4.5 19.5 9 15 13.5',
+  SL: 'M15 21v-6L8 8M7.5 14V7.5H14',
+  SR: 'M9 21v-6l7-7M10 7.5h6.5V14',
+  exit: 'M9 21v-6l7-7M10 7.5h6.5V14',
+  U: 'M8 21V9a4 4 0 0 1 8 0v8M12.5 13.5 16 17l3.5-3.5',
+  arrive: 'M7 21V4M7 4h10l-2.5 4L17 12H7',
+};
 
 /** Metres for the HUD: "850 m", "2.4 km". */
 export function fmtDist(m: number): string {
   if (!Number.isFinite(m)) return '—';
-  return m < 1000 ? t('nav.m', { n: Math.max(0, Math.round(m / 10) * 10) }) : t('nav.km', { n: (m / 1000).toFixed(m < 10000 ? 1 : 0) });
+  return m < 995 ? t('nav.m', { n: Math.max(0, Math.round(m / 10) * 10) }) : t('nav.km', { n: (m / 1000).toFixed(m < 9950 ? 1 : 0) });
 }
 
 // Muted road greys, thinnest tier first; widths in px at the reference zoom.
@@ -47,6 +68,13 @@ export class Minimap implements System {
   private ctx: CanvasRenderingContext2D;
   private bar: HTMLDivElement;
   private barD: HTMLSpanElement;
+  /** GPS turn-by-turn strip across the top of the radar. */
+  private turnEl: HTMLDivElement;
+  private turnIcon: SVGSVGElement;
+  private turnD: HTMLElement;
+  private turnA: Text;
+  private turnR: HTMLSpanElement;
+  private shownTurn = '';
   private barL: HTMLSpanElement;
   private shownBar = '';
   private w = 1; private h = 1; private dpr = 1;
@@ -63,6 +91,14 @@ export class Minimap implements System {
     host.prepend(this.root);   // before the F1 help panel, so the panel draws over it when open
     const frame = el('div', 'frame', this.root);
     this.canvas = el('canvas', '', frame);
+    this.turnEl = el('div', 'turn', frame);
+    this.turnEl.innerHTML = '<svg viewBox="0 0 24 24"><path/></svg>';
+    this.turnIcon = this.turnEl.querySelector('svg')!;
+    const col = el('div', 't', this.turnEl), line = el('span', 'a', col);
+    this.turnD = document.createElement('b'); line.append(this.turnD);
+    this.turnA = document.createTextNode(''); line.append(this.turnA);
+    this.turnR = el('span', 'r', col);
+    this.turnEl.hidden = true;
     this.ctx = this.canvas.getContext('2d')!;
     this.bar = el('div', 'bar', this.root);
     this.barD = el('span', 'd', this.bar);
@@ -93,6 +129,22 @@ export class Minimap implements System {
     this.last = now;
     this.draw(nav, now / 1000);
     this.updateBar(nav);
+    this.updateTurn(nav);
+  }
+
+  private updateTurn(nav: NavSystem): void {
+    const tn = nav.nextTurn;
+    const near = tn && tn.dist < 30;
+    const text = tn ? `${tn.kind}|${near ? '' : fmtDist(tn.dist)}|${t(`nav.turn.${tn.kind}` as TKey)}|${tn.road && tn.kind !== 'arrive' ? t('nav.turn.onto', { road: tn.road }) : ''}` : '';
+    if (text === this.shownTurn) return;
+    this.shownTurn = text;
+    this.turnEl.hidden = !tn;
+    if (!tn) return;
+    const [kind, d, a, r] = text.split('|');
+    this.turnIcon.querySelector('path')!.setAttribute('d', TURN_ICON[kind as TurnKind]);
+    this.turnD.textContent = d; this.turnD.hidden = !d;
+    this.turnA.textContent = a;
+    this.turnR.textContent = r;
   }
 
   private updateBar(nav: NavSystem): void {

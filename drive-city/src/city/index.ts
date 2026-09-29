@@ -11,6 +11,8 @@ import { Routes } from './Routes';
 import { findDeadEnds } from './DeadEnds';
 import { carStops } from './landmarks/CarStops';
 import { placeDeadEndSigns } from './visual/DeadEndSigns';
+import { placeGuideSigns } from './visual/GuideSigns';
+import type { Closure, GuideSign } from './Signs';
 import { SkylineLod } from './Skyline';
 import { CityStreamer, spawnTileWorkers } from './Streamer';
 import { undergroundHoles } from '../underground/Layout';
@@ -152,9 +154,11 @@ export async function install(engine: Engine): Promise<void> {
   // The tile workers first: their module fetch is 42 KB the boot cannot finish without, and it must
   // go out before the facade photos below take the connection for the next minute (see Streamer).
   const tileWorkers = spawnTileWorkers();
-  const [manifest, network, skyline, mats, defs] = await Promise.all([
+  const [manifest, network, skyline, mats, defs, signs] = await Promise.all([
     loadCity<Manifest>('manifest.json'), loadCity<Network>('network.json'), loadCity<Skyline>('skyline.json'),
     createCityMaterials(engine, env), loadLandmarks(),
+    // The guide signs (city/Signs.ts, placed by the build): optional, the city runs without them.
+    loadCity<{ signs: GuideSign[]; closures: Closure[] }>('signs.json').catch(() => null),
   ]);
   const b = manifest.bounds;
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
@@ -206,7 +210,8 @@ export async function install(engine: Engine): Promise<void> {
   engine.add(streamer.knocks);
   const routes = new Routes(network);
   // 此路不通 at the mouth of every dead-end branch (「我把车开到了故宫，发现进了死胡同，开不出去了」).
-  placeDeadEndSigns(engine, network, findDeadEnds(network, manifest.bounds), env);
+  placeDeadEndSigns(engine, network, findDeadEnds(network, { ...manifest.bounds, regions: manifest.regions }), env);
+  if (signs && new URLSearchParams(location.search).get('signs') !== '0') placeGuideSigns(engine, signs, env);
 
   const sp = manifest.spawn;
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);

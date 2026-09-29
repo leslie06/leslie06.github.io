@@ -393,6 +393,8 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms): Pro
   const tier = engine.quality.tier;
   const areas: Record<AreaKind, THREE.MeshStandardMaterial> = {
     rail: skin(std({ roughness: 1, color: '#9a968e' }, undefined, 0.6, 0.25, 1, true), 'brushed_concrete', 5, { map: true }),
+    // Building sites and cleared land (landuse=construction/brownfield): bare earth with weeds.
+    site: skin(std({ roughness: 1, color: '#7f7666' }, undefined, 0.75, 0.5, 0.7, true), 'sparse_grass', 7, { map: true }),
     parking: skin(std({ roughness: 0.9, color: '#8e8d89' }, undefined, 0.6, 0.2, 1.5, 'ground'), 'asphalt_04', 6, { map: true }),
     grass: skin(std({ roughness: 0.95, color: '#7c9460' }, undefined, 0.8, 0.35, 2, true), 'leafy_grass', 4, { map: true, normal: true }),
     park: skin(std({ roughness: 0.95, color: '#6f8c55' }, undefined, 0.8, 0.4, 2.5, true), 'leafy_grass', 4, { map: true, normal: true }),

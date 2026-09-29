@@ -25,6 +25,7 @@
     "@gltf-transform/functions": "^4.5.0",
     "@types/node": "^26.4.1",
     "@types/three": "^0.185.4",
+    "pinyin-pro": "^3.29.4",
     "playwright": "^1.62.1",
     "sharp": "^0.35.4",
     "typescript": "^7.0.2",

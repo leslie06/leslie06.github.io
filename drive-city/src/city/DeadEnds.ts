@@ -34,7 +34,7 @@ const EDGE_MARGIN = 60;
  * road, does not run off the data, and can be driven into (not a one-way leaving it) gets a sign
  * on the right-hand kerb, clear of every carriageway round it.
  */
-export function findDeadEnds(net: Network, bounds: { x0: number; z0: number; x1: number; z1: number }): DeadEnds {
+export function findDeadEnds(net: Network, bounds: { x0: number; z0: number; x1: number; z1: number; regions?: number[][] }): DeadEnds {
   const nNodes = net.nodes.length / 2, E = net.edges;
   const adj: number[][] = Array.from({ length: nNodes }, () => []);
   const deg = new Int32Array(nNodes);
@@ -61,6 +61,13 @@ export function findDeadEnds(net: Network, bounds: { x0: number; z0: number; x1:
   const core = (n: number) => deg[n] > 0;
   const nearEdge = (n: number) => {
     const x = net.nodes[n * 2], z = net.nodes[n * 2 + 1];
+    // The data is a union of boxes (the corridors): near its edge when any point EDGE_MARGIN round is outside all of them.
+    const R = bounds.regions;
+    if (R) {
+      const inside = (px: number, pz: number) => R.some((r) => px >= r[0] && px <= r[2] && pz >= r[1] && pz <= r[3]);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [0.7, -0.7], [-0.7, 0.7], [-0.7, -0.7]]) if (!inside(x + dx * EDGE_MARGIN, z + dz * EDGE_MARGIN)) return true;
+      return false;
+    }
     return x - bounds.x0 < EDGE_MARGIN || bounds.x1 - x < EDGE_MARGIN || z - bounds.z0 < EDGE_MARGIN || bounds.z1 - z < EDGE_MARGIN;
   };
 

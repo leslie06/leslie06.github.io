@@ -3,7 +3,7 @@
  * Outer rings have positive signed area in (x, z), holes negative.
  */
 export type BuildingKind = 'glass' | 'office' | 'resid' | 'hutong' | 'trad' | 'wall' | 'low' | 'station';
-export type AreaKind = 'water' | 'plaza' | 'pitch' | 'wood' | 'park' | 'grass' | 'parking' | 'rail';
+export type AreaKind = 'water' | 'plaza' | 'pitch' | 'wood' | 'park' | 'grass' | 'parking' | 'rail' | 'site';
 
 export interface RoadPiece {
   /** OSM highway class. */
@@ -71,6 +71,8 @@ export interface Manifest {
   tile: number;
   origin: { lat: number; lon: number };
   bounds: { x0: number; z0: number; x1: number; z1: number };
+  /** The boxes the data covers, [x0, z0, x1, z1] each (the main one and the corridors); `bounds` is their union's box. */
+  regions?: number[][];
   /** "ix_iz" -> [buildings, road pieces, trees]. */
   tiles: Record<string, [number, number, number]>;
   spawn: { x: number; z: number; yaw: number; road: string };
@@ -80,7 +82,13 @@ export interface Manifest {
 
 /** `h`: height above the ground at each point of `p` (decks and ramps), absent when flat. */
 export interface NetworkEdge { a: number; b: number; p: number[]; c: string; o: 0 | 1; l: number; w: number; n?: string; br?: 1; h?: number[] }
-export interface Network { nodes: number[]; sig: number[]; edges: NetworkEdge[] }
+export interface Network {
+  nodes: number[]; sig: number[]; edges: NetworkEdge[];
+  /** Named interchanges [x, z, name] (东风北桥), for the guide signs. */
+  br?: [number, number, string][];
+  /** Road and interchange names in pinyin (Beijing's bilingual style), for the signs' second line. */
+  en?: Record<string, string>;
+}
 /** Buildings of 20 m+ for the far skyline: [cx, cz, angle, halfLength, halfWidth, height, kindIndex, seed] each. */
 export interface Skyline { b: number[] }
 export const KINDS: BuildingKind[] = ['glass', 'office', 'resid', 'hutong', 'trad', 'wall', 'low', 'station'];

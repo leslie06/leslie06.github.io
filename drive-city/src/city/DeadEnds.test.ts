@@ -70,7 +70,7 @@ describe('dead ends in a hand-built network', () => {
 describe('dead ends in the real city', () => {
   const read = <T>(f: string) => JSON.parse(fs.readFileSync(fileURLToPath(new URL(`../../public/city/${f}`, import.meta.url)), 'utf8')) as T;
   const city = read<Network>('network.json'), man = read<Manifest>('manifest.json');
-  const { signs, out } = findDeadEnds(city, man.bounds);
+  const { signs, out } = findDeadEnds(city, { ...man.bounds, regions: man.regions });
 
   it('signs the palace lane the report came from', () => {
     // Its mouth is at the palace's north-west corner (-816.6, -1301.7), its end at (-722.1, -558.5).

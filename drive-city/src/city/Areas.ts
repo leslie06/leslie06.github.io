@@ -5,7 +5,7 @@ import type { AreaKind, AreaRec } from './Data';
  * Small lifts only (under the 3 cm roads): the real separation between overlapping ground layers
  * is each kind's polygon offset (Materials.ts), which holds at a kilometre where millimetres do not.
  */
-const LIFT: Record<AreaKind, number> = { rail: 0.004, parking: 0.006, grass: 0.008, park: 0.009, wood: 0.01, pitch: 0.012, plaza: 0.014, water: 0.016 };
+const LIFT: Record<AreaKind, number> = { site: 0.003, rail: 0.004, parking: 0.006, grass: 0.008, park: 0.009, wood: 0.01, pitch: 0.012, plaza: 0.014, water: 0.016 };
 
 /** Ground polygons (clipped to the tile by the build) triangulated with holes, one geometry per kind. */
 export function buildAreas(areas: AreaRec[]): Map<AreaKind, THREE.BufferGeometry> {

@@ -287,7 +287,8 @@ export class Router {
         for (const b of fwd ? this.out[L[a].to] : into[L[a].from]) if (!mark[b]) { mark[b] = 1; queue[t++] = b; }
       }
     };
-    const seeds = L.map((l) => l.id).sort((a, b) => L[b].len * L[b].speed - L[a].len * L[a].speed).slice(0, 8);
+    // Up to 32 tries: a long fast link can be a stub cut off at the edge of the data, whose component is itself.
+    const seeds = L.map((l) => l.id).sort((a, b) => L[b].len * L[b].speed - L[a].len * L[a].speed).slice(0, 32);
     const F = new Uint8Array(n), B = new Uint8Array(n), bestF = new Uint8Array(n), bestB = new Uint8Array(n);
     let bestSize = -1;
     for (const seed of seeds) {
