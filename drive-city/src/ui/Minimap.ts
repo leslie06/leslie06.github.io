@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
-import { t, type TKey } from '../core/I18n';
+import { lang, t, type TKey } from '../core/I18n';
 import type { PlayerApi, VehicleApi } from '../game/Contracts';
 import type { NavSystem } from '../nav';
 import { TIERS, type AreaCell, type RoadCell } from '../nav/MapData';
 import type { TurnKind } from '../nav/Turns';
 import { BLIP_COLOR, INK, drawBlip, drawEdgeArrow, drawPlayer, screenAngle, type MarkKind } from '../nav/Draw';
 import { C, F, css, el } from './theme';
+import { Labeller, type LabelStyle } from './MapLabels';
 
 css(`
 :root{--mm-left:max(24px,3vw);--mm-top:max(20px,3vh);--mm-w:clamp(210px,16vw,320px);--mm-h:calc(var(--mm-w) / 1.58 + 25px)}
@@ -52,6 +53,15 @@ const ROAD_PX = [1.4, 2.4, 3.6, 5, 6.6];
 const GROUND = '#161b1e', WATER = '#1a3444', GREEN = '#1c2f23';
 const REF_SCALE = 0.6;
 const EDGE_KINDS = new Set<MarkKind>(['target', 'pickup', 'dropoff', 'mission', 'waypoint']);
+/**
+ * The radar's labels: a few, small. Its zoom runs from ~0.8 px/m on foot to ~0.18 at speed, so the
+ * interchanges, ring shields, main roads, stations and parks always, side streets and hotels, shops
+ * and schools only slow or on foot; no district names.
+ */
+const LABELS: LabelStyle = {
+  rankS: [0, 0.26, 0.55, Infinity], areaMax: 0, areas: false, roadS: [Infinity, 0.6, 0.3, 0, 0], shortBelow: 0.35, bridgeS: 0,
+  font: { place: 10, big: 10, road: [11, 10, 10], shield: 10 }, icon: 4.5, every: 150, gap: 170, maxRoads: 6, maxPlaces: 6, margin: 6,
+};
 
 /**
  * GTA-V-style radar, top-left: rotates with the camera, zooms out with speed, the player a
@@ -85,6 +95,7 @@ export class Minimap implements System {
   private readonly dir = new THREE.Vector3();
   private readonly roads: RoadCell[] = [];
   private readonly areas: AreaCell[] = [];
+  private readonly labels = new Labeller(LABELS);
 
   constructor(private engine: Engine, private host: HTMLElement) {
     this.root = el('div', 'minimap');
@@ -216,13 +227,23 @@ export class Minimap implements System {
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const tg = nav.target;
+    // Road names, interchanges and places, clear of the player, the blips, the north badge and the turn strip.
+    const boxes = this.labels.boxes;
+    boxes.length = 0;
+    boxes.push(ax - 14, ay - 14, ax + 14, ay + 14);
+    const [nx, ny] = this.northAt(up, W, H);
+    boxes.push(nx - 10, ny - 10, nx + 10, ny + 10);
+    if (!this.turnEl.hidden) boxes.push(0, H - 40, W, H);
+    for (const b of nav.blips()) { const bx = toX(b.x, b.z), by = toY(b.x, b.z); if (bx > -8 && bx < W + 8 && by > -8 && by < H + 8) boxes.push(bx - 7, by - 7, bx + 7, by + 7); }
+    if (tg) { const bx = toX(tg.x, tg.z), by = toY(tg.x, tg.z); boxes.push(bx - 8, by - 20, bx + 8, by + 6); }
+    this.labels.draw(nav, { ctx, W, H, s, X: toX, Y: toY, x0, z0, x1, z1, lg: lang() });
     // Landmarks (small, inside only), then blips, then the target on top.
     for (const lm of nav.landmarks) {
       const sx = toX(lm.x, lm.z), sy = toY(lm.x, lm.z);
       if (sx > 4 && sx < W - 4 && sy > 4 && sy < H - 4) drawBlip(ctx, 'landmark', sx, sy, 3.6, NaN, time);
     }
     for (const b of nav.blips()) this.mark(b.kind, b.x, b.z, b.heading, up, time, b.flash ?? false, ax, ay, toX, toY);
-    const tg = nav.target;
     if (tg) this.mark(tg.kind === 'mission' ? 'mission' : 'waypoint', tg.x, tg.z, undefined, up, time, false, ax, ay, toX, toY);
 
     drawPlayer(ctx, ax, ay, screenAngle(me.heading, up), 17);
@@ -255,11 +276,15 @@ export class Minimap implements System {
   }
 
   /** "N" on the radar's edge where north is. */
-  private north(up: number, W: number, H: number): void {
-    const ctx = this.ctx, ang = screenAngle(Math.PI, up), dx = Math.sin(ang), dy = -Math.cos(ang);
+  private northAt(up: number, W: number, H: number): [number, number] {
+    const ang = screenAngle(Math.PI, up), dx = Math.sin(ang), dy = -Math.cos(ang);
     const cx = W / 2, cy = H / 2, inset = 11;
     const tt = Math.min(dx ? Math.abs((W / 2 - inset) / dx) : Infinity, dy ? Math.abs((H / 2 - inset) / dy) : Infinity);
-    const x = cx + dx * tt, y = cy + dy * tt;
+    return [cx + dx * tt, cy + dy * tt];
+  }
+
+  private north(up: number, W: number, H: number): void {
+    const ctx = this.ctx, [x, y] = this.northAt(up, W, H);
     ctx.beginPath(); ctx.arc(x, y, 8.5, 0, Math.PI * 2);
     ctx.fillStyle = INK; ctx.fill();
     ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(244,241,232,0.35)'; ctx.stroke();
