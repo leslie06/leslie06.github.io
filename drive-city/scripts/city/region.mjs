@@ -10,9 +10,14 @@ export const CHUNKS = 4;   // 16 chunks of ~2.0 x 2.5 km: the 5.3 MB chunk was a
 // city. Each is fetched as `chunks` x `chunks` requests into chunk-<tag><i>-<j>.json.
 //   n: 东四环北段 from 红领巾桥 past 朝阳公园桥 and 双新桥 to 东风北桥, with 朝阳公园 beside it.
 //   e: 京通快速路 east from 四惠 past 高碑店桥 to the 东五环 interchange, with 朝阳路 and 建国路.
+//   w, u (2026-09-29, 「一路做到四环」, first the whole old city): w the west of it - 西单, 金融街, 西二环,
+//   中南海, 北海 - and u its north - 什刹海, 鼓楼, 南锣鼓巷, 雍和宫, 地坛, 东直门, 工体, 三里屯 - both to
+//   a few hundred metres past the 2nd Ring (w 116.342, n 39.948), u running on east to the n corridor.
 export const EXTRA = [
   { tag: 'n', s: 39.926, w: 116.462, n: 39.963, e: 116.504, chunks: 2 },
   { tag: 'e', s: 39.897, w: 116.504, n: 39.921, e: 116.550, chunks: 2 },
+  { tag: 'w', s: 39.857, w: 116.336, n: 39.926, e: 116.386, chunks: 2 },
+  { tag: 'u', s: 39.926, w: 116.336, n: 39.953, e: 116.462, chunks: 2 },
 ];
 /** Every box of the playable area, the main one first. */
 export const REGIONS = [BBOX, ...EXTRA];

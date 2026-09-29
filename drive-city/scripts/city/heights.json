@@ -1,0 +1,618 @@
+[
+ {
+  "name": "中国大饭店 China World Hotel",
+  "lat": 39.9088,
+  "lon": 116.45296,
+  "height": 77,
+  "confidence": "B",
+  "source": "https://www.cwtc.com/zgdfd.html"
+ },
+ {
+  "name": "SOHO尚都 8-storey block along 东大桥路 (OSM calls it North Tower)",
+  "lat": 39.91739,
+  "lon": 116.44699,
+  "height": 32,
+  "confidence": "B",
+  "source": "https://architizer.com/projects/soho-shangdu/"
+ },
+ {
+  "name": "嘉里中心商场 Kerry Centre mall podium",
+  "lat": 39.91268,
+  "lon": 116.45274,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.beijingkerrycentre.com/SC/"
+ },
+ {
+  "name": "财富购物中心 Fortune Mall",
+  "lat": 39.91621,
+  "lon": 116.45275,
+  "height": 20,
+  "confidence": "B",
+  "source": "http://www.fortunemall.com.cn/about/"
+ },
+ {
+  "name": "北京银泰中心 podium (in01 mall)",
+  "lat": 39.90618,
+  "lon": 116.45326,
+  "height": 24,
+  "confidence": "A",
+  "source": "https://baike.baidu.com/item/%E5%8C%97%E4%BA%AC%E9%93%B6%E6%B3%B0%E4%B8%AD%E5%BF%83/3404565"
+ },
+ {
+  "name": "unnamed, 航华商务苑 (AVIC block, SE corner of 国贸桥), probably 瑞赛大厦 or its twin",
+  "lat": 39.90424,
+  "lon": 116.45662,
+  "height": 75,
+  "confidence": "C",
+  "source": "https://www.ruisaidasha.cn/"
+ },
+ {
+  "name": "unnamed office, 航华商务苑 (AVIC block) by 大北窑南 bus stop",
+  "lat": 39.90468,
+  "lon": 116.45644,
+  "height": 50,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/233134840"
+ },
+ {
+  "name": "unnamed, 郎家园 block south of 建国路 (budget hotels 喆啡/星程 inside)",
+  "lat": 39.90596,
+  "lon": 116.45995,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/233137381"
+ },
+ {
+  "name": "金地购物中心 Gemdale Plaza (mall podium of 金地中心)",
+  "lat": 39.90795,
+  "lon": 116.46849,
+  "height": 22,
+  "confidence": "C",
+  "source": "https://baike.baidu.com/item/%E9%87%91%E5%9C%B0%E4%B8%AD%E5%BF%83/9976736"
+ },
+ {
+  "name": "金地国际花园 residential tower (建国路91号)",
+  "lat": 39.90885,
+  "lon": 116.46779,
+  "height": 87,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E9%87%91%E5%9C%B0%C2%B7%E5%9B%BD%E9%99%85%E8%8A%B1%E5%9B%AD/484164"
+ },
+ {
+  "name": "金地国际花园 residential tower (建国路91号)",
+  "lat": 39.90879,
+  "lon": 116.46912,
+  "height": 87,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E9%87%91%E5%9C%B0%C2%B7%E5%9B%BD%E9%99%85%E8%8A%B1%E5%9B%AD/484164"
+ },
+ {
+  "name": "unnamed slab, 郎家园 / 针织路 east of the CBD core",
+  "lat": 39.90983,
+  "lon": 116.46528,
+  "height": 30,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/297809773"
+ },
+ {
+  "name": "北京千禧大酒店 Grand Millennium Beijing",
+  "lat": 39.91576,
+  "lon": 116.4528,
+  "height": 100,
+  "confidence": "B",
+  "source": "https://www.jufair.com/pavilion/959.html"
+ },
+ {
+  "name": "北京财富中心千禧公寓 Millennium Residences (pinwheel tower)",
+  "lat": 39.91644,
+  "lon": 116.4522,
+  "height": 105,
+  "confidence": "B",
+  "source": "https://www.beijingmillennium.com/aboutus/"
+ },
+ {
+  "name": "北京财富中心写字楼A座 Fortune Plaza Office Tower A",
+  "lat": 39.91462,
+  "lon": 116.45342,
+  "height": 155,
+  "confidence": "A",
+  "source": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Beijing"
+ },
+ {
+  "name": "SOHO尚都 南塔 South Tower",
+  "lat": 39.91616,
+  "lon": 116.44696,
+  "height": 110,
+  "confidence": "B",
+  "source": "https://architizer.com/projects/soho-shangdu/"
+ },
+ {
+  "name": "unnamed, 团结湖 residential blocks",
+  "lat": 39.92308,
+  "lon": 116.4599,
+  "height": 18,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/352729336"
+ },
+ {
+  "name": "unnamed, NE of 呼家楼桥 (东三环北路/朝阳北路)",
+  "lat": 39.92312,
+  "lon": 116.45618,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/371402221"
+ },
+ {
+  "name": "好世界商业广场 (Beijing International Center commercial podium), 东三环北路38号",
+  "lat": 39.91936,
+  "lon": 116.45672,
+  "height": 25,
+  "confidence": "C",
+  "source": "https://www.xzlsd.com/office_detail/368.html"
+ },
+ {
+  "name": "中国社会科学院 科研大楼 (建国门内大街5号)",
+  "lat": 39.90853,
+  "lon": 116.42555,
+  "height": 57,
+  "confidence": "B",
+  "source": "https://www.cass.cn/lxwm/"
+ },
+ {
+  "name": "新阳商务楼 (珠市口东大街1号)",
+  "lat": 39.89233,
+  "lon": 116.41071,
+  "height": 18,
+  "confidence": "B",
+  "source": "https://www.xzlsd.com/office_detail/2189.html"
+ },
+ {
+  "name": "新成文化大厦 (崇文门外大街11号)",
+  "lat": 39.89279,
+  "lon": 116.41196,
+  "height": 46,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E6%96%B0%E6%88%90%E6%96%87%E5%8C%96%E5%A4%A7%E5%8E%A6/2319787"
+ },
+ {
+  "name": "瑞德祺国际幼儿园 kindergarten",
+  "lat": 39.88932,
+  "lon": 116.4599,
+  "height": 12,
+  "confidence": "B",
+  "source": "https://www.openstreetmap.org/way/638337343"
+ },
+ {
+  "name": "国贸三期 podium / 国贸商城 north part (between Tower 3A and 光华路)",
+  "lat": 39.91153,
+  "lon": 116.45239,
+  "height": 25,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/660651177"
+ },
+ {
+  "name": "泰康集团大厦 Taikang Headquarters Building (CBD Z12)",
+  "lat": 39.90993,
+  "lon": 116.46169,
+  "height": 223.4,
+  "confidence": "A",
+  "source": "https://en.wikipedia.org/wiki/List_of_tallest_buildings_in_Beijing"
+ },
+ {
+  "name": "CBD核心区 Z3 office tower",
+  "lat": 39.90986,
+  "lon": 116.45703,
+  "height": 140,
+  "confidence": "A",
+  "source": "http://bj.wenming.cn/chy/wmbb/202405/t20240510_6773734.shtml"
+ },
+ {
+  "name": "博瑞大厦B座",
+  "lat": 39.92584,
+  "lon": 116.45643,
+  "height": 71.9,
+  "confidence": "A",
+  "source": "https://baike.baidu.com/item/%E5%8D%9A%E7%91%9E%E5%A4%A7%E5%8E%A6/6987165"
+ },
+ {
+  "name": "北京工业大学 地震研究所",
+  "lat": 39.87695,
+  "lon": 116.474,
+  "height": 16,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1051762781"
+ },
+ {
+  "name": "unnamed commercial (ref 1), 蒲安西里 by 安乐林路",
+  "lat": 39.86378,
+  "lon": 116.41001,
+  "height": 18,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1117497838"
+ },
+ {
+  "name": "华瀚大厦 (南磨房, 东四环)",
+  "lat": 39.87183,
+  "lon": 116.48731,
+  "height": 45,
+  "confidence": "C",
+  "source": "https://m.fang.com/zhishi/xf/bj_739489.html"
+ },
+ {
+  "name": "unnamed commercial block in the 中国海关 plot, CBD core (east of 正大中心)",
+  "lat": 39.91091,
+  "lon": 116.46278,
+  "height": 40,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1197842041"
+ },
+ {
+  "name": "抖音集团 office (朝阳北路, SW of 红领巾桥)",
+  "lat": 39.92098,
+  "lon": 116.48529,
+  "height": 40,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1302259463"
+ },
+ {
+  "name": "协和医院 link corridor (layer=1)",
+  "lat": 39.91257,
+  "lon": 116.40961,
+  "height": 12,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1302974658"
+ },
+ {
+  "name": "unnamed retail at 双井桥南",
+  "lat": 39.88764,
+  "lon": 116.45468,
+  "height": 10,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1307951460"
+ },
+ {
+  "name": "unnamed commercial at 夕照寺中街/光明楼 (McDonald's inside)",
+  "lat": 39.88752,
+  "lon": 116.43454,
+  "height": 14,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1318447523"
+ },
+ {
+  "name": "润枫·嘉尚 tower (朝阳北路, 十里堡)",
+  "lat": 39.92228,
+  "lon": 116.49684,
+  "height": 62,
+  "confidence": "B",
+  "source": "https://www.xzlsd.com/office_detail/382.html"
+ },
+ {
+  "name": "潘家园旧货市场 丙排 (roofed stall row)",
+  "lat": 39.87368,
+  "lon": 116.45309,
+  "height": 6,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1390462581"
+ },
+ {
+  "name": "CBD核心区 Z4 中国民生银行总行大楼",
+  "lat": 39.90985,
+  "lon": 116.45848,
+  "height": 140,
+  "confidence": "A",
+  "source": "https://www.bjnews.com.cn/detail/1772250548129704.html"
+ },
+ {
+  "name": "CBD核心区 Z6 远洋集团 office tower",
+  "lat": 39.90894,
+  "lon": 116.45853,
+  "height": 160,
+  "confidence": "A",
+  "source": "http://bj.wenming.cn/chy/wmbb/202405/t20240510_6773734.shtml"
+ },
+ {
+  "name": "CBD核心区 Z5 大家保险 office tower",
+  "lat": 39.90896,
+  "lon": 116.4574,
+  "height": 160,
+  "confidence": "A",
+  "source": "http://bj.wenming.cn/chy/wmbb/202405/t20240510_6773734.shtml"
+ },
+ {
+  "name": "unnamed retail strip east of 金地购物中心",
+  "lat": 39.90823,
+  "lon": 116.46956,
+  "height": 6,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1559046236"
+ },
+ {
+  "name": "unnamed retail strip east of 金地购物中心",
+  "lat": 39.90884,
+  "lon": 116.47023,
+  "height": 6,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1559046240"
+ },
+ {
+  "name": "unnamed commercial, 高碑店 by 通惠河灌渠",
+  "lat": 39.90375,
+  "lon": 116.52599,
+  "height": 12,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1264045101"
+ },
+ {
+  "name": "unnamed commercial, 高碑店 by 通惠河灌渠",
+  "lat": 39.90412,
+  "lon": 116.52554,
+  "height": 12,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1264045103"
+ },
+ {
+  "name": "unnamed commercial, 西店记忆文创小镇 (高碑店)",
+  "lat": 39.89855,
+  "lon": 116.51249,
+  "height": 9,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1264711671"
+ },
+ {
+  "name": "unnamed office in 朝阳公园 (by 太上老君庙)",
+  "lat": 39.94483,
+  "lon": 116.47738,
+  "height": 9,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/232495598"
+ },
+ {
+  "name": "ML footprint, 东大桥/朝阳北路 (near 圣天使酒店)",
+  "lat": 39.92276,
+  "lon": 116.45232,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://nominatim.openstreetmap.org/reverse?lat=39.92276&lon=116.45232&zoom=18"
+ },
+ {
+  "name": "ML footprint inside 国贸 (between China World Apartments North Lodge and a 5-storey block)",
+  "lat": 39.90977,
+  "lon": 116.45227,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://nominatim.openstreetmap.org/reverse?lat=39.90977&lon=116.45227&zoom=18"
+ },
+ {
+  "name": "ML footprint in the CBD core south plots (Z8-Z11, construction)",
+  "lat": 39.90876,
+  "lon": 116.46285,
+  "height": 8,
+  "confidence": "C",
+  "source": "https://nominatim.openstreetmap.org/reverse?lat=39.90876&lon=116.46285&zoom=18"
+ },
+ {
+  "name": "ML footprint in the CBD core south plots (construction)",
+  "lat": 39.90945,
+  "lon": 116.46385,
+  "height": 8,
+  "confidence": "C",
+  "source": "https://nominatim.openstreetmap.org/reverse?lat=39.90945&lon=116.46385&zoom=18"
+ },
+ {
+  "name": "ML footprint, 金台里 residential (金台北街)",
+  "lat": 39.92104,
+  "lon": 116.46587,
+  "height": 18,
+  "confidence": "C",
+  "source": "https://nominatim.openstreetmap.org/reverse?lat=39.92104&lon=116.46587&zoom=18"
+ },
+ {
+  "name": "ML footprint, 呼家楼 west of 北京国际中心",
+  "lat": 39.91853,
+  "lon": 116.45634,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://nominatim.openstreetmap.org/reverse?lat=39.91853&lon=116.45634&zoom=18"
+ },
+ {
+  "name": "梵悦108 (two residential/serviced towers, 建国路乙108号)",
+  "lat": 39.90552,
+  "lon": 116.45906,
+  "height": 80,
+  "confidence": "B",
+  "source": "https://house.focus.cn/zixun/1bca476277b5d78f.html"
+ },
+ {
+  "name": "unnamed block, 金台/呼家楼 east (光华路东 area)",
+  "lat": 39.91903,
+  "lon": 116.46949,
+  "height": 18,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/298031028"
+ },
+ {
+  "name": "unnamed commercial on 朝阳北路 (团结湖), in front of 16-storey 呼家楼北街 slabs",
+  "lat": 39.92235,
+  "lon": 116.45769,
+  "height": 15,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/349213078"
+ },
+ {
+  "name": "unnamed commercial, 劲松西 (广和东街)",
+  "lat": 39.88069,
+  "lon": 116.44493,
+  "height": 12,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1318077953"
+ },
+ {
+  "name": "unnamed office in the 三里屯 embassy area (next to Nigerian and Pakistani embassies)",
+  "lat": 39.9421,
+  "lon": 116.45409,
+  "height": 15,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/228086991"
+ },
+ {
+  "name": "永利国际购物中心 Yongli International mall",
+  "lat": 39.9334,
+  "lon": 116.43842,
+  "height": 14,
+  "confidence": "B",
+  "source": "https://www.visitbeijing.com.cn/article/47Qm5qtFSZZ"
+ },
+ {
+  "name": "世茂工三 mall (building 2)",
+  "lat": 39.93346,
+  "lon": 116.44316,
+  "height": 25,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E4%B8%96%E8%8C%82%E5%B7%A5%E4%B8%89/1626909"
+ },
+ {
+  "name": "天辰大厦 (朝阳门北大街乙12号)",
+  "lat": 39.92676,
+  "lon": 116.42966,
+  "height": 80,
+  "confidence": "A",
+  "source": "https://www.5sw.com/show/office/8359.html"
+ },
+ {
+  "name": "中青大厦 China Youth Plaza (东三环北路19号)",
+  "lat": 39.92756,
+  "lon": 116.45438,
+  "height": 88,
+  "confidence": "A",
+  "source": "https://baike.baidu.com/item/%E4%B8%AD%E9%9D%92%E5%A4%A7%E5%8E%A6/9413032"
+ },
+ {
+  "name": "unnamed commercial, 工人体育场北路66号 (by 港澳中心/Swissotel)",
+  "lat": 39.93153,
+  "lon": 116.43088,
+  "height": 55,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/347258533"
+ },
+ {
+  "name": "unnamed commercial beside a 170 m tower, between 世茂工三 and 三里屯SOHO",
+  "lat": 39.93158,
+  "lon": 116.44589,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/347403608"
+ },
+ {
+  "name": "unnamed commercial, 团结湖 (姚家园路)",
+  "lat": 39.92792,
+  "lon": 116.45899,
+  "height": 25,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/350719271"
+ },
+ {
+  "name": "unnamed commercial beside 天辰大厦 (朝外北街)",
+  "lat": 39.92647,
+  "lon": 116.42905,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/351672644"
+ },
+ {
+  "name": "西环广场 tower (north), 西直门",
+  "lat": 39.94091,
+  "lon": 116.34637,
+  "height": 99,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E8%A5%BF%E7%8E%AF%E5%B9%BF%E5%9C%BA/4267960"
+ },
+ {
+  "name": "西环广场 tower (middle), 西直门",
+  "lat": 39.94031,
+  "lon": 116.34653,
+  "height": 99,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E8%A5%BF%E7%8E%AF%E5%B9%BF%E5%9C%BA/4267960"
+ },
+ {
+  "name": "西环广场 tower (south), 西直门",
+  "lat": 39.93971,
+  "lon": 116.34667,
+  "height": 99,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E8%A5%BF%E7%8E%AF%E5%B9%BF%E5%9C%BA/4267960"
+ },
+ {
+  "name": "三里屯SOHO shopping block (south-west)",
+  "lat": 39.93005,
+  "lon": 116.44681,
+  "height": 24,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E4%B8%89%E9%87%8C%E5%B1%AFSOHO/8382458"
+ },
+ {
+  "name": "三里屯SOHO shopping block",
+  "lat": 39.93059,
+  "lon": 116.44782,
+  "height": 24,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E4%B8%89%E9%87%8C%E5%B1%AFSOHO/8382458"
+ },
+ {
+  "name": "三里屯SOHO shopping block (Building 5 area)",
+  "lat": 39.93031,
+  "lon": 116.4481,
+  "height": 24,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E4%B8%89%E9%87%8C%E5%B1%AFSOHO/8382458"
+ },
+ {
+  "name": "三里屯SOHO shopping block (north-west)",
+  "lat": 39.93093,
+  "lon": 116.44686,
+  "height": 24,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E4%B8%89%E9%87%8C%E5%B1%AFSOHO/8382458"
+ },
+ {
+  "name": "三里屯SOHO shopping block (east)",
+  "lat": 39.93133,
+  "lon": 116.44815,
+  "height": 24,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E4%B8%89%E9%87%8C%E5%B1%AFSOHO/8382458"
+ },
+ {
+  "name": "unnamed retail near 越秀大饭店 (宣武门外)",
+  "lat": 39.89745,
+  "lon": 116.369,
+  "height": 15,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/230698937"
+ },
+ {
+  "name": "国信证券大厦 (金融街兴盛街6号)",
+  "lat": 39.90846,
+  "lon": 116.35459,
+  "height": 45,
+  "confidence": "C",
+  "source": "https://bj.city8.com/financial/887v9o81jmlvb10eb8"
+ },
+ {
+  "name": "unnamed office in the 国家电网冀北公司 compound (白纸坊/枣林前街)",
+  "lat": 39.88121,
+  "lon": 116.35171,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1324451723"
+ },
+ {
+  "name": "三里屯SOHO Building 12 (relation; same outline as way 191693428 \"Sanlitun SOHO-A\")",
+  "lat": 39.93167,
+  "lon": 116.44689,
+  "height": 80,
+  "confidence": "C",
+  "source": "https://baike.baidu.com/item/%E4%B8%89%E9%87%8C%E5%B1%AFSOHO/8382458"
+ }
+]

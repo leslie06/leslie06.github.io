@@ -10,6 +10,17 @@ export function inside(x: number, z: number, r: number[]): boolean {
   return c;
 }
 
+/** Two flat rings overlap: a corner of either inside the other (enough for footprints and zones). */
+export function overlaps(a: number[], b: number[]): boolean {
+  let ax0 = Infinity, ax1 = -Infinity, az0 = Infinity, az1 = -Infinity, bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
+  for (let i = 0; i < a.length; i += 2) { ax0 = Math.min(ax0, a[i]); ax1 = Math.max(ax1, a[i]); az0 = Math.min(az0, a[i + 1]); az1 = Math.max(az1, a[i + 1]); }
+  for (let i = 0; i < b.length; i += 2) { bx0 = Math.min(bx0, b[i]); bx1 = Math.max(bx1, b[i]); bz0 = Math.min(bz0, b[i + 1]); bz1 = Math.max(bz1, b[i + 1]); }
+  if (ax1 < bx0 || bx1 < ax0 || az1 < bz0 || bz1 < az0) return false;
+  for (let i = 0; i < a.length; i += 2) if (inside(a[i], a[i + 1], b)) return true;
+  for (let i = 0; i < b.length; i += 2) if (inside(b[i], b[i + 1], a)) return true;
+  return false;
+}
+
 /** `list` without the records (of `stride` numbers, x at `xi` and z at `zi`) that stand in a zone. */
 export function dropInside(list: number[], stride: number, zones: number[][], xi = 0, zi = 1): number[] {
   if (!zones.length || !list.length) return list;

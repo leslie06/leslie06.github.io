@@ -69,11 +69,18 @@ export class MapData {
     this.buildMs = performance.now() - t0;
   }
 
-  /** Start the area crawl, nearest tiles to (x, z) first. */
+  /** Start the area crawl, nearest map blocks to (x, z) first. */
   load(manifest: Manifest, x: number, z: number, concurrency = 4): void {
     if (this.worker) return;
-    const T = manifest.tile;
-    const keys = Object.keys(manifest.tiles).map((k) => { const [ix, iz] = k.split('_').map(Number); return { k, d: Math.hypot((ix + 0.5) * T - x, (iz + 0.5) * T - z) }; });
+    const T = manifest.tile, B = T * 4;
+    const seen = new Set<string>();
+    const keys: { k: string; d: number }[] = [];
+    for (const k of Object.keys(manifest.tiles)) {
+      const [ix, iz] = k.split('_').map(Number), bx = Math.floor(ix / 4), bz = Math.floor(iz / 4), bk = `${bx}_${bz}`;
+      if (seen.has(bk)) continue;
+      seen.add(bk);
+      keys.push({ k: bk, d: Math.hypot((bx + 0.5) * B - x, (bz + 0.5) * B - z) });
+    }
     keys.sort((a, b) => a.d - b.d);
     this.tilesTotal = keys.length;
     if (!keys.length) { this.done(); return; }
@@ -82,10 +89,11 @@ export class MapData {
       w.onmessage = (ev: MessageEvent<MapWorkerOut>) => {
         const m = ev.data;
         if ('tile' in m) this.ingest(m.tile);
-        else { w.terminate(); this.worker = null; this.done(); if (m.failed) console.warn(`[nav] ${m.failed} map tiles failed to load`); }
+        else if ('block' in m) { this.tilesLoaded++; this.version++; }
+        else { w.terminate(); this.worker = null; this.done(); if (m.failed) console.warn(`[nav] ${m.failed} map blocks failed to load`); }
       };
       w.onerror = (e) => { console.warn('[nav] map worker', e.message); this.done(); };
-      const msg: MapWorkerIn = { tiles: keys.map(({ k }) => [k, new URL(`${BASE}city/t_${k}.json`, location.href).href]), concurrency, tile: T };
+      const msg: MapWorkerIn = { blocks: keys.map(({ k }) => [k, new URL(`${BASE}city/map/m_${k}.json`, location.href).href]), concurrency, tile: T };
       w.postMessage(msg);
     } catch (e) { console.warn('[nav] no map worker', e); this.done(); }
   }
@@ -95,7 +103,6 @@ export class MapData {
   private ingest(msg: MapTileMsg): void {
     this.tiles.set(ck(msg.ix, msg.iz), { msg, cell: null });
     this.coarseAreas.delete(ck(Math.floor(msg.ix * FINE / COARSE), Math.floor(msg.iz * FINE / COARSE)));
-    this.tilesLoaded++;
     this.version++;
   }
 

@@ -9,3 +9,4 @@ scripts/blender/*.zip
 __pycache__/
 *.blend1
 data/*.pbf
+data/*.zip

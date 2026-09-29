@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pinyinOf } from './pinyin.mjs';
+import { available as extraAvailable, clsmFootprints, grid, heightRasters, sample, scan } from './extra-buildings.mjs';
 import { REGIONS, TILE, project } from './region.mjs';
 
 const RAW = path.resolve('.cache/osm');
@@ -1019,6 +1020,9 @@ for (const w of ways) {
   const t = w.tags; if (!t || !w.geometry || w.geometry.length < 4) continue;
   // An indoor room (a metro station's halls under 前门) is not a building's shell: it drew as a 18 m block.
   if (t.indoor === 'room') continue;
+  // Underground (a metro station's outline, layer -1..-5, over the street it runs under): 太平桥 and
+  // 北新桥 stood as 18 m blocks across 闹市口北街 and 东四北大街.
+  if ((Number(t.layer) < 0 && t.location !== 'surface') || t.location === 'underground') continue;
   if (t['building:part'] && t['building:part'] !== 'no') addBuilding(parts, w.id, t, proj(w.geometry));
   else if (t.building && t.building !== 'no') addBuilding(outlines, w.id, t, proj(w.geometry));
 }
@@ -1026,6 +1030,7 @@ for (const r of rels) {
   const t = r.tags; if (!t || (t.type !== 'multipolygon' && t.type !== 'building')) continue;
   const isPart = t['building:part'] && t['building:part'] !== 'no';
   if (!isPart && !(t.building && t.building !== 'no')) continue;
+  if ((Number(t.layer) < 0 && t.location !== 'surface') || t.location === 'underground') continue;
   const mem = (role) => r.members.filter((m) => m.type === 'way' && m.geometry && (role === 'inner' ? m.role === 'inner' : m.role !== 'inner')).map((m) => proj(m.geometry));
   const inner = assemble(mem('inner'));
   for (const outer of assemble(mem('outer'))) addBuilding(isPart ? parts : outlines, r.id, t, outer, inner.filter((h) => pip(h[0][0], h[0][1], outer)));
@@ -1038,6 +1043,49 @@ for (const o of outlines) {
   let covered = 0;
   eachTile(o.bb, (ix, iz) => { for (const p of partsByTile.get(`${ix}_${iz}`) || []) if (p.c[0] >= o.bb[0] && p.c[0] <= o.bb[2] && p.c[1] >= o.bb[1] && p.c[1] <= o.bb[3] && pip(p.c[0], p.c[1], o.ring)) covered += p.area; });
   if (covered < 0.4 * o.area) kept.push(o);
+}
+// Buildings OSM has not drawn, from machine-learnt footprints (Shi et al. 2023, via Overture; CC BY 4.0),
+// and measured heights (3D-GloBFP, CMAB) for everything OSM gives no height (extra-buildings.mjs,
+// 2026-09-29, 「尽量还原北京城的原貌」). In the play area OSM has 16k buildings and 15.2 km² of
+// footprint; the learnt set adds 40k (7.7 km²) - the courtyard houses of the hutongs, the low blocks of
+// the 小区, whole compounds - and two thirds of OSM's buildings had a made-up height. OSM wins wherever
+// it has something: a learnt footprint mostly under an OSM one is dropped (our OSM is newer than
+// Overture's), and none go in the palace or the temple (mapped to the last hall), on a carriageway or in
+// water. NO_EXTRA=1 builds without any of it.
+const EXTRA = extraAvailable() && !process.env.NO_EXTRA;
+const HG = grid(RX0, RZ0, RX1, RZ1);
+const HR = EXTRA ? heightRasters(HG) : null;
+const learnt = [];
+if (EXTRA) {
+  const osmMask = new Uint8Array(HG.nx * HG.nz);
+  for (const b of kept) scan(HG, b.ring, (i) => { osmMask[i] = 1; });
+  for (const b of parts) scan(HG, b.ring, (i) => { osmMask[i] = 1; });
+  const water = [];
+  for (const e of [...ways, ...rels]) {
+    if (!e.tags || areaKind(e.tags) !== 'water') continue;
+    const rs = e.type === 'way' ? (e.geometry && e.geometry.length >= 4 ? [openRing(proj(e.geometry))] : []) : assemble(e.members.filter((m) => m.type === 'way' && m.geometry && m.role !== 'inner').map((m) => proj(m.geometry)));
+    for (const r of rs) if (r.length >= 3) water.push({ r, bb: bboxOf(r) });
+  }
+  const inWater = (x, z) => water.some((w) => x >= w.bb[0] && x <= w.bb[2] && z >= w.bb[1] && z <= w.bb[3] && pip(x, z, w.r));
+  const drop = { osm: 0, zone: 0, road: 0, water: 0 };
+  let id = 8e12;
+  for (const ring of clsmFootprints(inRegion)) {
+    const n0 = learnt.length;
+    addBuilding(learnt, id++, { building: 'yes' }, ring);
+    if (learnt.length === n0) continue;
+    const b = learnt[n0], [cx, cz] = b.c, z = zone(cx, cz);
+    let n = 0, o = 0;
+    scan(HG, b.ring, (i) => { n++; o += osmMask[i]; });
+    // Into a carriageway: any corner or edge midpoint more than 0.5 m inside one (it would stand in the road).
+    let onRoad = inCarriageway(cx, cz, 0.5);
+    for (let k = 0; k < b.ring.length && !onRoad; k++) {
+      const [ax, az] = b.ring[k], [bx, bz] = b.ring[(k + 1) % b.ring.length];
+      onRoad = inCarriageway(ax, az, -0.5) || inCarriageway((ax + bx) / 2, (az + bz) / 2, -0.5);
+    }
+    const why = z === 'palace' || z === 'temple' ? 'zone' : n && o / n > 0.12 ? 'osm' : onRoad ? 'road' : inWater(cx, cz) ? 'water' : '';
+    if (why) { drop[why]++; learnt.pop(); }
+  }
+  console.log(`learnt footprints: ${learnt.length} added (${(learnt.reduce((a, b) => a + b.area, 0) / 1e6).toFixed(2)} km²), dropped`, drop);
 }
 // Blocks OSM has not drawn, in the corridors (2026-09-29): 东四环's east side from 朝阳公园桥 to 东风北桥
 // is mapped as residential land with almost no buildings in it, and the ring ran between empty paved
@@ -1053,6 +1101,7 @@ const filled = [];
   const index = (b) => eachTile(b.bb, (ix, iz) => { const k = `${ix}_${iz}`; (exIndex.get(k) ?? exIndex.set(k, []).get(k)).push(b); });
   for (const b of kept) index(b);
   for (const b of parts) index(b);
+  for (const b of learnt) index(b);
   const inExisting = (x, z, m) => { for (const b of exIndex.get(tileOf(x, z).join('_')) ?? []) if (x > b.bb[0] - m && x < b.bb[2] + m && z > b.bb[1] - m && z < b.bb[3] + m && (m === 0 ? pip(x, z, b.ring) : true)) return true; return false; };
   // Ground that must stay open: water, parks, pitches, woods, car parks, railways, squares.
   const open = [];
@@ -1145,7 +1194,7 @@ const filled = [];
   }
   console.log(`filled: ${filled.length - hoard} blocks in ${lands.length} residential/commercial polygons of the corridors, ${hoard} lengths of hoarding round the building sites`);
 }
-const buildings = kept.concat(parts, filled);
+const buildings = kept.concat(parts, learnt, filled);
 // Roads through a building (OSM tunnel=building_passage: a gate, an arch under a block): the building
 // gets a passage - [ax, az, bx, bz, half width, clearance] per segment, the segment carried 4 m past
 // the road's ends so it cuts both walls - and the tile mesher opens its walls there, lines the
@@ -1179,7 +1228,37 @@ const passageOf = new Map();
   }
   console.log(`passages: ${passageOf.size} buildings with a road through them`);
 }
+// Where OSM gives no height: the measured sets' estimate (HEIGHT_EVAL=1 prints how each does against the
+// buildings OSM does give a height).
+const DEBUG_AT = process.env.DEBUG_AT?.split(',').map(Number);
+const HEIGHT_EVAL = !!process.env.HEIGHT_EVAL, heightEval = [], guessLog = [], heightFrom = { osm: 0, curated: 0, corrected: 0, measured: 0, guessed: 0 };
+// 3D-GloBFP, else CMAB: against OSM's heights of 6 m and more, 3D-GloBFP is off by a median 2.6 m at 6-12 m
+// (CMAB 7.5), ~5 m at 12-30 m, and it flattens towers (-25% at 30-60 m, -50% over 60), so what it puts
+// over 22 m is stretched by 1.4.
+function measured(e) { const v = e.globfp || e.cmab; return v > 22 ? 22 + (v - 22) * 1.4 : v; }
 const ROOF = { flat: 'f', gabled: 'g', hipped: 'h', pyramidal: 'p', skillion: 's', dome: 'd', half_hipped: 'h', round: 'd', onion: 'd' };
+// Hutong context: the share of the ground within ~60 m covered by house-sized buildings (under 300 m²) in
+// the old city. The learnt heights put a courtyard house at 8-19 m (median 12 in 南池子, where the
+// houses are 4-6 m) - trusted there, they turned the hutongs round the palace into mid-rise blocks - while
+// the old city's walk-ups (15-20 m) stand in blocks of their own. Where the houses dominate, a building
+// they put under 20 m is a courtyard house.
+const HC = 40, hutongCells = new Map();
+for (const b of kept.concat(learnt)) {
+  if (b.area >= 300 || zone(b.c[0], b.c[1]) !== 'old') continue;
+  const k = `${Math.floor(b.c[0] / HC)}_${Math.floor(b.c[1] / HC)}`;
+  hutongCells.set(k, (hutongCells.get(k) ?? 0) + b.area);
+}
+function hutongContext(x, z) {
+  const cx = Math.floor(x / HC), cz = Math.floor(z / HC);
+  let a = 0;
+  for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) a += hutongCells.get(`${cx + dx}_${cz + dz}`) ?? 0;
+  return a / (9 * HC * HC);
+}
+// Heights looked up by hand (scripts/city/heights.json, with sources): the CBD's towers and malls that
+// neither OSM nor the measured sets give a height (the learnt sets miss most big buildings there, and
+// the old guess put 金地购物中心, a mall, at 207 m). Matched by a point inside the footprint.
+const curated = fs.existsSync('scripts/city/heights.json') ? JSON.parse(fs.readFileSync('scripts/city/heights.json', 'utf8')).map((q) => ({ ...q, p: project(q.lat, q.lon) })) : [];
+const curatedFor = (b) => curated.find((q) => q.p[0] >= b.bb[0] && q.p[0] <= b.bb[2] && q.p[1] >= b.bb[1] && q.p[1] <= b.bb[3] && pip(q.p[0], q.p[1], b.ring));
 const kinds = {};
 const named = {};
 const bIndex = new Map(); // tile -> buildings (by bbox) for tree exclusion
@@ -1199,14 +1278,51 @@ for (const b of buildings) {
   else if (z === 'cbd' && b.area > 600) kind = 'glass';
   else kind = z === 'old' && b.area < 420 ? 'hutong' : 'resid';
   let h = parseLen(t.height);
+  const cur = !(h > 0) && curated.length ? curatedFor(b) : null;
+  if (cur) { h = cur.height; heightFrom.curated++; }
+  const hTag = h > 0;
   if (!(h > 0) && levels > 0) h = levels * 3.2 + (roofLevels > 0 ? roofLevels * 2.4 : 0);
+  // Measured heights and CMAB's function under the footprint (extra-buildings.mjs).
+  const ext = HR && bt !== 'wall' ? sample(HG, HR, b.ring, b.c) : null;
+  if (ext && HEIGHT_EVAL && h > 0) heightEval.push([h, ext.globfp, ext.cmab, Math.round(b.area), z, b.id, levels > 0 ? 1 : 0]);
+  // Not for what OSM says is a single-storey type (bungalow, house, garage...), and not CMAB alone under a
+  // small footprint (it puts 30 m on 30 m² courtyard wings round 鼓楼: its polygons merge neighbours).
+  const lowType = /^(bungalow|house|detached|semidetached_house|terrace|garage|garages|shed|hut|kiosk|toilets|roof|carport|cabin|greenhouse|service)$/.test(bt);
+  let mh = ext && kind !== 'trad' && kind !== 'station' && !lowType && (ext.globfp || b.area >= 300) ? measured(ext) : 0;
+  // A footprint under 150 m² the sets put over 12 m (a seven-storey pencil tower among the courtyards)
+  // is a tall neighbour's roof traced over it: the learnt outlines are roofs, towers lean ~20 m off.
+  if (b.area < 150 && mh > 12) mh = 0;
+  // OSM's building:levels=1 is wrong on much of Beijing: 3,700 of the 6,000 buildings here with a height
+  // say one storey, most from one mass edit, apartment blocks among them (drawn as 3 m slabs). Outside
+  // the courtyard houses, a one-storey tag the measurement puts at 9 m or more (15 in the old city) goes.
+  const houses = z === 'old' && hutongContext(cx, cz) > 0.15;
+  if (!hTag && levels === 1 && mh >= (houses ? 22 : z === 'old' ? 15 : 9) && !(z === 'old' && b.area < 420)) { h = mh; heightFrom.corrected++; }
+  else if (h > 0 && !cur) heightFrom.osm++;
+  else if (mh > 0) {
+    // The learnt heights cannot tell a courtyard house from a three-storey block (they bottom out near
+    // 8 m): among the courtyard houses, what they put under 20 m is one (its default height).
+    if (bt === 'yes' && z === 'old' && (houses ? b.area < 600 && mh < 20 : b.area < 420 && mh < 14)) kind = 'hutong';
+    else {
+      h = Math.max(3, mh);
+      heightFrom.measured++;
+      if (bt === 'yes' && z === 'old') kind = h <= 6.5 ? 'hutong' : kind === 'hutong' ? 'resid' : kind;
+    }
+  }
+  if (DEBUG_AT && Math.hypot(cx - DEBUG_AT[0], cz - DEBUG_AT[1]) < DEBUG_AT[2]) console.log('bld', b.id, bt, kind, 'area', Math.round(b.area), 'h', h && h.toFixed(1), 'levels', levels, 'ext', ext && [ext.globfp, ext.cmab, ext.fn], 'houses', hutongContext(cx, cz).toFixed(2));
+  // What CMAB says it is used for, for the buildings OSM only calls building=yes.
+  if (ext?.fn && bt === 'yes' && kind === 'resid') {
+    if (ext.fn === 'Office' || ext.fn === 'Commerce' || ext.fn === 'Public service') kind = z === 'cbd' && b.area > 600 ? 'glass' : 'office';
+    else if (ext.fn === 'Industry' && !(h > 12)) kind = 'low';
+  }
   if (!(h > 0)) {
+    heightFrom.guessed++;
+    if (process.env.GUESS_LOG && (kind === 'glass' || kind === 'office') && b.area > 600) guessLog.push([b.id, kind, Math.round(b.area), t.name ?? '', Math.round(cx), Math.round(cz)]);
     const s = Math.sqrt(b.area);
     h = kind === 'hutong' ? 4.2 + 1.8 * r
       : kind === 'trad' ? (bt === 'gate' ? 10 + 4 * r : 8 + 8 * r)
       : kind === 'wall' ? 4
       : kind === 'low' ? 4 + 3 * r
-      : kind === 'glass' ? Math.min(230, 50 + s * (0.9 + 1.4 * r))
+      : kind === 'glass' ? (b.area > 6000 ? 24 + 12 * r : Math.min(160, 50 + s * (0.9 + 1.4 * r)))  // a footprint that big is a podium or a mall
       : kind === 'station' ? 18
       : kind === 'office' ? 14 + 22 * r + (z === 'city' || z === 'cbd' ? 14 : 0)
       : b.area < 500 ? 11 + 8 * r : 18 + 28 * r + (z === 'city' ? 12 : 0);
@@ -1242,6 +1358,22 @@ for (const b of buildings) {
   if (deck < Infinity && h > deck - 1.5) { underCut++; continue; }
   tile(...tileOf(cx, cz)).buildings.push(rec);
   eachTile(b.bb, (ix, iz) => { const k = `${ix}_${iz}`; (bIndex.get(k) ?? bIndex.set(k, []).get(k)).push(b); });
+}
+console.log('heights:', heightFrom);
+if (process.env.GUESS_LOG) fs.writeFileSync('.scratch/guesslog.json', JSON.stringify(guessLog));
+if (HEIGHT_EVAL) {
+  // Against OSM's own heights (levels x 3.2 or height): median absolute error and bias per estimator, by band.
+  const est = { globfp: (g, c) => g, cmab: (g, c) => c, mean: (g, c) => (g && c ? (g + c) / 2 : g || c), max: (g, c) => Math.max(g, c) };
+  for (const [lo, hi] of [[0, 12], [12, 30], [30, 60], [60, 400]]) {
+    const rows = heightEval.filter(([h]) => h >= lo && h < hi);
+    const out = [];
+    for (const [k, f] of Object.entries(est)) {
+      const e = rows.map(([h, g, c]) => [h, f(g, c)]).filter(([, v]) => v > 0), err = e.map(([h, v]) => Math.abs(v - h)).sort((a, b) => a - b), bias = e.map(([h, v]) => v - h).sort((a, b) => a - b);
+      out.push(`${k} n${e.length} mae ${err[err.length >> 1]?.toFixed(1)} bias ${bias[bias.length >> 1]?.toFixed(1)}`);
+    }
+    console.log(`  osm ${lo}-${hi} m (${rows.length}):`, out.join(' | '));
+  }
+  fs.writeFileSync('.scratch/heighteval.json', JSON.stringify(heightEval));
 }
 function inBuilding(x, z, margin = 0) {
   for (const b of bIndex.get(tileOf(x, z).join('_')) || []) {
@@ -1319,7 +1451,18 @@ for (const w of ways) if (w.tags?.natural === 'tree_row' && w.geometry) {
   const p = proj(w.geometry);
   for (let i = 1; i < p.length; i++) { const L = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); for (let s = 0; s < L; s += 7) addTree(p[i - 1][0] + (p[i][0] - p[i - 1][0]) * s / L, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * s / L); }
 }
-// Scatter in woods and parks (jittered grid, deterministic).
+// Scatter in woods and parks (jittered grid, deterministic) - but not on the water, pitches and squares
+// inside them: 北海 and 中南海 are park polygons round their lakes, and the lakes were planted.
+const noTrees = new Map();
+for (const a of areaPolys) {
+  if (a.k !== 'water' && a.k !== 'pitch' && a.k !== 'plaza') continue;
+  const bb = bboxOf(a.outer);
+  for (let ix = Math.floor(bb[0] / 256); ix <= Math.floor(bb[2] / 256); ix++) for (let iz = Math.floor(bb[1] / 256); iz <= Math.floor(bb[3] / 256); iz++) {
+    const k = ix * 65536 + iz;
+    (noTrees.get(k) ?? noTrees.set(k, []).get(k)).push({ a, bb });
+  }
+}
+const onOpen = (x, z) => (noTrees.get(Math.floor(x / 256) * 65536 + Math.floor(z / 256)) ?? []).some(({ a, bb }) => x >= bb[0] && x <= bb[2] && z >= bb[1] && z <= bb[3] && pip(x, z, a.outer) && !a.holes.some((h) => pip(x, z, h)));
 for (const a of areaPolys) {
   if (a.k !== 'wood' && a.k !== 'park') continue;
   const step = a.k === 'wood' ? 8 : 16;
@@ -1329,6 +1472,7 @@ for (const a of areaPolys) {
     const px = x + (rnd(id, 3) - 0.5) * step * 0.9, pz = z + (rnd(id, 4) - 0.5) * step * 0.9;
     if (!pip(px, pz, a.outer) || a.holes.some((h) => pip(px, pz, h))) continue;
     if (a.k === 'park' && rnd(id, 5) < 0.35) continue;
+    if (onOpen(px, pz)) continue;
     addTree(px, pz);
   }
 }
@@ -1526,12 +1670,39 @@ for (const [k, t] of tiles) {
   index[k] = [t.buildings.length, t.roads.length, t.trees.length / 4];
   bytes += s.length;
 }
+// The maps' area layer (nav/mapWorker.ts), baked per block of 4 x 4 tiles: water, green, plazas and
+// building outlines in whole metres. The map used to fetch every tile, all of it, to draw itself -
+// 20 MB for the first city, 38 MB once the old city was in, and the 4th Ring would be three times that.
+{
+  const MAPDIR = path.join(OUT, 'map');
+  fs.rmSync(MAPDIR, { recursive: true, force: true });
+  fs.mkdirSync(MAPDIR, { recursive: true });
+  const GREEN = new Set(['park', 'wood', 'grass', 'pitch']);
+  const blocks = new Map();
+  const ints = (r) => r.map((v) => Math.round(v));
+  for (const [k, t] of tiles) {
+    if (!t.buildings.length && !t.areas.length) continue;
+    const e = { k, w: [], g: [], p: [], b: [] };
+    for (const a of t.areas) {
+      const dst = a.k === 'water' ? e.w : GREEN.has(a.k) ? e.g : a.k === 'plaza' ? e.p : null;
+      if (!dst) continue;
+      dst.push(ints(a.o));
+      for (const h of a.hs ?? []) dst.push(ints(h));
+    }
+    for (const b of t.buildings) { e.b.push(ints(b.o)); for (const h of b.hs ?? []) e.b.push(ints(h)); }
+    const bk = `${Math.floor(t.ix / 4)}_${Math.floor(t.iz / 4)}`;
+    (blocks.get(bk) ?? blocks.set(bk, []).get(bk)).push(e);
+  }
+  let mb = 0;
+  for (const [bk, list] of blocks) { const s = JSON.stringify(list); mb += s.length; fs.writeFileSync(path.join(MAPDIR, `m_${bk}.json`), s); }
+  console.log(`map layer: ${blocks.size} blocks, ${(mb / 1e6).toFixed(1)} MB`);
+}
 const net = JSON.stringify({ nodes: netXZ, sig: Array.from(sig), edges, br: bridgeNames, en: roadEn });
 fs.writeFileSync(path.join(OUT, 'network.json'), net);
 const manifest = {
   version: 1, tile: TILE, origin: { lat: 39.90883, lon: 116.39757 },
   bounds: { x0: q1(RX0), z0: q1(RZ0), x1: q1(RX1), z1: q1(RZ1) }, regions: RECTS.map((r) => r.map(q1)), tiles: index, spawn, named,
-  attribution: 'Map data © OpenStreetMap contributors (ODbL)',
+  attribution: EXTRA ? 'Map data © OpenStreetMap contributors (ODbL), Overture Maps · building footprints Shi et al. 2023, heights 3D-GloBFP, CMAB (CC BY 4.0)' : 'Map data © OpenStreetMap contributors (ODbL)',
 };
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest));
 fs.writeFileSync(path.join(OUT, 'skyline.json'), JSON.stringify({ b: sky }));

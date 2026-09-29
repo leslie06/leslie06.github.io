@@ -8,7 +8,7 @@ import { buildBuildings } from './Buildings';
 import { buildRoads } from './Roads';
 import { buildAreas } from './Areas';
 import { placeFurniture, type Furniture } from './visual/StreetFurniture';
-import { clearStreet, inside } from './Clear';
+import { clearStreet, inside, overlaps } from './Clear';
 import type * as THREE from 'three';
 
 export interface PackedGeometry { name: string; attrs: { name: string; array: Float32Array; itemSize: number }[]; index?: Uint32Array }
@@ -44,11 +44,16 @@ self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints:
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as TileData;
-    const skip = footprints.length ? (b: BuildingRec) => {
+    // A footprint removes the buildings whose centre it holds; a learnt building (ids from 8e12, machine-
+    // learnt footprints OSM lacks) goes if it overlaps a footprint at all, and anything overlapping a clear
+    // zone goes (the villa's drive, the shortcuts: sited on open ground that the learnt set may build on).
+    const skip = footprints.length || clear.length ? (b: BuildingRec) => {
       let cx = 0, cz = 0; const n = b.o.length / 2;
       for (let i = 0; i < b.o.length; i += 2) { cx += b.o[i]; cz += b.o[i + 1]; }
       cx /= n; cz /= n;
-      return footprints.some((f) => inside(cx, cz, f));
+      if (footprints.some((f) => inside(cx, cz, f))) return true;
+      const learnt = b.i >= 8e12 && b.i < 9e12;
+      return clear.some((f) => overlaps(b.o, f)) || (learnt && footprints.some((f) => overlaps(b.o, f)));
     } : undefined;
     const geoms: PackedGeometry[] = [], transfer: Transferable[] = [];
     const bm = buildBuildings(data.buildings, skip, data.roads);

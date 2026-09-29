@@ -94,7 +94,7 @@ for (const p of out) {
   if (cat === C.hospital) {
     const i = name.indexOf('附属');
     if (i >= 0 && name.length - i - 2 >= 4) name = name.slice(i + 2);
-    name = name.replace(/^北京(市)?(?!医院)(?=.{4,})/, '');
+    name = name.replace(/^北京(市)?(?!医院|大学)(?=.{4,})/, '');
   }
   // A long name with no Chinese in it (an English-only tag) is not something a map in either language shows.
   if (!/[一-鿿]/.test(name) && name.length > 14) continue;
