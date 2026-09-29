@@ -47,6 +47,26 @@ describe('guide signs', () => {
       }
     }
   });
+  it('have no deck over the pole or the plate (every segment scanned, not just nearby points)', () => {
+    const bad: string[] = [];
+    for (const s of signs) {
+      const c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
+      const spots = [0, s.reach - s.w / 2, s.reach, s.reach + s.w / 2].map((r) => [s.x - r * c, s.z + r * sn]);
+      for (const o of g.links) {
+        if (!o.h || o.hmax < s.y + 1.5) continue;
+        for (let k = 1; k < o.cum.length; k++) {
+          const ax = o.pts[k * 2 - 2], az = o.pts[k * 2 - 1], vx = o.pts[k * 2] - ax, vz = o.pts[k * 2 + 1] - az, L2 = vx * vx + vz * vz || 1;
+          for (const [x, z] of spots) {
+            const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L2)), d = Math.hypot(x - ax - vx * t, z - az - vz * t);
+            if (d > o.hw + 1.2) continue;
+            const h = g.heightAt(o, o.cum[k - 1] + t * Math.sqrt(L2));
+            if (h > s.y + 1.5 && h < s.y + s.clear + s.h + 1) bad.push(`${s.kind} ${s.lines.map((q) => q.name).join('/')} at ${s.x.toFixed(0)},${s.z.toFixed(0)} under ${o.name || o.cls} at ${h.toFixed(1)} m`);
+          }
+        }
+      }
+    }
+    expect(bad).toEqual([]);
+  });
   it('close the roads that run off the data', () => {
     expect(closures.length).toBeGreaterThan(20);
     // 东四环 north of 东风北桥 leaves the data at z -6028.

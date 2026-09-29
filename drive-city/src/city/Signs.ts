@@ -145,9 +145,31 @@ export function placeSigns(g: LaneGraph, net: Network, regions?: number[][]): { 
     return best;
   };
   const proj = projectAll;
+  // Links by 32 m cell along every segment, not only at their points: g.near indexes points, and a deck's
+  // straight run between two points 200 m apart passed over a sign's spot unseen - the plate of a sign
+  // for the street under 东四环 at 百子湾路 stood up through the deck (「路牌嵌入到了马路里」).
+  const CELL = 32, segGrid = new Map<number, number[]>();
+  const ck = (ix: number, iz: number) => ix * 100003 + iz;
+  for (const o of L) {
+    for (let k = 1; k < o.cum.length; k++) {
+      const ax = o.pts[k * 2 - 2], az = o.pts[k * 2 - 1], bx = o.pts[k * 2], bz = o.pts[k * 2 + 1];
+      const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / (CELL / 2)));
+      for (let j = 0; j <= n; j++) {
+        const key = ck(Math.floor((ax + (bx - ax) * j / n) / CELL), Math.floor((az + (bz - az) * j / n) / CELL));
+        const list = segGrid.get(key) ?? segGrid.set(key, []).get(key)!;
+        if (list[list.length - 1] !== o.id) list.push(o.id);
+      }
+    }
+  }
+  /** Links with a segment passing within about a cell of (x, z). */
+  const nearLinks = (x: number, z: number): Set<number> => {
+    const out = new Set<number>(), cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const id of segGrid.get(ck(cx + i, cz + j)) ?? []) out.add(id);
+    return out;
+  };
   /** Not in any carriageway at about the same height (a pole's spot). */
   const clearOfRoads = (x: number, z: number, y: number, margin: number) => {
-    for (const id of g.near(x, z, 30)) {
+    for (const id of nearLinks(x, z)) {
       const o = L[id], p = proj(o, x, z);
       if (p.d < o.hw + margin && Math.abs(g.heightAt(o, p.s) - y) < 3.5) return false;
     }
@@ -155,7 +177,7 @@ export function placeSigns(g: LaneGraph, net: Network, regions?: number[][]): { 
   };
   /** Nothing overhead between the base and the top of the plate (a deck passing over the spot). */
   const clearOverhead = (x: number, z: number, y: number, top: number) => {
-    for (const id of g.near(x, z, 30)) {
+    for (const id of nearLinks(x, z)) {
       const o = L[id];
       if (!o.h) continue;
       const p = proj(o, x, z);
@@ -183,7 +205,8 @@ export function placeSigns(g: LaneGraph, net: Network, regions?: number[][]): { 
       // plate's right edge 2 m in from the kerb, or as far as the carriageway's middle allows on a narrow road.
       const reach = Math.max(extra + w / 2 - 0.4, Math.min(extra + 2 + w / 2, off));
       const qx = px + dz * reach, qz = pz - dx * reach;
-      if (!clearOverhead(qx, qz, y, CLEARANCE + h) || !clearOverhead(px, pz, y, CLEARANCE + h)) continue;
+      // The pole, the plate's middle and both its ends.
+      if (![[px, pz], [qx, qz], [qx + dz * w / 2, qz - dx * w / 2], [qx - dz * w / 2, qz + dx * w / 2]].every(([ox, oz]) => clearOverhead(ox, oz, y, CLEARANCE + h))) continue;
       const colour = l.cls === 'motorway' || l.cls === 'motorway_link' ? 'green' : 'blue';
       signs.push({ kind, colour, x: px, z: pz, y, yaw: Math.atan2(-dx, -dz), reach, w, h, clear: CLEARANCE, lines, heading, link: l.id, s });
       placed.push({ x: cx, z: cz, dx, dz, y });
