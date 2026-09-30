@@ -1,0 +1,51 @@
+{
+  "id": "zhonglou",
+  "name": {
+    "zh": "钟楼",
+    "en": "Bell Tower"
+  },
+  "lat": 39.9410218,
+  "lon": 116.3896404,
+  "headingDeg": -0.7,
+  "file": "zhonglou.glb",
+  "version": "9fb50835",
+  "footprint": [
+    [-17, -18.1],
+    [17, -18.1],
+    [17, 18.1],
+    [-17, 18.1]
+  ],
+  "moreFootprints": [
+    [
+      [16.33, 5.5],
+      [16.34, -11.7],
+      [39.55, -11.72],
+      [39.53, 5.58]
+    ],
+    [
+      [-38.78, 6.23],
+      [-38.76, -11.57],
+      [-16.36, -11.6],
+      [-16.38, 6.3]
+    ]
+  ],
+  "height": 47.35,
+  "farDistance": 500,
+  "stats": {
+    "triangles": 51330,
+    "farTriangles": 962,
+    "materials": 10,
+    "farMaterials": 5,
+    "colliders": {
+      "solid": 18,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 5,
+    "textures": 3,
+    "maxTexture": 2048,
+    "footprintArea": 2031,
+    "bytes": 798608,
+    "source": "zhonglou.glb"
+  }
+}
