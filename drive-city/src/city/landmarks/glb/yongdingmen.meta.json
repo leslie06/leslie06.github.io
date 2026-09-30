@@ -1,0 +1,59 @@
+{
+  "id": "yongdingmen",
+  "name": {
+    "zh": "永定门",
+    "en": "Yongdingmen"
+  },
+  "lat": 39.8710621,
+  "lon": 116.3931186,
+  "headingDeg": -2.3,
+  "file": "yongdingmen.glb",
+  "version": "e57ecc44",
+  "footprint": [
+    [-15.9, -9.6],
+    [15.9, -9.6],
+    [15.9, 9.6],
+    [-15.9, 9.6]
+  ],
+  "moreFootprints": [
+    [
+      [-32.6, -4.7],
+      [-15.2, -4.7],
+      [-15.2, 6.7],
+      [-32.6, 6.7]
+    ],
+    [
+      [15.2, -4.7],
+      [32.1, -4.7],
+      [32.1, 6.7],
+      [15.2, 6.7]
+    ]
+  ],
+  "clear": [
+    [
+      [-11, -14.9],
+      [11, -14.9],
+      [11, 14],
+      [-11, 14]
+    ]
+  ],
+  "height": 25.88,
+  "farDistance": 500,
+  "stats": {
+    "triangles": 93346,
+    "farTriangles": 1010,
+    "materials": 13,
+    "farMaterials": 5,
+    "colliders": {
+      "solid": 8,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 7,
+    "textures": 5,
+    "maxTexture": 2048,
+    "footprintArea": 1002,
+    "bytes": 878400,
+    "source": "yongdingmen.glb"
+  }
+}

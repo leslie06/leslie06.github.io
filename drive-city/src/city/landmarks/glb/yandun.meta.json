@@ -1,0 +1,45 @@
+{
+  "id": "yandun",
+  "name": {
+    "zh": "燕墩",
+    "en": "Yandun"
+  },
+  "lat": 39.8672344,
+  "lon": 116.3927216,
+  "headingDeg": 0.4,
+  "file": "yandun.glb",
+  "version": "a7cc494b",
+  "footprint": [
+    [-7.83, -7.83],
+    [7.83, -7.83],
+    [7.83, 7.83],
+    [-7.83, 7.83]
+  ],
+  "clear": [
+    [
+      [-9.93, -9.93],
+      [9.93, -9.93],
+      [9.93, 9.93],
+      [-9.93, 9.93]
+    ]
+  ],
+  "height": 19.04,
+  "farDistance": 400,
+  "stats": {
+    "triangles": 541,
+    "farTriangles": 40,
+    "materials": 4,
+    "farMaterials": 2,
+    "colliders": {
+      "solid": 2,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 1,
+    "maxTexture": 512,
+    "footprintArea": 245,
+    "bytes": 32144,
+    "source": "yandun.glb"
+  }
+}
