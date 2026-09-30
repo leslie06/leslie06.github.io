@@ -449,8 +449,8 @@
  },
  {
   "name": "unnamed office in the 三里屯 embassy area (next to Nigerian and Pakistani embassies)",
-  "lat": 39.9421,
-  "lon": 116.45409,
+  "lat": 39.94219,
+  "lon": 116.45398,
   "height": 15,
   "confidence": "C",
   "source": "https://www.openstreetmap.org/way/228086991"
@@ -505,8 +505,8 @@
  },
  {
   "name": "unnamed commercial, 团结湖 (姚家园路)",
-  "lat": 39.92792,
-  "lon": 116.45899,
+  "lat": 39.92777,
+  "lon": 116.45889,
   "height": 25,
   "confidence": "C",
   "source": "https://www.openstreetmap.org/way/350719271"
@@ -614,5 +614,269 @@
   "height": 80,
   "confidence": "C",
   "source": "https://baike.baidu.com/item/%E4%B8%89%E9%87%8C%E5%B1%AFSOHO/8382458"
+ },
+ {
+  "name": "中国社会科学院 compound annex (建国门内大街5号)",
+  "lat": 39.90842,
+  "lon": 116.42509,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/476106722"
+ },
+ {
+  "name": "中国社会科学院 compound annex, by the CASS library",
+  "lat": 39.90817,
+  "lon": 116.42624,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/476106725"
+ },
+ {
+  "name": "华联商厦 (丰台, 南三环外)",
+  "lat": 39.83286,
+  "lon": 116.36299,
+  "height": 25,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/535537114"
+ },
+ {
+  "name": "unnamed block of the 国家能源集团 / 神华大厦 site (安定门外)",
+  "lat": 39.94892,
+  "lon": 116.39361,
+  "height": 45,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/776231783"
+ },
+ {
+  "name": "凤凰汇购物中心 (凤凰置地广场, 三元桥)",
+  "lat": 39.96052,
+  "lon": 116.44951,
+  "height": 18,
+  "confidence": "B",
+  "source": "https://you.ctrip.com/shopping/beijing1/1369880-tuan.html"
+ },
+ {
+  "name": "unnamed commercial beside 北发大厦 A/B座 (北太平庄)",
+  "lat": 39.95785,
+  "lon": 116.34676,
+  "height": 40,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/435150377"
+ },
+ {
+  "name": "北京大学第三医院 内科一病区 (ward block)",
+  "lat": 39.98175,
+  "lon": 116.35461,
+  "height": 29,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/544287671"
+ },
+ {
+  "name": "北京大学第三医院 电工楼 (plant building)",
+  "lat": 39.98217,
+  "lon": 116.35377,
+  "height": 11,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/544287676"
+ },
+ {
+  "name": "北京大学医学科技楼 (medical science building)",
+  "lat": 39.98433,
+  "lon": 116.34911,
+  "height": 80,
+  "confidence": "A",
+  "source": "https://baike.baidu.com/item/%E5%8C%97%E4%BA%AC%E5%A4%A7%E5%AD%A6%E5%8C%BB%E5%AD%A6%E7%A7%91%E6%8A%80%E6%A5%BC/67734847"
+ },
+ {
+  "name": "unnamed commercial, 望京 南湖西里",
+  "lat": 39.99046,
+  "lon": 116.4504,
+  "height": 15,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1353121298"
+ },
+ {
+  "name": "中油昆仑大厦 (太阳宫金星园8号)",
+  "lat": 39.96726,
+  "lon": 116.44813,
+  "height": 90,
+  "confidence": "B",
+  "source": "https://m.map.360.cn/m/search/detail/pid=a2359b1fb1b7884c"
+ },
+ {
+  "name": "银科大厦 (海淀大街38号)",
+  "lat": 39.98055,
+  "lon": 116.30031,
+  "height": 80,
+  "confidence": "B",
+  "source": "https://www.yinkedasha.cn/"
+ },
+ {
+  "name": "数码大厦B座 Cyber Tower B (中关村南大街2号)",
+  "lat": 39.96406,
+  "lon": 116.31731,
+  "height": 125,
+  "confidence": "A",
+  "source": "https://baike.baidu.com/item/%E6%95%B0%E7%A0%81%E5%A4%A7%E5%8E%A6/9718733"
+ },
+ {
+  "name": "unnamed commercial beside 甘家口大厦 (百万庄西口)",
+  "lat": 39.92657,
+  "lon": 116.32654,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/489944877"
+ },
+ {
+  "name": "凯德晶品购物中心 CapitaMall Crystal (公主坟)",
+  "lat": 39.907,
+  "lon": 116.29137,
+  "height": 30,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E5%87%AF%E5%BE%B7%E6%99%B6%E5%93%81%E8%B4%AD%E7%89%A9%E4%B8%AD%E5%BF%83/5968227"
+ },
+ {
+  "name": "翠微大厦 / 翠微百货 (公主坟)",
+  "lat": 39.90704,
+  "lon": 116.29818,
+  "height": 30,
+  "confidence": "C",
+  "source": "https://baike.baidu.com/item/%E7%BF%A0%E5%BE%AE%E5%A4%A7%E5%8E%A6/6993702"
+ },
+ {
+  "name": "光耀东方广场 (羊坊店路, south of 世纪坛)",
+  "lat": 39.89804,
+  "lon": 116.31615,
+  "height": 27,
+  "confidence": "C",
+  "source": "https://baike.baidu.com/item/%E5%85%89%E8%80%80%E4%B8%9C%E6%96%B9%E6%96%87%E5%8C%96%E5%B9%BF%E5%9C%BA/4630114"
+ },
+ {
+  "name": "西新隆商场 (北京西站 south side)",
+  "lat": 39.89651,
+  "lon": 116.31655,
+  "height": 25,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/653300374"
+ },
+ {
+  "name": "新年华购物中心 New Times Plaza (丰台)",
+  "lat": 39.87592,
+  "lon": 116.31956,
+  "height": 32,
+  "confidence": "B",
+  "source": "https://baike.baidu.com/item/%E6%96%B0%E5%B9%B4%E5%8D%8E%E8%B4%AD%E7%89%A9%E4%B8%AD%E5%BF%83/8422719"
+ },
+ {
+  "name": "亿潼隆丰益购物中心 (丰管路)",
+  "lat": 39.85728,
+  "lon": 116.29607,
+  "height": 16,
+  "confidence": "B",
+  "source": "http://m.winshang.com/xm61206.html"
+ },
+ {
+  "name": "海淀区气象局 (by 海淀公园)",
+  "lat": 39.98353,
+  "lon": 116.28639,
+  "height": 10,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/993979411"
+ },
+ {
+  "name": "北京市育英中学 teaching building",
+  "lat": 39.90791,
+  "lon": 116.28044,
+  "height": 18,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1059728175"
+ },
+ {
+  "name": "首都师范大学附属丽泽中学 (南校区) building",
+  "lat": 39.8386,
+  "lon": 116.30221,
+  "height": 16,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1063032802"
+ },
+ {
+  "name": "平安幸福汇 mall pavilion (平安幸福中心, 丽泽/东管头)",
+  "lat": 39.86593,
+  "lon": 116.31612,
+  "height": 15,
+  "confidence": "C",
+  "source": "https://peking.bjd.com.cn/channels/5b165687a010550e5ddc0e70/contentShare/5de9e02de4b0fe93cc1890c0/AP6266439de4b06aa58855ebdc.html"
+ },
+ {
+  "name": "unnamed office beside 中国科学院计算机网络信息中心 (中关村)",
+  "lat": 39.98595,
+  "lon": 116.33114,
+  "height": 25,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1276278415"
+ },
+ {
+  "name": "通用时代中心B座 General Times Tower B (丽泽)",
+  "lat": 39.86447,
+  "lon": 116.32332,
+  "height": 200,
+  "confidence": "A",
+  "source": "https://baike.baidu.com/item/%E9%80%9A%E7%94%A8%E6%97%B6%E4%BB%A3%E4%B8%AD%E5%BF%83/62656334"
+ },
+ {
+  "name": "嘉润花园 clubhouse/podium between towers A-D (广顺南大街19号)",
+  "lat": 39.9848,
+  "lon": 116.47288,
+  "height": 12,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/357285454"
+ },
+ {
+  "name": "方恒国际中心A座 (阜通东大街6号)",
+  "lat": 39.98852,
+  "lon": 116.47431,
+  "height": 140,
+  "confidence": "A",
+  "source": "https://baike.baidu.com/item/%E6%96%B9%E6%81%92%E5%9B%BD%E9%99%85%E4%B8%AD%E5%BF%83/8292499"
+ },
+ {
+  "name": "unnamed office, 将台 by 东五环",
+  "lat": 39.99184,
+  "lon": 116.4971,
+  "height": 20,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1128421859"
+ },
+ {
+  "name": "unnamed commercial, 酒仙桥 electronics campus (by 德信大厦, 404号楼)",
+  "lat": 39.98068,
+  "lon": 116.50138,
+  "height": 25,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1130439494"
+ },
+ {
+  "name": "unnamed commercial, 798 art district",
+  "lat": 39.98464,
+  "lon": 116.49554,
+  "height": 12,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1130879758"
+ },
+ {
+  "name": "798艺术中心 (798 art district)",
+  "lat": 39.98368,
+  "lon": 116.48969,
+  "height": 12,
+  "confidence": "C",
+  "source": "https://www.openstreetmap.org/way/1131425418"
+ },
+ {
+  "name": "ML footprint by 金台夕照 exit C, west of the CCTV HQ",
+  "lat": 39.9144,
+  "lon": 116.45665,
+  "height": 10,
+  "confidence": "C",
+  "source": "https://nominatim.openstreetmap.org/reverse?lat=39.91440&lon=116.45665&zoom=18"
  }
 ]

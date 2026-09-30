@@ -45,10 +45,10 @@ const OUTSIDE = '#0b0e10', GROUND = '#12171a', GREEN = '#182b20', WATER = '#1530
 const ROAD = ['#2c3439', '#3c454b', '#525b62', '#6c747a', '#9c7b47'];
 /** Road widths: metres at street zoom, and the thinnest they get in px. */
 const ROAD_M = [5, 8, 13, 20, 28], ROAD_MIN = [0.6, 0.9, 1.4, 2, 2.6];
-const S_MIN = 0.1, S_MAX = 5, S_OPEN = 0.42;
+const S_MIN = 0.05, S_MAX = 5, S_OPEN = 0.42;
 /** The full map's labels: sizes and the zoom each kind shows from (px per m). */
 const LABELS: LabelStyle = {
-  rankS: [0.08, 0.2, 0.5, 1.05], areaMax: 2.4, areas: true, roadS: [Infinity, 0.9, 0.42, 0.17, 0.08], shortBelow: 0.45, bridgeS: 0.17,
+  rankS: [0.05, 0.2, 0.5, 1.05], areaMax: 2.4, areas: true, roadS: [Infinity, 0.9, 0.42, 0.17, 0.05], shortBelow: 0.45, bridgeS: 0.17,
   font: { place: 12, big: 13, road: [13, 12, 11], shield: 12 }, icon: 7, every: 250, gap: 300, maxRoads: 90, maxPlaces: 400, margin: 28,
 };
 const smooth = (a: number, b: number, x: number) => { const u = Math.max(0, Math.min(1, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
@@ -425,7 +425,7 @@ export class MapScreen implements System {
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     const cells = nav.map.roadCells(x0, z0, x1, z1, coarse, this.roads);
     for (let tier = 0; tier < TIERS; tier++) {
-      if ((tier === 0 && s < 0.22) || (tier === 1 && s < 0.13)) continue;
+      if ((tier === 0 && s < 0.22) || (tier === 1 && s < 0.13) || (tier === 2 && s < 0.07)) continue;
       ctx.strokeStyle = ROAD[tier];
       ctx.lineWidth = Math.max(ROAD_MIN[tier] / s, ROAD_M[tier] * 0.85);
       for (const c of cells) { const p = c.roads[tier]; if (p) ctx.stroke(p); }

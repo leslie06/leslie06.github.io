@@ -24,7 +24,8 @@ if (process.env.PROFILE) {
 
 describe('guide signs', () => {
   it('are placed quickly and in number', () => {
-    expect(ms).toBeLessThan(3000);
+    // Placed at build time (scripts/city/signs.mts); with the map to the 4th Ring ~2 s there.
+    expect(ms).toBeLessThan(8000);
     expect(signs.filter((s) => s.kind === 'cross').length).toBeGreaterThan(200);
     expect(signs.filter((s) => s.kind === 'exit').length).toBeGreaterThan(40);
     expect(signs.filter((s) => s.kind === 'ahead').length).toBeGreaterThan(20);

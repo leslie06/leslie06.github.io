@@ -170,7 +170,9 @@ function zone(x, z) {
   if ((palacePoly && pip(x, z, palacePoly)) || (x > -940 && x < -150 && z > -1420 && z < 225)) return 'palace';
   if (templePoly && pip(x, z, templePoly)) return 'temple';
   if (x > 4650 && x < 6500 && z > -1650 && z < 750) return 'cbd';
-  if (x < 2850) return 'old';
+  // The old city: inside the 2nd Ring (its box; 东二环 at x ~2850 is where it used to stop, when the map
+  // began a kilometre west of Tiananmen - with the map out to the 4th Ring, 公主坟 was "old" too).
+  if (x > -4650 && x < 2850 && z > -4350 && z < 4850) return 'old';
   return 'city';
 }
 

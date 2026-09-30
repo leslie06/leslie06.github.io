@@ -88,6 +88,9 @@ export class SkylineLod {
 
   /** Boxes inside a landmark footprint (flat world [x, z, ...] polygons): the landmark model replaces them. */
   private excluded = new Set<number>();
+  /** Where the detailed tiles are centred: far boxes thin out with distance from it. */
+  private cx = 0;
+  private cz = 0;
   exclude(footprints: number[][]): void {
     const d = this.data;
     const inside = (x: number, z: number, r: number[]) => {
@@ -111,6 +114,10 @@ export class SkylineLod {
     if (!changed) for (const k of keys) if (!this.hidden.has(k)) { changed = true; break; }
     if (!changed) return;
     this.hidden = new Set(keys);
+    // Where the detail is: the middle of the detailed tiles (the camera's neighbourhood).
+    let sx = 0, sz = 0;
+    for (const k of keys) { const [ix, iz] = k.split('_').map(Number); sx += (ix + 0.5) * TILE; sz += (iz + 0.5) * TILE; }
+    if (keys.size) { this.cx = sx / keys.size; this.cz = sz / keys.size; }
     this.write();
   }
 
@@ -125,6 +132,10 @@ export class SkylineLod {
     for (let i = 0; i < this.tiles.length; i++) {
       if (this.hidden.has(this.tiles[i]) || this.excluded.has(i)) continue;
       const o = i * 8;
+      // With the map out to the 4th Ring there are 27k boxes (46% of a low-tier frame's triangles at the
+      // spawn): past 3 km only what stands out over the roofs round it, past 7 km only the towers.
+      const dd = Math.hypot(d[o] - this.cx, d[o + 1] - this.cz), h = d[o + 5];
+      if ((dd > 3000 && h < 36) || (dd > 7000 && h < 70)) continue;
       this.s.set(d[o + 3], d[o + 5], d[o + 4]);
       this.q.setFromAxisAngle(SkylineLod.UP, -d[o + 2]);
       this.p.set(d[o], 0, d[o + 1]);

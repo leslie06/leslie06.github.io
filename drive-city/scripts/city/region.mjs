@@ -18,6 +18,14 @@ export const EXTRA = [
   { tag: 'e', s: 39.897, w: 116.504, n: 39.921, e: 116.550, chunks: 2 },
   { tag: 'w', s: 39.857, w: 116.336, n: 39.926, e: 116.386, chunks: 2 },
   { tag: 'u', s: 39.926, w: 116.336, n: 39.953, e: 116.462, chunks: 2 },
+  // To the 4th Ring (2026-09-30), a few hundred metres past it all round (its box: 116.268-116.484 E,
+  // 39.829-39.988 N; the main box already reaches past 东四环): x the whole west - 公主坟, 军博,
+  // 西客站, 丽泽, 中关村南 - s the south strip - 北京南站, 陶然亭, 大红门, 分钟寺 - v the north -
+  // 北三环, 北太平庄, 奥林匹克公园 - and y the north-east corner up to 四元桥.
+  { tag: 'x', s: 39.826, w: 116.264, n: 39.992, e: 116.336, chunks: 2 },
+  { tag: 's', s: 39.826, w: 116.336, n: 39.857, e: 116.504, chunks: 2 },
+  { tag: 'v', s: 39.953, w: 116.336, n: 39.992, e: 116.462, chunks: 2 },
+  { tag: 'y', s: 39.963, w: 116.462, n: 39.992, e: 116.504, chunks: 2 },
 ];
 /** Every box of the playable area, the main one first. */
 export const REGIONS = [BBOX, ...EXTRA];
