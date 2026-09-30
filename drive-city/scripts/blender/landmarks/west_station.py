@@ -55,7 +55,7 @@ GATE = dict(hw=30.75, ow=21.9, y0=10.0, y1=43.0, ylow=23.5, zlow=13.0, zopen=50.
 MAIN = dict(x0=-170.65, x1=174.95, y0=-37.5, y1=10.0, h=34.0)
 TALL = dict(x=62.0, h=52.0)
 CORE_H = 24.0
-PIL = dict(z=5.0, yb=-23.5)                               # the west wing's columns: open under 5 m, back wall at y -23.5
+PIL = dict(z=5.0, yb=-27.0)                               # the west wing on columns: open under 5 m, the back wall 8.5 m behind the road (y -18.5)
 WINGS = [dict(x0=-310.75, x1=-170.65, y0=-37.5, y1=-10.5, h=24.0, pilotis=True),
          dict(x0=174.95, x1=358.35, y0=-37.5, y1=-16.25, h=24.0, pilotis=False)]
 TING = [dict(x0=-344.05, x1=-310.75, yf=68.6), dict(x0=358.35, x1=391.55, yf=69.8)]

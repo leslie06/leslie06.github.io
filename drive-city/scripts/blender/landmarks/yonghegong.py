@@ -930,7 +930,7 @@ def plaque_text(coll, M, text, x, y, z, w, hgt, face, name):
     return me, k, cx, cy
 
 
-def pailou(cx, cy, rot, cols, roofs_def, M, parts, plaques=None, tag="P"):
+def pailou(cx, cy, rot, cols, roofs_def, M, parts, plaques=None, tag="P", braces=True):
     """A 牌楼 in its frame (along x, faces +-y): columns in stone clamps with raking braces, the beams and
     frieze under each bay, a small 庑殿 (textured) over each roof segment on a bracket band, the gilt-edged board."""
     g = Geo()
@@ -977,7 +977,7 @@ def pailou(cx, cy, rot, cols, roofs_def, M, parts, plaques=None, tag="P"):
     for x in cols:
         g.box(x - 0.5, x + 0.5, -0.5, 0.5, 0.0, 1.8, "marble", skip=("-z",))
         g.box(x - 0.56, x + 0.56, -0.56, 0.56, 1.8, 1.95, "marble", skip=("-z",))
-        for side in (-1, 1):
+        for side in ((-1, 1) if braces else ()):
             a, b = Vector((x, side * 0.2, 4.2)), Vector((x, side * 2.4, 0.0))
             d = (b - a).normalized()
             u = Vector((1, 0, 0))
@@ -992,7 +992,7 @@ def pailou(cx, cy, rot, cols, roofs_def, M, parts, plaques=None, tag="P"):
         column(m, x, 0.0, 1.95, top + 0.5 - 1.95, COL_R)
         COLL.append(("hull", [tuple(m @ Vector(p)) for p in ((x - 0.5, -0.5, 0), (x + 0.5, -0.5, 0), (x + 0.5, 0.5, 0), (x - 0.5, 0.5, 0),
                                                               (x - 0.5, -0.5, 9), (x + 0.5, -0.5, 9), (x + 0.5, 0.5, 9), (x - 0.5, 0.5, 9))]))
-        for side in (-1, 1):
+        for side in ((-1, 1) if braces else ()):
             COLL.append(("hull", [tuple(m @ Vector(p)) for p in ((x - 0.15, side * 0.3, 4.2), (x + 0.15, side * 0.3, 4.2), (x - 0.15, side * 2.4, 0.0),
                                                                   (x + 0.15, side * 2.4, 0.0), (x - 0.15, side * 0.3, 0.0), (x + 0.15, side * 0.3, 0.0))]))
     G.add(g, m)
@@ -1095,14 +1095,16 @@ def walls(polys, zt=3.8, th=0.8):
 # --- the plan --------------------------------------------------------------------------------------------------
 # local rects from OSM (x0, x1, y0, y1): see the header. Main compound outline (the part north of the gate wall):
 OUTLINE = [(-45.5, -21.2), (-45.6, 2.4), (-45.7, 31.0), (-45.8, 37.9), (-38.7, 37.9), (-38.6, 54.8), (-38.5, 85.1), (-38.5, 99.8),
-           (-38.7, 200.3), (-38.7, 215.5), (-14.9, 215.5), (15.6, 215.3), (37.5, 215.2), (37.4, 206.9), (37.3, 179.4), (37.3, 142.4),
-           (37.3, 79.0), (37.5, 54.8), (46.7, 54.6), (46.7, 30.4), (47.0, 2.5), (47.0, -20.6)]
+           (-38.7, 200.3), (-38.7, 215.5), (-14.9, 215.5), (15.6, 215.3), (37.5, 215.2), (37.4, 206.9), (37.3, 179.4), (37.2, 142.4),
+           (36.3, 99.0), (33.0, 79.0), (33.0, 54.8), (46.7, 54.6), (46.7, 30.4), (47.0, 2.5), (47.0, -20.6)]
+# (the east wall between 54.8 and 142.4 is pulled back 1-4 m off OSM's line: the alley east of it, 5 m wide, would
+# otherwise have its west edge inside the wall, and cars swing wide round its corner at y 70)
 WALLS = [
     (OUTLINE, True),
     ([(-18.9, -21.0), (-19.4, -55.4), (-19.1, -179.0), (-6.9, -179.0)], False),          # 辇道 west
     ([(18.2, -20.9), (18.3, -54.1), (19.9, -179.0), (7.9, -178.8)], False),             # 辇道 east
     ([(-38.2, 31.0), (-19.2, 30.6)], False), ([(-16.0, 30.6), (-12.8, 30.5)], False),    # 雍和门's line
-    ([(12.8, 30.3), (14.3, 30.3)], False), ([(18.0, 30.3), (37.0, 30.5), (37.5, 54.8)], False),
+    ([(12.8, 30.3), (14.3, 30.3)], False), ([(18.0, 30.3), (33.0, 30.5), (33.0, 54.8)], False),
 ]
 
 SIDE_HALLS = [
@@ -1259,8 +1261,12 @@ def build():
     screen_wall(0.0, -221.9)
     pailou(0.5, -178.7, 0, [-7.0, -2.9, 2.9, 7.0], pailou_roofs([-7.0, -2.9, 2.9, 7.0], True), M, parts,
            plaques=[(-1, "親尊海寰"), (1, "壽仁生群")], tag="N")
-    pailou(-39.3, -206.0, 1, [-6.0, -2.5, 2.5, 6.0], pailou_roofs([-6.0, -2.5, 2.5, 6.0], False), M, parts, tag="W")
-    pailou(36.9, -206.0, 1, [-6.0, -2.5, 2.5, 6.0], pailou_roofs([-6.0, -2.5, 2.5, 6.0], False), M, parts, tag="E")
+    # the side archways stand over the parking lane through the square, clear of 雍和宫大街's carriageway (west)
+    # and 戏楼胡同 (east), with the lane's 5 m through the middle bay
+    # (an 8 m middle bay and no raking braces: the lane turns in off 戏楼胡同 and doglegs north just either side)
+    side = [-8.5, -4.5, 4.5, 8.5]
+    pailou(-34.0, -206.0, 1, side, pailou_roofs(side, False), M, parts, tag="W", braces=False)
+    pailou(27.0, -205.3, 1, side, pailou_roofs(side, False), M, parts, tag="E", braces=False)
     BODIES.append((-8.0, 8.0, -181.5, -176.0))
 
     mark("forecourt")
@@ -1269,7 +1275,7 @@ def build():
 
     # paving: the courts, the 辇道, the forecourt
     for poly in (rect(-45.3, 46.5, -20.8, 54.6), rect(-38.4, 37.1, 54.6, 215.0), rect(-18.8, 17.9, -178.6, -21.4),
-                 [(-40.0, -223.6), (36.0, -223.6), (36.7, -205.7), (39.6, -179.2), (-6.0, -179.2), (-17.1, -190.6), (-41.4, -192.6)]):
+                 [(-38.0, -222.6), (35.6, -222.6), (35.6, -190.2), (33.0, -179.2), (-6.0, -179.2), (-17.1, -190.6), (-38.0, -192.4)]):
         G.polyn([(x, y, 0.03) for x, y in poly], "paving", (0, 0, 1))
         FAR.polyn([(x, y, 0.03) for x, y in poly], "paving", (0, 0, 1))
 
@@ -1313,11 +1319,11 @@ def build():
     stats.update(boxes=nb, hulls=nh, ramps=nw)
     # footprints: the main compound, the 辇道 and the forecourt, each kept off the hutong round it
     flat_marker(helpers, "gatecourt", rect(-45.6, 46.9, -21.0, 54.7), "FOOTPRINT")
-    flat_marker(helpers, "courts", rect(-38.7, 37.4, 54.7, 215.5), "FOOTPRINT")
+    flat_marker(helpers, "courts", rect(-38.7, 36.6, 54.7, 215.5), "FOOTPRINT")
     flat_marker(helpers, "niandao", rect(-19.3, 19.5, -179.0, -21.0), "FOOTPRINT")
-    flat_marker(helpers, "square", rect(-40.5, 36.4, -224.3, -191.8), "FOOTPRINT")
-    flat_marker(helpers, "squareNE", rect(-6.5, 39.5, -191.8, -178.3), "FOOTPRINT")
-    for i, poly in enumerate((rect(-46.5, 47.5, -22.0, 54.7), rect(-39.5, 38.2, 54.7, 216.5), rect(-19.8, 20.2, -179.5, -21.0), rect(-41.0, 37.0, -224.0, -191.8))):
+    # no footprint over the square itself: it holds no buildings, and its parking lane and 戏楼胡同 run through it
+    flat_marker(helpers, "squareNE", rect(-6.5, 36.0, -189.5, -178.3), "FOOTPRINT")
+    for i, poly in enumerate((rect(-46.5, 47.5, -22.0, 54.7), rect(-39.5, 36.6, 54.7, 216.5), rect(-19.8, 20.2, -179.5, -21.0), rect(-38.0, 35.6, -222.6, -191.8))):
         flat_marker(helpers, f"clear{i}", poly, "CLEAR")
 
     s = bpy.context.scene.bcity

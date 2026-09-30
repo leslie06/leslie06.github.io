@@ -8,7 +8,7 @@
   "lon": 116.3151131,
   "headingDeg": 0,
   "file": "weststation.glb",
-  "version": "7abcb106",
+  "version": "ffb533d6",
   "footprint": [
     [-82, 37.5],
     [84.25, 37.5],
@@ -167,7 +167,7 @@
     "textures": 5,
     "maxTexture": 2048,
     "footprintArea": 104736,
-    "bytes": 1557860,
+    "bytes": 1557864,
     "source": "weststation.glb"
   }
 }

@@ -921,10 +921,10 @@ console.log(`elevation: ${deckX.length} deck crossings (${stacked} restacked), $
 
 const roadSegs = new Map(); // tile key -> [ax, az, bx, bz, halfWidth]
 const carSegs = new Map();  // the same for the carriageways on the ground, for keeping lamp posts out of them
-function addSeg(ax, az, bx, bz, hw, car = false) {
+function addSeg(ax, az, bx, bz, hw, car = false, cls = '', way = 0) {
   eachTile([Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw], (ix, iz) => {
     const k = `${ix}_${iz}`; (roadSegs.get(k) ?? roadSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw]);
-    if (car) (carSegs.get(k) ?? carSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw]);
+    if (car) (carSegs.get(k) ?? carSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw, cls, way]);
   });
 }
 /** Whether (x, z) is on a carriageway on the ground (or within `margin` of one). */
@@ -960,7 +960,7 @@ for (const w of ways) {
   };
   for (let i = 0; i < P.length - 1; i++) {
     const mx = (P[i][0] + P[i + 1][0]) / 2, mz = (P[i][1] + P[i + 1][1]) / 2;
-    addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2, info.car && heightAlong(w, (PS[i] + PS[i + 1]) / 2) < 2);
+    addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2, info.car && heightAlong(w, (PS[i] + PS[i + 1]) / 2) < 2, info.cls, w.id);
     if (!inRegion(mx, mz)) { flush(); cur = null; continue; }
     const [ix, iz] = tileOf(mx, mz);
     if (!cur || cur.ix !== ix || cur.iz !== iz) { flush(); cur = { ix, iz, p: [P[i]], j: [J[i]], s: [PS[i]], a: i > 0 ? P[i - 1] : null, b: null }; }
@@ -1224,11 +1224,46 @@ const passageOf = new Map();
         if (Math.max(ax, bx) + hw < bb[0] || Math.min(ax, bx) - hw > bb[2] || Math.max(az, bz) + hw < bb[1] || Math.min(az, bz) - hw > bb[3]) continue;
         let hit = false;
         for (let k = 0; k <= n && !hit; k++) { const t = k / n; hit = pip(ax + (bx - ax) * t, az + (bz - az) * t, bd.ring); }
-        if (hit) (passageOf.get(bd) ?? passageOf.set(bd, []).get(bd)).push(q1(ax), q1(az), q1(bx), q1(bz), q1(hw));
+        if (hit) { (passageOf.get(bd) ?? passageOf.set(bd, []).get(bd)).push(q1(ax), q1(az), q1(bx), q1(bz), q1(hw)); (bd.passWays ??= new Set()).add(w.id); }
       }
     }
   }
   console.log(`passages: ${passageOf.size} buildings with a road through them`);
+}
+// Roads a building blocks (see the building loop): segment-to-footprint distance against the carriageway.
+const roadBlockers = { osm: 0, learnt: 0 }, roadPassages = { osm: 0, learnt: 0 }, blockLog = [];
+const LANES = /^(residential|service|living_street|unclassified)$/;
+function segCrosses(ax, az, bx, bz, cx, cz, dx, dz) {
+  const d = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
+  if (!d) return false;
+  const t = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / d, u = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / d;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+function segToRing(ax, az, bx, bz, R) {
+  if (pip(ax, az, R) || pip(bx, bz, R)) return 0;
+  let d = Infinity;
+  for (let i = 0; i < R.length; i++) {
+    const [px, pz] = R[i], [qx, qz] = R[(i + 1) % R.length];
+    if (segCrosses(ax, az, bx, bz, px, pz, qx, qz)) return 0;
+    d = Math.min(d, segDist(px, pz, ax, az, bx, bz), segDist(ax, az, px, pz, qx, qz), segDist(bx, bz, px, pz, qx, qz));
+  }
+  return d;
+}
+function blocksRoad(b, old) {
+  const seen = new Set(), hits = [];
+  eachTile([b.bb[0] - 12, b.bb[1] - 12, b.bb[2] + 12, b.bb[3] + 12], (ix, iz) => {
+    for (const s of carSegs.get(`${ix}_${iz}`) ?? []) {
+      if (seen.has(s)) continue;
+      seen.add(s);
+      const [ax, az, bx, bz, hw, cls, way] = s;
+      if (b.passWays?.has(way)) continue;
+      if (Math.max(ax, bx) + hw < b.bb[0] || Math.min(ax, bx) - hw > b.bb[2] || Math.max(az, bz) + hw < b.bb[1] || Math.min(az, bz) - hw > b.bb[3]) continue;
+      const lim = old && LANES.test(cls) ? 1.2 : Math.max(1.2, 0.45 * hw);
+      const d = segToRing(ax, az, bx, bz, b.ring);
+      if (d < lim) hits.push({ ax, az, bx, bz, hw, cls, way, d });
+    }
+  });
+  return hits;
 }
 // Where OSM gives no height: the measured sets' estimate (HEIGHT_EVAL=1 prints how each does against the
 // buildings OSM does give a height).
@@ -1358,10 +1393,40 @@ for (const b of buildings) {
   let deck = deckOver(cx, cz);
   for (const [x, z] of b.ring) deck = Math.min(deck, deckOver(x, z));
   if (deck < Infinity && h > deck - 1.5) { underCut++; continue; }
+  // A building standing in a carriageway on the ground goes (「有的道路有建筑遮挡」): OSM draws some over
+  // the street they front (a whole hutong house across 崇文门西河沿), the learnt set's roof outlines lean
+  // into it, and a road through a building with no passage tagged ran into its wall. Blocking: the road's
+  // centre line within 45% of its half width of the footprint (at least 1.2 m) - in the old city's
+  // lanes 1.2 m, since our widths overstate a hutong and its houses really do stand at the kerb.
+  // Walls, buildings raised over the street and roads through a tagged passage are left.
+  if (bt !== 'wall' && !(minH > 3.5)) {
+    const hits = blocksRoad(b, z === 'old');
+    if (hits.length) {
+      const src = b.id >= 8e12 ? 'learnt' : 'osm';
+      // A small one is simply in the road (a hutong house drawn across 崇文门西河沿). A big one stays and
+      // the road goes through it at street level, as if OSM had tagged a building_passage: a driveway into
+      // a compound under its block, a mall spanning a street (王府井, 国贸, 吉市口 lost whole blocks to a
+      // driveway ending under them before this).
+      if (b.area < 400 || src === 'learnt' && b.area < 1500) { roadBlockers[src]++; if (process.env.BLOCK_LOG) blockLog.push(`${b.id} ${kind} removed ${hits[0].cls} ${hits[0].way}`); continue; }
+      if (minH < 0.5) {
+        const wallTop = rec.r === 'g' || rec.r === 'h' || rec.r === 'p' ? h - rh : h;
+        const ch = q1(Math.max(2.8, Math.min(4.5, wallTop - 0.6)));
+        rec.ps ??= [];
+        for (const g of hits) {
+          const L = Math.hypot(g.bx - g.ax, g.bz - g.az) || 1, ux = (g.bx - g.ax) / L, uz = (g.bz - g.az) / L;
+          rec.ps.push(q1(g.ax - ux * 4), q1(g.az - uz * 4), q1(g.bx + ux * 4), q1(g.bz + uz * 4), q1(Math.min(4.5, g.hw) + 0.25), ch);
+        }
+        roadPassages[src]++;
+        if (process.env.BLOCK_LOG) blockLog.push(`${b.id} ${kind} passage ${hits.length} ${hits[0].cls} ${hits[0].way}`);
+      }
+    }
+  }
   tile(...tileOf(cx, cz)).buildings.push(rec);
   eachTile(b.bb, (ix, iz) => { const k = `${ix}_${iz}`; (bIndex.get(k) ?? bIndex.set(k, []).get(k)).push(b); });
 }
 console.log('heights:', heightFrom);
+console.log('buildings removed from carriageways:', roadBlockers, 'given a passage:', roadPassages);
+if (process.env.BLOCK_LOG) fs.writeFileSync('.scratch/blocklog.txt', blockLog.join('\n'));
 if (process.env.GUESS_LOG) fs.writeFileSync('.scratch/guesslog.json', JSON.stringify(guessLog));
 if (HEIGHT_EVAL) {
   // Against OSM's own heights (levels x 3.2 or height): median absolute error and bias per estimator, by band.
