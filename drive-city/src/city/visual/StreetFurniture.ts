@@ -1,5 +1,5 @@
 import type { RoadPiece } from '../Data';
-import { MAIN, SIDEWALK, Y, at, isCar, junctions, lifted, lineOf, project, spans, zebrasOn, type Line } from '../Roads';
+import { MAIN, SIDEWALK, Y, at, isCar, junctions, lifted, lineOf, project, spans, sunk, zebrasOn, type Line } from '../Roads';
 import { hash3, h01 } from './hash';
 
 /**
@@ -47,7 +47,7 @@ export function placeFurniture(pieces: RoadPiece[], crossings: number[], stops: 
     const R = (a: number, b = 0) => h01(hash3(seed, a, b));
     const sides = sw ? (r.o ? [-1] : [1, -1]) : [];
     // Nothing on an interchange's decks and ramps, nor at their feet.
-    const up = lifted(l, 0.15).map(([a, b]) => [a - 4, b + 4] as [number, number]);
+    const up = [...lifted(l, 0.15), ...sunk(l, 0.15)].map(([a, b]) => [a - 4, b + 4] as [number, number]);
     const block = (extraJ: number, zebra: number, stop: number, side?: number) => spans(l.len, [
       ...up,
       ...js.map((j) => [j.s - j.cut - extraJ, j.s + j.cut + extraJ] as [number, number]),

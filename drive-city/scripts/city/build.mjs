@@ -5,6 +5,7 @@
 //                                signals, crossings, bus stops
 // Local metres, +X east, +Z south (region.mjs). Outer rings have positive signed area in (x, z),
 // holes negative. Data © OpenStreetMap contributors, ODbL.
+import polygonClipping from 'polygon-clipping';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -184,16 +185,21 @@ const ROAD = {
   pedestrian: [6, 6], footway: [2.5, 2.5], cycleway: [2.5, 2.5], path: [2, 2], steps: [2.5, 2.5], track: [3, 3],
 };
 const CAR = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'service', 'busway']);
+const NO_TUNNELS = !!process.env.NO_TUNNELS;
 function roadInfo(t) {
   const cls = t.highway, R = ROAD[cls];
   if (!R || t.area === 'yes') return null;
-  if (t.tunnel && t.tunnel !== 'no' && t.tunnel !== 'building_passage') return null;
-  if (Number(t.layer) < 0 && !(t.bridge && t.bridge !== 'no')) return null;
+  // Underpasses (下穿): a car road's tunnel is kept and sunk (see "underpasses" below); a path's, a
+  // service road's (an underground car park's ramp) or a living street's is left out as before.
+  const tunnel = t.tunnel && t.tunnel !== 'no' && t.tunnel !== 'building_passage';
+  const sunkOK = !NO_TUNNELS && CAR.has(cls) && cls !== 'service' && cls !== 'living_street';
+  if (tunnel && !sunkOK) return null;
+  if (Number(t.layer) < 0 && !(t.bridge && t.bridge !== 'no') && !sunkOK) return null;
   const oneway = t.oneway === 'yes' || t.oneway === '1' || t.oneway === 'true' || t.junction === 'roundabout' || cls === 'motorway' ? 1 : t.oneway === '-1' ? -1 : 0;
   const lanes = parseInt(t.lanes, 10);
   let w = parseLen(t.width);
   if (!(w > 1.5)) w = lanes > 0 && CAR.has(cls) ? lanes * 3.3 + (oneway ? 1 : 1.5) : R[oneway ? 0 : 1];
-  return { cls, w, oneway, lanes: lanes > 0 ? lanes : 0, car: CAR.has(cls), name: t.name || '', bridge: t.bridge && t.bridge !== 'no' ? 1 : 0 };
+  return { cls, w, oneway, lanes: lanes > 0 ? lanes : 0, car: CAR.has(cls), name: t.name || '', bridge: t.bridge && t.bridge !== 'no' ? 1 : 0, tunnel: tunnel ? 1 : 0, below: tunnel || (Number(t.layer) < 0 && !(t.bridge && t.bridge !== 'no')) ? 1 : 0 };
 }
 const degAll = new Map(), degCar = new Map();
 for (const w of ways) {
@@ -221,7 +227,9 @@ for (const w of ways) {
 const DECK = 6.5, GRADE = 0.06, STEEP = 0.12, PIN = 35;
 const isBridgeT = (t) => t.bridge && t.bridge !== 'no';
 const layerOf = (t) => { const n = parseInt(t.layer, 10); return Number.isFinite(n) ? n : isBridgeT(t) ? 1 : 0; };
-const carWays = ways.filter((w) => w._road?.car);
+// The elevation solve below works on the ways on and above the ground; the tunnels and the ways under
+// the ground (layer < 0) join after it (underpasses), so a bridge over a tunnel is not lifted.
+const carWays = ways.filter((w) => w._road?.car && !w._road.below);
 const ECELL = 64, ekey = (ix, iz) => `${ix},${iz}`;
 function gridOf(list) {
   const g = new Map();
@@ -908,6 +916,228 @@ function heightAlong(w, s) {
   return (HT.get(a.key) ?? 0) * (1 - t) + (HT.get(b.key) ?? 0) * t;
 }
 const nodeHeight = (id) => HT.get(String(id)) ?? 0;
+// ---------------------------------------------------------------------------------- underpasses (下穿)
+// A car road's tunnel (OSM tunnel=yes: the covered part, between two ways of the same road) goes down to
+// -TUN.D and its approaches come down to it at TUN.G along the ways that continue it - never through a
+// junction (a node where three car roads meet is held on the ground, and rises at most TUN.STEEP from it).
+// A tunnel its approaches cannot take down to TUN.CLEAR before a junction is left out, as all tunnels
+// were before (OSM's 下穿 often joins its 辅路 a few metres past the portal). A ground road crossing over
+// an open approach makes it covered there (and as deep as the tunnel). The covered stretches keep the
+// ground over them; the open ones are holes in the ground, written to public/city/tunnels.json with the
+// sunk roads' centre lines, heights, half widths (narrowed where another carriageway runs alongside or
+// another trench runs beside) and covered flags, for city/visual/Tunnels.ts.
+const TUN = { D: 6, G: 0.06, STEEP: 0.09, CLEAR: 5.3 };
+const TRENCH = { ways: [], holes: [], open: new Map() };
+{
+  // the ways the solve left out join its graph now, dense points and all
+  const below = ways.filter((w) => w._road?.car && w._road.below);
+  for (const w of below) {
+    const D = [];
+    for (let i = 0; i < w._pts.length; i++) {
+      if (i > 0) {
+        const [ax, az] = w._pts[i - 1], [bx, bz] = w._pts[i], L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 10), s0 = D.at(-1).s;
+        for (let k = 1; k < n; k++) D.push({ key: `${w.id}_${i}_${k}`, x: ax + (bx - ax) * k / n, z: az + (bz - az) * k / n, s: s0 + L * k / n });
+        D.push({ key: String(w._ids[i]), x: bx, z: bz, s: s0 + L });
+      } else D.push({ key: String(w._ids[0]), x: w._pts[0][0], z: w._pts[0][1], s: 0 });
+    }
+    for (let i = 1; i < D.length; i++) link(D[i - 1].key, D[i].key, D[i].s - D[i - 1].s);
+    w._dense = D;
+  }
+  const allCar = [...carWays, ...below];
+  const tun = below.filter((w) => w._road.tunnel);
+  const SG = 25, segGrid = new Map();
+  for (const w of allCar) { const D = w._dense; for (let i = 1; i < D.length; i++) { const k = `${Math.floor((D[i - 1].x + D[i].x) / 2 / SG)},${Math.floor((D[i - 1].z + D[i].z) / 2 / SG)}`; (segGrid.get(k) ?? segGrid.set(k, []).get(k)).push([w, i]); } }
+  const segsNear = (x, z) => { const out = [], cx = Math.floor(x / SG), cz = Math.floor(z / SG); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) out.push(...(segGrid.get(`${cx + a},${cz + b}`) ?? [])); return out; };
+  const cross = (ax, az, bx, bz, cx, cz, dx, dz) => { const d = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx); if (!d) return false; const t = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / d, u = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / d; return t >= 0 && t <= 1 && u >= 0 && u <= 1; };
+  const active = new Set(tun), extra = new Map();   // extra: key -> the tunnel it hangs off
+  let H = new Map(), src = new Map(), dropped = 0, passes = 0;
+  for (let pass = 0; pass < 60; pass++) {
+    passes = pass + 1;
+    const sinks = new Map();
+    for (const w of active) for (const d of w._dense) sinks.set(d.key, w);
+    for (const [k, w] of extra) if (active.has(w)) sinks.set(k, w);
+    // held: a junction (on the ground) or a point the decks raised (at its height)
+    const isPin = (k) => !sinks.has(k) && ((degCar.get(Number(k)) ?? 0) >= 3 || (HT.get(k) ?? 0) > 0.05);
+    const down = new Map(), heap = new Heap((a, b) => a[1] < b[1]);
+    src = new Map();
+    for (const [k, w] of sinks) { down.set(k, -TUN.D); src.set(k, w); heap.push([k, -TUN.D]); }
+    while (heap.size) {
+      const [k, v] = heap.pop();
+      if (v > down.get(k) || isPin(k)) continue;
+      for (const [n, l] of adj.get(k) ?? []) { const nv = v + TUN.G * l; if (nv < -0.02 && nv < (down.get(n) ?? 0)) { down.set(n, nv); src.set(n, src.get(k)); heap.push([n, nv]); } }
+    }
+    const cap = new Map(), h2 = new Heap((a, b) => a[1] < b[1]);
+    // every held point the sinking reaches or touches (it stops short of one where it runs out of depth)
+    const seeds = new Set();
+    for (const k of down.keys()) { if (isPin(k)) seeds.add(k); for (const [n] of adj.get(k) ?? []) if (isPin(n)) seeds.add(n); }
+    for (const k of seeds) { const c = -Math.max(0, HT.get(k) ?? 0); cap.set(k, c); h2.push([k, c]); }
+    while (h2.size) {
+      const [k, v] = h2.pop();
+      if (v > cap.get(k)) continue;
+      for (const [n, l] of adj.get(k) ?? []) { if (!down.has(n)) continue; const nv = v + TUN.STEEP * l; if (nv < (cap.get(n) ?? Infinity)) { cap.set(n, nv); h2.push([n, nv]); } }
+    }
+    H = new Map();
+    for (const [k, v] of down) { const h = Math.max(v, -(cap.get(k) ?? Infinity)); if (h < -0.02) H.set(k, h); }
+    let changed = false;
+    for (const [k, w] of sinks) if ((H.get(k) ?? 0) > -TUN.CLEAR && active.has(w)) { active.delete(w); changed = true; dropped++; }
+    if (changed) continue;
+    // ground roads crossing over an open approach: covered there
+    for (const w of allCar) {
+      if (!w._road || active.has(w)) continue;
+      const D = w._dense;
+      for (let i = 1; i < D.length; i++) {
+        const a = D[i - 1], b = D[i], ha = H.get(a.key) ?? 0, hb = H.get(b.key) ?? 0;
+        if (Math.min(ha, hb) > -0.3 || (extra.has(a.key) && extra.has(b.key))) continue;
+        for (const [o, j] of segsNear((a.x + b.x) / 2, (a.z + b.z) / 2)) {
+          if (o === w || !o._road) continue;
+          const p = o._dense[j - 1], q = o._dense[j];
+          if ((H.get(p.key) ?? 0) < -0.3 || (H.get(q.key) ?? 0) < -0.3) continue;
+          if ((HT.get(p.key) ?? 0) > 3 && (HT.get(q.key) ?? 0) > 3) continue;   // a deck high over it
+          if (!cross(a.x, a.z, b.x, b.z, p.x, p.z, q.x, q.z)) continue;
+          const t = src.get(a.key) ?? src.get(b.key);
+          if (t) { extra.set(a.key, t); extra.set(b.key, t); changed = true; }
+          break;
+        }
+      }
+    }
+    if (!changed) break;
+  }
+  if (process.env.TUN_AT) {
+    const [tx, tz] = process.env.TUN_AT.split(',').map(Number);
+    for (const w of allCar) for (const d of w._dense) if (Math.hypot(d.x - tx, d.z - tz) < 12) console.log('TUN', w.id, w._road?.cls, w._road?.tunnel ? 'tunnel' : '', d.key, d.x.toFixed(1), d.z.toFixed(1), 'HT', (HT.get(d.key) ?? 0).toFixed(2), 'H', (H.get(d.key) ?? 0).toFixed(2), 'deg', degCar.get(Number(d.key)) ?? '-', 'active', active.has(w));
+  }
+  for (const w of tun) if (!active.has(w)) w._road = null;
+  // the final heights
+  for (const [k, v] of H) HT.set(k, v);
+  // An open trench must not stand in a ground carriageway beside it, and OSM often draws a 下穿 and the
+  // road it runs beside closer than their widths (东四环中路's side roads 5.8 m from the main line,
+  // 9 m of carriageway between them): the sunk points of an open stretch that overlap one are moved
+  // away by the overlap (at most 6 m), the move fading out along the road over EASE m either way and
+  // never through a junction, and every way through a moved point takes it (as the decks' "moved aside").
+  for (let round = 0; round < 3; round++) {
+    const EASE = 30, want = new Map();
+    const sunkKey = (k) => (H.get(k) ?? 0) < -0.3;
+    for (const w of allCar) {
+      if (!w._road || w._road.tunnel) continue;
+      const hw0 = w._road.w / 2;
+      for (const d of w._dense) {
+        if (!sunkKey(d.key) || extra.has(d.key)) continue;
+        let best = null;
+        for (const [o, j] of segsNear(d.x, d.z)) {
+          if (o === w || !o._road) continue;
+          const p = o._dense[j - 1], q = o._dense[j];
+          if (sunkKey(p.key) || sunkKey(q.key) || (HT.get(p.key) ?? 0) > 2 || (HT.get(q.key) ?? 0) > 2) continue;
+          const vx = q.x - p.x, vz = q.z - p.z, L2 = vx * vx + vz * vz || 1, t = clamp(((d.x - p.x) * vx + (d.z - p.z) * vz) / L2, 0, 1);
+          const cx = d.x - (p.x + vx * t), cz = d.z - (p.z + vz * t), dist = Math.hypot(cx, cz) || 0.01;
+          const over = hw0 + 0.6 + o._road.w / 2 - dist;
+          if (over > 0.05 && (!best || over > best.m)) best = { m: Math.min(6, over), x: cx / dist, z: cz / dist };
+        }
+        if (best && (!want.get(d.key) || want.get(d.key).m < best.m)) want.set(d.key, best);
+      }
+    }
+    // spread along the roads, fading over EASE m, stopped at junctions
+    const shift = new Map(), heap = new Heap((a, b) => a[1] > b[1]);
+    for (const [k, v] of want) { shift.set(k, v); heap.push([k, v.m]); }
+    while (heap.size) {
+      const [k, m] = heap.pop();
+      const v = shift.get(k);
+      if (!v || m < v.m - 1e-9 || (degCar.get(Number(k)) ?? 0) >= 3) continue;
+      for (const [n, l] of adj.get(k) ?? []) {
+        const nm = m - (6 / EASE) * l * (m / 6 + 0.5);   // a larger move fades over a little longer
+        if (nm <= 0.02 || (shift.get(n)?.m ?? 0) >= nm || (degCar.get(Number(n)) ?? 0) >= 3) continue;
+        shift.set(n, { m: nm, x: v.x, z: v.z }); heap.push([n, nm]);
+      }
+    }
+    const touched = new Set();
+    for (const w of allCar) for (const d of w._dense) { const v = shift.get(d.key); if (!v) continue; touched.add(w); }
+    const moved = new Set();
+    for (const w of touched) for (const d of w._dense) { const v = shift.get(d.key); if (!v || moved.has(d)) continue; d.x += v.x * v.m; d.z += v.z * v.m; moved.add(d); }
+    // a node shared by two ways is two objects with one key: both moved above, once each
+    for (const w of touched) {
+      w._pts = w._dense.map((d) => [d.x, d.z]);
+      w._ids = w._dense.map((d) => (/^\d+$/.test(d.key) ? Number(d.key) : `x${d.key}`));
+      let s0 = 0; w._dense.forEach((d, i) => { if (i) s0 += Math.hypot(d.x - w._dense[i - 1].x, d.z - w._dense[i - 1].z); d.s = s0; });
+    }
+    segGrid.clear();
+    for (const w of allCar) { const D = w._dense; for (let i = 1; i < D.length; i++) { const k = `${Math.floor((D[i - 1].x + D[i].x) / 2 / SG)},${Math.floor((D[i - 1].z + D[i].z) / 2 / SG)}`; (segGrid.get(k) ?? segGrid.set(k, []).get(k)).push([w, i]); } }
+    const mx = [...want.values()].reduce((a, v) => Math.max(a, v.m), 0);
+    console.log(`underpasses (round ${round + 1}): ${want.size} trench points overlapping a road beside them moved away (up to ${mx.toFixed(1)} m), ${shift.size} points moved in all`);
+    if (!want.size) break;
+  }
+  // the sunk ways: covered and open stretches, half widths narrowed against what runs alongside
+  const sunkWays = allCar.filter((w) => w._road && w._dense.some((d) => (H.get(d.key) ?? 0) < -0.1));
+  const sunkSet = new Set(sunkWays);
+  let open = 0, covered = 0;
+  for (const w of sunkWays) {
+    const D = w._dense, hw0 = w._road.w / 2;
+    // each side on its own: a sunk carriageway alongside at its height and close (OSM often draws the
+    // two directions of an underpass closer than their widths) makes one trench with it - no wall
+    // between, the edge carried out to meet it; a ground carriageway alongside pulls the wall in, but
+    // never more than 0.5 m into this road's own lanes
+    const L = [], R = [], wl = [], wr = [];
+    for (let i = 0; i < D.length; i++) {
+      const d = D[i], pa = D[Math.max(0, i - 1)], pb = D[Math.min(D.length - 1, i + 1)], tl = Math.hypot(pb.x - pa.x, pb.z - pa.z) || 1;
+      const nx = -(pb.z - pa.z) / tl, nz = (pb.x - pa.x) / tl, hd = H.get(d.key) ?? 0;
+      let l = hw0, r = hw0, wallL = true, wallR = true;
+      for (const [o, j] of segsNear(d.x, d.z)) {
+        if (o === w || !o._road) continue;
+        const p = o._dense[j - 1], q = o._dense[j], ohw = o._road.w / 2;
+        const vx = q.x - p.x, vz = q.z - p.z, L2 = vx * vx + vz * vz || 1, t = clamp(((d.x - p.x) * vx + (d.z - p.z) * vz) / L2, 0, 1);
+        const cx = p.x + vx * t - d.x, cz = p.z + vz * t - d.z, dist = Math.hypot(cx, cz);
+        if (dist > hw0 + ohw + 1 || dist < 0.3) continue;
+        const left = cx * nx + cz * nz > 0;
+        if (sunkSet.has(o)) {
+          const ho = ((H.get(p.key) ?? 0) + (H.get(q.key) ?? 0)) / 2;
+          if (Math.abs(ho - hd) > 2.5) continue;
+          // one trench only with one like it: a tunnel beside an open trench keeps its wall (else you see
+          // the sky from inside it, through the ground's underside)
+          const mine = !!w._road.tunnel || extra.has(d.key), theirs = !!o._road.tunnel || (extra.has(p.key) && extra.has(q.key));
+          if (mine !== theirs) continue;
+          if (left) { wallL = false; l = Math.max(l, dist - ohw + 0.3); } else { wallR = false; r = Math.max(r, dist - ohw + 0.3); }
+        } else if ((HT.get(p.key) ?? 0) < 2) {
+          const lim = Math.max(hw0 - 0.5, Math.min(hw0, dist - ohw - 0.2));
+          if (left) l = Math.min(l, lim); else r = Math.min(r, lim);
+        }
+      }
+      L.push(l); R.push(r); wl.push(wallL); wr.push(wallR);
+    }
+    const cov = [], eL = [], eR = [];
+    for (let i = 1; i < D.length; i++) {
+      const c = !!w._road.tunnel || (extra.has(D[i - 1].key) && extra.has(D[i].key));
+      cov.push(c); eL.push(wl[i - 1] && wl[i]); eR.push(wr[i - 1] && wr[i]);
+      const ha = H.get(D[i - 1].key) ?? 0, hb = H.get(D[i].key) ?? 0;
+      if (Math.min(ha, hb) < -0.1) { if (c) covered += D[i].s - D[i - 1].s; else open += D[i].s - D[i - 1].s; }
+    }
+    TRENCH.open.set(w, cov.map((c, i) => !c && Math.min(H.get(D[i].key) ?? 0, H.get(D[i + 1].key) ?? 0) < -0.1));
+    TRENCH.ways.push({ w, L, R, cov, eL, eR });
+    // holes: each run of open segments as one ring, the left edge forward and the right edge back
+    const op = TRENCH.open.get(w);
+    for (let i = 0; i < op.length;) {
+      if (!op[i]) { i++; continue; }
+      let j = i; while (j + 1 < op.length && op[j + 1]) j++;
+      const Lr = [], Rr = [];
+      for (let k = i; k <= j + 1; k++) {
+        const pa = D[Math.max(0, k - 1)], pb = D[Math.min(D.length - 1, k + 1)], l = Math.hypot(pb.x - pa.x, pb.z - pa.z) || 1;
+        const nx = -(pb.z - pa.z) / l, nz = (pb.x - pa.x) / l;
+        Lr.push([D[k].x + nx * L[k], D[k].z + nz * L[k]]); Rr.push([D[k].x - nx * R[k], D[k].z - nz * R[k]]);
+      }
+      TRENCH.holes.push([...Lr, ...Rr.reverse()]);
+      i = j + 1;
+    }
+  }
+  // overlapping holes (the two carriageways' trenches side by side) become one: the ground is
+  // triangulated round them, which needs holes that do not overlap
+  if (TRENCH.holes.length) {
+    const close = (r) => [...r, r[0]];
+    try {
+      const u = polygonClipping.union(...TRENCH.holes.map((h) => [[close(h)]]));
+      TRENCH.holes = u.map((poly) => poly[0].slice(0, -1));
+    } catch (e) { console.warn('underpasses: union failed', e.message); }
+  }
+  console.log(`underpasses: solved in ${passes} passes; ${active.size} tunnels kept, ${dropped} left out (no room for the approaches), ${extra.size} approach points covered by a road over them; ${(covered / 1000).toFixed(1)} km covered, ${(open / 1000).toFixed(1)} km open, ${TRENCH.holes.length} holes`);
+}
+/** Whether way w is an open trench at arc length s (its carriageway is a hole in the ground there). */
+const trenchOpen = (w, s) => { const op = TRENCH.open.get(w); if (!op) return false; const D = w._dense; for (let i = 1; i < D.length; i++) if (s <= D[i].s) return op[i - 1]; return false; };
 // Elevated stretches by tile, to keep lamps and trees out from under and off the decks.
 const elevSegs = new Map();
 let elevLen = 0;
@@ -954,7 +1184,7 @@ for (const w of ways) {
   let run = 0;
   // A point every 40 m, or every 10 m on a way with any height: the heights are linear between points,
   // and at 40 m two overlapping roads interpolated their ramps' feet and tops a metre apart.
-  const step = info.car && w._dense?.some((d) => (HT.get(d.key) ?? 0) > 0.02) ? 10 : 40;
+  const step = info.car && w._dense?.some((d) => Math.abs(HT.get(d.key) ?? 0) > 0.02) ? 10 : 40;
   for (let i = 0; i < w._pts.length; i++) {
     if (i > 0) {
       const [ax, az] = w._pts[i - 1], [bx, bz] = w._pts[i];
@@ -970,12 +1200,12 @@ for (const w of ways) {
   const flush = () => {
     if (!cur || cur.p.length < 2) return;
     const h = info.car ? cur.s.map((s) => q1(heightAlong(w, s))) : [];
-    tile(cur.ix, cur.iz).roads.push({ c: info.cls, w: q1(info.w), o: info.oneway ? 1 : 0, l: info.lanes, br: info.bridge, n: info.name || undefined, p: flat(cur.p), j: cur.j, a: cur.a ? flat([cur.a]) : 0, b: cur.b ? flat([cur.b]) : 0, ...(h.some((v) => v > 0.05) ? { h } : {}) });
+    tile(cur.ix, cur.iz).roads.push({ c: info.cls, w: q1(info.w), o: info.oneway ? 1 : 0, l: info.lanes, br: info.bridge, n: info.name || undefined, p: flat(cur.p), j: cur.j, a: cur.a ? flat([cur.a]) : 0, b: cur.b ? flat([cur.b]) : 0, ...(h.some((v) => Math.abs(v) > 0.05) ? { h } : {}) });
     roadPieces++;
   };
   for (let i = 0; i < P.length - 1; i++) {
     const mx = (P[i][0] + P[i + 1][0]) / 2, mz = (P[i][1] + P[i + 1][1]) / 2;
-    addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2, info.car && heightAlong(w, (PS[i] + PS[i + 1]) / 2) < 2, info.cls, w.id);
+    { const hm = heightAlong(w, (PS[i] + PS[i + 1]) / 2); addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2, info.car && hm < 2 && (hm > -0.5 || trenchOpen(w, (PS[i] + PS[i + 1]) / 2)), info.cls, w.id); }
     if (!inRegion(mx, mz)) { flush(); cur = null; continue; }
     const [ix, iz] = tileOf(mx, mz);
     if (!cur || cur.ix !== ix || cur.iz !== iz) { flush(); cur = { ix, iz, p: [P[i]], j: [J[i]], s: [PS[i]], a: i > 0 ? P[i - 1] : null, b: null }; }
@@ -1012,7 +1242,7 @@ for (const w of ways) {
     for (let i = r0 + 1; i <= r1; i++) {
       if (i === r1 || (degCar.get(w._ids[i]) || 0) >= 3) {
         const h = vs.slice(start, i + 1).map((s) => q1(heightAlong(w, s)));
-        edges.push({ a: nodeIdx(w._ids[start], w._pts[start]), b: nodeIdx(w._ids[i], w._pts[i]), p: flat(w._pts.slice(start, i + 1)), c: info.cls, o: info.oneway, l: info.lanes, w: q1(info.w), n: info.name || undefined, br: info.bridge || undefined, ...(h.some((v) => v > 0.05) ? { h } : {}) });
+        edges.push({ a: nodeIdx(w._ids[start], w._pts[start]), b: nodeIdx(w._ids[i], w._pts[i]), p: flat(w._pts.slice(start, i + 1)), c: info.cls, o: info.oneway, l: info.lanes, w: q1(info.w), n: info.name || undefined, br: info.bridge || undefined, ...(h.some((v) => Math.abs(v) > 0.05) ? { h } : {}) });
         start = i;
       }
     }
@@ -1660,6 +1890,24 @@ if (!process.env.NO_EXTRA && fs.existsSync('.cache/buildings/green.json')) {
   flush();
   console.log(`green ground: ${nLawn} polygons`);
 }
+// The open trenches of the underpasses are holes in every area over them (a lawn or a square would lie
+// over the hole like a lid).
+if (TRENCH.holes.length) {
+  const hb = TRENCH.holes.map((h) => ({ h, bb: bboxOf(h) }));
+  const close = (r) => [...r, r[0]];
+  let cut = 0;
+  for (let i = areaPolys.length - 1; i >= 0; i--) {
+    const a = areaPolys[i], bb = bboxOf(a.outer);
+    const hit = hb.filter(({ bb: b }) => !(b[0] > bb[2] || b[2] < bb[0] || b[1] > bb[3] || b[3] < bb[1]));
+    if (!hit.length) continue;
+    let res;
+    try { res = polygonClipping.difference([[close(a.outer), ...a.holes.map(close)]], ...hit.map(({ h }) => [[close(h)]])); } catch { continue; }
+    const parts = res.map((poly) => ({ k: a.k, outer: poly[0].slice(0, -1), holes: poly.slice(1).map((r) => r.slice(0, -1)), id: a.id }));
+    areaPolys.splice(i, 1, ...parts.filter((q) => q.outer.length >= 3));
+    cut++;
+  }
+  console.log(`underpasses: ${cut} areas cut round the open trenches`);
+}
 const areaCount = {};
 for (const a of areaPolys) {
   if (signedArea(a.outer) < 0) a.outer.reverse();
@@ -1780,7 +2028,7 @@ for (const w of ways) {
       const x = ax + dx * s, z = az + dz * s;
       if (junctions.some((j) => Math.hypot(j[0] - x, j[1] - z) < 14)) continue;
       // None along a deck or a ramp (`drop`: the seed is spent all the same, see addTree).
-      const up = heightAlong(w, acc + s) > 0.3;
+      const up = Math.abs(heightAlong(w, acc + s)) > 0.3;
       if (STREET_TREES.has(info.cls)) for (const sd of info.oneway ? [1] : [1, -1]) addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2), undefined, up);
     }
     const gap = LAMPS[info.cls];
@@ -1794,7 +2042,7 @@ for (const w of ways) {
       side = info.oneway ? 1 : -side;
       // Nor in another road's carriageway: a lamp at one road's kerb stood in the lanes of a driveway,
       // a slip road or a side road running alongside (2.5k of them, 7%), and cars met them head on.
-      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2) || underDeck(lx, lz) || inCarriageway(lx, lz, 0.3)) continue;
+      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2) || underDeck(lx, lz) || inCarriageway(lx, lz, 0.3) || heightAlong(w, acc + s) < -0.3) continue;
       tile(...tileOf(lx, lz)).lamps.push(q1(lx), q1(lz), +yaw.toFixed(3));
       nLamps++;
     }
@@ -2060,6 +2308,13 @@ for (const [k, t] of tiles) {
 }
 const net = JSON.stringify({ nodes: netXZ, sig: Array.from(sig), edges, br: bridgeNames, en: roadEn });
 fs.writeFileSync(path.join(OUT, 'network.json'), net);
+// The underpasses (city/visual/Tunnels.ts): per sunk way its dense centre line, heights, half widths and
+// covered flags per segment; and the open trenches as rings (holes in the ground plane and collider).
+fs.writeFileSync(path.join(OUT, 'tunnels.json'), JSON.stringify({
+  // per segment c: 1 covered, and walls: 2 on the left, 4 on the right
+  t: TRENCH.ways.map(({ w, L, R, cov, eL, eR }) => ({ p: w._dense.flatMap((d) => [q1(d.x), q1(d.z)]), h: w._dense.map((d) => q1(HT.get(d.key) ?? 0)), l: L.map(q1), w: R.map(q1), r: q1(w._road.w / 2), c: cov.map((c, i) => (c ? 1 : 0) | (eL[i] ? 2 : 0) | (eR[i] ? 4 : 0)) })),
+  holes: TRENCH.holes.map((r) => r.flatMap(([x, z]) => [q1(x), q1(z)])),
+}));
 const manifest = {
   version: 1, tile: TILE, origin: { lat: 39.90883, lon: 116.39757 },
   bounds: { x0: q1(RX0), z0: q1(RZ0), x1: q1(RX1), z1: q1(RZ1) }, regions: RECTS.map((r) => r.map(q1)), tiles: index, spawn, named,

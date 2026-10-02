@@ -27,6 +27,7 @@
     "@types/three": "^0.185.4",
     "pinyin-pro": "^3.29.4",
     "playwright": "^1.62.1",
+    "polygon-clipping": "^0.15.7",
     "sharp": "^0.35.4",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",

@@ -13,6 +13,7 @@ import { carStops } from './landmarks/CarStops';
 import { placeDeadEndSigns } from './visual/DeadEndSigns';
 import { placeGuideSigns } from './visual/GuideSigns';
 import { placeRailways, railZones, type RailFile } from './visual/Railways';
+import { placeTunnels, trenchZones, type TunnelsFile } from './visual/Tunnels';
 import { footbridgeZones, placeFootbridges, underFootbridge, type FootbridgesFile } from './visual/Footbridges';
 import { entranceZones, placeSubwayEntrances, type EntrancesFile } from './visual/SubwayEntrances';
 import type { Closure, GuideSign } from './Signs';
@@ -157,7 +158,7 @@ export async function install(engine: Engine): Promise<void> {
   // The tile workers first: their module fetch is 42 KB the boot cannot finish without, and it must
   // go out before the facade photos below take the connection for the next minute (see Streamer).
   const tileWorkers = spawnTileWorkers();
-  const [manifest, network, skyline, mats, defs, signs, entrances, footbridges, rail] = await Promise.all([
+  const [manifest, network, skyline, mats, defs, signs, entrances, footbridges, rail, tunnels] = await Promise.all([
     loadCity<Manifest>('manifest.json'), loadCity<Network>('network.json'), loadCity<Skyline>('skyline.json'),
     createCityMaterials(engine, env), loadLandmarks(),
     // The guide signs (city/Signs.ts, placed by the build): optional, the city runs without them.
@@ -168,6 +169,8 @@ export async function install(engine: Engine): Promise<void> {
     new URLSearchParams(location.search).get('footbridges') === '0' ? null : loadCity<FootbridgesFile>('footbridges.json').catch(() => null),
     // The railways above ground (scripts/city/railways.mjs): optional too.
     new URLSearchParams(location.search).get('rail') === '0' ? null : loadCity<RailFile>('rail.json').catch(() => null),
+    // The underpasses' trenches and tunnels (build.mjs): without them the sunk roads would have no floor.
+    loadCity<TunnelsFile>('tunnels.json').catch(() => null),
   ]);
   const b = manifest.bounds;
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
@@ -180,24 +183,60 @@ export async function install(engine: Engine): Promise<void> {
   const gbody = physics.world.createRigidBody(R.RigidBodyDesc.fixed());
   const size = 26000, E = size / 2;
   const hole = undergroundHoles();
-  const slabs: [number, number, number, number][] = hole
-    ? [[cx - E, cz - E, hole.all.x0, cz + E], [hole.all.x1, cz - E, cx + E, cz + E], [hole.all.x0, cz - E, hole.all.x1, hole.all.z0], [hole.all.x0, hole.all.z1, hole.all.x1, cz + E]]
-    : [[cx - E, cz - E, cx + E, cz + E]];
+  // The underpasses' open trenches are holes in the ground too (a ring each, x, z pairs).
+  const trenches = (tunnels?.holes ?? []).map((r) => { const P: [number, number][] = []; for (let i = 0; i < r.length; i += 2) P.push([r[i], r[i + 1]]); return P; });
+  // The collider: windows cut out of the plane - the car park's whole footprint (its own floors and roof
+  // slab take over) and a rectangle round each group of trenches, filled by a flat trimesh with the
+  // trenches left out - and the rest as cuboids, column by column between the windows' edges.
+  type Win = { x0: number; z0: number; x1: number; z1: number; holes: [number, number][][] };
+  let wins: Win[] = trenches.map((P) => {
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (const [x, z] of P) { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
+    return { x0: x0 - 2, z0: z0 - 2, x1: x1 + 2, z1: z1 + 2, holes: [P] };
+  });
+  for (let merged = true; merged;) {
+    merged = false;
+    outer: for (let i = 0; i < wins.length; i++) for (let j = i + 1; j < wins.length; j++) {
+      const a = wins[i], b = wins[j];
+      if (a.x1 < b.x0 || b.x1 < a.x0 || a.z1 < b.z0 || b.z1 < a.z0) continue;
+      wins[i] = { x0: Math.min(a.x0, b.x0), z0: Math.min(a.z0, b.z0), x1: Math.max(a.x1, b.x1), z1: Math.max(a.z1, b.z1), holes: [...a.holes, ...b.holes] };
+      wins.splice(j, 1); merged = true; break outer;
+    }
+  }
+  const cut: { x0: number; z0: number; x1: number; z1: number }[] = [...wins];
+  if (hole) cut.push(hole.all);
+  const xs = [...new Set([cx - E, cx + E, ...cut.flatMap((w) => [w.x0, w.x1])])].sort((a, b) => a - b);
+  const slabs: [number, number, number, number][] = [];
+  for (let i = 0; i + 1 < xs.length; i++) {
+    const xa = xs[i], xb = xs[i + 1];
+    const zs = cut.filter((w) => w.x0 <= xa && w.x1 >= xb).map((w) => [w.z0, w.z1] as [number, number]).sort((a, b) => a[0] - b[0]);
+    let z = cz - E;
+    for (const [za, zb] of zs) { if (za > z) slabs.push([xa, z, xb, za]); z = Math.max(z, zb); }
+    if (z < cz + E) slabs.push([xa, z, xb, cz + E]);
+  }
   for (const [x0, z0, x1, z1] of slabs) {
     const ground = physics.world.createCollider(R.ColliderDesc.cuboid((x1 - x0) / 2, 1, (z1 - z0) / 2).setTranslation((x0 + x1) / 2, -0.97, (z0 + z1) / 2).setFriction(0.95)
       .setCollisionGroups(groups(CG.WORLD, CG.ALL)), gbody);
     physics.tag(ground, { surface: 'asphalt' });
   }
-  let pg: THREE.BufferGeometry;
-  if (hole) {
-    // Shape space is (x, y) facing +z; laid down with rotateX(-90°) its y becomes -z and it faces up,
-    // so the outline and the hole are given as (x, -z).
-    const v = (x: number, z: number) => new THREE.Vector2(x, -z);
-    const shape = new THREE.Shape([v(cx - E, cz - E), v(cx + E, cz - E), v(cx + E, cz + E), v(cx - E, cz + E)]);
-    const o = hole.open;
-    shape.holes.push(new THREE.Path([v(o.x0, o.z0), v(o.x0, o.z1), v(o.x1, o.z1), v(o.x1, o.z0)]));
-    pg = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2);
-  } else pg = new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2).translate(cx, 0, cz);
+  for (const w of wins) {
+    const contour = [new THREE.Vector2(w.x0, w.z0), new THREE.Vector2(w.x1, w.z0), new THREE.Vector2(w.x1, w.z1), new THREE.Vector2(w.x0, w.z1)];
+    const holes = w.holes.map((P) => P.map(([x, z]) => new THREE.Vector2(x, z)));
+    const tris = THREE.ShapeUtils.triangulateShape(contour, holes);
+    const pts = [...contour, ...holes.flat()];
+    const verts = new Float32Array(pts.length * 3);
+    pts.forEach((p, k) => verts.set([p.x, 0.03, p.y], k * 3));
+    const idx = new Uint32Array(tris.flat());
+    const col = physics.world.createCollider(R.ColliderDesc.trimesh(verts, idx).setFriction(0.95).setCollisionGroups(groups(CG.WORLD, CG.ALL)), gbody);
+    physics.tag(col, { surface: 'asphalt' });
+  }
+  // The plane: a hole for the car park's open ramp and for each trench. Shape space is (x, y) facing +z;
+  // laid down with rotateX(-90°) its y becomes -z and it faces up, so outlines are given as (x, -z).
+  const v = (x: number, z: number) => new THREE.Vector2(x, -z);
+  const shape = new THREE.Shape([v(cx - E, cz - E), v(cx + E, cz - E), v(cx + E, cz + E), v(cx - E, cz + E)]);
+  if (hole) { const o = hole.open; shape.holes.push(new THREE.Path([v(o.x0, o.z0), v(o.x0, o.z1), v(o.x1, o.z1), v(o.x1, o.z0)])); }
+  for (const P of trenches) shape.holes.push(new THREE.Path(P.map(([x, z]) => v(x, z))));
+  const pg = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2);
   const uv = pg.getAttribute('uv') as THREE.BufferAttribute, pos = pg.getAttribute('position');
   for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i), pos.getZ(i));
   const groundMesh = new THREE.Mesh(pg, mats.ground);
@@ -218,6 +257,8 @@ export async function install(engine: Engine): Promise<void> {
   scene.add(sky.mesh);
   const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear, landmarkTrees);
   streamer.streetClear = [...(footbridges ? footbridgeZones(footbridges) : []), ...(rail ? railZones(rail) : [])];
+  // nothing stands in a trench: no tree, lamp, bin or building
+  if (tunnels) clear.push(...trenchZones(tunnels));
   streamer.onDetailChange = (keys) => sky.setDetailed(keys);
   engine.add(streamer);
   engine.add(streamer.knocks);
@@ -230,6 +271,7 @@ export async function install(engine: Engine): Promise<void> {
   if (entrances) placeSubwayEntrances(engine, entrances, env);
   if (footbridges) placeFootbridges(engine, footbridges);
   if (rail) placeRailways(engine, rail, footprints);
+  if (tunnels) placeTunnels(engine, tunnels);
 
   const sp = manifest.spawn;
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);

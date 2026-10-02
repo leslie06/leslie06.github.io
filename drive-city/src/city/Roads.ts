@@ -83,6 +83,11 @@ export function lifted(l: Line, thr: number): [number, number][] {
   if (start >= 0) out.push([start, l.len]);
   return out;
 }
+/** The stretches of the piece sunk deeper than `thr` (an underpass's approach or tunnel), as `lifted`. */
+export function sunk(l: Line, thr: number): [number, number][] {
+  if (!l.H) return [];
+  return lifted({ ...l, H: l.H.map((h) => -h) }, thr);
+}
 /** Point, left normal and tangent at arc length s. */
 export function at(l: Line, s: number): [number, number, number, number, number, number] {
   const { P, N, S } = l;
@@ -209,7 +214,7 @@ export function pavementTrees(pieces: RoadPiece[], trees: number[]): { x: number
   const segs: { ax: number; az: number; bx: number; bz: number; hw: number; sw: number }[] = [];
   for (const r of pieces) {
     const sw = SIDEWALK[r.c] ?? 0;
-    if (!sw || !isCar(r.c) || (r.h && r.h.some((h) => h > 0.5))) continue;
+    if (!sw || !isCar(r.c) || (r.h && r.h.some((h) => Math.abs(h) > 0.5))) continue;
     for (let i = 0; i + 3 < r.p.length; i += 2) segs.push({ ax: r.p[i], az: r.p[i + 1], bx: r.p[i + 2], bz: r.p[i + 3], hw: r.w / 2, sw });
   }
   // segments bucketed on a 16 m grid by their bounding box grown by the widest pavement reach (~16 m), so a tree only
@@ -566,7 +571,8 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
     const junctions = J.get(r) ?? [];
     const block = (extra: number, useRoad = false) => spans(l.len, junctions.map((j) => [j.s - (useRoad ? j.road : j.cut) - extra, j.s + (useRoad ? j.road : j.cut) + extra] as [number, number]));
     // Up on an interchange: parapets and the structure instead of pavements.
-    const up = lifted(l, 0.15).map(([a, b]) => [a - 3, b + 3] as [number, number]);
+    // (and down in an underpass: its trench walls instead, city/visual/Tunnels.ts)
+    const up = [...lifted(l, 0.15), ...sunk(l, 0.15)].map(([a, b]) => [a - 3, b + 3] as [number, number]);
     if (l.H) bridgeOf(bridge, col, l, r, below, (x, z, h) => ends.some(([ex, ez, eh]) => eh < h - 2.5 && Math.hypot(ex - x, ez - z) < 24), (x, z, h, step, margin = 0.05) => carLines.some((o) => {
       if (o.r === r) return false;
       const p = project(o.l, x, z);

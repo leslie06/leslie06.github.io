@@ -17,6 +17,7 @@ export interface Link {
   /** Unit direction at the start and the end. */
   d0x: number; d0z: number; d1x: number; d1z: number;
   /** Carriageway height above the ground at each point (a deck or a ramp of an interchange), or null when flat; and its highest. */
+  /** Heights per point (negative in an underpass) and the largest off the ground either way. */
   h: Float32Array | null; hmax: number;
 }
 
@@ -55,7 +56,7 @@ export class LaneGraph {
         const dir = (a: number, b: number) => { const dx = pts[b * 2] - pts[a * 2], dz = pts[b * 2 + 1] - pts[a * 2 + 1], L = Math.hypot(dx, dz) || 1; return [dx / L, dz / L]; };
         const [d0x, d0z] = dir(0, 1), [d1x, d1z] = dir(m - 2, m - 1);
         let h: Float32Array | null = null, hmax = 0;
-        if (e.h) { h = new Float32Array(m); for (let k = 0; k < m; k++) { h[k] = e.h[fwd ? k : m - 1 - k]; hmax = Math.max(hmax, h[k]); } }
+        if (e.h) { h = new Float32Array(m); for (let k = 0; k < m; k++) { h[k] = e.h[fwd ? k : m - 1 - k]; hmax = Math.max(hmax, Math.abs(h[k])); } }
         return { h, hmax, id: this.links.length, from: fwd ? e.a : e.b, to: fwd ? e.b : e.a, pts, cum, len: cum[m - 1], cls: e.c, lanes, laneW, hw: e.w / 2, oneway: !!e.o,
           speed: SPEED[e.c] ?? 8, rev: -1, name: e.n ?? '', d0x, d0z, d1x, d1z };
       };

@@ -108,15 +108,15 @@ export async function install(engine: Engine): Promise<void> {
   const recycle = (n: Npc) => { const l = spares.get(n.body) ?? []; l.push(n.car); spares.set(n.body, l); };
   /**
    * The ground height to drop a car at on link `l` at `s`: 0 on the flat; on an interchange's deck or
-   * ramp its height, but only once the deck's collider is in (the tile has a body), else -1 - a car
+   * ramp (or down in an underpass) its height, but only once the collider is in (the tile has a body), else NaN - a car
    * put there too early fell through to the road underneath.
    */
   const deckAt = (l: { h: Float32Array | null }, s: number, x: number, z: number): number => {
     if (!l.h) return 0;
     const h = g.heightAt(l as Parameters<typeof g.heightAt>[0], s);
-    if (h < 0.3) return h;
+    if (Math.abs(h) < 0.3) return h;
     const hit = engine.physics.raycast({ x, y: h + 1.5, z }, { x: 0, y: -1, z: 0 }, 3, groups(CG.CAR, CG.WORLD));
-    return hit && Math.abs(hit.point[1] - h) < 0.6 ? hit.point[1] : -1;
+    return hit && Math.abs(hit.point[1] - h) < 0.6 ? hit.point[1] : NaN;
   };
   const makeNpc = (car: Vehicle, body: BodyType): Npc => ({ car, driver: null, filter: new ControlFilter(), active: false, bike: false, hornT: 0, runner: false, prevPos: new THREE.Vector3(), curPos: new THREE.Vector3(), prevQuat: new THREE.Quaternion(), curQuat: new THREE.Quaternion(),
     upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, body, flipped: 0, parked: false });
@@ -177,7 +177,7 @@ export async function install(engine: Engine): Promise<void> {
       if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < clear)) continue;
       if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < 25) continue;
       const lift = deckAt(l, s, tmp.x, tmp.z);
-      if (lift < 0) continue;
+      if (Number.isNaN(lift)) continue;
       n.car.body.setEnabled(true);
       n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
       n.car.setMoving(l.speed * (0.75 + 0.2 * rnd()));
@@ -310,7 +310,7 @@ export async function install(engine: Engine): Promise<void> {
         g.at(l, s, g.laneOffset(l, 0), tmp);
         if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 8)) { bs += 12; continue; }
         const lift = deckAt(l, s, tmp.x, tmp.z);
-        if (lift < 0) { bs += 12; continue; }
+        if (Number.isNaN(lift)) { bs += 12; continue; }
         const body: BodyType = rnd() < 0.5 ? 'hatch' : 'sedan';
         let n = pool.find((p) => !p.active && !p.parked && p.body === body);
         if (!n) { n = makeNpc(newCar(body), body); pool.push(n); }   // a free slot keeps its own car (see spawnBike)

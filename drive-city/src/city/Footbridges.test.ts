@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { Manifest, RoadPiece } from './Data';
 import type { FootbridgesFile } from './visual/Footbridges';
 import type { RailFile } from './visual/Railways';
+import type { TunnelsFile } from './visual/Tunnels';
 import type { EntrancesFile } from './visual/SubwayEntrances';
 
 const dir = fileURLToPath(new URL('../../public/city/', import.meta.url));
@@ -26,11 +27,12 @@ const roadsAt = (x: number, z: number): RoadPiece[] => {
   return out;
 };
 const segDist = (x: number, z: number, ax: number, az: number, bx: number, bz: number) => { const vx = bx - ax, vz = bz - az, L = vx * vx + vz * vz || 1, t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L)); return Math.hypot(x - ax - vx * t, z - az - vz * t); };
-/** How far (x, z) is inside the nearest ground carriageway (negative: outside). */
-const into = (x: number, z: number) => {
+/** How far (x, z) is inside the nearest ground carriageway (negative: outside); `sunk` counts an underpass's too. */
+const into = (x: number, z: number, sunk = true) => {
   let worst = -Infinity;
   for (const r of roadsAt(x, z)) for (let i = 0; i + 3 < r.p.length; i += 2) {
     if (r.h && Math.max(r.h[i / 2] ?? 0, r.h[i / 2 + 1] ?? 0) > 1) continue;
+    if (!sunk && r.h && Math.min(r.h[i / 2] ?? 0, r.h[i / 2 + 1] ?? 0) < -0.5) continue;
     worst = Math.max(worst, r.w / 2 - segDist(x, z, r.p[i], r.p[i + 1], r.p[i + 2], r.p[i + 3]));
   }
   return worst;
@@ -79,5 +81,25 @@ describe('street structures', () => {
     }
     expect(raised).toBeGreaterThan(1000);
     expect(bad, `${bad.length}: ` + bad.slice(0, 10).join(' | ')).toEqual([]);
+  }, 120000);
+
+  it('keeps the underpasses\' walls out of every carriageway on the ground', () => {
+    const f = JSON.parse(fs.readFileSync(dir + 'tunnels.json', 'utf8')) as TunnelsFile;
+    expect(f.t.length).toBeGreaterThan(100);
+    const bad: string[] = [];
+    let walls = 0;
+    for (const t of f.t) for (let i = 0; i + 1 < t.h.length; i++) {
+      const h = Math.min(t.h[i], t.h[i + 1]);
+      if (h > -0.1 || (t.c[i] & 1)) continue;   // the open trenches: their parapets stand on the ground
+      const ax = t.p[2 * i], az = t.p[2 * i + 1], bx = t.p[2 * i + 2], bz = t.p[2 * i + 3], L = Math.hypot(bx - ax, bz - az) || 1, nx = -(bz - az) / L, nz = (bx - ax) / L;
+      for (const [bit, o] of [[2, (t.l[i] + t.l[i + 1]) / 2 + 0.2], [4, -(t.w[i] + t.w[i + 1]) / 2 - 0.2]] as const) {
+        if (!(t.c[i] & bit)) continue;
+        walls++;
+        const x = (ax + bx) / 2 + nx * o, z = (az + bz) / 2 + nz * o;
+        if (into(x, z, false) > 0.8) bad.push(`${x.toFixed(1)},${z.toFixed(1)} h ${h}`);
+      }
+    }
+    expect(walls).toBeGreaterThan(1000);
+    expect(bad.length / walls, `${bad.length} of ${walls}: ` + bad.slice(0, 8).join(' | ')).toBeLessThan(0.01);
   }, 120000);
 });
