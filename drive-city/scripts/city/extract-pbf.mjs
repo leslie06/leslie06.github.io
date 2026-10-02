@@ -24,12 +24,12 @@ fs.mkdirSync(TMP, { recursive: true });
 const FILTER = [
   'nwr/building', 'w/building:part', 'w/highway', 'wr/landuse', 'wr/leisure', 'nwr/natural', 'w/waterway', 'w/amenity',
   'nwr/tourism', 'nw/attraction', 'w/railway', 'w/barrier=wall', 'w/man_made', 'w/area:highway', 'wr/place=square',
-  'n/highway=traffic_signals,crossing,bus_stop,street_lamp',
+  'n/highway=traffic_signals,crossing,bus_stop,street_lamp', 'n/railway=subway_entrance',
 ];
 const WAY_KEYS = ['building', 'building:part', 'highway', 'landuse', 'leisure', 'natural', 'waterway', 'amenity', 'tourism', 'attraction', 'railway', 'man_made', 'area:highway'];
 const REL_KEYS = ['building', 'landuse', 'leisure', 'natural', 'tourism'];
 const wanted = {
-  n: (t) => t.tourism != null || t.attraction != null || t.natural === 'tree' || /traffic_signals|crossing|bus_stop|street_lamp/.test(t.highway ?? ''),
+  n: (t) => t.tourism != null || t.attraction != null || t.natural === 'tree' || /traffic_signals|crossing|bus_stop|street_lamp/.test(t.highway ?? '') || t.railway === 'subway_entrance',
   w: (t) => WAY_KEYS.some((k) => t[k] != null) || t.barrier === 'wall' || t.place === 'square',
   r: (t) => REL_KEYS.some((k) => t[k] != null) || t.place === 'square',
 };

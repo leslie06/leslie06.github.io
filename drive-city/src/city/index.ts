@@ -12,6 +12,9 @@ import { findDeadEnds } from './DeadEnds';
 import { carStops } from './landmarks/CarStops';
 import { placeDeadEndSigns } from './visual/DeadEndSigns';
 import { placeGuideSigns } from './visual/GuideSigns';
+import { placeRailways, railZones, type RailFile } from './visual/Railways';
+import { footbridgeZones, placeFootbridges, underFootbridge, type FootbridgesFile } from './visual/Footbridges';
+import { entranceZones, placeSubwayEntrances, type EntrancesFile } from './visual/SubwayEntrances';
 import type { Closure, GuideSign } from './Signs';
 import { SkylineLod } from './Skyline';
 import { CityStreamer, spawnTileWorkers } from './Streamer';
@@ -154,11 +157,17 @@ export async function install(engine: Engine): Promise<void> {
   // The tile workers first: their module fetch is 42 KB the boot cannot finish without, and it must
   // go out before the facade photos below take the connection for the next minute (see Streamer).
   const tileWorkers = spawnTileWorkers();
-  const [manifest, network, skyline, mats, defs, signs] = await Promise.all([
+  const [manifest, network, skyline, mats, defs, signs, entrances, footbridges, rail] = await Promise.all([
     loadCity<Manifest>('manifest.json'), loadCity<Network>('network.json'), loadCity<Skyline>('skyline.json'),
     createCityMaterials(engine, env), loadLandmarks(),
     // The guide signs (city/Signs.ts, placed by the build): optional, the city runs without them.
     loadCity<{ signs: GuideSign[]; closures: Closure[] }>('signs.json').catch(() => null),
+    // The subway entrances (scripts/city/entrances.mjs): optional too.
+    new URLSearchParams(location.search).get('subway') === '0' ? null : loadCity<EntrancesFile>('entrances.json').catch(() => null),
+    // The footbridges (scripts/city/footbridges.mjs): optional too.
+    new URLSearchParams(location.search).get('footbridges') === '0' ? null : loadCity<FootbridgesFile>('footbridges.json').catch(() => null),
+    // The railways above ground (scripts/city/railways.mjs): optional too.
+    new URLSearchParams(location.search).get('rail') === '0' ? null : loadCity<RailFile>('rail.json').catch(() => null),
   ]);
   const b = manifest.bounds;
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
@@ -201,17 +210,26 @@ export async function install(engine: Engine): Promise<void> {
   const bootDone = new Promise<void>((r) => { openGate = r; });
   const { footprints, clear, trees: landmarkTrees, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs, bootDone, [manifest.spawn.x, manifest.spawn.z]);
   clear.push(...shortcutClear(SHORTCUTS));
+  // Each kiosk keeps its ground clear of trees, lamps and kerb furniture, and takes the place of the
+  // small box OSM drew for it.
+  if (entrances) clear.push(...entranceZones(entrances));
   const sky = new SkylineLod(skyline, env);
   sky.exclude(footprints);
   scene.add(sky.mesh);
   const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear, landmarkTrees);
+  streamer.streetClear = [...(footbridges ? footbridgeZones(footbridges) : []), ...(rail ? railZones(rail) : [])];
   streamer.onDetailChange = (keys) => sky.setDetailed(keys);
   engine.add(streamer);
   engine.add(streamer.knocks);
   const routes = new Routes(network);
   // 此路不通 at the mouth of every dead-end branch (「我把车开到了故宫，发现进了死胡同，开不出去了」).
   placeDeadEndSigns(engine, network, findDeadEnds(network, { ...manifest.bounds, regions: manifest.regions }), env);
+  // A guide sign whose pole or plate stands under a footbridge's deck would hang through its girder (19 of 4877): left out.
+  if (signs && footbridges) signs.signs = signs.signs.filter((g) => !underFootbridge(footbridges, g));
   if (signs && new URLSearchParams(location.search).get('signs') !== '0') placeGuideSigns(engine, signs, env);
+  if (entrances) placeSubwayEntrances(engine, entrances, env);
+  if (footbridges) placeFootbridges(engine, footbridges);
+  if (rail) placeRailways(engine, rail, footprints);
 
   const sp = manifest.spawn;
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);

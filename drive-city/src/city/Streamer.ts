@@ -114,6 +114,10 @@ export function spawnTileWorkers(n = Math.min(4, Math.max(1, (navigator.hardware
  * and lamps within `vegRadius` feed the shared instanced pools.
  */
 export class CityStreamer implements System {
+  /** Zones that clear only the street (trees, lamps, kerb furniture), never a building: the footbridges' decks and stairs. Set before the first update. */
+  streetClear: number[][] = [];
+  /** Each clear zone's and footprint's box, for picking the ones near a tile (tens of thousands with the railways'). */
+  private zoneBox = new WeakMap<number[], number[]>();
   name = 'cityStreamer';
   readonly focus = new THREE.Vector3();
   /**
@@ -275,7 +279,20 @@ export class CityStreamer implements System {
     if (this.tiles.has(k) || this.inflight.has(k)) return;
     const w = this.workers[this.rr++ % this.workers.length];
     this.inflight.set(k, performance.now());
-    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, location.href).href, footprints: this.footprints, clear: this.clear });
+    // Only the zones near the tile: the clear list holds every subway kiosk in the city, and the worker
+    // tests each tree, lamp and building against each zone.
+    const [ix, iz] = k.split('_').map(Number), T = this.manifest.tile, M = 160;
+    const x0 = ix * T - M, z0 = iz * T - M, x1 = (ix + 1) * T + M, z1 = (iz + 1) * T + M;
+    const near = (r: number[]) => {
+      let b = this.zoneBox.get(r);
+      if (!b) {
+        let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+        for (let i = 0; i < r.length; i += 2) { a0 = Math.min(a0, r[i]); a1 = Math.max(a1, r[i]); b0 = Math.min(b0, r[i + 1]); b1 = Math.max(b1, r[i + 1]); }
+        this.zoneBox.set(r, b = [a0, b0, a1, b1]);
+      }
+      return b[2] > x0 && b[0] < x1 && b[3] > z0 && b[1] < z1;
+    };
+    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, location.href).href, footprints: this.footprints.filter(near), clear: this.clear.filter(near), street: this.streetClear.filter(near) });
   }
 
   private build(res: TileResult): void {

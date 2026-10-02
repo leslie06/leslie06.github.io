@@ -38,8 +38,8 @@ function pack(name: string, g: THREE.BufferGeometry | null, out: PackedGeometry[
   out.push({ name, attrs, index });
 }
 
-self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][] }>) => {
-  const { key, url, footprints, clear = [] } = ev.data;
+self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][]; street?: number[][] }>) => {
+  const { key, url, footprints, clear = [], street: streetOnly = [] } = ev.data;
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -61,7 +61,7 @@ self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints:
     pack('roofprops', bm.props, geoms, transfer);
     const deck: number[] = [], deckLamps: number[] = [];
     // tree pits under the street trees the clear zones leave standing
-    const street = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, clear);
+    const street = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, streetOnly.length ? [...clear, ...streetOnly] : clear);
     const rm = buildRoads(data.roads, data.crossings, deck, deckLamps, data.ctx, street.trees);
     for (const [k, g] of Object.entries(rm)) pack(k, g as THREE.BufferGeometry | null, geoms, transfer);
     for (const [k, g] of buildAreas(data.areas)) pack(`area:${k}`, g, geoms, transfer);

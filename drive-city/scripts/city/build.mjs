@@ -1592,6 +1592,51 @@ for (const r of rels) {
   const inner = assemble(r.members.filter((m) => m.type === 'way' && m.geometry && m.role === 'inner').map((m) => proj(m.geometry)));
   for (const outer of assemble(r.members.filter((m) => m.type === 'way' && m.geometry && m.role !== 'inner').map((m) => proj(m.geometry)))) areaPolys.push({ k, outer, holes: inner.filter((h) => pip(h[0][0], h[0][1], outer)), id: r.id });
 }
+// Rivers drawn as a line only (2026-10-02, step 4 of the plan): OSM gives most of 通惠河, 亮马河 and the
+// moats as water areas, but ~86 km of rivers, canals, streams and drains in the play area as centre lines
+// alone (凉水河's upper reaches, 坝河, the drains), and nothing drew them. Each one's stretches that no water
+// area covers (sampled every 5 m, runs of 10 m or more) become a water strip as wide as its `width` tag, or
+// river 18, canal 12, stream 4, drain or ditch 3 m.
+{
+  const W = { river: 18, canal: 12, stream: 4, drain: 3, ditch: 2.5 };
+  const wet = areaPolys.filter((a) => a.k === 'water').map((a) => ({ a, bb: bboxOf(a.outer) }));
+  const inWet = (x, z) => wet.some(({ a, bb }) => x >= bb[0] && x <= bb[2] && z >= bb[1] && z <= bb[3] && pip(x, z, a.outer) && !a.holes.some((h) => pip(x, z, h)));
+  let strips = 0, metres = 0, rid = 9.9e12;
+  for (const w of ways) {
+    const t = w.tags; if (!t || !(t.waterway in W) || !w.geometry || (t.tunnel && t.tunnel !== 'no')) continue;
+    // covered over (护城河（已盖板）: the moat under 东二环's west side), or underground
+    if (t.covered === 'yes' || t.location === 'underground' || /盖板|暗沟|暗河/.test(t.name ?? '')) continue;
+    const P = proj(w.geometry);
+    if (!P.some(([x, z]) => inRegion(x, z))) continue;
+    const width = Math.min(60, Math.max(1.5, parseFloat(t.width) || W[t.waterway]));
+    // dense points with a flag: is there water drawn here already?
+    const D = [];
+    for (let i = 0; i < P.length; i++) {
+      if (i > 0) { const [ax, az] = P[i - 1], [bx, bz] = P[i], n = Math.ceil(Math.hypot(bx - ax, bz - az) / 5); for (let k = 1; k < n; k++) D.push([ax + (bx - ax) * k / n, az + (bz - az) * k / n]); }
+      D.push(P[i]);
+    }
+    const dry = D.map(([x, z]) => inRegion(x, z) && !inWet(x, z));
+    for (let s0 = 0; s0 < D.length;) {
+      if (!dry[s0]) { s0++; continue; }
+      let s1 = s0; while (s1 + 1 < D.length && dry[s1 + 1]) s1++;
+      // one point of overlap into the water at either end, so the strip meets it
+      const a = Math.max(0, s0 - 1), e = Math.min(D.length - 1, s1 + 1), run = D.slice(a, e + 1);
+      let L = 0; for (let i = 1; i < run.length; i++) L += Math.hypot(run[i][0] - run[i - 1][0], run[i][1] - run[i - 1][1]);
+      if (run.length >= 2 && L >= 10) {
+        const left = [], right = [];
+        for (let i = 0; i < run.length; i++) {
+          const p = run[Math.max(0, i - 1)], q = run[Math.min(run.length - 1, i + 1)], l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+          const nx = -(q[1] - p[1]) / l * width / 2, nz = (q[0] - p[0]) / l * width / 2;
+          left.push([run[i][0] + nx, run[i][1] + nz]); right.push([run[i][0] - nx, run[i][1] - nz]);
+        }
+        areaPolys.push({ k: 'water', outer: [...left, ...right.reverse()], holes: [], id: rid++ });
+        strips++; metres += L;
+      }
+      s0 = s1 + 1;
+    }
+  }
+  console.log(`rivers from their centre lines: ${strips} strips, ${(metres / 1000).toFixed(1)} km`);
+}
 // Green ground under everything else (fetch-ground.py: ESA WorldCover tree cover, grass and crops,
 // CC BY 4.0): the courtyards, compounds and verges under the trees were bare paving. Drawn lowest
 // (Areas.ts `lawn`), so OSM's own areas, the roads and the buildings cover it where they are.
@@ -1826,6 +1871,86 @@ for (const w of ways) if (w._road?.car && w._road.name && !(w._road.name in road
 for (const b of bridgeNames) if (!(b[2] in roadEn)) roadEn[b[2]] = pinyinOf(b[2]);
 console.log(`names: ${brHits.size} interchanges (${bridgeNames.length} points), ${Object.keys(roadEn).length} roads in pinyin/English`);
 
+// Compound walls (大院围墙, 2026-10-02, step 4 of the plan). Beijing's schools, hospitals, offices, barracks,
+// factories and 小区 stand behind walls, and OSM maps a few (barrier=wall, 136 km) but almost never the
+// rest. Along the boundary of each such compound (a closed way: amenity school/university/college/hospital/
+// kindergarten, landuse military/industrial, office/government, a named residential estate of 3,000-
+// 300,000 m²) and along every OSM wall: a 2.4 m wall 0.3 m inside the line, a metre at a time, wherever
+// the line is clear of buildings (0.7 m either side: the line often runs along a facade), of every road
+// and path (a gap - the gate - where one crosses: a car road's pavement and 0.4 m more, a path's width and
+// 0.6 m), of decks, water, pitches and squares, and of a wall already there (hutong courtyards, another
+// compound's); runs of 4 m or more (piers at the ends were tried: 60k more records, +6 MB of tiles,
+// not seen from the street). One colour per compound: grey brick, red brick
+// or render.
+const COMPOUND_SW = { trunk: 4.5, primary: 4.5, secondary: 4, tertiary: 3.5, unclassified: 2.5, residential: 2.5, busway: 3 };
+{
+  let walls = 0, cid = 9.6e12, compounds = 0, metres = 0;
+  const WALLS = ['#8e908f', '#8e908f', '#93593f', '#d6ccb8'];
+  const taken = new Set();   // 1 m cells already holding a wall
+  for (const [, t] of tiles) for (const b of t.buildings) if (b.k === 'wall') for (let i = 0; i < b.o.length; i += 2) taken.add(`${Math.floor(b.o[i])}_${Math.floor(b.o[i + 1])}`);
+  const emit = (ring, tags) => {
+    const id = cid++, [cx, cz] = centroid(ring);
+    if (!inRegion(cx, cz)) return;
+    const [ix, iz] = tileOf(cx, cz);
+    tile(ix, iz).buildings.push({ i: id, ...tags, o: flat(ring), s: +rnd(id, 2).toFixed(3) });
+  };
+  const nearCar = (x, z) => { for (const [ax, az, bx, bz, hw, cls] of carSegs.get(tileOf(x, z).join('_')) ?? []) if (segDist(x, z, ax, az, bx, bz) < hw + (COMPOUND_SW[cls] ?? 0) + 0.4) return true; return false; };
+  const clear = (x, z, nx, nz) => {
+    if (taken.has(`${Math.floor(x)}_${Math.floor(z)}`)) return false;
+    for (const k of [0, 0.7, -0.7]) if (inBuilding(x + nx * k, z + nz * k)) return false;
+    return !nearCar(x, z) && !nearRoad(x, z, 0.6) && deckOver(x, z) === Infinity && !onOpen(x, z);
+  };
+  const ringArea = (P) => { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; };
+  /** Walls along a polyline, `inward` the side to set them on (+1 left of the direction, -1 right, 0 on it). */
+  const line = (P, inward, colour) => {
+    for (let i = 0; i + 1 < P.length; i++) {
+      const [ax, az] = P[i], [bx, bz] = P[i + 1], L = Math.hypot(bx - ax, bz - az);
+      if (L < 2) continue;
+      const ux = (bx - ax) / L, uz = (bz - az) / L, nx = -uz, nz = ux, off = inward * 0.3;
+      const ok = [];
+      for (let sd = 0.5; sd < L; sd += 1) ok.push(clear(ax + ux * sd + nx * off, az + uz * sd + nz * off, nx, nz));
+      for (let s0 = 0; s0 < ok.length;) {
+        if (!ok[s0]) { s0++; continue; }
+        let s1 = s0; while (s1 + 1 < ok.length && ok[s1 + 1]) s1++;
+        const a = s0, e = Math.min(L, s1 + 1);
+        if (e - a >= 4) {
+          const th = 0.3, p0 = [ax + ux * a + nx * (off - th / 2), az + uz * a + nz * (off - th / 2)], p1 = [ax + ux * e + nx * (off - th / 2), az + uz * e + nz * (off - th / 2)];
+          emit([p0, p1, [p1[0] + nx * th, p1[1] + nz * th], [p0[0] + nx * th, p0[1] + nz * th]], { k: 'wall', h: 2.4, m: 0, r: 'f', rh: 0, c: colour });
+          for (let d = a; d < e; d += 1) taken.add(`${Math.floor(ax + ux * d + nx * off)}_${Math.floor(az + uz * d + nz * off)}`);
+          walls++; metres += e - a;
+        }
+        s0 = s1 + 1;
+      }
+    }
+  };
+  const COMPOUND = (t) => /^(school|university|college|hospital|kindergarten|prison)$/.test(t.amenity ?? '') || /^(military|industrial)$/.test(t.landuse ?? '') || t.office === 'government' || !!t.government;
+  for (const w of ways) {
+    const t = w.tags; if (!t || !w.geometry || w.geometry.length < 4) continue;
+    const P = proj(w.geometry);
+    if (!P.some(([x, z]) => inRegion(x, z))) continue;
+    if (t.barrier === 'wall') { line(P, 0, WALLS[0]); continue; }
+    if (w.nodes?.[0] !== w.nodes?.at(-1)) continue;
+    const A = ringArea(P), area = Math.abs(A);
+    const resid = t.landuse === 'residential' && t.name && area >= 3000 && area <= 300000;
+    if (!(COMPOUND(t) && area >= 1500 && area <= 600000) && !resid) continue;
+    compounds++;
+    // the walls go 0.3 m inside the boundary: left of a clockwise ring in screen terms is its inside when A < 0
+    line(P, A > 0 ? 1 : -1, WALLS[Math.floor(rnd(w.id, 5) * WALLS.length)]);
+  }
+  // compounds drawn as multipolygons (the universities): their outer ways, the wall on the line itself
+  for (const r of rels) {
+    const t = r.tags; if (!t || !COMPOUND(t)) continue;
+    let any = false;
+    for (const m of r.members ?? []) {
+      if (m.type !== 'way' || m.role !== 'outer' || !m.geometry || m.geometry.length < 2) continue;
+      const P = proj(m.geometry);
+      if (!P.some(([x, z]) => inRegion(x, z))) continue;
+      line(P, 0, WALLS[Math.floor(rnd(r.id, 5) * WALLS.length)]); any = true;
+    }
+    if (any) compounds++;
+  }
+  console.log(`compound walls: ${compounds} compounds and the OSM walls, ${walls} lengths of wall (${(metres / 1000).toFixed(0)} km)`);
+}
 addCanopyTrees(onOpen);
 console.log(`canopy trees: ${nCanopy}`);
 // Signalised network nodes (for traffic lights): nearest graph node within 30 m of a signal.
@@ -1949,5 +2074,9 @@ console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lam
 console.log('spawn', spawn);
 // The guide signs are placed from the network just written (TypeScript shared with the game).
 execFileSync('npx', ['tsx', 'scripts/city/signs.mts'], { stdio: 'inherit' });
+// The subway entrances, placed against the tiles just written.
+execFileSync('node', ['scripts/city/entrances.mjs'], { stdio: 'inherit' });
+execFileSync('node', ['scripts/city/footbridges.mjs'], { stdio: 'inherit' });
+execFileSync('node', ['scripts/city/railways.mjs'], { stdio: 'inherit' });
 // The map's place labels (needs the places export of extract-pbf.mjs; skipped without it).
 execFileSync('node', ['scripts/city/places.mjs'], { stdio: 'inherit' });
