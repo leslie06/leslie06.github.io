@@ -506,7 +506,22 @@ const heightNear = (W, x, z) => { let best = 0, bd = Infinity; for (const d of W
 // could only climb 1-2 m (STEEP from the pins) and sat on top of the traffic under it. Such bridges
 // go back to the flat, with their pins, and everything is solved again.
 let demoted = 0;
-for (const [W, lf] of [...lifted]) for (const { o, x, z } of lf.over) if (!lifted.has(o) && heightNear(W, x, z) < DECK - 1.2) { lifted.delete(W); demoted++; break; }
+const demotedWays = [];
+for (const [W, lf] of [...lifted]) for (const { o, x, z } of lf.over) if (!lifted.has(o) && heightNear(W, x, z) < DECK - 1.2) { lifted.delete(W); demoted++; demotedWays.push(W); break; }
+// A dual carriageway's other half goes with it (2026-10-01): 紫竹院路's two bridges over 西三环 are separate
+// ways; one could not climb and went flat, the other stayed a deck, was tied down to its flat twin and
+// ended 0-0.5 m up with parapets standing across all four carriageways it crosses.
+const bbOf = (W) => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const [x, z] of W._pts) { a = Math.min(a, x); c = Math.max(c, x); b = Math.min(b, z); d = Math.max(d, z); } return [a, b, c, d]; };
+for (const D of demotedWays) {
+  if (!D.tags.name) continue;
+  const [a, b, c, d] = bbOf(D);
+  for (const [W] of [...lifted]) {
+    if (W.tags.name !== D.tags.name) continue;
+    const [e, f, g, h] = bbOf(W);
+    if (e > c + 30 || g < a - 30 || f > d + 30 || h < b - 30) continue;
+    lifted.delete(W); demoted++;
+  }
+}
 if (demoted) {
   LB.clear(); pinned.clear();
   for (const [W, lf] of lifted) for (const d of W._dense) LB.set(d.key, Math.max(LB.get(d.key) ?? 0, lf.H));
@@ -1414,7 +1429,7 @@ for (const b of buildings) {
         rec.ps ??= [];
         for (const g of hits) {
           const L = Math.hypot(g.bx - g.ax, g.bz - g.az) || 1, ux = (g.bx - g.ax) / L, uz = (g.bz - g.az) / L;
-          rec.ps.push(q1(g.ax - ux * 4), q1(g.az - uz * 4), q1(g.bx + ux * 4), q1(g.bz + uz * 4), q1(Math.min(4.5, g.hw) + 0.25), ch);
+          rec.ps.push(q1(g.ax - ux * 4), q1(g.az - uz * 4), q1(g.bx + ux * 4), q1(g.bz + uz * 4), q1(Math.min(4.5, g.hw) + 1.25), -ch);  // negative: no side walls (Buildings.ts `open`); a metre wider than a tagged gate: these follow whole roads, round bends
         }
         roadPassages[src]++;
         if (process.env.BLOCK_LOG) blockLog.push(`${b.id} ${kind} passage ${hits.length} ${hits[0].cls} ${hits[0].way}`);

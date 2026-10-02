@@ -170,7 +170,7 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     const wallTop = top + ph;
 
     const ps = base < 0.5 ? passagesOf(b) : [];
-    for (const p of ps) passageLining(fb, cv, ci, p, rings, F);
+    for (const p of ps) passageLining(fb, cv, ci, p, rings, F, ps);
 
     rings.forEach((r, ri) => {
       let u = 0;
@@ -226,7 +226,9 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
 }
 
 /** A road through a building: start, unit direction and length along it, half width, clearance. */
-interface Passage { ax: number; az: number; dx: number; dz: number; len: number; hw: number; ch: number }
+/** `open`: a passage the build gave a road through a big building (a negative clearance in the record):
+ * no side walls - it follows a whole road, bends and junctions, and its walls stood in the way. */
+interface Passage { ax: number; az: number; dx: number; dz: number; len: number; hw: number; ch: number; open: boolean }
 
 function passagesOf(b: BuildingRec): Passage[] {
   const out: Passage[] = [];
@@ -234,7 +236,7 @@ function passagesOf(b: BuildingRec): Passage[] {
   if (!p) return out;
   for (let i = 0; i + 5 < p.length; i += 6) {
     const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
-    if (L > 0.1) out.push({ ax: p[i], az: p[i + 1], dx: (p[i + 2] - p[i]) / L, dz: (p[i + 3] - p[i + 1]) / L, len: L, hw: p[i + 4], ch: p[i + 5] });
+    if (L > 0.1) out.push({ ax: p[i], az: p[i + 1], dx: (p[i + 2] - p[i]) / L, dz: (p[i + 3] - p[i + 1]) / L, len: L, hw: p[i + 4], ch: Math.abs(p[i + 5]), open: p[i + 5] < 0 });
   }
   return out;
 }
@@ -304,12 +306,38 @@ function spansInside(x0: number, z0: number, dx: number, dz: number, len: number
 }
 
 /** The passage's two side walls and ceiling inside the building, facing into it; its sides collide. */
-function passageLining(fb: FacadeBucket, cv: number[], ci: number[], p: Passage, rings: [number, number][][], F: Facade): void {
+/** Whether (x, z) is inside the opening of a passage other than `p` (a road bending inside a building). */
+function inOtherPassage(x: number, z: number, p: Passage, all: Passage[]): boolean {
+  for (const q of all) {
+    if (q === p) continue;
+    const rx = x - q.ax, rz = z - q.az, along = rx * q.dx + rz * q.dz, lat = -rx * q.dz + rz * q.dx;
+    if (along > 0 && along < q.len && Math.abs(lat) < q.hw - 0.05) return true;
+  }
+  return false;
+}
+
+/** Sub-spans of [s0, s1] along a line from (x0, z0) that are not inside another passage's opening. */
+function outsideOthers(x0: number, z0: number, dx: number, dz: number, s0: number, s1: number, p: Passage, all: Passage[]): [number, number][] {
+  if (all.length < 2) return [[s0, s1]];
+  const out: [number, number][] = [];
+  let start = -1;
+  const step = 0.5, n = Math.max(1, Math.ceil((s1 - s0) / step));
+  for (let i = 0; i <= n; i++) {
+    const s = s0 + (s1 - s0) * i / n, free = !inOtherPassage(x0 + dx * s, z0 + dz * s, p, all);
+    if (free && start < 0) start = s;
+    if ((!free || i === n) && start >= 0) { const e = free ? s : s - (s1 - s0) / n; if (e - start > 2) out.push([start, e]); start = -1; }  // no stubs between openings: a car cuts the corner
+  }
+  return out;
+}
+
+function passageLining(fb: FacadeBucket, cv: number[], ci: number[], p: Passage, rings: [number, number][][], F: Facade, all: Passage[] = [p]): void {
   const nx = -p.dz, nz = p.dx;
   const wall = F.col.clone().multiplyScalar(0.8), ceil = F.col.clone().multiplyScalar(0.55);
-  for (const side of [-1, 1]) {
+  for (const side of p.open ? [] : [-1, 1]) {
     const x0 = p.ax + nx * side * p.hw, z0 = p.az + nz * side * p.hw;
-    for (const [s0, s1] of spansInside(x0, z0, p.dx, p.dz, p.len, rings)) {
+    // A road that bends inside the building is several passages: each one's side wall stops where it
+    // enters another's opening, or it stood across the road at the bend (东直门交通枢纽's bus lane).
+    for (const [s0, s1] of spansInside(x0, z0, p.dx, p.dz, p.len, rings).flatMap(([a, b]) => outsideOthers(x0, z0, p.dx, p.dz, a, b, p, all))) {
       // wall from A to B faces (dz, -dx) of its direction: order the ends so that is towards the road
       let ax = x0 + p.dx * s0, az = z0 + p.dz * s0, bx = x0 + p.dx * s1, bz = z0 + p.dz * s1;
       if ((bz - az) * (-nx * side) + (-(bx - ax)) * (-nz * side) < 0) [ax, az, bx, bz] = [bx, bz, ax, az];
