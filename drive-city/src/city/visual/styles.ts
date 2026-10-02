@@ -38,5 +38,6 @@ export const TYPE_COLOURS: Record<number, string[]> = {
   1: ['#8e908e', '#979893', '#a09e98', '#8b8d8c', '#a8705c', '#9b6a58'],
   2: ['#e4e1da', '#dad6cc', '#ece9e2', '#cfccc4', '#d8d0c0', '#c7c6c0', '#e0d9cb'],
   3: ['#eeece6', '#e4e3df', '#dcdcd8', '#e8e2d6', '#f0eee8'],
-  4: ['#d9b48c', '#cf9f78', '#c4886a', '#e0c39d', '#b9876a', '#d6b8a0', '#c2a07f', '#dcc8ae'],
+  // lighter than the first cut: the terracotta read as brick towers
+  4: ['#ddbe9c', '#d4ab88', '#cf9d82', '#e3cba9', '#cda48c', '#dcc2ab', '#cdb093', '#e2d1b9', '#d8c7b2'],
 };

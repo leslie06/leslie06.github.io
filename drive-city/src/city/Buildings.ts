@@ -5,7 +5,8 @@ import { hashU, h01, rng } from './visual/hash';
 import ROOF_PROPS from './visual/roofprops.json';
 
 /** Per-building facade parameters (see the facade shader in Materials.ts). */
-interface Facade { style: Style; fh: number; bw: number; gh: number; top: number; base: number; seed: number; col: THREE.Color }
+/** `ty`: the Beijing housing type (BuildingRec.t), passed to the shader in the segment flags' upper bits. */
+interface Facade { style: Style; fh: number; bw: number; gh: number; top: number; base: number; seed: number; col: THREE.Color; ty?: number }
 
 /**
  * Wall vertices for the facade shader, as indexed quads. Per vertex: uv = (metres along the ring,
@@ -17,7 +18,7 @@ class FacadeBucket {
   private n = 0;
   vert(x: number, y: number, z: number, n: number[], u: number, bay: number, bayW: number, flags: number, style: number, F: Facade, c: THREE.Color): number {
     this.pos.push(x, y, z); this.nor.push(n[0], n[1], n[2]); this.uv.push(u, y);
-    this.col.push(c.r, c.g, c.b); this.fac.push(bay, bayW, flags, style); this.flo.push(F.fh, F.gh, F.top, F.base); this.seed.push(F.seed);
+    this.col.push(c.r, c.g, c.b); this.fac.push(bay, bayW, flags + (F.ty ?? 0) * 4, style); this.flo.push(F.fh, F.gh, F.top, F.base); this.seed.push(F.seed);
     return this.n++;
   }
   /** Roof or roof-object vertex: [x, y, z, u, v] with its own metre UVs. */
@@ -111,7 +112,7 @@ function facadeOf(b: BuildingRec, top: number, base: number, shops: boolean): Fa
   const housing = style === ST.SLAB || style === ST.BRICK || style === ST.TOWER;
   const gh = base > 0.5 || H < 7 ? 0 : shops && style !== ST.GLASS && style !== ST.LOW ? 4.3 : housing ? fh : 0;
   const col = b.c ? C(b.c).lerp(C('#d8d4cb'), 0.3) : C(pick(b.t ? TYPE_COLOURS[b.t] : WALL_COLOURS[style], b.s)).offsetHSL(0, 0, (r2 - 0.5) * 0.04);
-  return { style, fh, bw, gh, top, base, seed: hh & 0xffffff, col };
+  return { style, fh, bw, gh, top, base, seed: hh & 0xffffff, col, ty: b.k === 'resid' ? b.t ?? 0 : 0 };
 }
 
 const CAR = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link', 'pedestrian', 'service']);

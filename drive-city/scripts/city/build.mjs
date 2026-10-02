@@ -30,7 +30,7 @@ for (const e of els.values()) (e.type === 'way' ? ways : e.type === 'relation' ?
 function hash32(a) { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
 const rnd = (id, salt = 0) => hash32(((id % 4294967296) ^ Math.imul(salt + 1, 0x9e3779b1)) >>> 0);
 const proj = (g) => g.map((p) => project(p.lat, p.lon));
-const q1 = (v) => Math.round(v * 10) / 10;
+const q1 = (v) => Math.round(v * 10) / 10, q1v = q1;
 const flat = (r) => r.flatMap(([x, z]) => [q1(x), q1(z)]);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const eq = (a, b) => a[0] === b[0] && a[1] === b[1];
@@ -1463,6 +1463,7 @@ for (const b of buildings) {
     }
   }
   tile(...tileOf(cx, cz)).buildings.push(rec);
+  b._kind = kind;
   eachTile(b.bb, (ix, iz) => { const k = `${ix}_${iz}`; (bIndex.get(k) ?? bIndex.set(k, []).get(k)).push(b); });
 }
 console.log('heights:', heightFrom);
@@ -1492,6 +1493,79 @@ function inBuilding(x, z, margin = 0) {
   return false;
 }
 
+// Courtyard walls and gates along the hutongs (2026-10-02, the building types' second round). The houses
+// of a 四合院 stand round a courtyard; where the lane runs past the courtyard, or past the gap between two
+// houses, OSM (and the learnt set) has nothing, so the hutongs read as rows of loose cottages on open
+// ground. Along every lane among the courtyard houses, on each side just off the carriageway: a grey brick
+// wall wherever the line is open and a courtyard house stands behind it within 12 m, broken at side lanes
+// and junctions; in a run of wall, a gate (门楼, a small house with a gable roof turned to the lane, its door
+// on the street face) every ~16 m.
+{
+  const houseAt = (x, z) => { for (const b of bIndex.get(tileOf(x, z).join('_')) || []) { if (x < b.bb[0] || x > b.bb[2] || z < b.bb[1] || z > b.bb[3]) continue; if (pip(x, z, b.ring)) return b; } return null; };
+  const LANE = /^(residential|service|living_street|unclassified|footway|pedestrian|path)$/;
+  let walls = 0, gates = 0, wid = 9.5e12;
+  const WALL_C = '#8d8f8e';
+  const emit = (ring, tags) => {
+    const id = wid++, [cx, cz] = centroid(ring), [ix, iz] = tileOf(cx, cz);
+    if (!tiles.has(`${ix}_${iz}`) && !inRegion(cx, cz)) return;
+    tile(ix, iz).buildings.push({ i: id, ...tags, o: flat(ring), s: +rnd(id, 2).toFixed(3) });
+  };
+  for (const w of ways) {
+    const info = w._road;
+    if (!info || !LANE.test(info.cls) || info.w > 9 || !w._pts) continue;
+    const P = w._pts;
+    if (!P.some(([x, z]) => zone(x, z) === 'old')) continue;
+    const hw = info.w / 2;
+    for (let i = 0; i + 1 < P.length; i++) {
+      const [ax, az] = P[i], [bx, bz] = P[i + 1], L = Math.hypot(bx - ax, bz - az);
+      if (L < 4) continue;
+      const ux = (bx - ax) / L, uz = (bz - az) / L;
+      for (const side of [1, -1]) {
+        const nx = -uz * side, nz = ux * side, off = hw + 0.35;
+        const ok = [];
+        for (let sd = 1; sd <= L - 1; sd += 1) {
+          const x = ax + ux * sd + nx * off, z = az + uz * sd + nz * off;
+          let good = zone(x, z) === 'old' && hutongContext(x, z) > 0.18 && !houseAt(x, z) && !nearRoad(x, z, 0.2) && deckOver(x, z) === Infinity;
+          if (good) {
+            good = false;
+            for (let k = 1.5; k <= 12 && !good; k += 1.5) { const b = houseAt(x + nx * k, z + nz * k); if (b) good = b._kind === 'hutong'; }
+          }
+          ok.push(good);
+        }
+        // runs of at least 3 m
+        for (let s0 = 0; s0 < ok.length;) {
+          if (!ok[s0]) { s0++; continue; }
+          let s1 = s0; while (s1 + 1 < ok.length && ok[s1 + 1]) s1++;
+          const a = s0 + 1 - 0.5, e = s1 + 1 + 0.5;
+          if (e - a >= 3) {
+            // gates every ~16 m in runs of 9 m or more, the rest wall
+            const cuts = [];
+            if (e - a >= 9) for (let g = a + 4 + rnd(Math.round(ax * 7 + az), side + 3) * 4; g + 3.4 < e - 1; g += 14 + rnd(Math.round(g * 13 + ax), 9) * 6) cuts.push(g);
+            let at = a;
+            const wallTo = (t) => {
+              if (t - at < 1.2) { at = t; return; }
+              const p0 = [ax + ux * at + nx * off, az + uz * at + nz * off], p1 = [ax + ux * t + nx * off, az + uz * t + nz * off], th = 0.36;
+              emit([p0, p1, [p1[0] + nx * th, p1[1] + nz * th], [p0[0] + nx * th, p0[1] + nz * th]], { k: 'wall', h: 3, m: 0, r: 'f', rh: 0, c: WALL_C });
+              walls++; at = t;
+            };
+            for (const g of cuts) {
+              wallTo(g);
+              // the gate: 3.4 m along the lane, 2.4 m deep behind the wall line, a gable roof along the lane
+              const q0 = [ax + ux * g + nx * off, az + uz * g + nz * off], q1 = [q0[0] + ux * 3.4, q0[1] + uz * 3.4];
+              const ring = [q0, q1, [q1[0] + nx * 2.4, q1[1] + nz * 2.4], [q0[0] + nx * 2.4, q0[1] + nz * 2.4]];
+              const ocx = q0[0] + ux * 1.7 + nx * 1.2, ocz = q0[1] + uz * 1.7 + nz * 1.2;
+              emit(ring, { k: 'hutong', h: 5.2, m: 0, r: 'g', rh: 1.3, ob: [q1v(ocx), q1v(ocz), +Math.atan2(uz, ux).toFixed(4), 1.7, 1.2] });
+              gates++; at = g + 3.4;
+            }
+            wallTo(e);
+          }
+          s0 = s1 + 1;
+        }
+      }
+    }
+  }
+  console.log(`hutong courtyards: ${walls} lengths of wall, ${gates} gates`);
+}
 // ---------------------------------------------------------------------------------- ground areas
 function areaKind(t) {
   if (t.natural === 'water' || t.waterway === 'riverbank' || /reservoir|basin/.test(t.landuse || '') || t.water) return 'water';

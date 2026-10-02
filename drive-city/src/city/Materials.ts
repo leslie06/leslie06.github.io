@@ -158,6 +158,8 @@ vec3 facEmis = vec3(0.0);
   float flags = vFac.z;
   bool shopSeg = mod(flags, 2.0) > 0.5;
   bool street = mod(floor(flags * 0.5 + 0.01), 2.0) > 0.5;
+  // Beijing housing type (Buildings.ts: flags + type * 4): 2 板楼, 3 塔楼, 4 new estate
+  float ty = floor(flags / 4.0 + 0.01);
   uint seed = uint(vSeed + 0.5);
   float u = vWall.x, v = vWall.y;
   float bayC = vFac.x, bayW = max(vFac.y, 0.5);
@@ -238,9 +240,10 @@ vec3 facEmis = vec3(0.0);
     float on = step(0.5, cityH01(cityHash3(seed, uint(int(fl6) + 4096), uint(int(floor(pc / 7.0)) + 99))));
     facEmis += vec3(0.78, 0.88, 1.0) * on * (1.0 - sp) * glassM * uNight * 1.3;
   } else if (sty == ${S.SLAB} || sty == ${S.TOWER}) {
-    uint per = sty == ${S.SLAB} ? 3u : 2u;
+    // 板楼: a balcony every other bay, mostly glazed in (封阳台); the rest as before
+    uint per = ty > 1.5 && ty < 2.5 ? 2u : sty == ${S.SLAB} ? 3u : 2u;
     bool balc = (cx + (seed >> 4)) % per == 1u;
-    uint grp = cityHash3(seed, 11u, 0u) % 3u;
+    uint grp = ty > 1.5 && ty < 2.5 ? (cityHash3(seed, 11u, 0u) % 10u < 7u ? 1u : 0u) : cityHash3(seed, 11u, 0u) % 3u;
     if (balc) { row = 1.0; colI = float(grp == 0u ? hc % 4u : grp == 1u ? 4u + hc % 2u : 6u + hc % 2u); }
     else { row = 0.0; colI = float(hc % 8u); }
     litShare = 0.55;
@@ -303,6 +306,11 @@ vec3 facEmis = vec3(0.0);
     float bw = 0.16 / fh, aa = length(dY) / fh + 1e-4;
     float band = (1.0 - smoothstep(bw, bw + aa, fy)) * (1.0 - cover);
     col = mix(col, wallC * (cityH01(seed * 7u) < 0.5 ? 1.16 : 0.84), band);
+  }
+  // New estates: a two-storey stone base and a pale crown band on the top floor.
+  if (ty > 3.5 && (sty == ${S.SLAB} || sty == ${S.TOWER}) && v < top) {
+    if (y < gh + 2.0 * fh) col = mix(col, vec3(0.42, 0.38, 0.34) * (0.9 + 0.2 * cityH01(seed * 5u)), 0.55 * (1.0 - cover * 0.6));
+    if (v > top - fh * 0.9) col = mix(col, vec3(0.86, 0.84, 0.8), 0.45 * (1.0 - cover));
   }
   if (sty != ${S.GLASS} && v > top + 0.42) col = mix(col, vec3(0.74, 0.73, 0.7), 0.75);
   if (sty == ${S.WALL} && v > top - 0.35) col = mix(col, vec3(0.3, 0.32, 0.33), 0.8);
