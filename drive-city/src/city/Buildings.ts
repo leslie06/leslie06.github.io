@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { BuildingRec, RoadPiece } from './Data';
-import { FLAG_SHOP, FLAG_STREET, ST, WALL_COLOURS, type Style } from './visual/styles';
+import { FLAG_SHOP, FLAG_STREET, ST, TYPE_COLOURS, WALL_COLOURS, type Style } from './visual/styles';
 import { hashU, h01, rng } from './visual/hash';
 import ROOF_PROPS from './visual/roofprops.json';
 
@@ -98,7 +98,9 @@ function facadeOf(b: BuildingRec, top: number, base: number, shops: boolean): Fa
     case 'glass': style = ST.GLASS; fh = 3.9 + 0.3 * r2; bw = 3.0; break;
     case 'office': style = r < 0.5 ? ST.OFF_RIBBON : ST.OFF_GRID; fh = 3.6 + 0.3 * r2; bw = 3.2; break;
     case 'resid':
-      style = H < 21 ? (r < 0.45 ? ST.BRICK : ST.SLAB) : (r < 0.6 ? ST.TOWER : ST.SLAB);
+      // by the build's Beijing housing type where it has one, else as before
+      style = b.t === 1 ? ST.BRICK : b.t === 2 ? ST.SLAB : b.t === 3 ? ST.TOWER : b.t === 4 ? (r < 0.55 ? ST.TOWER : ST.SLAB)
+        : H < 21 ? (r < 0.45 ? ST.BRICK : ST.SLAB) : (r < 0.6 ? ST.TOWER : ST.SLAB);
       fh = 2.85 + 0.2 * r2; bw = style === ST.TOWER ? 3.5 : style === ST.BRICK ? 3.0 : 3.3; break;
     case 'hutong': style = ST.HUTONG; fh = Math.max(2.4, H); bw = 4.2 + r2; break;
     case 'trad': style = ST.TRAD; fh = H > 13 ? H / 2 : Math.max(3, H); bw = 3.8 + r2 * 0.6; break;
@@ -108,7 +110,7 @@ function facadeOf(b: BuildingRec, top: number, base: number, shops: boolean): Fa
   }
   const housing = style === ST.SLAB || style === ST.BRICK || style === ST.TOWER;
   const gh = base > 0.5 || H < 7 ? 0 : shops && style !== ST.GLASS && style !== ST.LOW ? 4.3 : housing ? fh : 0;
-  const col = b.c ? C(b.c).lerp(C('#d8d4cb'), 0.3) : C(pick(WALL_COLOURS[style], b.s)).offsetHSL(0, 0, (r2 - 0.5) * 0.04);
+  const col = b.c ? C(b.c).lerp(C('#d8d4cb'), 0.3) : C(pick(b.t ? TYPE_COLOURS[b.t] : WALL_COLOURS[style], b.s)).offsetHSL(0, 0, (r2 - 0.5) * 0.04);
   return { style, fh, bw, gh, top, base, seed: hh & 0xffffff, col };
 }
 

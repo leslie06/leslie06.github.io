@@ -29,3 +29,14 @@ export const WALL_COLOURS: Record<number, string[]> = {
 };
 /** Curtain-wall glass tints by building (linear-ish sRGB). */
 export const GLASS_TINTS = ['#46708c', '#3d6a70', '#56707f', '#355a7a', '#617a88'];
+
+/**
+ * Wall colours by Beijing housing type (BuildingRec.t): 1 苏式 walk-ups - grey brick, some red; 2 板楼 -
+ * pale tile and grey render; 3 塔楼 - white tile; 4 new estates - warm render, sand to terracotta.
+ */
+export const TYPE_COLOURS: Record<number, string[]> = {
+  1: ['#8e908e', '#979893', '#a09e98', '#8b8d8c', '#a8705c', '#9b6a58'],
+  2: ['#e4e1da', '#dad6cc', '#ece9e2', '#cfccc4', '#d8d0c0', '#c7c6c0', '#e0d9cb'],
+  3: ['#eeece6', '#e4e3df', '#dcdcd8', '#e8e2d6', '#f0eee8'],
+  4: ['#d9b48c', '#cf9f78', '#c4886a', '#e0c39d', '#b9876a', '#d6b8a0', '#c2a07f', '#dcc8ae'],
+};

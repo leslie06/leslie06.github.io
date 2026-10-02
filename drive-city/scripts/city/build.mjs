@@ -1311,7 +1311,7 @@ function hutongContext(x, z) {
 // the old guess put 金地购物中心, a mall, at 207 m). Matched by a point inside the footprint.
 const curated = fs.existsSync('scripts/city/heights.json') ? JSON.parse(fs.readFileSync('scripts/city/heights.json', 'utf8')).map((q) => ({ ...q, p: project(q.lat, q.lon) })) : [];
 const curatedFor = (b) => curated.find((q) => q.p[0] >= b.bb[0] && q.p[0] <= b.bb[2] && q.p[1] >= b.bb[1] && q.p[1] <= b.bb[3] && pip(q.p[0], q.p[1], b.ring));
-const kinds = {};
+const kinds = {}, btys = {};
 const named = {};
 const bIndex = new Map(); // tile -> buildings (by bbox) for tree exclusion
 for (const b of buildings) {
@@ -1384,14 +1384,40 @@ for (const b of buildings) {
   if (minH >= h) minH = 0;
   let roof = ROOF[t['roof:shape']] || (kind === 'hutong' ? 'g' : kind === 'trad' ? 'h' : 'f');
   const o = obb(b.ring);
+  // Beijing's housing by era (2026-10-02, the building types): CMAB's year (when the land was first built
+  // up; 1985 = then or before) where it has one, else guessed from height and plan. 1 苏式 brick walk-ups
+  // (1950s-70s, three to five storeys, grey or red brick, some under a hipped tile roof); 2 板楼 (1980s-90s
+  // six-storey slabs, pale tile or grey render, many given a pitched roof in the 2000s 平改坡); 3 塔楼
+  // (1990s point blocks, white tile); 4 new high-rise estates (2000s on: warm render, sand to terracotta).
+  let bty = 0;
+  const year = ext?.year ?? 0, rt = rnd(b.id, 7);
+  if (kind === 'resid' && !(t['building:colour'] || t.colour)) {
+    const aspect = o.hl / Math.max(1, o.hw), point = aspect < 1.7 && o.hl < 28;
+    if (h <= 21) bty = (year && year <= 1985 ? (h <= 17 && rt < 0.5) : (!year && z === 'old' && rt < 0.4)) ? 1 : 2;
+    else bty = point && (year ? year < 2006 : rt < 0.6) ? 3 : year && year < 1998 ? 3 : 4;
+    // the pitched roofs: half the brick walk-ups, a third of the slabs (平改坡), none on the towers
+    if (roof === 'f' && minH < 0.5 && !t['roof:shape'] && o.hw > 4 && aspect > 1.4 && (bty === 1 ? rt < 0.5 : bty === 2 ? rt < 0.33 && h >= 15 : false)) {
+      roof = 'h';
+      const add = Math.min(o.hw * 0.55, 3.2);
+      h += add;   // the roof sits on top of the walls it had
+    }
+  }
   let rh = parseLen(t['roof:height']);
-  if (!(rh > 0)) rh = roof === 'g' || roof === 'h' ? Math.min(o.hw * 0.7, kind === 'trad' ? 9 : 3.5) : roof === 'p' ? o.hw * 0.8 : roof === 's' ? 1.2 : roof === 'd' ? o.hw : 0;
+  if (!(rh > 0)) rh = roof === 'g' || roof === 'h' ? Math.min(o.hw * (bty ? 0.55 : 0.7), kind === 'trad' ? 9 : bty ? 3.2 : 3.5) : roof === 'p' ? o.hw * 0.8 : roof === 's' ? 1.2 : roof === 'd' ? o.hw : 0;
   if (roof !== 'f' && rh > h * 0.6) rh = h * 0.6;
   kinds[kind] = (kinds[kind] || 0) + 1;
   const rec = { i: b.id, k: kind, h: q1(h), m: q1(minH), r: roof, rh: q1(rh), o: flat(b.ring) };
   if (b.holes.length) rec.hs = b.holes.map(flat);
   const c = colour(t['building:colour'] || t.colour); if (c) rec.c = c;
   const rc = colour(t['roof:colour']); if (rc) rec.rc = rc;
+  if (bty) {
+    rec.t = bty;
+    btys[bty] = (btys[bty] ?? 0) + 1;
+    // 平改坡 roofs are red or grey tile; the old brick blocks' grey
+    if ((roof === 'h' || roof === 'g') && !rc) rec.rc = bty === 1 ? (rt < 0.75 ? '#5f6366' : '#8a4a3a') : rt < 0.2 ? '#5f6366' : rt < 0.27 ? '#3f5f7a' : '#9a4b39';
+  }
+  // Big low sheds with no colour of their own are colour-steel (彩钢板): blue or white roofs.
+  if (kind === 'low' && b.area > 250 && !rc && !rec.rc) rec.rc = rt < 0.55 ? '#3f6f9e' : rt < 0.8 ? '#d9dcdc' : '#9a4b39';
   if (roof === 'g' || roof === 'h') rec.ob = [q1(o.cx), q1(o.cz), +o.angle.toFixed(4), q1(o.hl), q1(o.hw)];
   const pas = passageOf.get(b);
   if (pas && minH < 0.5) {
@@ -1440,6 +1466,7 @@ for (const b of buildings) {
   eachTile(b.bb, (ix, iz) => { const k = `${ix}_${iz}`; (bIndex.get(k) ?? bIndex.set(k, []).get(k)).push(b); });
 }
 console.log('heights:', heightFrom);
+console.log('housing types (1 苏式, 2 板楼, 3 塔楼, 4 new):', btys);
 console.log('buildings removed from carriageways:', roadBlockers, 'given a passage:', roadPassages);
 if (process.env.BLOCK_LOG) fs.writeFileSync('.scratch/blocklog.txt', blockLog.join('\n'));
 if (process.env.GUESS_LOG) fs.writeFileSync('.scratch/guesslog.json', JSON.stringify(guessLog));

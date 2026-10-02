@@ -39,6 +39,8 @@ export interface BuildingRec {
   n?: string;
   /** Per-building random 0..1. */
   s: number;
+  /** Beijing housing type (scripts/city/build.mjs): 1 苏式 brick walk-up, 2 板楼, 3 塔楼, 4 new high-rise estate. */
+  t?: number;
   /**
    * Roads through the building (OSM tunnel=building_passage): [ax, az, bx, bz, half width, clearance]
    * per passage. The walls open there up to the clearance, the passage is lined, and has no collider.
