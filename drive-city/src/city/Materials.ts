@@ -369,7 +369,7 @@ async function roadMap(size: number): Promise<{ tex: THREE.CanvasTexture; bounds
   } catch (e) { console.warn('[city] road map', e); return null; }
 }
 
-export async function createCityMaterials(engine: Engine, env: EnvUniforms): Promise<CityMaterials> {
+export async function createCityMaterials(engine: Engine, env: EnvUniforms, later: Promise<void> = Promise.resolve()): Promise<CityMaterials> {
   const a = engine.assets;
   const tex = async (name: string, metres: number) => {
     try { return await a.pbr(name, { repeat: [1 / metres, 1 / metres] }); }
@@ -379,9 +379,13 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms): Pro
   // they arrive: blocking the whole boot on every photo made the first load on GitHub Pages take
   // three minutes, because the browser had to finish 14 MB of images before the game appeared.
   const [brick, plaster] = await Promise.all([tex('dark_brick_wall', 3), tex('grey_plaster', 4)]);
-  /** Give `m` its photo maps when they arrive; until then it is a flat colour. */
+  /**
+   * Give `m` its photo maps when they arrive; until then it is a flat colour. They are asked for only
+   * once `later` resolves (the spawn's tiles are in): ~3 MB of them shared the link with the network
+   * and the tiles the boot waits on.
+   */
   const skin = (m: THREE.MeshStandardMaterial, name: string, metres: number, want: { map?: boolean; normal?: boolean; rough?: boolean }) => {
-    void tex(name, metres).then((p) => {
+    void later.then(() => tex(name, metres)).then((p) => {
       if (want.map && p.map) m.map = p.map;
       if (want.normal && p.normalMap) m.normalMap = p.normalMap;
       if (want.rough && p.roughnessMap) m.roughnessMap = p.roughnessMap;

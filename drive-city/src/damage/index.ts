@@ -13,7 +13,7 @@ export interface DamageApi extends System {
 
 /**
  * Wear on the cars the player drives. Every hard hit takes health off that car (kept per car, so a
- * wreck left behind stays a wreck): below 45 it smokes, below 20 it loses power, at 0 the engine
+ * wreck left behind stays a wreck): below 25 it smokes, below 20 it loses power, at 0 the engine
  * dies and the player has to find another car. A respawn (a reset far from where the car was)
  * repairs it; R flipping it upright does not.
  */
@@ -32,7 +32,10 @@ export async function install(engine: Engine): Promise<void> {
     // A collision fires an impact every step while the car is still scraping, so only the first of
     // a burst counts. Light knocks do nothing, and no single crash can total the car.
     if (clock - lastHit < 0.35) return;
-    const before = get(car), dmg = Math.min(30, Math.max(0, e.strength - 6) * 2.2);
+    // Sturdier since 2026-10-02 (「车撞几下就冒烟，发动机坏了」): it was (dv - 6) x 2.2 up to 30, so three
+    // 50 km/h knocks had it smoking. Now nothing under 8 m/s, one point a m/s over it, at most 20 a crash:
+    // ~10 hits at 50 km/h before it smokes, ~14 before the engine goes.
+    const before = get(car), dmg = Math.min(20, Math.max(0, e.strength - 8) * 1.0);
     if (dmg <= 0) return;
     lastHit = clock;
     const after = Math.max(0, before - dmg);
@@ -52,20 +55,20 @@ export async function install(engine: Engine): Promise<void> {
       clock += dt;
       const v = veh(), car = v.car, h = get(car);
       // A wrecked car still limps: the player can always crawl somewhere and find another.
-      v.power = h <= 0 ? 0.3 : h < 12 ? 0.55 : h < 30 ? 0.8 : 1;
+      v.power = h <= 0 ? 0.3 : h < 8 ? 0.55 : h < 20 ? 0.8 : 1;
       last.copy(car.pos); lastCar = car;
     },
     update(dt) {
       const car = veh().car, h = get(car);
-      if (h >= 40) return;
+      if (h >= 25) return;
       smokeT -= dt;
       const fx = engine.get<FxApi>('fx');
       if (smokeT > 0 || !fx) return;
-      smokeT = h <= 0 ? 0.035 : h < 15 ? 0.06 : 0.12;
+      smokeT = h <= 0 ? 0.035 : h < 10 ? 0.06 : 0.12;
       // From under the bonnet: grey at first, black once the engine is gone.
       const k = 1.5, u = 0.45;
       fx.smoke(car.pos.x + car.fwd.x * k + car.up.x * u, car.pos.y + car.fwd.y * k + car.up.y * u, car.pos.z + car.fwd.z * k + car.up.z * u,
-        car.vel.x * 0.6, 0.6, car.vel.z * 0.6, h <= 0 ? 0.7 : 0.45, h <= 0 ? 3 : 2, h <= 0 ? 0.9 : h < 15 ? 0.6 : 0.15);
+        car.vel.x * 0.6, 0.6, car.vel.z * 0.6, h <= 0 ? 0.7 : 0.45, h <= 0 ? 3 : 2, h <= 0 ? 0.9 : h < 10 ? 0.6 : 0.15);
     },
   };
   engine.add(api);

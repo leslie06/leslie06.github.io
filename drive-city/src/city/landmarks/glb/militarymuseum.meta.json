@@ -1,0 +1,71 @@
+{
+  "id": "militarymuseum",
+  "name": {
+    "zh": "中国人民革命军事博物馆",
+    "en": "Military Museum of the Chinese People's Revolution"
+  },
+  "lat": 39.9082551,
+  "lon": 116.3178611,
+  "headingDeg": 0.4,
+  "file": "militarymuseum.glb",
+  "version": "af956a86",
+  "footprint": [
+    [-109.3, -90],
+    [109.3, -90],
+    [109.3, 66.9],
+    [-109.3, 66.9]
+  ],
+  "moreFootprints": [
+    [
+      [-100, 66.4],
+      [100, 66.4],
+      [100, 188],
+      [-100, 188]
+    ],
+    [
+      [80.3, 66.4],
+      [109.3, 66.4],
+      [109.3, 89.4],
+      [80.3, 89.4]
+    ],
+    [
+      [-109.3, 66.4],
+      [-80.3, 66.4],
+      [-80.3, 89.4],
+      [-109.3, 89.4]
+    ]
+  ],
+  "clear": [
+    [
+      [-111, -92],
+      [111, -92],
+      [111, 91],
+      [-111, 91]
+    ],
+    [
+      [-32.35, 66.4],
+      [32.35, 66.4],
+      [32.35, 87.5],
+      [-32.35, 87.5]
+    ]
+  ],
+  "height": 94.7,
+  "farDistance": 700,
+  "stats": {
+    "triangles": 9068,
+    "farTriangles": 178,
+    "materials": 9,
+    "farMaterials": 2,
+    "colliders": {
+      "solid": 23,
+      "walk": 1,
+      "mesh": 0
+    },
+    "instancedMeshes": 2,
+    "textures": 5,
+    "maxTexture": 512,
+    "footprintArea": 59952,
+    "bytes": 244628,
+    "source": "militarymuseum.glb"
+  }
+}

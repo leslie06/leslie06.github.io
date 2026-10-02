@@ -926,7 +926,7 @@ const nodeHeight = (id) => HT.get(String(id)) ?? 0;
 // ground over them; the open ones are holes in the ground, written to public/city/tunnels.json with the
 // sunk roads' centre lines, heights, half widths (narrowed where another carriageway runs alongside or
 // another trench runs beside) and covered flags, for city/visual/Tunnels.ts.
-const TUN = { D: 6, G: 0.06, STEEP: 0.09, CLEAR: 5.3 };
+const TUN = { D: 6, G: 0.06, STEEP: 0.12, CLEAR: 5.3 };
 const TRENCH = { ways: [], holes: [], open: new Map() };
 {
   // the ways the solve left out join its graph now, dense points and all
@@ -950,7 +950,7 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
   const segsNear = (x, z) => { const out = [], cx = Math.floor(x / SG), cz = Math.floor(z / SG); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) out.push(...(segGrid.get(`${cx + a},${cz + b}`) ?? [])); return out; };
   const cross = (ax, az, bx, bz, cx, cz, dx, dz) => { const d = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx); if (!d) return false; const t = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / d, u = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / d; return t >= 0 && t <= 1 && u >= 0 && u <= 1; };
   const active = new Set(tun), extra = new Map();   // extra: key -> the tunnel it hangs off
-  let H = new Map(), src = new Map(), dropped = 0, passes = 0;
+  let H = new Map(), src = new Map(), dropped = 0, passes = 0, flatDropped = 0;
   for (let pass = 0; pass < 60; pass++) {
     passes = pass + 1;
     const sinks = new Map();
@@ -1006,7 +1006,24 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
     const [tx, tz] = process.env.TUN_AT.split(',').map(Number);
     for (const w of allCar) for (const d of w._dense) if (Math.hypot(d.x - tx, d.z - tz) < 12) console.log('TUN', w.id, w._road?.cls, w._road?.tunnel ? 'tunnel' : '', d.key, d.x.toFixed(1), d.z.toFixed(1), 'HT', (HT.get(d.key) ?? 0).toFixed(2), 'H', (H.get(d.key) ?? 0).toFixed(2), 'deg', degCar.get(Number(d.key)) ?? '-', 'active', active.has(w));
   }
-  for (const w of tun) if (!active.has(w)) w._road = null;
+  if (process.env.TUN_DROPS) for (const w of tun) if (!active.has(w)) {
+    const D = w._dense, L = D.at(-1).s, e0 = degCar.get(Number(D[0].key)) ?? 0, e1 = degCar.get(Number(D.at(-1).key)) ?? 0;
+    console.log('DROP', w.id, w._road.cls, w.tags.name ?? '', 'L', L.toFixed(0), 'end degrees', e0, e1, 'at', D[0].x.toFixed(0), D[0].z.toFixed(0));
+  }
+  // A tunnel left out stays a road on the ground (most are 10-50 m under a railway or a building, and
+  // the railway is lifted over it, the building given a passage): dropping it, as before, cut the
+  // network there and sent the GPS round.
+  // Not where a raised road passes over it: flattened under a ramp it ran into the ramp's underside
+  // (bridgeaudit's blocks 765 -> 1097) - those are left out, as before.
+  for (const w of tun) if (!active.has(w)) {
+    const hw = w._road.w / 2;
+    const under = w._dense.some((d) => segsNear(d.x, d.z).some(([o, j]) => {
+      if (o === w || !o._road) return false;
+      const p = o._dense[j - 1], q = o._dense[j];
+      return Math.max(HT.get(p.key) ?? 0, HT.get(q.key) ?? 0) > 0.3 && segDist(d.x, d.z, p.x, p.z, q.x, q.z) < hw + o._road.w / 2;
+    }));
+    if (under) { w._road = null; flatDropped++; } else w._road.tunnel = 0;
+  }
   // the final heights
   for (const [k, v] of H) HT.set(k, v);
   // An open trench must not stand in a ground carriageway beside it, and OSM often draws a 下穿 and the
@@ -1134,7 +1151,7 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
       TRENCH.holes = u.map((poly) => poly[0].slice(0, -1));
     } catch (e) { console.warn('underpasses: union failed', e.message); }
   }
-  console.log(`underpasses: solved in ${passes} passes; ${active.size} tunnels kept, ${dropped} left out (no room for the approaches), ${extra.size} approach points covered by a road over them; ${(covered / 1000).toFixed(1)} km covered, ${(open / 1000).toFixed(1)} km open, ${TRENCH.holes.length} holes`);
+  console.log(`underpasses: solved in ${passes} passes; ${active.size} tunnels kept, ${dropped - flatDropped} kept on the ground instead (no room for the approaches; ${flatDropped} more under a raised road left out), ${extra.size} approach points covered by a road over them; ${(covered / 1000).toFixed(1)} km covered, ${(open / 1000).toFixed(1)} km open, ${TRENCH.holes.length} holes`);
 }
 /** Whether way w is an open trench at arc length s (its carriageway is a hole in the ground there). */
 const trenchOpen = (w, s) => { const op = TRENCH.open.get(w); if (!op) return false; const D = w._dense; for (let i = 1; i < D.length; i++) if (s <= D[i].s) return op[i - 1]; return false; };
@@ -1172,6 +1189,23 @@ function addSeg(ax, az, bx, bz, hw, car = false, cls = '', way = 0) {
     if (car) (carSegs.get(k) ?? carSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw, cls, way]);
   });
 }
+/** Whether (x, z) is within `margin` of the kerb of a carriageway on the ground other than way `own`'s. */
+function nearOtherCarriageway(x, z, margin, own) {
+  for (const [ax, az, bx, bz, hw, , way] of carSegs.get(tileOf(x, z).join('_')) ?? []) if (way !== own && segDist(x, z, ax, az, bx, bz) < hw + margin) return true;
+  return false;
+}
+/** Whether (x, z) is within r m of a node where three or more car roads meet. */
+let junctionGrid = null;
+function nearJunction(x, z, r) {
+  if (!junctionGrid) {
+    junctionGrid = new Map();
+    for (const w of ways) if (w._road?.car && w._ids) w._ids.forEach((id, i) => { if ((degCar.get(id) || 0) >= 3) { const k = `${Math.floor(w._pts[i][0] / 50)},${Math.floor(w._pts[i][1] / 50)}`; (junctionGrid.get(k) ?? junctionGrid.set(k, []).get(k)).push(w._pts[i]); } });
+  }
+  const cx = Math.floor(x / 50), cz = Math.floor(z / 50);
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const [jx, jz] of junctionGrid.get(`${cx + a},${cz + b}`) ?? []) if (Math.hypot(jx - x, jz - z) < r) return true;
+  return false;
+}
+let lampsCut = 0;
 /** Whether (x, z) is on a carriageway on the ground (or within `margin` of one). */
 function inCarriageway(x, z, margin) {
   for (const [ax, az, bx, bz, hw] of carSegs.get(tileOf(x, z).join('_')) ?? []) if (segDist(x, z, ax, az, bx, bz) < hw + margin) return true;
@@ -2042,7 +2076,11 @@ for (const w of ways) {
       side = info.oneway ? 1 : -side;
       // Nor in another road's carriageway: a lamp at one road's kerb stood in the lanes of a driveway,
       // a slip road or a side road running alongside (2.5k of them, 7%), and cars met them head on.
-      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2) || underDeck(lx, lz) || inCarriageway(lx, lz, 0.3) || heightAlong(w, acc + s) < -0.3) continue;
+      // Nor at any road's junction, nor within 2 m of another road's kerb (「电灯柱会无故在马路生成，容易撞车」,
+      // 2026-10-02): the way's own junctions were skipped, but a side road crossing it through a gap in its
+      // pavement, with no node shared, left a lamp standing in the mouth where cars turn.
+      if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2) || underDeck(lx, lz) || inCarriageway(lx, lz, 0.3) || heightAlong(w, acc + s) < -0.3
+        || nearJunction(lx, lz, 12) || nearOtherCarriageway(lx, lz, 2, w.id)) { lampsCut++; continue; }
       tile(...tileOf(lx, lz)).lamps.push(q1(lx), q1(lz), +yaw.toFixed(3));
       nLamps++;
     }
@@ -2325,10 +2363,12 @@ fs.writeFileSync(path.join(OUT, 'skyline.json'), JSON.stringify({ b: sky }));
 console.log(`skyline ${sky.length / 8} buildings`);
 console.log(`tiles ${Object.keys(index).length}, ${(bytes / 1e6).toFixed(1)} MB; network ${(net.length / 1e6).toFixed(1)} MB (${netXZ.length / 2} nodes, ${edges.length} edges, ${sig.reduce((a, b) => a + b, 0)} signalised)`);
 console.log(`buildings ${buildings.length} (outlines kept ${kept.length}/${outlines.length}, parts ${parts.length})`, kinds);
-console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lamps ${nLamps}, signals ${nSignals}, crossings ${nCross}, stops ${nStops}`);
+console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lamps ${nLamps} (${lampsCut} spots skipped), signals ${nSignals}, crossings ${nCross}, stops ${nStops}`);
 console.log('spawn', spawn);
 // The guide signs are placed from the network just written (TypeScript shared with the game).
 execFileSync('npx', ['tsx', 'scripts/city/signs.mts'], { stdio: 'inherit' });
+// Bus stops whose shelter would stand in a carriageway, taken out of the tiles just written.
+execFileSync('npx', ['tsx', 'scripts/city/shelters.mts'], { stdio: 'inherit' });
 // The subway entrances, placed against the tiles just written.
 execFileSync('node', ['scripts/city/entrances.mjs'], { stdio: 'inherit' });
 execFileSync('node', ['scripts/city/footbridges.mjs'], { stdio: 'inherit' });

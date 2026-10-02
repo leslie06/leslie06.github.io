@@ -275,8 +275,27 @@ export class CityStreamer implements System {
     return out.sort((a, b) => a.d - b.d).map((o) => o.k);
   }
 
-  private request(k: string): void {
-    if (this.tiles.has(k) || this.inflight.has(k)) return;
+  /**
+   * Street-clearing zones that arrive after the boot (the railways' and footbridges' data loads in the
+   * background, see city/index.ts): added for the tiles still to come, and the tiles already built that
+   * they reach are built again - the old tile stays drawn and solid until its replacement is in.
+   */
+  addStreetClear(zones: number[][]): void {
+    if (!zones.length) return;
+    this.streetClear.push(...zones);
+    const T = this.manifest.tile, boxes: number[][] = zones.map((r) => {
+      let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+      for (let i = 0; i < r.length; i += 2) { a0 = Math.min(a0, r[i]); a1 = Math.max(a1, r[i]); b0 = Math.min(b0, r[i + 1]); b1 = Math.max(b1, r[i + 1]); }
+      return [a0, b0, a1, b1];
+    });
+    for (const t of this.tiles.values()) {
+      const x0 = t.ix * T, z0 = t.iz * T, x1 = x0 + T, z1 = z0 + T;
+      if (boxes.some((b) => b[2] > x0 && b[0] < x1 && b[3] > z0 && b[1] < z1)) this.request(t.key, true);
+    }
+  }
+
+  private request(k: string, again = false): void {
+    if ((this.tiles.has(k) && !again) || this.inflight.has(k)) return;
     const w = this.workers[this.rr++ % this.workers.length];
     this.inflight.set(k, performance.now());
     // Only the zones near the tile: the clear list holds every subway kiosk in the city, and the worker
@@ -323,6 +342,16 @@ export class CityStreamer implements System {
     // Patch the materials for shadow cascades / wetness now, not up to 30 frames later.
     this.engine.get<RenderSystem>('render')?.prepare?.(group);
     this.engine.scene.add(group);
+    // Built again (addStreetClear): the old one goes now, and its colliders are swapped in the same step.
+    const old = this.tiles.get(res.key);
+    let hadBody = false;
+    if (old) {
+      this.engine.scene.remove(old.group);
+      old.group.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); });
+      hadBody = !!old.body;
+      this.dropBody(old);
+      this.vegKey = '';
+    }
     const t: Tile = { key: res.key, ix, iz, group, colVerts: res.colVerts!, colIdx: res.colIdx!, deckVerts: res.deckVerts, deckIdx: res.deckIdx, deckLamps: res.deckLamps ?? [], trees: [...(res.trees ?? []), ...(this.extraTrees.get(res.key) ?? [])], lamps: res.lamps ?? [], body: null, far: false, focus: true };
     this.tiles.set(res.key, t);
     this.treeLists.set(res.key, this.treeMatrices(t.trees));
@@ -330,6 +359,7 @@ export class CityStreamer implements System {
     this.headsDirty = true;
     this.furnLists.set(res.key, this.furnMatrices(res.furniture));
     if (res.furniture) this.furnRaw.set(res.key, res.furniture);
+    if (hadBody) this.addBody(t);
     this.onDetailChange?.(this.loadedKeys);
   }
 

@@ -1,0 +1,71 @@
+{
+  "id": "nationallibrary",
+  "name": {
+    "zh": "中国国家图书馆",
+    "en": "National Library of China"
+  },
+  "lat": 39.9426637,
+  "lon": 116.317089,
+  "headingDeg": -5.57,
+  "file": "nationallibrary.glb",
+  "version": "87e3a0b5",
+  "footprint": [
+    [-108, 24.5],
+    [71, 24.5],
+    [71, 174.5],
+    [-108, 174.5]
+  ],
+  "moreFootprints": [
+    [
+      [-41, -223],
+      [93.5, -223],
+      [93.5, -106],
+      [-41, -106]
+    ],
+    [
+      [-77, 167],
+      [23, 167],
+      [23, 220.5],
+      [-77, 220.5]
+    ],
+    [
+      [103.7, 117.5],
+      [113, 117.5],
+      [113, 129.2],
+      [103.7, 129.2]
+    ]
+  ],
+  "clear": [
+    [
+      [64, -212],
+      [94, -212],
+      [94, -115],
+      [64, -115]
+    ],
+    [
+      [66, 79],
+      [103, 79],
+      [103, 116],
+      [66, 116]
+    ]
+  ],
+  "height": 63.52,
+  "farDistance": 900,
+  "stats": {
+    "triangles": 7686,
+    "farTriangles": 786,
+    "materials": 18,
+    "farMaterials": 6,
+    "colliders": {
+      "solid": 67,
+      "walk": 2,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 8,
+    "maxTexture": 512,
+    "footprintArea": 48045,
+    "bytes": 319312,
+    "source": "nationallibrary.glb"
+  }
+}

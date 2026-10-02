@@ -15,7 +15,7 @@ from scipy.ndimage import binary_opening, binary_closing
 from shapely.geometry import shape
 from shapely.ops import transform
 
-W, S, E, N = 116.264, 39.826, 116.55, 39.992
+W, S, E, N = 116.264, 39.826, 116.55, 40.008
 URL = 'https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N39E114_Map.tif'
 LAT0, LON0, R = 39.90883, 116.39757, 6378137.0
 KX = math.pi / 180 * R * math.cos(math.radians(LAT0))

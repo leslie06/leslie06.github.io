@@ -215,6 +215,47 @@ for (let ri = 0; ri < rails.length; ri++) {
   } else ground++;
   out.push(rec);
 }
-const json = JSON.stringify({ r: out });
+// Smaller on the wire (2026-10-02: 1.5 MB / 466 KB compressed held up the boot on a slow link): each
+// track simplified (Douglas-Peucker, 0.25 m in plan and 0.1 m in height, keeping every point where the
+// segment flags change), then written in decimetres as deltas. Railways.ts `decodeRail` reads it back.
+function simplify(rec) {
+  const n = rec.p.length / 2, keep = new Uint8Array(n);
+  keep[0] = keep[n - 1] = 1;
+  if (rec.e) for (let i = 1; i < n - 1; i++) if (rec.e[i - 1] !== rec.e[i]) keep[i] = 1;
+  const X = (i) => rec.p[2 * i], Z = (i) => rec.p[2 * i + 1], Hh = (i) => rec.h?.[i] ?? 0;
+  const dp = (a, b) => {
+    let worst = -1, wi = -1;
+    const ax = X(a), az = Z(a), bx = X(b), bz = Z(b), L2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1;
+    for (let i = a + 1; i < b; i++) {
+      const t = Math.max(0, Math.min(1, ((X(i) - ax) * (bx - ax) + (Z(i) - az) * (bz - az)) / L2));
+      const d = Math.hypot(X(i) - ax - (bx - ax) * t, Z(i) - az - (bz - az) * t) / 0.25 + Math.abs(Hh(i) - (Hh(a) + (Hh(b) - Hh(a)) * t)) / 0.1;
+      if (d > worst) { worst = d; wi = i; }
+    }
+    if (worst > 1) { keep[wi] = 1; dp(a, wi); dp(wi, b); }
+  };
+  let a = 0;
+  for (let i = 1; i < n; i++) if (keep[i]) { dp(a, i); a = i; }
+  const idx = [...keep.keys()].filter((i) => keep[i]);
+  const outRec = { k: rec.k, p: idx.flatMap((i) => [X(i), Z(i)]) };
+  if (rec.h) outRec.h = idx.map((i) => rec.h[i]);
+  // a kept segment takes the flags of the first original segment it covers
+  if (rec.e) outRec.e = idx.slice(0, -1).map((i) => rec.e[i]);
+  if (rec.q) outRec.q = rec.q;
+  return outRec;
+}
+const dm = (v) => Math.round(v * 10);
+const delta = (arr, stride) => { const o = []; const prev = new Array(stride).fill(0); for (let i = 0; i < arr.length; i++) { const v = dm(arr[i]); o.push(v - prev[i % stride]); prev[i % stride] = v; } return o; };
+let before = 0, after = 0;
+const packed = out.map((rec) => {
+  const r = simplify(rec);
+  before += rec.p.length / 2; after += r.p.length / 2;
+  const o = { k: r.k, p: delta(r.p, 2) };
+  if (r.h) o.h = delta(r.h, 1);
+  if (r.e && r.e.some(Boolean)) o.e = r.e;
+  if (r.q && r.q.length) o.q = delta(r.q, 3);
+  return o;
+});
+console.log(`railways: ${before} points simplified to ${after}`);
+const json = JSON.stringify({ v: 2, r: packed });
 fs.writeFileSync(path.join(DIR, 'rail.json'), json);
 console.log(`railways: ${demoted} lifted points back on the ground; ${out.reduce((a, r) => a + (r.e ? r.e.filter((v) => v & 4).length : 0), 0)} segments set in a road; ${out.length} tracks (${elevated} with a raised stretch, ${ground} on the ground), ${nLift} bridge crossings over roads, ${nLevel} level crossings, ${nUnder} under road bridges, ${piers} piers, ${(json.length / 1e6).toFixed(1)} MB`);

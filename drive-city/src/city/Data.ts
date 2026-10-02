@@ -97,8 +97,22 @@ export const KINDS: BuildingKind[] = ['glass', 'office', 'resid', 'hutong', 'tra
 
 const BASE: string = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
 
-export async function loadCity<T>(file: string): Promise<T> {
-  const r = await fetch(`${BASE}city/${file}`);
-  if (!r.ok) throw new Error(`city data ${file}: HTTP ${r.status}`);
-  return r.json() as Promise<T>;
+const cityFiles = new Map<string, Promise<unknown>>();
+/**
+ * A file of public/city, fetched once: the city and the far ground's road mask (Materials.ts) both read
+ * network.json and manifest.json, and each fetched its own 1.6 MB copy at boot. A failed fetch is
+ * forgotten, so a retry fetches again. Callers share the parsed object: treat it as read-only.
+ */
+export function loadCity<T>(file: string): Promise<T> {
+  let p = cityFiles.get(file);
+  if (!p) {
+    p = (async () => {
+      const r = await fetch(`${BASE}city/${file}`);
+      if (!r.ok) throw new Error(`city data ${file}: HTTP ${r.status}`);
+      return r.json();
+    })();
+    p.catch(() => cityFiles.delete(file));
+    cityFiles.set(file, p);
+  }
+  return p as Promise<T>;
 }

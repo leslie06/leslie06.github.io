@@ -14,7 +14,7 @@ import rasterio
 from rasterio.windows import from_bounds
 from scipy.ndimage import maximum_filter
 
-W, S, E, N = 116.264, 39.826, 116.55, 39.992
+W, S, E, N = 116.264, 39.826, 116.55, 40.008
 SPACING = float(sys.argv[1]) if len(sys.argv) > 1 else 7.0
 TILES = ['data/chm-132100121.tif', 'data/chm-132100103.tif']
 LAT0, LON0, R = 39.90883, 116.39757, 6378137.0

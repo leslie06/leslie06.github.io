@@ -26,6 +26,9 @@ export const EXTRA = [
   { tag: 's', s: 39.826, w: 116.336, n: 39.857, e: 116.504, chunks: 2 },
   { tag: 'v', s: 39.953, w: 116.336, n: 39.992, e: 116.462, chunks: 2 },
   { tag: 'y', s: 39.963, w: 116.462, n: 39.992, e: 116.504, chunks: 2 },
+  // 奥林匹克公园's centre (2026-10-02, 「扩到奥林匹克公园」): the map stopped behind 水立方 and 鸟巢 stood
+  // outside it - o is the strip north of the 4th Ring box between 北辰西路 and 北辰东路 up to 国家会议中心.
+  { tag: 'o', s: 39.992, w: 116.374, n: 40.008, e: 116.404, chunks: 1 },
 ];
 /** Every box of the playable area, the main one first. */
 export const REGIONS = [BBOX, ...EXTRA];

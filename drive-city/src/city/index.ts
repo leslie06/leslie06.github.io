@@ -12,7 +12,7 @@ import { findDeadEnds } from './DeadEnds';
 import { carStops } from './landmarks/CarStops';
 import { placeDeadEndSigns } from './visual/DeadEndSigns';
 import { placeGuideSigns } from './visual/GuideSigns';
-import { placeRailways, railZones, type RailFile } from './visual/Railways';
+import { placeRailways, railZones, type RailFileV2 } from './visual/Railways';
 import { placeTunnels, trenchZones, type TunnelsFile } from './visual/Tunnels';
 import { footbridgeZones, placeFootbridges, underFootbridge, type FootbridgesFile } from './visual/Footbridges';
 import { entranceZones, placeSubwayEntrances, type EntrancesFile } from './visual/SubwayEntrances';
@@ -151,6 +151,14 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
  * Central Beijing from OpenStreetMap: 天安门 to 国贸, 故宫 to 天坛. Ground and colliders, the
  * streamed tiles, the far skyline, the landmarks, and the street-name lookup for the HUD.
  */
+/**
+ * The guide signs and the railways (half a megabyte compressed between them) download after the boot,
+ * once the spawn's tiles are in: on a slow link they held up the first drive (2026-10-02, the live
+ * game took minutes to become playable). Shot mode keeps them in the boot, for the same picture every run.
+ */
+const DEFER_EXTRAS = !new URLSearchParams(location.search).has('shot') || new URLSearchParams(location.search).has('defer');
+const RAIL_ON = new URLSearchParams(location.search).get('rail') !== '0';
+
 export async function install(engine: Engine): Promise<void> {
   const { scene, physics } = engine;
   const render = engine.get<RenderApi>('render');
@@ -158,17 +166,22 @@ export async function install(engine: Engine): Promise<void> {
   // The tile workers first: their module fetch is 42 KB the boot cannot finish without, and it must
   // go out before the facade photos below take the connection for the next minute (see Streamer).
   const tileWorkers = spawnTileWorkers();
+  // The spawn's tiles in: the glb landmarks, the trees, the photo textures (outside shot mode) and the
+  // extras below wait for it.
+  let openGate = () => {};
+  const bootDone = new Promise<void>((r) => { openGate = r; });
   const [manifest, network, skyline, mats, defs, signs, entrances, footbridges, rail, tunnels] = await Promise.all([
     loadCity<Manifest>('manifest.json'), loadCity<Network>('network.json'), loadCity<Skyline>('skyline.json'),
-    createCityMaterials(engine, env), loadLandmarks(),
-    // The guide signs (city/Signs.ts, placed by the build): optional, the city runs without them.
-    loadCity<{ signs: GuideSign[]; closures: Closure[] }>('signs.json').catch(() => null),
+    createCityMaterials(engine, env, DEFER_EXTRAS ? bootDone : undefined), loadLandmarks(),
+    // The guide signs (city/Signs.ts, placed by the build): optional, the city runs without them, and
+    // after the boot (below) unless in shot mode.
+    DEFER_EXTRAS ? null : loadCity<{ signs: GuideSign[]; closures: Closure[] }>('signs.json').catch(() => null),
     // The subway entrances (scripts/city/entrances.mjs): optional too.
     new URLSearchParams(location.search).get('subway') === '0' ? null : loadCity<EntrancesFile>('entrances.json').catch(() => null),
     // The footbridges (scripts/city/footbridges.mjs): optional too.
     new URLSearchParams(location.search).get('footbridges') === '0' ? null : loadCity<FootbridgesFile>('footbridges.json').catch(() => null),
     // The railways above ground (scripts/city/railways.mjs): optional too.
-    new URLSearchParams(location.search).get('rail') === '0' ? null : loadCity<RailFile>('rail.json').catch(() => null),
+    DEFER_EXTRAS || !RAIL_ON ? null : loadCity<RailFileV2>('rail.json').catch(() => null),
     // The underpasses' trenches and tunnels (build.mjs): without them the sunk roads would have no floor.
     loadCity<TunnelsFile>('tunnels.json').catch(() => null),
   ]);
@@ -245,8 +258,6 @@ export async function install(engine: Engine): Promise<void> {
   scene.add(groundMesh);
 
   // The spawn's tiles first; the glb landmarks and the Blender trees download after them.
-  let openGate = () => {};
-  const bootDone = new Promise<void>((r) => { openGate = r; });
   const { footprints, clear, trees: landmarkTrees, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs, bootDone, [manifest.spawn.x, manifest.spawn.z]);
   clear.push(...shortcutClear(SHORTCUTS));
   // Each kiosk keeps its ground clear of trees, lamps and kerb furniture, and takes the place of the
@@ -266,8 +277,12 @@ export async function install(engine: Engine): Promise<void> {
   // 此路不通 at the mouth of every dead-end branch (「我把车开到了故宫，发现进了死胡同，开不出去了」).
   placeDeadEndSigns(engine, network, findDeadEnds(network, { ...manifest.bounds, regions: manifest.regions }), env);
   // A guide sign whose pole or plate stands under a footbridge's deck would hang through its girder (19 of 4877): left out.
-  if (signs && footbridges) signs.signs = signs.signs.filter((g) => !underFootbridge(footbridges, g));
-  if (signs && new URLSearchParams(location.search).get('signs') !== '0') placeGuideSigns(engine, signs, env);
+  const putSigns = (sg: typeof signs) => {
+    if (!sg || new URLSearchParams(location.search).get('signs') === '0') return;
+    if (footbridges) sg.signs = sg.signs.filter((g) => !underFootbridge(footbridges, g));
+    placeGuideSigns(engine, sg, env);
+  };
+  putSigns(signs);
   if (entrances) placeSubwayEntrances(engine, entrances, env);
   if (footbridges) placeFootbridges(engine, footbridges);
   if (rail) placeRailways(engine, rail, footprints);
@@ -277,11 +292,25 @@ export async function install(engine: Engine): Promise<void> {
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);
   await streamer.preload(sp.x, sp.z);
   openGate();
+  // The extras the boot did not wait for (DEFER_EXTRAS): the railways' street clearing reaches the tiles
+  // already built by building them again (CityStreamer.addStreetClear).
+  const extrasLoaded = !DEFER_EXTRAS ? Promise.resolve() : (async () => {
+    // not while the boot still downloads: when the player starts, or 20 s on (the title's attract drive)
+    await new Promise<void>((r) => { const off = engine.events.on('game:start', () => { off?.(); r(); }); setTimeout(r, 20000); });
+    const [sg, rl] = await Promise.all([
+      loadCity<{ signs: GuideSign[]; closures: Closure[] }>('signs.json').catch(() => null),
+      RAIL_ON ? loadCity<RailFileV2>('rail.json').catch(() => null) : null,
+    ]);
+    putSigns(sg);
+    if (rl) { streamer.addStreetClear(railZones(rl)); placeRailways(engine, rl, footprints); }
+  })();
   streamer.loadTrees();
   const path = routes.ahead(sp.x, sp.z, hx, hz, 3500);
 
-  const api: WorldApi & { manifest: Manifest; routes: Routes; streamer: CityStreamer; landmarksLoaded: Promise<void> } = {
+  const api: WorldApi & { manifest: Manifest; routes: Routes; streamer: CityStreamer; landmarksLoaded: Promise<void>; extrasLoaded: Promise<void> } = {
     name: 'world',
+    /** Resolves once the guide signs and railways are placed (they load after the boot outside shot mode). */
+    extrasLoaded,
     /** Resolves once every glb landmark is in (probes and shots of one wait on it). */
     landmarksLoaded,
     spawn: { x: sp.x, y: 0.03 + TAXI.wheelRadius + 0.08, z: sp.z, yaw: sp.yaw },

@@ -1,0 +1,53 @@
+{
+  "id": "capitalmuseum",
+  "name": {
+    "zh": "首都博物馆",
+    "en": "Capital Museum"
+  },
+  "lat": 39.9050194,
+  "lon": 116.3358769,
+  "headingDeg": 0.37,
+  "file": "capitalmuseum.glb",
+  "version": "7358d6f5",
+  "footprint": [
+    [-84.35, -44.85],
+    [84.35, -44.85],
+    [84.35, 44.85],
+    [-84.35, 44.85]
+  ],
+  "moreFootprints": [
+    [
+      [-84.35, -86],
+      [84.35, -86],
+      [84.35, -44.85],
+      [-84.35, -44.85]
+    ]
+  ],
+  "clear": [
+    [
+      [-85.85, -46.35],
+      [85.85, -46.35],
+      [85.85, 46.35],
+      [-85.85, 46.35]
+    ]
+  ],
+  "height": 43.2,
+  "farDistance": 900,
+  "stats": {
+    "triangles": 1060,
+    "farTriangles": 52,
+    "materials": 12,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 23,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 10,
+    "maxTexture": 1024,
+    "footprintArea": 22074,
+    "bytes": 135540,
+    "source": "capitalmuseum.glb"
+  }
+}

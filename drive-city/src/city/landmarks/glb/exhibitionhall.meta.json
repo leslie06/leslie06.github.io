@@ -1,0 +1,77 @@
+{
+  "id": "exhibitionhall",
+  "name": {
+    "zh": "北京展览馆",
+    "en": "Beijing Exhibition Center"
+  },
+  "lat": 39.9388337,
+  "lon": 116.3378963,
+  "headingDeg": 0,
+  "file": "exhibitionhall.glb",
+  "version": "42d410d3",
+  "footprint": [
+    [-110, -110],
+    [110, -110],
+    [110, 3],
+    [-110, 3]
+  ],
+  "moreFootprints": [
+    [
+      [-48.5, -200.5],
+      [43.5, -200.5],
+      [43.5, -108],
+      [-48.5, -108]
+    ],
+    [
+      [66, 2],
+      [105.5, 2],
+      [105.5, 76],
+      [66, 76]
+    ],
+    [
+      [-105.5, 2],
+      [-66, 2],
+      [-66, 74.5],
+      [-105.5, 74.5]
+    ],
+    [
+      [-25, 2],
+      [25, 2],
+      [25, 16.5],
+      [-25, 16.5]
+    ]
+  ],
+  "clear": [
+    [
+      [-51, -203],
+      [47, -203],
+      [47, -108],
+      [-51, -108]
+    ],
+    [
+      [-113, -113],
+      [113, -113],
+      [113, 78],
+      [-113, 78]
+    ]
+  ],
+  "height": 86.85,
+  "farDistance": 900,
+  "stats": {
+    "triangles": 20230,
+    "farTriangles": 302,
+    "materials": 9,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 82,
+      "walk": 1,
+      "mesh": 0
+    },
+    "instancedMeshes": 5,
+    "textures": 5,
+    "maxTexture": 512,
+    "footprintArea": 39882,
+    "bytes": 315508,
+    "source": "exhibitionhall.glb"
+  }
+}

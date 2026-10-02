@@ -14,7 +14,7 @@
 import json, os, sys, time, zipfile
 import duckdb
 
-W, S, E, N = 116.25, 39.82, 116.56, 40.00
+W, S, E, N = 116.25, 39.82, 116.56, 40.01
 OVERTURE = 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=buildings/type=building/*'
 OUT = '.cache/buildings'
 os.makedirs(OUT, exist_ok=True)

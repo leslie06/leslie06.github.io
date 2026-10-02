@@ -17,19 +17,19 @@ const hair = path.join(src, 'Hairstyles/Origin at 0/glTF (Godot)');
 /** [source png, published name, longest side, format] */
 const IMAGES = [
   ['T_Superhero_Male_Ligh.png', 'body.jpg', 1024, 'jpeg'],
-  ['T_Superhero_Male_Normal.png', 'body_n.png', 1024, 'png'],
+  ['T_Superhero_Male_Normal.png', 'body_n.jpg', 1024, 'jpeg'],
   ['T_Superhero_Male_Roughness.png', 'body_r.jpg', 512, 'jpeg'],
   ['T_Eye_Brown.png', 'eye.jpg', 256, 'jpeg'],
   ['T_Hair_1_BaseColor.png', 'hair.jpg', 512, 'jpeg'],
-  ['T_Hair_1_Normal.png', 'hair_n.png', 512, 'png'],
+  ['T_Hair_1_Normal.png', 'hair_n.jpg', 512, 'jpeg'],
 ];
 for (const [from, to, size, fmt] of IMAGES) {
   execFileSync('sips', ['-s', 'format', fmt, ...(fmt === 'jpeg' ? ['-s', 'formatOptions', '88'] : []), '-Z', String(size), path.join(tex, from), '--out', path.join(out, to)], { stdio: 'ignore' });
 }
 const RENAME = {
-  'T_Hair_1_Normal_png.png': 'hair_n.png', 'T_Hair_1_Normal.png': 'hair_n.png', 'T_Hair_1_BaseColor.png': 'hair.jpg',
+  'T_Hair_1_Normal_png.png': 'hair_n.jpg', 'T_Hair_1_Normal.png': 'hair_n.jpg', 'T_Hair_1_BaseColor.png': 'hair.jpg',
   'T_Eye_Normal_png.png': null, 'T_Eye_Brown.png': 'eye.jpg',
-  'T_Superhero_Male_Normal.png': 'body_n.png', 'T_Superhero_Male_Dark.png': 'body.jpg', 'T_Superhero_Male_Roughness.png': 'body_r.jpg',
+  'T_Superhero_Male_Normal.png': 'body_n.jpg', 'T_Superhero_Male_Dark.png': 'body.jpg', 'T_Superhero_Male_Roughness.png': 'body_r.jpg',
 };
 
 /** Copy a glTF and its buffer, pointing its images at the published textures (null: dropped). */

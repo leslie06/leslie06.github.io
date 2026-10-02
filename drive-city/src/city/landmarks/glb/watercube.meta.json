@@ -1,0 +1,53 @@
+{
+  "id": "watercube",
+  "name": {
+    "zh": "国家游泳中心（水立方）",
+    "en": "National Aquatics Center (Water Cube)"
+  },
+  "lat": 39.9915781,
+  "lon": 116.3841731,
+  "headingDeg": -2.42,
+  "file": "watercube.glb",
+  "version": "03bf65fc",
+  "footprint": [
+    [-95, -95],
+    [96.68, -95],
+    [96.68, 96.68],
+    [-95, 96.68]
+  ],
+  "moreFootprints": [
+    [
+      [-104, -34],
+      [-95, -34],
+      [-95, -8],
+      [-104, -8]
+    ]
+  ],
+  "clear": [
+    [
+      [-95, -95],
+      [97.18, -95],
+      [97.18, 97.18],
+      [-95, 97.18]
+    ]
+  ],
+  "height": 31,
+  "farDistance": 900,
+  "stats": {
+    "triangles": 8178,
+    "farTriangles": 28,
+    "materials": 6,
+    "farMaterials": 3,
+    "colliders": {
+      "solid": 8,
+      "walk": 2,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 5,
+    "maxTexture": 1024,
+    "footprintArea": 36975,
+    "bytes": 295064,
+    "source": "watercube.glb"
+  }
+}

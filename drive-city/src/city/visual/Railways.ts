@@ -5,7 +5,30 @@ import { CG, groups } from '../../core/Physics';
 import { inside } from '../Clear';
 import { FlatMesh } from './Footbridges';
 
-/** public/city/rail.json (scripts/city/railways.mjs). */
+/**
+ * public/city/rail.json as written (v 2): every number in decimetres as a delta from the one before it
+ * of its kind (x from x, z from z; heights; piers' x, z, height). `decodeRail` turns it into a RailFile.
+ */
+export interface RailFileV2 { v: 2; r: { k: number; p: number[]; h?: number[]; e?: number[]; q?: number[] }[] }
+const undelta = (a: number[] | undefined, stride: number): number[] | undefined => {
+  if (!a) return a;
+  const out = new Array<number>(a.length), prev = new Array<number>(stride).fill(0);
+  for (let i = 0; i < a.length; i++) { prev[i % stride] += a[i]; out[i] = prev[i % stride] / 10; }
+  return out;
+};
+const decoded = new WeakMap<object, RailFile>();
+/** The railways in metres (decoded once per file object; a v1 file passes through). */
+export function decodeRail(f: RailFile | RailFileV2): RailFile {
+  if (!('v' in f)) return f;
+  let d = decoded.get(f);
+  if (!d) {
+    d = { r: f.r.map((t) => ({ k: t.k, p: undelta(t.p, 2)!, h: undelta(t.h, 1), e: t.e, q: undelta(t.q, 3) })) };
+    decoded.set(f, d);
+  }
+  return d;
+}
+
+/** The railways in metres (scripts/city/railways.mjs, read through `decodeRail`). */
 export interface RailFile {
   r: {
     /** 0 main line, 1 subway / light rail, 2 yard, siding or spur. */
@@ -71,7 +94,8 @@ class BedMesh {
 }
 
 /** The ring each segment keeps clear of street trees, lamps and kerb furniture. */
-export function railZones(f: RailFile): number[][] {
+export function railZones(file: RailFile | RailFileV2): number[][] {
+  const f = decodeRail(file);
   const out: number[][] = [];
   for (const r of f.r) for (let i = 0; i + 3 < r.p.length; i += 2) {
     if ((r.e?.[i / 2] ?? 0) & 4) continue;
@@ -100,7 +124,8 @@ export interface RailApi extends System {
  * piers and the low decks (a car meets the ramp's side, not the bed); tracks inside a landmark's
  * footprint (the stations') are left to the landmark.
  */
-export function placeRailways(engine: Engine, data: RailFile, footprints: number[][]): RailApi {
+export function placeRailways(engine: Engine, file: RailFile | RailFileV2, footprints: number[][]): RailApi {
+  const data = decodeRail(file);
   const bedMat = new THREE.MeshStandardMaterial({ map: bedTexture(), roughness: 0.95 });
   bedMat.userData.wet = 'ground';
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.1 });

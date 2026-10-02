@@ -357,8 +357,26 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
     for (let i = 1; i < c.length; i++) { const n = Math.max(1, Math.ceil((c[i] - c[i - 1]) / 4)); for (let k = 1; k <= n; k++) out.push(c[i - 1] + (c[i] - c[i - 1]) * k / n); }
     return out;
   };
+  /** Whether the parapet's foot at sv stands on another carriageway at this level (with `step`, on one a step lower). */
+  const footOn = (sv: number, side: number, step: boolean) => {
+    const h = hAt(l, sv) + Y.road, f = P(sv, side * (oi + DECK.parapet / 2), 0);
+    return joins(f[0], f[2], h, step, 0);
+  };
   for (const [a, b] of lifted(l, 0.02)) {
-    const cuts = cutsOf(a, b);
+    // Every 4 m, and every metre where the parapet's foot runs onto another carriageway part way along
+    // the 4: at junction mouths a parapet's end stood in the lane of the road crossing it (wallaudit,
+    // 2026-10-02), and opening the whole 4 m left the rest of it open over the drop.
+    const cuts: number[] = [];
+    {
+      const c4 = cutsOf(a, b);
+      cuts.push(c4[0]);
+      for (let k = 0; k < c4.length - 1; k++) {
+        const s0 = c4[k], s1 = c4[k + 1], t = [0.15, 0.5, 0.85].map((u) => s0 + (s1 - s0) * u);
+        const mixed = [-1, 1].some((side) => [false, true].some((step) => { const v = t.map((sv) => footOn(sv, side, step)); return v.some(Boolean) && !v.every(Boolean); }));
+        if (mixed) { const n = Math.max(2, Math.ceil(s1 - s0)); for (let i = 1; i < n; i++) cuts.push(s0 + (s1 - s0) * i / n); }
+        cuts.push(s1);
+      }
+    }
     // First what each side of each stretch is: 'merge' (another carriageway at this level covers the
     // edge - no parapet), 'gore' (one a little way off, the wedge between two roads parting: paved
     // across, no parapet, so the parapets start where the roads are apart), 'rail' or 'bare'.
@@ -380,14 +398,14 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
         const mid = P(sm, side * (oo + 0.3), 0);
         // Nor one standing on another carriageway at this level: the outer parapet of a slip road
         // still inside the main line it is leaving stood in the main line's lane, beside its own.
-        const foot = P(sm, side * (oi + DECK.parapet / 2), 0);
-        if (joins(mid[0], mid[2], hm) || joins(foot[0], foot[2], hm, false, 0)) kd = 'merge';
+        const onLevel = footOn(sm, side, false);
+        if (joins(mid[0], mid[2], hm) || onLevel) kd = 'merge';
         else { gw = gapAt(sm, side, hm, 2.4); if (gw > 0) kd = 'gore'; }
         // The parapet grows out of the deck as the ramp leaves the ground (none under 0.45 m, full
         // height from 1.45): at full height from the first centimetre its end stood in the lane of the
         // road the ramp comes off, a concrete block across it. And none over another carriageway only a
-        // step lower, which it would stand in.
-        if (kd === 'rail' && ((railOf(hAt(l, s0) + Y.road) <= 0 && railOf(hAt(l, s1) + Y.road) <= 0) || joins(mid[0], mid[2], hm, true))) kd = 'bare';
+        // step lower, which it would stand in - beside it or under its own foot.
+        if (kd === 'rail' && ((railOf(hAt(l, s0) + Y.road) <= 0 && railOf(hAt(l, s1) + Y.road) <= 0) || joins(mid[0], mid[2], hm, true) || footOn(sm, side, true))) kd = 'bare';
         kind[side].push(kd); goreW[side].push(gw);
       }
     }
@@ -480,6 +498,10 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
       if (!r.o) lampSide = -lampSide;
       const lx = x + nx * o, lz = z + nz * o;
       if (joins(x + nx * side * (oo + 0.3), z + nz * side * (oo + 0.3), h)) continue;
+      // Only on a parapet that is there: where it was left out (its foot on another carriageway, a gore,
+      // a bare low edge) the lamp stood in that road's lanes (「电灯柱会无故在马路生成」, 2026-10-02).
+      const ck = cuts.findIndex((c, i) => i + 1 < cuts.length && sl >= c && sl < cuts[i + 1]);
+      if (ck < 0 || kind[side][ck] !== 'rail') continue;
       lamps.push(lx, h + DECK.rail, lz, Math.atan2(-nx * side, -nz * side));
     }
     // Piers on the high stretches, not on a road below.

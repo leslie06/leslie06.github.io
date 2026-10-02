@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Manifest, RoadPiece } from './Data';
 import type { FootbridgesFile } from './visual/Footbridges';
-import type { RailFile } from './visual/Railways';
+import { decodeRail, type RailFileV2 } from './visual/Railways';
 import type { TunnelsFile } from './visual/Tunnels';
 import type { EntrancesFile } from './visual/SubwayEntrances';
 
@@ -63,7 +63,7 @@ describe('street structures', () => {
   }, 120000);
 
   it('keeps the railways off the roads where they are low', () => {
-    const f = JSON.parse(fs.readFileSync(dir + 'rail.json', 'utf8')) as RailFile;
+    const f = decodeRail(JSON.parse(fs.readFileSync(dir + 'rail.json', 'utf8')) as RailFileV2);
     expect(f.r.length).toBeGreaterThan(1500);
     // a deck between 0.6 and 4.5 m over a carriageway is a wall or a low ceiling for traffic; piers stay off them
     const bad: string[] = [];
