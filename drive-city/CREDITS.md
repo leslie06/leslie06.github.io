@@ -7,3 +7,5 @@ The city is built from open data (scripts/city/). Derived files in `public/city/
 - **Building footprints OSM lacks**: Shi, Q. et al. (2023), machine-learnt building footprints of East Asia, doi:10.5281/zenodo.8174931. CC BY 4.0, via Overture.
 - **Building heights**: Che, Y. et al. (2024), *3D-GloBFP: the first global three-dimensional building footprint dataset*, Earth System Science Data 16, 5357–5374. CC BY 4.0.
 - **Building heights, function and age**: Zhang, Y., Zhao, H. & Long, Y. (2025), *CMAB: a multi-attribute building dataset of China*, Scientific Data. The data is CC BY 4.0 (figshare).
+- **Tree positions and heights**: Meta and World Resources Institute (2024), *High Resolution Canopy Height Maps*, https://registry.opendata.aws/dataforgood-fb-forests/. CC BY 4.0.
+- **Green ground**: ESA WorldCover 10 m 2021 v200, doi:10.5281/zenodo.7254221. CC BY 4.0.

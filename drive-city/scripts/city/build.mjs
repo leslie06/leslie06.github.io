@@ -1592,6 +1592,29 @@ for (const r of rels) {
   const inner = assemble(r.members.filter((m) => m.type === 'way' && m.geometry && m.role === 'inner').map((m) => proj(m.geometry)));
   for (const outer of assemble(r.members.filter((m) => m.type === 'way' && m.geometry && m.role !== 'inner').map((m) => proj(m.geometry)))) areaPolys.push({ k, outer, holes: inner.filter((h) => pip(h[0][0], h[0][1], outer)), id: r.id });
 }
+// Green ground under everything else (fetch-ground.py: ESA WorldCover tree cover, grass and crops,
+// CC BY 4.0): the courtyards, compounds and verges under the trees were bare paving. Drawn lowest
+// (Areas.ts `lawn`), so OSM's own areas, the roads and the buildings cover it where they are.
+if (!process.env.NO_EXTRA && fs.existsSync('.cache/buildings/green.json')) {
+  const G = JSON.parse(fs.readFileSync('.cache/buildings/green.json', 'utf8')).p;
+  let rings = [], gid = 9.8e12, nLawn = 0;
+  const flush = () => {
+    if (rings.length) {
+      const [outer, ...holes] = rings;
+      const bb = bboxOf(outer);
+      if (RECTS.some((R) => !(bb[0] > R[2] || bb[2] < R[0] || bb[1] > R[3] || bb[3] < R[1]))) { areaPolys.push({ k: 'lawn', outer, holes, id: gid++ }); nLawn++; }
+    }
+    rings = [];
+  };
+  for (const r of G) {
+    if (r === null) { flush(); continue; }
+    const ring = [];
+    for (let i = 0; i + 1 < r.length; i += 2) ring.push([r[i], r[i + 1]]);
+    rings.push(ring);
+  }
+  flush();
+  console.log(`green ground: ${nLawn} polygons`);
+}
 const areaCount = {};
 for (const a of areaPolys) {
   if (signedArea(a.outer) < 0) a.outer.reverse();
@@ -1628,6 +1651,33 @@ function addTree(x, z, kind, drop = false) {
   t.trees.push(q1(x), q1(z), kind ?? treeType(x, z, seed), +(0.8 + 0.45 * rnd(seed, 9)).toFixed(2));
   if (main) treeSeed++;
   nTrees++;
+  noteTree(x, z);
+}
+// Every tree placed, on an 8 m grid, so the canopy's crowns (below) do not double the ones already there.
+const treeGrid = new Map();
+function noteTree(x, z) { const k = Math.floor(x / 8) * 100000 + Math.floor(z / 8); (treeGrid.get(k) ?? treeGrid.set(k, []).get(k)).push(x, z); }
+function nearTreeG(x, z, r) {
+  const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
+  for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const a = treeGrid.get((cx + dx) * 100000 + cz + dz); if (a) for (let i = 0; i < a.length; i += 2) if ((a[i] - x) ** 2 + (a[i + 1] - z) ** 2 < r * r) return true; }
+  return false;
+}
+// Trees where the canopy map has a crown (fetch-trees.py: Meta/WRI 1 m canopy height, CC BY 4.0): the
+// courtyards, compounds, campuses and parks, at their real height. Seeded by position.
+const CHM = !process.env.NO_EXTRA && fs.existsSync('.cache/buildings/trees.json') ? JSON.parse(fs.readFileSync('.cache/buildings/trees.json', 'utf8')).p : null;
+let nCanopy = 0;
+function addCanopyTrees(onOpen) {
+  if (!CHM) return;
+  for (let i = 0; i < CHM.length; i += 3) {
+    const x = CHM[i], z = CHM[i + 1], hgt = CHM[i + 2];
+    if (!inRegion(x, z) || nearTreeG(x, z, 3.5) || inBuilding(x, z, 0.8) || nearRoad(x, z, 1.2) || underDeck(x, z) || onOpen(x, z)) continue;
+    const seed = 2e7 + Math.round(x * 10) * 7919 + Math.round(z * 10);
+    // a tall one is most likely a poplar; the models stand ~9 m at scale 1
+    let kind = treeType(x, z, seed);
+    if (hgt >= 15 && kind !== 2 && rnd(seed, 11) < 0.5) kind = 1;
+    tile(...tileOf(x, z)).trees.push(q1(x), q1(z), kind, +Math.max(0.55, Math.min(1.7, hgt / 9)).toFixed(2));
+    noteTree(x, z);
+    nTrees++; nCanopy++;
+  }
 }
 for (const n of nodes) if (n.tags?.natural === 'tree') { const [x, z] = project(n.lat, n.lon); addTree(x, z); }
 for (const w of ways) if (w.tags?.natural === 'tree_row' && w.geometry) {
@@ -1646,7 +1696,8 @@ for (const a of areaPolys) {
   }
 }
 const onOpen = (x, z) => (noTrees.get(Math.floor(x / 256) * 65536 + Math.floor(z / 256)) ?? []).some(({ a, bb }) => x >= bb[0] && x <= bb[2] && z >= bb[1] && z <= bb[3] && pip(x, z, a.outer) && !a.holes.some((h) => pip(x, z, h)));
-for (const a of areaPolys) {
+// (with the canopy map, parks and woods get their trees from it, where they really stand)
+if (!CHM) for (const a of areaPolys) {
   if (a.k !== 'wood' && a.k !== 'park') continue;
   const step = a.k === 'wood' ? 8 : 16;
   const [x0, z0, x1, z1] = bboxOf(a.outer);
@@ -1775,6 +1826,8 @@ for (const w of ways) if (w._road?.car && w._road.name && !(w._road.name in road
 for (const b of bridgeNames) if (!(b[2] in roadEn)) roadEn[b[2]] = pinyinOf(b[2]);
 console.log(`names: ${brHits.size} interchanges (${bridgeNames.length} points), ${Object.keys(roadEn).length} roads in pinyin/English`);
 
+addCanopyTrees(onOpen);
+console.log(`canopy trees: ${nCanopy}`);
 // Signalised network nodes (for traffic lights): nearest graph node within 30 m of a signal.
 const sig = new Uint8Array(netXZ.length / 2);
 for (const n of nodes) if (n.tags?.highway?.includes('traffic_signals')) {
@@ -1885,7 +1938,7 @@ fs.writeFileSync(path.join(OUT, 'network.json'), net);
 const manifest = {
   version: 1, tile: TILE, origin: { lat: 39.90883, lon: 116.39757 },
   bounds: { x0: q1(RX0), z0: q1(RZ0), x1: q1(RX1), z1: q1(RZ1) }, regions: RECTS.map((r) => r.map(q1)), tiles: index, spawn, named,
-  attribution: EXTRA ? 'Map data © OpenStreetMap contributors (ODbL), Overture Maps · building footprints Shi et al. 2023, heights 3D-GloBFP, CMAB (CC BY 4.0)' : 'Map data © OpenStreetMap contributors (ODbL)',
+  attribution: EXTRA ? 'Map data © OpenStreetMap contributors (ODbL), Overture Maps · buildings Shi et al. 2023, 3D-GloBFP, CMAB · trees Meta/WRI · land cover ESA WorldCover (CC BY 4.0)' : 'Map data © OpenStreetMap contributors (ODbL)',
 };
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest));
 fs.writeFileSync(path.join(OUT, 'skyline.json'), JSON.stringify({ b: sky }));

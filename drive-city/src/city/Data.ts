@@ -3,7 +3,7 @@
  * Outer rings have positive signed area in (x, z), holes negative.
  */
 export type BuildingKind = 'glass' | 'office' | 'resid' | 'hutong' | 'trad' | 'wall' | 'low' | 'station';
-export type AreaKind = 'water' | 'plaza' | 'pitch' | 'wood' | 'park' | 'grass' | 'parking' | 'rail' | 'site';
+export type AreaKind = 'water' | 'plaza' | 'pitch' | 'wood' | 'park' | 'grass' | 'parking' | 'rail' | 'site' | 'lawn';
 
 export interface RoadPiece {
   /** OSM highway class. */

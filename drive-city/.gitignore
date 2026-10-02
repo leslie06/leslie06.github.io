@@ -10,3 +10,4 @@ __pycache__/
 *.blend1
 data/*.pbf
 data/*.zip
+data/*.tif
