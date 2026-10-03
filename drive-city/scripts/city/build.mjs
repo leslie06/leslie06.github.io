@@ -1204,6 +1204,21 @@ for (const w of carWays) {
 /** The lowest deck over (x, z) (its road surface height), or Infinity. */
 const deckOver = (x, z) => { let m = Infinity; for (const [ax, az, bx, bz, hw, lo] of elevSegs.get(tileOf(x, z).join('_')) ?? []) if (lo < m && segDist(x, z, ax, az, bx, bz) < hw) m = lo; return m; };
 let underCut = 0;
+/** The lowest deck whose carriageway (and parapets) reaches into a building's outline anywhere, or Infinity. */
+const deckThrough = (b) => {
+  let m = Infinity;
+  const seen = new Set();
+  eachTile(b.bb, (ix, iz) => {
+    for (const sg of elevSegs.get(`${ix}_${iz}`) ?? []) {
+      if (seen.has(sg)) continue;
+      seen.add(sg);
+      const [ax, az, bx, bz, hw, lo] = sg;
+      if (lo >= m || Math.max(ax, bx) + hw < b.bb[0] || Math.min(ax, bx) - hw > b.bb[2] || Math.max(az, bz) + hw < b.bb[1] || Math.min(az, bz) - hw > b.bb[3]) continue;
+      if (segToRing(ax, az, bx, bz, b.ring) < hw) m = lo;
+    }
+  });
+  return m;
+};
 const underDeck = (x, z) => { for (const [ax, az, bx, bz, hw] of elevSegs.get(tileOf(x, z).join('_')) ?? []) if (segDist(x, z, ax, az, bx, bz) < hw) return true; return false; };
 if (process.env.ELEV_DEBUG) {
   const rows = [...lifted].map(([w, lf]) => { let L = 0; for (let i = 1; i < w._pts.length; i++) L += Math.hypot(w._pts[i][0] - w._pts[i - 1][0], w._pts[i][1] - w._pts[i - 1][1]); return { L, w, lf }; }).sort((a, b) => b.L - a.L);
@@ -1241,6 +1256,60 @@ let lampsCut = 0;
 function inCarriageway(x, z, margin) {
   for (const [ax, az, bx, bz, hw] of carSegs.get(tileOf(x, z).join('_')) ?? []) if (segDist(x, z, ax, az, bx, bz) < hw + margin) return true;
   return false;
+}
+// The old city's lanes narrowed to the gap between their houses (2026-10-04, 「再检查其他地方道路有建筑挡着」): OSM
+// gives a hutong no width, our class default draws it 4-7 m, and the houses along it stand 1.2-3 m from its centre
+// line - the building rule keeps them there (`blocksRoad`, 1.2 m in the old city's lanes), so the kerb lane ran
+// along their fronts and cars met them (an audit over the map: 1,090 of the 1,181 buildings in a car's way were in
+// the old city's lanes). Each lane on the ground, sampled every 4 m: the distance from its centre line to the
+// nearest outline (OSM and learnt, raw); the 15th percentile of those, twice, is its width (3.2 m at least). The
+// road drawn, the lane graph (its lanes and their offsets) and everything placed along it follow.
+let lanesNarrowed = 0;
+{
+  const NARROW = /^(residential|service|living_street|unclassified)$/;
+  const G = 32, grid = new Map();
+  const put = (ring) => {
+    const bb = bboxOf(ring), rec = { ring, bb };
+    for (let gx = Math.floor(bb[0] / G); gx <= Math.floor(bb[2] / G); gx++) for (let gz = Math.floor(bb[1] / G); gz <= Math.floor(bb[3] / G); gz++) { const k = `${gx},${gz}`; (grid.get(k) ?? grid.set(k, []).get(k)).push(rec); }
+  };
+  for (const w of ways) {
+    const t = w.tags;
+    if (!t || !t.building || t.building === 'no' || /^(roof|carport|canopy)$/.test(t.building) || !w.geometry || w.geometry.length < 4) continue;
+    const ring = proj(w.geometry);
+    if (zone(ring[0][0], ring[0][1]) === 'old') put(ring);
+  }
+  if (extraAvailable() && !process.env.NO_EXTRA) for (const ring of clsmFootprints((x, z) => zone(x, z) === 'old')) put(ring);
+  const near = (x, z) => {
+    let d = Infinity;
+    for (let gx = Math.floor((x - 6) / G); gx <= Math.floor((x + 6) / G); gx++) for (let gz = Math.floor((z - 6) / G); gz <= Math.floor((z + 6) / G); gz++) for (const { ring, bb } of grid.get(`${gx},${gz}`) ?? []) {
+      if (x < bb[0] - 6 || x > bb[2] + 6 || z < bb[1] - 6 || z > bb[3] + 6) continue;
+      if (pip(x, z, ring)) return 0;
+      for (let i = 0; i < ring.length; i++) { const [ax, az] = ring[i], [bx, bz] = ring[(i + 1) % ring.length]; d = Math.min(d, segDist(x, z, ax, az, bx, bz)); }
+    }
+    return d;
+  };
+  for (const w of ways) {
+    const info = w._road;
+    if (!info || !info.car || !NARROW.test(info.cls) || !w._pts || w._pts.length < 2 || info.tunnel) continue;
+    if (!w._pts.some(([x, z]) => zone(x, z) === 'old')) continue;
+    const ds = [];
+    let run = 0;
+    for (let i = 1; i < w._pts.length; i++) {
+      const [ax, az] = w._pts[i - 1], [bx, bz] = w._pts[i], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / 4));
+      for (let k = 0; k < n; k++) {
+        const u = (k + 0.5) / n, x = ax + (bx - ax) * u, z = az + (bz - az) * u;
+        if (Math.abs(heightAlong(w, run + L * u)) > 0.3 || zone(x, z) !== 'old') continue;
+        const d = near(x, z);
+        if (d > 0) ds.push(Math.min(d, info.w / 2));
+      }
+      run += L;
+    }
+    if (ds.length < 3) continue;
+    ds.sort((a, b) => a - b);
+    const f = ds[Math.floor(ds.length * 0.15)], w2 = Math.max(3.2, Math.min(info.w, 2 * f));
+    if (w2 < info.w - 0.3) { info.w = q1(w2); lanesNarrowed++; }
+  }
+  console.log(`old-city lanes narrowed to the gap between their houses: ${lanesNarrowed}`);
 }
 let roadPieces = 0;
 for (const w of ways) {
@@ -1569,7 +1638,8 @@ function laneEnvelope(hw, oneway, lanes) {
   const total = lanes || Math.max(1, Math.round((hw * 2) / 3.4));
   if (oneway) return total <= 1 ? 1.1 : hw - 0.6;
   const per = Math.max(1, Math.round(total / 2)), lw = hw / per;
-  return (per - 0.5) * lw + 1.0;
+  // one lane each way keeps within 1.4 m of the centre line (traffic/LaneGraph.laneOffset)
+  return (per === 1 ? Math.min(0.5 * lw, 1.4) : (per - 0.5) * lw) + 1.0;
 }
 function blocksRoad(b, old) {
   const seen = new Set(), hits = [];
@@ -1580,7 +1650,9 @@ function blocksRoad(b, old) {
       const [ax, az, bx, bz, hw, cls, way, oneway, lanes] = s;
       if (b.passWays?.has(way)) continue;
       if (Math.max(ax, bx) + hw < b.bb[0] || Math.min(ax, bx) - hw > b.bb[2] || Math.max(az, bz) + hw < b.bb[1] || Math.min(az, bz) - hw > b.bb[3]) continue;
-      const lim = old && LANES.test(cls) ? 1.2 : Math.max(1.2, Math.min(hw - 0.3, laneEnvelope(hw, oneway, lanes)));
+      // The old city's lanes have their real width now (narrowed to the gap between their houses, above): what still
+      // reaches into a car's way there (the reach less the hand's breadth) is in it; it was 1.2 m from the line.
+      const lim = old && LANES.test(cls) ? Math.max(1.2, Math.min(hw - 0.3, laneEnvelope(hw, oneway, lanes)) - 0.1) : Math.max(1.2, Math.min(hw - 0.3, laneEnvelope(hw, oneway, lanes)));
       const d = segToRing(ax, az, bx, bz, b.ring);
       if (d < lim) hits.push({ ax, az, bx, bz, hw, cls, way, d });
     }
@@ -1740,6 +1812,10 @@ for (const b of buildings) {
   // stopped dead against its walls); one low enough to stand under the deck's soffit stays.
   let deck = deckOver(cx, cz);
   for (const [x, z] of b.ring) deck = Math.min(deck, deckOver(x, z));
+  // ...and the deck's segments against the whole outline: a slip road over the railway south of 通惠河北路 ran
+  // through the middle of a 14 m office block with no corner of it and not its centre under the deck, and the
+  // car stopped against its wall 6.5 m up (「通惠河北路匝道桥有个建筑挡着」, 2026-10-04).
+  deck = Math.min(deck, deckThrough(b));
   if (deck < Infinity && h > deck - 1.5) { underCut++; continue; }
   // A building standing in a carriageway on the ground goes (「有的道路有建筑遮挡」): OSM draws some over
   // the street they front (a whole hutong house across 崇文门西河沿), the learnt set's roof outlines lean
