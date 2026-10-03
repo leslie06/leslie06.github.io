@@ -78,6 +78,9 @@ export async function install(engine: Engine): Promise<void> {
   const nav = engine.get<NavApi>('nav') as NavSystem | undefined;
   const areas = engine.get<WorldApi>('world')?.landmarkAreas;
   if (!pl || !nav || !areas) return;
+  // Not in shot mode unless asked (?checkin=1): the card covered the middle of every landmark screenshot.
+  const q = new URLSearchParams(location.search);
+  if (q.has('shot') && !q.has('checkin')) return;
   let found = new Set<string>();
   try { found = new Set(JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[]); } catch { /* private mode */ }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...found])); } catch { /* ignore */ } };

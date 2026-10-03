@@ -1,0 +1,45 @@
+{
+  "id": "wutasi",
+  "name": {
+    "zh": "五塔寺金刚宝座塔",
+    "en": "Five Pagoda Temple"
+  },
+  "lat": 39.9436069,
+  "lon": 116.3242079,
+  "headingDeg": -6,
+  "file": "wutasi.glb",
+  "version": "fc4c4932",
+  "footprint": [
+    [-11.8, 13.29],
+    [-11.71, -13.45],
+    [11.8, -13.29],
+    [11.71, 13.45]
+  ],
+  "moreFootprints": [
+    [
+      [-17.99, 23.4],
+      [13.31, 23.07],
+      [13.52, 41.19],
+      [-17.79, 41.52]
+    ]
+  ],
+  "height": 15.98,
+  "farDistance": 450,
+  "stats": {
+    "triangles": 7990,
+    "farTriangles": 202,
+    "materials": 12,
+    "farMaterials": 9,
+    "colliders": {
+      "solid": 20,
+      "walk": 3,
+      "mesh": 0
+    },
+    "instancedMeshes": 1,
+    "textures": 13,
+    "maxTexture": 512,
+    "footprintArea": 1196,
+    "bytes": 252944,
+    "source": "wutasi.glb"
+  }
+}

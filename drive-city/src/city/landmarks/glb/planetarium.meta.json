@@ -1,0 +1,50 @@
+{
+  "id": "planetarium",
+  "name": {
+    "zh": "北京天文馆",
+    "en": "Beijing Planetarium"
+  },
+  "lat": 39.9358244,
+  "lon": 116.3305828,
+  "headingDeg": 0,
+  "file": "planetarium.glb",
+  "version": "0596c12e",
+  "footprint": [
+    [-53.1, 14.47],
+    [99.24, -13.54],
+    [105.1, 18.33],
+    [-47.24, 46.34]
+  ],
+  "moreFootprints": [
+    [
+      [-68.6, -24.2],
+      [-67.71, -50.04],
+      [-34.61, -65.91],
+      [-6.02, -66.66],
+      [27.86, -52.54],
+      [28.42, -30.95],
+      [-7.6, -0.2],
+      [-20.4, 5.2],
+      [-34, -0.7]
+    ]
+  ],
+  "height": 35.5,
+  "farDistance": 700,
+  "stats": {
+    "triangles": 14408,
+    "farTriangles": 580,
+    "materials": 13,
+    "farMaterials": 9,
+    "colliders": {
+      "solid": 16,
+      "walk": 1,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 7,
+    "maxTexture": 1024,
+    "footprintArea": 9980,
+    "bytes": 436804,
+    "source": "planetarium.glb"
+  }
+}
