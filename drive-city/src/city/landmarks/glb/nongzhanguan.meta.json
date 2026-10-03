@@ -1,0 +1,77 @@
+{
+  "id": "nongzhanguan",
+  "name": {
+    "zh": "全国农业展览馆",
+    "en": "National Agricultural Exhibition Center"
+  },
+  "lat": 39.9399688,
+  "lon": 116.4587679,
+  "headingDeg": -1,
+  "file": "nongzhanguan.glb",
+  "version": "a43f6fdd",
+  "footprint": [
+    [-43.5, -44],
+    [35.5, -44],
+    [35.5, 44],
+    [-43.5, 44]
+  ],
+  "moreFootprints": [
+    [
+      [-52.5, -213.2],
+      [-17, -213.2],
+      [-17, -71],
+      [-52.5, -71]
+    ],
+    [
+      [-55.6, 64.7],
+      [-21.4, 64.7],
+      [-21.4, 211.8],
+      [-55.6, 211.8]
+    ],
+    [
+      [-19, -213.2],
+      [3.5, -213.2],
+      [3.5, -182.1],
+      [-19, -182.1]
+    ],
+    [
+      [-23.4, 184],
+      [-3.25, 184],
+      [-3.25, 211.8],
+      [-23.4, 211.8]
+    ]
+  ],
+  "clear": [
+    [
+      [-46, -48],
+      [38, -48],
+      [38, 48],
+      [-46, 48]
+    ],
+    [
+      [-172, -65],
+      [37, -65],
+      [37, 52],
+      [-172, 52]
+    ]
+  ],
+  "height": 34.24,
+  "farDistance": 700,
+  "stats": {
+    "triangles": 113558,
+    "farTriangles": 228,
+    "materials": 14,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 45,
+      "walk": 1,
+      "mesh": 0
+    },
+    "instancedMeshes": 1,
+    "textures": 7,
+    "maxTexture": 2048,
+    "footprintArea": 18291,
+    "bytes": 1438180,
+    "source": "nongzhanguan.glb"
+  }
+}

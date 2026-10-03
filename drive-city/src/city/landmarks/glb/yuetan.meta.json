@@ -1,0 +1,59 @@
+{
+  "id": "yuetan",
+  "name": {
+    "zh": "月坛钟楼",
+    "en": "Temple of the Moon Bell Tower"
+  },
+  "lat": 39.9165309,
+  "lon": 116.3458113,
+  "headingDeg": -4,
+  "file": "yuetan.glb",
+  "version": "83d4ec91",
+  "footprint": [
+    [17.9, -25.13],
+    [18.41, -34.21],
+    [42.37, -32.87],
+    [41.86, -23.79]
+  ],
+  "moreFootprints": [
+    [
+      [-6.9, -6.9],
+      [6.9, -6.9],
+      [6.9, 6.9],
+      [-6.9, 6.9]
+    ]
+  ],
+  "clear": [
+    [
+      [18.19, -26.71],
+      [18.55, -33.2],
+      [42.11, -31.89],
+      [41.75, -25.4]
+    ],
+    [
+      [-8.4, -8.4],
+      [8.4, -8.4],
+      [8.4, 8.4],
+      [-8.4, 8.4]
+    ]
+  ],
+  "height": 17.05,
+  "farDistance": 400,
+  "stats": {
+    "triangles": 22012,
+    "farTriangles": 878,
+    "materials": 7,
+    "farMaterials": 3,
+    "colliders": {
+      "solid": 13,
+      "walk": 2,
+      "mesh": 0
+    },
+    "instancedMeshes": 2,
+    "textures": 4,
+    "maxTexture": 2048,
+    "footprintArea": 409,
+    "bytes": 527160,
+    "source": "yuetan.glb"
+  }
+}

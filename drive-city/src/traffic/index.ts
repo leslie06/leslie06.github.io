@@ -57,7 +57,7 @@ const BUS_LOWER = ['#c3232b', '#c3232b', '#c3232b', '#2f7d4f'];
  * The Beijing mix: mostly saloons - many of them taxis - then SUVs and hatchbacks, a few MPVs,
  * buses (main roads only) and light box trucks. Shares of the car pool; the rest are saloons.
  */
-const MIX: [BodyType, number][] = [['suv', 0.16], ['hatch', 0.14], ['mpv', 0.08], ['bus', 0.05], ['truck', 0.07]];
+const MIX: [BodyType, number][] = [['suv', 0.16], ['hatch', 0.14], ['mpv', 0.08], ['bus', 0.09], ['truck', 0.07]];
 /** Buses only spawn on these road classes. */
 const BUS_ROADS = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'busway']);
 
@@ -135,7 +135,7 @@ export async function install(engine: Engine): Promise<void> {
   const tmp = { x: 0, z: 0, dx: 0, dz: 0 };
   const camDir = new THREE.Vector3();
   const renderPos = new THREE.Vector3(), renderQuat = new THREE.Quaternion();
-  let t = 0, spawnT = 0;
+  let t = 0, spawnT = 0, busT = 0;
   /** Cars written to each kit this frame. */
   const written = new Map<BodyType, number>();
 
@@ -368,6 +368,20 @@ export async function install(engine: Engine): Promise<void> {
         }
       }
       if (spawnT <= 0) { spawnT = 0.2; if (driving() < max) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); }
+      // Buses look for a shelter ahead on their side once a second (at the kerb of the link they are on).
+      busT -= dt;
+      if (busT <= 0) {
+        busT = 1;
+        const streamer = (engine.get('world') as unknown as { streamer?: { sheltersNear(x: number, z: number, r: number): number[] } } | undefined)?.streamer;
+        if (streamer) for (const n of pool) {
+          if (!n.active || n.parked || n.body !== 'bus' || !n.driver || n.driver.busStop || n.driver.busCool > 0 || n.driver.mode !== 'drive') continue;
+          const sh = streamer.sheltersNear(n.car.pos.x, n.car.pos.z, 90);
+          for (let i = 0; i < sh.length; i += 2) {
+            const s = n.driver.stopAhead(sh[i], sh[i + 1], 15, 85);
+            if (s >= 0) { n.driver.busStop = { s, dwell: 8 + rnd() * 4 }; break; }
+          }
+        }
+      }
       for (const n of pool) {
         if (!n.active) continue;
         const inp = n.parked ? parkedInput : n.driver!.update(n.car, dt, t, leaderFor(n));

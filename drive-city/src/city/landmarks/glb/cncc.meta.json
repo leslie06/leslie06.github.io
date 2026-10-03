@@ -1,0 +1,56 @@
+{
+  "id": "cncc",
+  "name": {
+    "zh": "国家会议中心",
+    "en": "China National Convention Center"
+  },
+  "lat": 39.9985924,
+  "lon": 116.3838382,
+  "headingDeg": -2.32,
+  "file": "cncc.glb",
+  "version": "0e895170",
+  "footprint": [
+    [-74.1, -201.9],
+    [73.8, -201.9],
+    [73.8, 202.1],
+    [-74.1, 202.1]
+  ],
+  "moreFootprints": [
+    [
+      [73.8, -150],
+      [105.8, -150],
+      [105.8, 202.1],
+      [73.8, 202.1]
+    ]
+  ],
+  "clear": [
+    [
+      [-76.3, -205.4],
+      [87.71, -205.4],
+      [88.4, -195.11],
+      [88.42, -61.37],
+      [88.44, 72.36],
+      [88.45, 206.1],
+      [-76.3, 206.1]
+    ]
+  ],
+  "height": 43.94,
+  "farDistance": 900,
+  "stats": {
+    "triangles": 14106,
+    "farTriangles": 566,
+    "materials": 10,
+    "farMaterials": 7,
+    "colliders": {
+      "solid": 40,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 3,
+    "maxTexture": 512,
+    "footprintArea": 71019,
+    "bytes": 259708,
+    "source": "cncc.glb"
+  }
+}

@@ -280,6 +280,16 @@ export class CityStreamer implements System {
    * background, see city/index.ts): added for the tiles still to come, and the tiles already built that
    * they reach are built again - the old tile stays drawn and solid until its replacement is in.
    */
+  /** The bus shelters of the tiles built round (x, z) within r: [x, z, ...] (buses stop at them, traffic/). */
+  sheltersNear(x: number, z: number, r: number): number[] {
+    const out: number[] = [];
+    for (const f of this.furnRaw.values()) for (let i = 0; i < f.shelter.length; i += 4) {
+      const dx = f.shelter[i] - x, dz = f.shelter[i + 2] - z;
+      if (dx * dx + dz * dz < r * r) out.push(f.shelter[i], f.shelter[i + 2]);
+    }
+    return out;
+  }
+
   addStreetClear(zones: number[][]): void {
     if (!zones.length) return;
     this.streetClear.push(...zones);

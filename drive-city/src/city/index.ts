@@ -4,7 +4,7 @@ import { CG, groups } from '../core/Physics';
 import type { EnvUniforms, LandmarkDef, LandmarkModel, RenderApi, WorldApi } from '../game/Contracts';
 import type { RenderSystem } from '../render/RenderSystem';
 import { TAXI } from '../vehicle/Spec';
-import { loadCity, type Manifest, type Network, type Skyline } from './Data';
+import { loadCity, loadNetwork, unpackSkyline, type Manifest, type Network, type Skyline, type SkylinePack } from './Data';
 import { project } from './Geo';
 import { createCityMaterials } from './Materials';
 import { Routes } from './Routes';
@@ -12,7 +12,8 @@ import { findDeadEnds } from './DeadEnds';
 import { carStops } from './landmarks/CarStops';
 import { placeDeadEndSigns } from './visual/DeadEndSigns';
 import { placeGuideSigns } from './visual/GuideSigns';
-import { placeRailways, railZones, type RailFileV2 } from './visual/Railways';
+import { decodeRail, placeRailways, railZones, type RailFileV2 } from './visual/Railways';
+import { placeTrains } from './visual/Trains';
 import { placeTunnels, trenchZones, type TunnelsFile } from './visual/Tunnels';
 import { footbridgeZones, placeFootbridges, underFootbridge, type FootbridgesFile } from './visual/Footbridges';
 import { entranceZones, placeSubwayEntrances, type EntrancesFile } from './visual/SubwayEntrances';
@@ -158,6 +159,8 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
  */
 const DEFER_EXTRAS = !new URLSearchParams(location.search).has('shot') || new URLSearchParams(location.search).has('defer');
 const RAIL_ON = new URLSearchParams(location.search).get('rail') !== '0';
+/** Trains on the railways (`?trains=0` for none). */
+const TRAINS_ON = new URLSearchParams(location.search).get('trains') !== '0';
 
 export async function install(engine: Engine): Promise<void> {
   const { scene, physics } = engine;
@@ -171,7 +174,7 @@ export async function install(engine: Engine): Promise<void> {
   let openGate = () => {};
   const bootDone = new Promise<void>((r) => { openGate = r; });
   const [manifest, network, skyline, mats, defs, signs, entrances, footbridges, rail, tunnels] = await Promise.all([
-    loadCity<Manifest>('manifest.json'), loadCity<Network>('network.json'), loadCity<Skyline>('skyline.json'),
+    loadCity<Manifest>('manifest.json'), loadNetwork(), loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline),
     createCityMaterials(engine, env, DEFER_EXTRAS ? bootDone : undefined), loadLandmarks(),
     // The guide signs (city/Signs.ts, placed by the build): optional, the city runs without them, and
     // after the boot (below) unless in shot mode.
@@ -285,7 +288,7 @@ export async function install(engine: Engine): Promise<void> {
   putSigns(signs);
   if (entrances) placeSubwayEntrances(engine, entrances, env);
   if (footbridges) placeFootbridges(engine, footbridges);
-  if (rail) placeRailways(engine, rail, footprints);
+  if (rail) { placeRailways(engine, rail, footprints); if (TRAINS_ON) placeTrains(engine, decodeRail(rail), env); }
   if (tunnels) placeTunnels(engine, tunnels);
 
   const sp = manifest.spawn;
@@ -302,7 +305,7 @@ export async function install(engine: Engine): Promise<void> {
       RAIL_ON ? loadCity<RailFileV2>('rail.json').catch(() => null) : null,
     ]);
     putSigns(sg);
-    if (rl) { streamer.addStreetClear(railZones(rl)); placeRailways(engine, rl, footprints); }
+    if (rl) { streamer.addStreetClear(railZones(rl)); placeRailways(engine, rl, footprints); if (TRAINS_ON) placeTrains(engine, decodeRail(rl), env); }
   })();
   streamer.loadTrees();
   const path = routes.ahead(sp.x, sp.z, hx, hz, 3500);

@@ -1,3 +1,4 @@
+import { unpackNetwork, type NetworkPack } from './NetPack';
 /**
  * City data as written by scripts/city/build.mjs (public/city/). Local metres, +X east, +Z south.
  * Outer rings have positive signed area in (x, z), holes negative.
@@ -93,6 +94,20 @@ export interface Network {
 }
 /** Buildings of 20 m+ for the far skyline: [cx, cz, angle, halfLength, halfWidth, height, kindIndex, seed] each. */
 export interface Skyline { b: number[] }
+/** skyline.json as written (build.mjs): eight integers a box, the centre as decimetre deltas from the box before. */
+export interface SkylinePack { v: 2; d: number[] }
+/** The skyline in metres from either form. */
+export function unpackSkyline(f: Skyline | SkylinePack): Skyline {
+  if (!('v' in f)) return f;
+  const b = new Array<number>(f.d.length);
+  let x = 0, z = 0;
+  for (let i = 0; i < f.d.length; i += 8) {
+    x += f.d[i]; z += f.d[i + 1];
+    b[i] = x / 10; b[i + 1] = z / 10; b[i + 2] = f.d[i + 2] / 100; b[i + 3] = f.d[i + 3] / 10; b[i + 4] = f.d[i + 4] / 10;
+    b[i + 5] = f.d[i + 5] / 10; b[i + 6] = f.d[i + 6]; b[i + 7] = f.d[i + 7] / 100;
+  }
+  return { b };
+}
 export const KINDS: BuildingKind[] = ['glass', 'office', 'resid', 'hutong', 'trad', 'wall', 'low', 'station'];
 
 const BASE: string = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
@@ -103,6 +118,20 @@ const cityFiles = new Map<string, Promise<unknown>>();
  * network.json and manifest.json, and each fetched its own 1.6 MB copy at boot. A failed fetch is
  * forgotten, so a retry fetches again. Callers share the parsed object: treat it as read-only.
  */
+/**
+ * The drivable network: network.pack.json (NetPack.ts, half the bytes on the wire) unpacked, else
+ * network.json. Cached like any city file, so the city and the far road mask share one copy.
+ */
+export function loadNetwork(): Promise<Network> {
+  let p = cityFiles.get('network') as Promise<Network> | undefined;
+  if (!p) {
+    p = loadCity<NetworkPack>('network.pack.json').then(unpackNetwork, () => loadCity<Network>('network.json'));
+    p.catch(() => cityFiles.delete('network'));
+    cityFiles.set('network', p);
+  }
+  return p;
+}
+
 export function loadCity<T>(file: string): Promise<T> {
   let p = cityFiles.get(file);
   if (!p) {

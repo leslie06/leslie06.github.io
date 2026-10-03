@@ -14,7 +14,7 @@ export const STOP_LINE = 7;
  * that traffic obeys the lights (`.scratch/order.mjs`). A line crossed on amber is legal - that is
  * a driver too close to stop when it changed.
  */
-export const lineStats = { crossed: 0, onRed: 0, yields: 0 };
+export const lineStats = { crossed: 0, onRed: 0, yields: 0, busStops: 0, lastStop: [0, 0] as number[] };
 
 /**
  * Drives one traffic car along the lane graph: pure-pursuit steering at a lane-offset point ahead,
@@ -35,6 +35,12 @@ export class AiDriver {
   yieldT = 0;
   /** Metres moved right of the lane towards the kerb while yielding (eased in and out). */
   private shift = 0;
+  /**
+   * A bus's next stop on this link (set by traffic/ from the shelters nearby): it pulls in to the kerb,
+   * stops at `s` and waits `dwell` seconds, then pulls out; `busCool` seconds before it takes another.
+   */
+  busStop: { s: number; dwell: number } | null = null;
+  busCool = 0;
   private timer = 0;
   stuck = 0;
   lateral = 0;
@@ -69,6 +75,27 @@ export class AiDriver {
     this.g.at(l, s, Math.max(-l.hw + 1.3, off - this.shift), out);
   }
 
+  /**
+   * Whether a shelter at (x, z) stands at this link's right-hand kerb between `min` and `max` m ahead of
+   * the car: its arc length on the link, or -1.
+   */
+  stopAhead(x: number, z: number, min: number, max: number): number {
+    const l = this.g.links[this.link];
+    let best = -1, bd = Infinity;
+    for (let k = 1; k < l.cum.length; k++) {
+      const ax = l.pts[k * 2 - 2], az = l.pts[k * 2 - 1], bx = l.pts[k * 2], bz = l.pts[k * 2 + 1];
+      const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L2));
+      const px = ax + vx * t, pz = az + vz * t, d = Math.hypot(x - px, z - pz);
+      if (d >= bd) continue;
+      // right of travel: (vz, -vx)
+      const right = ((x - px) * vz - (z - pz) * vx) / Math.sqrt(L2);
+      bd = d;
+      best = right > 0 && d < l.hw + 7 ? l.cum[k - 1] + t * Math.sqrt(L2) : -1;
+    }
+    return best >= 0 && best - this.s > min && best - this.s < max && best < l.len - 8 ? best : -1;
+  }
+
   /** Called when the car hit something hard. */
   shake(): void { if (this.mode === 'drive') { this.mode = 'shaken'; this.timer = 2 + this.rnd() * 2; } }
 
@@ -86,6 +113,7 @@ export class AiDriver {
     let hops = 0;
     while (this.s > l.len - 0.3 && this.queue.length && hops++ < 6) {
       this.s -= l.len;
+      this.busStop = null;   // a stop is held on its link
       this.link = this.queue.shift()!;
       l = g.links[this.link];
       if (this.lane >= l.lanes) this.lane = l.lanes - 1;
@@ -109,7 +137,11 @@ export class AiDriver {
     // Sirens behind: ease over to the kerb and crawl until they are past (GTA's traffic clears a lane).
     const yielding = this.yieldT > 0 && !this.reckless;
     this.yieldT = Math.max(0, this.yieldT - dt);
-    this.shift += ((yielding ? 3.2 : 0) - this.shift) * Math.min(1, dt * 1.6);
+    this.busCool = Math.max(0, this.busCool - dt);
+    const toStop = this.busStop ? this.busStop.s - this.s : Infinity;
+    if (this.busStop && toStop < -3) this.busStop = null;   // gone past it (pushed, or the stop was behind)
+    const pulling = !!this.busStop && toStop < 45;
+    this.shift += ((yielding ? 3.2 : pulling ? 2.4 : 0) - this.shift) * Math.min(1, dt * 1.6);
     // Steering: pure pursuit on a point ahead at the lane offset.
     const look = Math.max(6, Math.min(24, 4 + v * 0.8));
     this.along(look, this.p);
@@ -140,6 +172,12 @@ export class AiDriver {
       const canStop = v * v / (2 * 4.5) < stopAt + 0.5;
       if (light === 2 || canStop) vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 2.6 * Math.max(0, stopAt - 0.8))));
     }
+    // A bus pulling in: brake to its stop, wait there, then go on.
+    let dwelling = false;
+    if (this.busStop) {
+      vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 1.8 * Math.max(0, toStop - 0.5))));
+      if (toStop < 2.5 && v < 0.5) { dwelling = true; lineStats.lastStop = [car.pos.x, car.pos.z]; this.busStop.dwell -= dt; if (this.busStop.dwell <= 0) { this.busStop = null; this.busCool = 30; lineStats.busStops++; } }
+    }
     // IDM with the car in front.
     let a = A_MAX * (1 - Math.pow(v / Math.max(0.5, vt), 4));
     if (vt < 0.3) a = -B_COMF * 2;
@@ -151,7 +189,7 @@ export class AiDriver {
     if (a >= 0) { inp.forward = Math.min(1, 0.12 + a / 2.2); inp.back = 0; }
     else if (v > 0.6) { inp.forward = 0; inp.back = Math.min(1, -a / 7); }
     else { inp.forward = 0; inp.back = 0; }   // stopped: the car's own hold keeps it there (never reverse)
-    this.stuck = v < 0.4 && light === 0 && (!leader || leader.gap > 14) ? this.stuck + dt : 0;
+    this.stuck = v < 0.4 && light === 0 && !dwelling && (!leader || leader.gap > 14) ? this.stuck + dt : 0;
     return inp;
   }
 }

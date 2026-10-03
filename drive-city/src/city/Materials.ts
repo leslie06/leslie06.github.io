@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import type { EnvUniforms } from '../game/Contracts';
-import { loadCity, type AreaKind, type Manifest, type Network } from './Data';
+import { loadCity, loadNetwork, type AreaKind, type Manifest, type Network } from './Data';
 import { facadeAtlas, signAtlas } from './visual/FacadeAtlas';
 import { GLSL_HASH } from './visual/hash';
 import { ST, GLASS_TINTS } from './visual/styles';
@@ -350,7 +350,7 @@ if (facPanel > 0.001) {
  */
 async function roadMap(size: number): Promise<{ tex: THREE.CanvasTexture; bounds: THREE.Vector4 } | null> {
   try {
-    const [man, net] = await Promise.all([loadCity<Manifest>('manifest.json'), loadCity<Network>('network.json')]);
+    const [man, net] = await Promise.all([loadCity<Manifest>('manifest.json'), loadNetwork()]);
     const b = man.bounds, pad = 300;
     const x0 = b.x0 - pad, z0 = b.z0 - pad, S = Math.max(b.x1 - b.x0, b.z1 - b.z0) + 2 * pad, k = size / S;
     const cv = document.createElement('canvas'); cv.width = cv.height = size;

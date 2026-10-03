@@ -2359,7 +2359,21 @@ const manifest = {
   attribution: EXTRA ? 'Map data © OpenStreetMap contributors (ODbL), Overture Maps · buildings Shi et al. 2023, 3D-GloBFP, CMAB · trees Meta/WRI · land cover ESA WorldCover (CC BY 4.0)' : 'Map data © OpenStreetMap contributors (ODbL)',
 };
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest));
-fs.writeFileSync(path.join(OUT, 'skyline.json'), JSON.stringify({ b: sky }));
+// Packed (src/city/Data.ts `unpackSkyline`): sorted by x, centres as decimetre deltas, angle in hundredths
+// of a radian, sizes and height in decimetres, the seed in hundredths - 0.48 -> ~0.3 MB gzipped.
+{
+  const rows = [];
+  for (let i = 0; i < sky.length; i += 8) rows.push(sky.slice(i, i + 8));
+  rows.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const d = [];
+  let px = 0, pz = 0;
+  for (const r of rows) {
+    const x = Math.round(r[0] * 10), z = Math.round(r[1] * 10);
+    d.push(x - px, z - pz, Math.round(r[2] * 100), Math.round(r[3] * 10), Math.round(r[4] * 10), Math.round(r[5] * 10), r[6], Math.round(r[7] * 100));
+    px = x; pz = z;
+  }
+  fs.writeFileSync(path.join(OUT, 'skyline.json'), JSON.stringify({ v: 2, d }));
+}
 console.log(`skyline ${sky.length / 8} buildings`);
 console.log(`tiles ${Object.keys(index).length}, ${(bytes / 1e6).toFixed(1)} MB; network ${(net.length / 1e6).toFixed(1)} MB (${netXZ.length / 2} nodes, ${edges.length} edges, ${sig.reduce((a, b) => a + b, 0)} signalised)`);
 console.log(`buildings ${buildings.length} (outlines kept ${kept.length}/${outlines.length}, parts ${parts.length})`, kinds);
@@ -2367,6 +2381,8 @@ console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lam
 console.log('spawn', spawn);
 // The guide signs are placed from the network just written (TypeScript shared with the game).
 execFileSync('npx', ['tsx', 'scripts/city/signs.mts'], { stdio: 'inherit' });
+// The network packed for the game's boot (src/city/NetPack.ts).
+execFileSync('npx', ['tsx', 'scripts/city/netpack.mts'], { stdio: 'inherit' });
 // Bus stops whose shelter would stand in a carriageway, taken out of the tiles just written.
 execFileSync('npx', ['tsx', 'scripts/city/shelters.mts'], { stdio: 'inherit' });
 // The subway entrances, placed against the tiles just written.

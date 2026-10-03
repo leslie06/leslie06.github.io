@@ -1,0 +1,59 @@
+{
+  "id": "nationalindoor",
+  "name": {
+    "zh": "国家体育馆",
+    "en": "National Indoor Stadium"
+  },
+  "lat": 39.9950903,
+  "lon": 116.383943,
+  "headingDeg": -2,
+  "file": "nationalindoor.glb",
+  "version": "c214010b",
+  "footprint": [
+    [-73.7, -88.6],
+    [73.7, -88.6],
+    [73.7, 132.1],
+    [-73.7, 132.1]
+  ],
+  "moreFootprints": [
+    [
+      [-61.7, -131.4],
+      [50, -131.4],
+      [50, -88.5],
+      [-61.7, -88.5]
+    ]
+  ],
+  "clear": [
+    [
+      [-74.2, -88.6],
+      [73.7, -88.6],
+      [73.7, 134.1],
+      [-74.2, 134.1]
+    ],
+    [
+      [-61.7, -131.4],
+      [50, -131.4],
+      [50, -88.5],
+      [-61.7, -88.5]
+    ]
+  ],
+  "height": 42.4,
+  "farDistance": 900,
+  "stats": {
+    "triangles": 8932,
+    "farTriangles": 540,
+    "materials": 13,
+    "farMaterials": 9,
+    "colliders": {
+      "solid": 27,
+      "walk": 2,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 5,
+    "maxTexture": 512,
+    "footprintArea": 37323,
+    "bytes": 211108,
+    "source": "nationalindoor.glb"
+  }
+}

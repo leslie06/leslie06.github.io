@@ -10,6 +10,7 @@ import type { Vehicle } from '../vehicle/Vehicle';
 import { Gait, type Action } from '../character/Animator';
 import { randomLook, type Look } from '../character/Body';
 import { CROWD_CAP } from '../character/Crowd';
+import { installWalkers } from './Walkers';
 
 import { SIDEWALK } from './Pavement';
 const GROUND = 0.045;
@@ -576,4 +577,7 @@ export async function install(engine: Engine): Promise<void> {
     },
   };
   engine.add(api);
+  // People out of the subway and over the footbridges (people/Walkers.ts), in the crowd's room left over.
+  const WALKERS = { low: 12, medium: 24, high: 30 } as const;
+  if (pl?.crowd && !q.has('nopeople') && !q.has('nowalkers')) await installWalkers(engine, pl.crowd, Math.min(WALKERS[engine.quality.tier], room - cap));
 }

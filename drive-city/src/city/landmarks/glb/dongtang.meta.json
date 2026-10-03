@@ -1,0 +1,51 @@
+{
+  "id": "dongtang",
+  "name": {
+    "zh": "王府井天主堂",
+    "en": "St. Joseph's Church (Wangfujing)"
+  },
+  "lat": 39.9159474,
+  "lon": 116.4059434,
+  "headingDeg": -1.2,
+  "file": "dongtang.glb",
+  "version": "749cf68e",
+  "footprint": [
+    [-70.48, -20],
+    [-34.8, -20],
+    [-34.8, 24],
+    [-70.48, 24]
+  ],
+  "moreFootprints": [
+    [
+      [-32.1, -10.85],
+      [15, -10.85],
+      [15, 10.85],
+      [-32.1, 10.85]
+    ],
+    [
+      [15, -8.1],
+      [33, -8.1],
+      [33, 8.1],
+      [15, 8.1]
+    ]
+  ],
+  "height": 29.01,
+  "farDistance": 450,
+  "stats": {
+    "triangles": 4845,
+    "farTriangles": 215,
+    "materials": 10,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 5,
+      "walk": 1,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 3,
+    "maxTexture": 512,
+    "footprintArea": 2884,
+    "bytes": 125296,
+    "source": "dongtang.glb"
+  }
+}

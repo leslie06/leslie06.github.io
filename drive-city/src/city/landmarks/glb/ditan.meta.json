@@ -1,0 +1,59 @@
+{
+  "id": "ditan",
+  "name": {
+    "zh": "地坛方泽坛",
+    "en": "Temple of Earth"
+  },
+  "lat": 39.9514569,
+  "lon": 116.4097881,
+  "headingDeg": -5.47,
+  "file": "ditan.glb",
+  "version": "014c13b0",
+  "footprint": [
+    [-66.9, -66.9],
+    [66.9, -66.9],
+    [66.9, 66.9],
+    [-66.9, 66.9]
+  ],
+  "moreFootprints": [
+    [
+      [-19.8, 74.6],
+      [17.8, 74.6],
+      [17.8, 108.1],
+      [-19.8, 108.1]
+    ]
+  ],
+  "clear": [
+    [
+      [-13.5, 92.2],
+      [11.5, 92.2],
+      [11.5, 107.2],
+      [-13.5, 107.2]
+    ],
+    [
+      [-42, -42],
+      [42, -42],
+      [42, 42],
+      [-42, 42]
+    ]
+  ],
+  "height": 12.35,
+  "farDistance": 500,
+  "stats": {
+    "triangles": 33164,
+    "farTriangles": 576,
+    "materials": 12,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 67,
+      "walk": 9,
+      "mesh": 0
+    },
+    "instancedMeshes": 6,
+    "textures": 7,
+    "maxTexture": 2048,
+    "footprintArea": 19162,
+    "bytes": 665120,
+    "source": "ditan.glb"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "shoudutiyuguan",
+  "name": {
+    "zh": "首都体育馆",
+    "en": "Capital Indoor Stadium"
+  },
+  "lat": 39.9388436,
+  "lon": 116.3211554,
+  "headingDeg": 6.6,
+  "file": "shoudutiyuguan.glb",
+  "version": "09038952",
+  "footprint": [
+    [-63.6, -58],
+    [63.6, -58],
+    [63.6, 58],
+    [-63.6, 58]
+  ],
+  "clear": [
+    [
+      [-71.1, -65.5],
+      [71.1, -65.5],
+      [71.1, 66.5],
+      [-71.1, 66.5]
+    ]
+  ],
+  "height": 30.4,
+  "farDistance": 800,
+  "stats": {
+    "triangles": 4506,
+    "farTriangles": 20,
+    "materials": 9,
+    "farMaterials": 3,
+    "colliders": {
+      "solid": 18,
+      "walk": 2,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 7,
+    "maxTexture": 512,
+    "footprintArea": 14755,
+    "bytes": 129608,
+    "source": "shoudutiyuguan.glb"
+  }
+}
