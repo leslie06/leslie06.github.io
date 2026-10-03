@@ -6,6 +6,7 @@ import { Rng } from '../core/Rng';
 import type { Blip, Crime, HudApi, NavApi, PlayerApi, RenderApi, VehicleApi, WantedApi, WorldApi, PeopleApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import type { FxApi } from '../fx';
+import { readyBodies } from '../vehicle/Bodies';
 import { CarKit } from '../traffic/CarKit';
 import { POLICE_LIVERY, type Livery } from '../vehicle/CarModel';
 import { ControlFilter, type DriveInput } from '../vehicle/ControlFilter';
@@ -87,7 +88,10 @@ export async function install(engine: Engine): Promise<void> {
   // Chasing cars plus a three-car roadblock; the SUVs are their own pool.
   const MAX_CAR = count(5) + 3, MAX_SWAT = SWAT_COUNT[5];
   const kit = new CarKit(engine.scene, MAX_CAR, POLICE_LIVERY);
-  const swatKit = new CarKit(engine.scene, MAX_SWAT, SWAT_LIVERY, 'suv');
+  // Built once the SUV body is in (it loads after the boot, vehicle/Bodies.ts): built before, it would stay the
+  // procedural stand-in. Four stars come long after.
+  let swatKit: CarKit | null = null;
+  void readyBodies(['suv']).then(() => { swatKit = new CarKit(engine.scene, MAX_SWAT, SWAT_LIVERY, 'suv'); });
   const makeCop = (i: number, swat: boolean): Cop => {
     const spec = swat ? SWAT : POLICE;
     const car = new Vehicle(engine.physics, spec, { x: 0, y: -400 - i * 6, z: 0 }, 0);
@@ -509,20 +513,20 @@ export async function install(engine: Engine): Promise<void> {
         if (!c.active) continue;
         renderPos.lerpVectors(c.prevPos, c.curPos, alpha);
         renderQuat.slerpQuaternions(c.prevQuat, c.curQuat, alpha);
-        if (c.swat) swatKit.set(ks++, renderPos, renderQuat, c.car, BLACK, BLACK, true);
+        if (c.swat && swatKit) swatKit.set(ks++, renderPos, renderQuat, c.car, BLACK, BLACK, true);
         else kit.set(k++, renderPos, renderQuat, c.car, WHITE, BLUE, true);
         const d = renderPos.distanceTo(cam);
         if (d < nd && c.wreck < 0) { nd = d; nearPos.copy(renderPos); nearLeft.copy(c.car.left); }
       }
-      kit.commit(k); swatKit.commit(ks);
+      kit.commit(k); swatKit?.commit(ks);
       const night = engine.get<RenderApi>('render')?.night ?? 0;
-      kit.setHeadlights(night > 0.35); swatKit.setHeadlights(night > 0.35);
+      kit.setHeadlights(night > 0.35); swatKit?.setHeadlights(night > 0.35);
       // Light bar: red then blue, a double flash each.
       const lit = level() > 0 || busted >= 0;
       const ph = (clock * 2.4) % 2, u = ph % 1, flash = u < 0.16 || (u > 0.28 && u < 0.44) ? 1 : 0;
       const red = lit && ph < 1 ? flash : 0, blue = lit && ph >= 1 ? flash : 0;
       kit.setBeacons(0.25 + red * 9, 0.25 + blue * 9);
-      swatKit.setBeacons(0.25 + blue * 9, 0.25 + red * 9);
+      swatKit?.setBeacons(0.25 + blue * 9, 0.25 + red * 9);
       const glow = lit && nd < 70 ? 18 + 70 * night : 0;
       glowR.intensity = glow * red; glowB.intensity = glow * blue;
       if (glow > 0) {

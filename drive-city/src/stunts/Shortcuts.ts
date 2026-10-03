@@ -4,7 +4,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Engine, System } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { t } from '../core/I18n';
-import type { Blip, HudApi, MissionApi, NavApi, PlayerApi, VehicleApi } from '../game/Contracts';
+import type { Blip, HudApi, MissionApi, NavApi, PlayerApi, VehicleApi, WorldApi } from '../game/Contracts';
+import { inside as insideRing } from '../city/Clear';
 import type { RenderSystem } from '../render/RenderSystem';
 import { SHORTCUTS } from './spots';
 import type { StuntApi } from '.';
@@ -38,6 +39,18 @@ export function installShortcuts(engine: Engine): void {
   try { found = new Set(JSON.parse(localStorage.getItem(KEY) ?? '[]') as number[]); } catch { /* private mode */ }
   const env = engine.get<RenderSystem>('render')?.uniforms;
 
+  // A path that now crosses an underpass's open trench (the trenches came after the paths were generated: #3's
+  // mouth runs into a 6 m deep one, 2026-10-03) is left out - no gates, no blip, never entered. The others keep
+  // their numbers, which is what the saved progress holds.
+  const trenches = engine.get<WorldApi>('world')?.trenches ?? [];
+  const crossesTrench = (p: readonly number[]) => {
+    const n = p.length / 2;
+    for (let k = 0; k + 1 < n; k++) for (let st = 0; st <= 1; st += 0.05) {
+      const x = p[k * 2] + (p[k * 2 + 2] - p[k * 2]) * st, z = p[k * 2 + 1] + (p[k * 2 + 3] - p[k * 2 + 1]) * st;
+      if (trenches.some((r) => insideRing(x, z, r))) return true;
+    }
+    return false;
+  };
   // Each path: its points, cumulative lengths, and its two ends with the direction into the path.
   const paths = SHORTCUTS.map((sc) => {
     const n = sc.p.length / 2, cum = new Float32Array(n);
@@ -56,7 +69,7 @@ export function installShortcuts(engine: Engine): void {
       const dx = tx - x, dz = tz - z, L = Math.hypot(dx, dz) || 1;
       return { x, z, dx: dx / L, dz: dz / L };
     };
-    return { sc, cum, len, ends: [end(sc.p[0], sc.p[1], at(reach)), end(sc.p[n * 2 - 2], sc.p[n * 2 - 1], at(len - reach))] };
+    return { sc, cum, len, off: crossesTrench(sc.p), ends: [end(sc.p[0], sc.p[1], at(reach)), end(sc.p[n * 2 - 2], sc.p[n * 2 - 1], at(len - reach))] };
   });
 
   // --- the lantern gates -----------------------------------------------------------------------------
@@ -76,7 +89,7 @@ export function installShortcuts(engine: Engine): void {
   const { R, world } = engine.physics;
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const GATE = 2.3, GATE_DRAW = 400;   // posts either side of the path's line: 4.6 m apart, room for a car
-  for (const p of paths) for (const e of p.ends) {
+  for (const p of paths) if (!p.off) for (const e of p.ends) {
     const lx = e.dz, lz = -e.dx;
     // Set a couple of metres into the path, so the gate stands at its mouth rather than on the street.
     const cx = e.x + e.dx * 2, cz = e.z + e.dz * 2;
@@ -136,7 +149,7 @@ export function installShortcuts(engine: Engine): void {
   const api: ShortcutApi = {
     name: 'shortcuts',
     get found() { return found.size; },
-    total: paths.length,
+    total: paths.filter((p) => !p.off).length,
     debug: { paths: () => SHORTCUTS, state: () => ({ on, from, progress }) },
     fixedUpdate(dt) {
       clock += dt;
@@ -146,6 +159,7 @@ export function installShortcuts(engine: Engine): void {
       if (on < 0) {
         // Into one from either end: within 5 m of an end's mouth, heading in.
         for (let i = 0; i < paths.length && on < 0; i++) {
+          if (paths[i].off) continue;
           paths[i].ends.forEach((e, k) => {
             if (on >= 0 || Math.hypot(car.pos.x - e.x, car.pos.z - e.z) > 6) return;
             if (car.vel.x * e.dx + car.vel.z * e.dz < 2) return;
@@ -166,7 +180,7 @@ export function installShortcuts(engine: Engine): void {
           found.add(i);
           try { localStorage.setItem(KEY, JSON.stringify([...found])); } catch { /* ignore */ }
           engine.get<MissionApi>('missions')?.addCash(SHORTCUT_PRIZE);
-          toast(t('shortcut.found', { i: found.size, of: paths.length, n: SHORTCUT_PRIZE, km: (p.sc.saves / 1000).toFixed(1) }));
+          toast(t('shortcut.found', { i: found.size, of: api.total, n: SHORTCUT_PRIZE, km: (p.sc.saves / 1000).toFixed(1) }));
         }
       }
     },
@@ -179,7 +193,7 @@ export function installShortcuts(engine: Engine): void {
         n.addBlips(() => {
           blips.length = 0;
           const at = pl.position;
-          for (const p of paths) for (const e of p.ends) if (!n.mapOpen ? Math.hypot(e.x - at.x, e.z - at.z) < 150 : true) blips.push({ kind: 'shortcut', x: e.x, z: e.z });
+          for (const p of paths) if (!p.off) for (const e of p.ends) if (!n.mapOpen ? Math.hypot(e.x - at.x, e.z - at.z) < 150 : true) blips.push({ kind: 'shortcut', x: e.x, z: e.z });
           return blips;
         });
       }

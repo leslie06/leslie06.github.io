@@ -24,6 +24,8 @@ export interface GameEvents {
   'stunt:bank': { points: number; cash: number; lost: boolean };
   /** A 兔儿爷 collectible was picked up (collect/). */
   'collect:found': { x: number; z: number; found: number; total: number };
+  /** A landmark checked in (checkin/): the first visit to it. */
+  'checkin': { id: string; x: number; z: number; found: number; total: number };
   /** The police got the player (police/), just before the respawn: fines and the impound hang off it. */
   'wanted:busted': { level: number };
   /** A traffic car blew its horn at (x, z). */
@@ -34,6 +36,10 @@ export interface GameEvents {
   'wanted:level': { level: number; up: boolean };
   /** A street race was finished (races/): which start line, the place, seconds from the green light. */
   'race:finish': { race: number; place: number; time: number };
+  /** A time trial (trials/): started, a checkpoint passed, finished (medal -1 none, 0 bronze .. 2 gold). */
+  'trial:start': { id: string };
+  'trial:checkpoint': { id: string; i: number; of: number };
+  'trial:finish': { id: string; time: number; medal: number; best: boolean };
   /** A Crazy-Taxi shift ended (missions/): what it earned. */
   'taxi:shift': { earned: number; fares: number };
   /** A text message arrived on the player's phone (story/). */

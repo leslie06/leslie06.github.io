@@ -13,7 +13,7 @@ export interface Motion {
   /** Tumble axis for `knocked` (character-local, horizontal): extra roll rate, rad/s. */
   tumble?: number;
   /** `ride`: which saddle (a motorcycle crouch or an upright pedal), and the machine's lean (roll, rad) to sit with. */
-  ride?: 'moto' | 'bike';
+  ride?: 'moto' | 'bike' | 'ebike';
   lean?: number;
 }
 
@@ -383,8 +383,8 @@ export class Gait {
     const r = this.rot;
     r.fill(0);
     this.sway = this.bob = this.fwd = this.drop = 0;
-    const moto = m.ride !== 'bike';
-    const pitch = moto ? 0.55 : 0.28;
+    const moto = m.ride === 'moto', scoot = m.ride === 'ebike';
+    const pitch = moto ? 0.55 : scoot ? 0.06 : 0.28;
     r[J.pelvis * 3] = pitch; r[J.pelvis * 3 + 2] = m.lean ?? 0;
     r[J.spine * 3] = moto ? 0.12 : 0.06; r[J.chest * 3] = moto ? 0.08 : 0.04;
     r[J.neck * 3] = -pitch * 0.75; r[J.head * 3] = -pitch * 0.35;
@@ -393,7 +393,11 @@ export class Gait {
     for (let k = 0; k < 2; k++) {
       const side = k === 0 ? 1 : -1;
       const jS = k === 0 ? J.shoulderL : J.shoulderR, jE = k === 0 ? J.elbowL : J.elbowR, jH = k === 0 ? J.hipL : J.hipR, jK = k === 0 ? J.kneeL : J.kneeR, jA = k === 0 ? J.ankleL : J.ankleR;
-      if (moto) {
+      if (scoot) {
+        // upright on the long seat, feet side by side on the board, hands out to the bar
+        r[jH * 3] = -1.45; r[jH * 3 + 2] = side * 0.1; r[jK * 3] = 1.62; r[jA * 3] = -0.12;
+        r[jS * 3] = -1.05; r[jS * 3 + 2] = side * 0.16; r[jE * 3] = -0.4;
+      } else if (moto) {
         r[jH * 3] = -1.3; r[jH * 3 + 2] = side * 0.28; r[jK * 3] = 1.75; r[jA * 3] = -0.35;
         r[jS * 3] = -0.95; r[jS * 3 + 2] = side * 0.12; r[jE * 3] = -0.45;
       } else {

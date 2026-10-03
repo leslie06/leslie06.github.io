@@ -131,6 +131,8 @@ export interface TrainApi extends System {
   readonly drawn: () => number;
   /** Every train's middle now and its heading: [x, y, z, yaw, kind] (for probes and shots). */
   readonly where: () => number[][];
+  /** The nearest train to (x, z): how far its nearest end is (m), its speed (m/s) and its kind; d Infinity if none. */
+  readonly nearest: (x: number, z: number) => { d: number; speed: number; kind: number };
 }
 
 /**
@@ -224,6 +226,16 @@ export function placeTrains(engine: Engine, data: RailFile, env: EnvUniforms): T
     trains: trains.length,
     drawn: () => drawn,
     where: () => trains.map((tr) => { const ps = poses(tr, clock, []); const m = ps[ps.length >> 1]; return [m[0], m[1], m[2], m[3], tr.kind]; }),
+    nearest: (x, z) => {
+      let best = { d: Infinity, speed: 0, kind: 0 };
+      for (const tr of trains) {
+        const { s, dir } = headAt(tr, clock);
+        at(tr.run, s - dir * tr.length / 2, A);
+        const d = Math.max(0, Math.hypot(A[0] - x, A[2] - z) - tr.length / 2);
+        if (d < best.d) best = { d, speed: tr.speed, kind: tr.kind };
+      }
+      return best;
+    },
     fixedUpdate(dt) {
       clock += dt;
       const car = (engine.get('vehicle') as unknown as { car?: { pos: THREE.Vector3 } } | undefined)?.car;

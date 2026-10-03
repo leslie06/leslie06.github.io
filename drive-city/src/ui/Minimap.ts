@@ -241,7 +241,7 @@ export class Minimap implements System {
     // Landmarks (small, inside only), then blips, then the target on top.
     for (const lm of nav.landmarks) {
       const sx = toX(lm.x, lm.z), sy = toY(lm.x, lm.z);
-      if (sx > 4 && sx < W - 4 && sy > 4 && sy < H - 4) drawBlip(ctx, 'landmark', sx, sy, 3.6, NaN, time);
+      if (sx > 4 && sx < W - 4 && sy > 4 && sy < H - 4) drawBlip(ctx, lm.visited ? 'landmarkDone' : 'landmark', sx, sy, 3.6, NaN, time);
     }
     for (const b of nav.blips()) this.mark(b.kind, b.x, b.z, b.heading, up, time, b.flash ?? false, ax, ay, toX, toY);
     if (tg) this.mark(tg.kind === 'mission' ? 'mission' : 'waypoint', tg.x, tg.z, undefined, up, time, false, ax, ay, toX, toY);

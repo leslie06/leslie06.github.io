@@ -98,6 +98,10 @@ export interface WorldApi extends System {
   sharedBike?(x: number, z: number, r: number): SharedBike | null;
   /** That bike leaves its rack (the player is riding it). */
   takeSharedBike?(b: SharedBike): void;
+  /** Each landmark's footprints in world XZ as flat rings [x, z, ...], by its id: the city only. */
+  readonly landmarkAreas?: readonly { id: string; rings: readonly number[][]; height: number }[];
+  /** The underpasses' open trenches as rings [x, z, ...] (holes in the ground): the city only. */
+  readonly trenches?: readonly number[][];
 }
 
 /** Cars other than the player's: traffic and cars left parked. Implemented by traffic/. */
@@ -162,7 +166,7 @@ export interface HomeApi extends System {
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------
 
-export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'jump' | 'collect' | 'parking' | 'shortcut';
+export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut';
 /** A marker on the minimap and map. `heading` (atan2(x, z)) turns it into an arrow. */
 export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string }
 export interface NavTarget { x: number; z: number; kind: 'waypoint' | 'mission'; label?: string }

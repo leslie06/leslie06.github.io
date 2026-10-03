@@ -28,6 +28,7 @@ const EXPECT: Record<BodyType, { v: number; within: number; brakeFrom: number; s
   truck: { v: 60, within: 16, brakeFrom: 60, stop: 30, topMin: 90 },
   moto: { v: 100, within: 8, brakeFrom: 60, stop: 20, topMin: 160 },
   bike: { v: 25, within: 10, brakeFrom: 25, stop: 9, topMin: 30, stopMin: 2, lane: 25 },
+  ebike: { v: 40, within: 10, brakeFrom: 40, stop: 14, topMin: 42, stopMin: 4, lane: 35 },
 };
 
 const rigFor = (t: BodyType) => Rig.create({ spec: SPEC_OF[t], at: { x: 0, y: SPEC_OF[t].wheelRadius + 0.05, z: 0 } });

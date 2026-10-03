@@ -21,8 +21,9 @@ import type { Closure, GuideSign } from './Signs';
 import { SkylineLod } from './Skyline';
 import { CityStreamer, spawnTileWorkers } from './Streamer';
 import { undergroundHoles } from '../underground/Layout';
-import { shortcutClear } from '../stunts/Structures';
-import { SHORTCUTS } from '../stunts/spots';
+import { shortcutClear, stuntClear } from '../stunts/Structures';
+import { overlaps } from './Clear';
+import { JUMPS, OVERPASSES, SHORTCUTS } from '../stunts/spots';
 
 export interface CityApi {
   name: 'city';
@@ -51,13 +52,13 @@ async function loadLandmarks(): Promise<LandmarkDef[]> {
  * the tiles, textures and scripts the boot needs, and the live game took 166 s to become playable
  * instead of 48 (`.scratch/boottime.mjs`).
  */
-function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], gate: Promise<void>, from: [number, number]): { footprints: number[][]; clear: number[][]; trees: number[]; loaded: Promise<void> } {
+function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], gate: Promise<void>, from: [number, number]): { footprints: number[][]; areas: { id: string; rings: number[][]; height: number }[]; clear: number[][]; trees: number[]; loaded: Promise<void> } {
   /** ?nostone skips the walkable stone colliders (for measuring what they cost). */
   const params = new URLSearchParams(location.search);
   const noStone = params.has('nostone');
   if (params.get('glb') === '0') defs = defs.filter((d) => !d.load);
   const { R, world } = engine.physics;
-  const footprints: number[][] = [], clear: number[][] = [], trees: number[] = [];
+  const footprints: number[][] = [], clear: number[][] = [], trees: number[] = [], areas: { id: string; rings: number[][]; height: number }[] = [];
   const jobs: { d: number; run: () => Promise<void> }[] = [];
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
@@ -124,7 +125,9 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
     const rot = -def.headingDeg * Math.PI / 180;
     const c = Math.cos(rot), s = Math.sin(rot);
     const toWorld = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
-    for (const f of [model.footprint, ...(model.moreFootprints ?? [])]) footprints.push(f.flatMap(([lx, lz]) => toWorld(lx, lz)));
+    const rings = [model.footprint, ...(model.moreFootprints ?? [])].map((f) => f.flatMap(([lx, lz]) => toWorld(lx, lz)));
+    footprints.push(...rings);
+    areas.push({ id: def.id, rings, height: model.height });
     for (const zone of model.clear ?? []) clear.push(zone.flatMap(([lx, lz]) => toWorld(lx, lz)));
     const tr = model.trees ?? [];
     for (let i = 0; i < tr.length; i += 4) trees.push(...toWorld(tr[i], tr[i + 1]), tr[i + 2], tr[i + 3]);
@@ -145,7 +148,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
   jobs.sort((a, b) => a.d - b.d);
   const worker = async () => { for (let j = jobs.shift(); j; j = jobs.shift()) await j.run(); };
   const loaded = gate.then(() => Promise.all([worker(), worker()])).then(() => {});
-  return { footprints, clear, trees, loaded };
+  return { footprints, areas, clear, trees, loaded };
 }
 
 /**
@@ -174,7 +177,7 @@ export async function install(engine: Engine): Promise<void> {
   let openGate = () => {};
   const bootDone = new Promise<void>((r) => { openGate = r; });
   const [manifest, network, skyline, mats, defs, signs, entrances, footbridges, rail, tunnels] = await Promise.all([
-    loadCity<Manifest>('manifest.json'), loadNetwork(), loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline),
+    loadCity<Manifest>('manifest.json'), loadNetwork(), DEFER_EXTRAS ? null : loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline),
     createCityMaterials(engine, env, DEFER_EXTRAS ? bootDone : undefined), loadLandmarks(),
     // The guide signs (city/Signs.ts, placed by the build): optional, the city runs without them, and
     // after the boot (below) unless in shot mode.
@@ -261,19 +264,32 @@ export async function install(engine: Engine): Promise<void> {
   scene.add(groundMesh);
 
   // The spawn's tiles first; the glb landmarks and the Blender trees download after them.
-  const { footprints, clear, trees: landmarkTrees, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs, bootDone, [manifest.spawn.x, manifest.spawn.z]);
-  clear.push(...shortcutClear(SHORTCUTS));
+  const { footprints, areas: landmarkAreas, clear, trees: landmarkTrees, loaded: landmarksLoaded } = placeLandmarks(engine, env, defs, bootDone, [manifest.spawn.x, manifest.spawn.z]);
+  clear.push(...shortcutClear(SHORTCUTS), ...stuntClear(JUMPS, OVERPASSES));
   // Each kiosk keeps its ground clear of trees, lamps and kerb furniture, and takes the place of the
   // small box OSM drew for it.
-  if (entrances) clear.push(...entranceZones(entrances));
-  const sky = new SkylineLod(skyline, env);
-  sky.exclude(footprints);
-  scene.add(sky.mesh);
+  if (entrances) {
+    // A kiosk standing in a stunt ramp's or overpass's run goes (ramp 9's run-up ended against one, 2026-10-03):
+    // the runs were placed before the kiosks, and moving a ramp would renumber everyone's progress.
+    const runs = stuntClear(JUMPS, OVERPASSES), zones = entranceZones(entrances);
+    entrances.e = entrances.e.filter((_, i) => !runs.some((r) => overlaps(zones[i], r)));
+    clear.push(...entranceZones(entrances));
+  }
+  // The far skyline: at once in shot mode, else after the boot (DEFER_EXTRAS: 0.36 MB the first drive
+  // does not need - the streamed tiles cover the near city).
+  let sky: SkylineLod | null = null;
+  const putSky = (data: Skyline) => {
+    sky = new SkylineLod(data, env);
+    sky.exclude(footprints);
+    scene.add(sky.mesh);
+    sky.setDetailed(streamer.loadedKeys);
+  };
   const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear, landmarkTrees);
   streamer.streetClear = [...(footbridges ? footbridgeZones(footbridges) : []), ...(rail ? railZones(rail) : [])];
   // nothing stands in a trench: no tree, lamp, bin or building
   if (tunnels) clear.push(...trenchZones(tunnels));
-  streamer.onDetailChange = (keys) => sky.setDetailed(keys);
+  streamer.onDetailChange = (keys) => sky?.setDetailed(keys);
+  if (skyline) putSky(skyline);
   engine.add(streamer);
   engine.add(streamer.knocks);
   const routes = new Routes(network);
@@ -295,6 +311,8 @@ export async function install(engine: Engine): Promise<void> {
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);
   await streamer.preload(sp.x, sp.z);
   openGate();
+  // the far skyline right after the spawn's tiles (the title's view shows it)
+  if (!skyline) void loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline).then(putSky, () => {});
   // The extras the boot did not wait for (DEFER_EXTRAS): the railways' street clearing reaches the tiles
   // already built by building them again (CityStreamer.addStreetClear).
   const extrasLoaded = !DEFER_EXTRAS ? Promise.resolve() : (async () => {
@@ -322,6 +340,8 @@ export async function install(engine: Engine): Promise<void> {
     preload: (x, z) => streamer.preload(x, z),
     sharedBike: (x, z, r) => streamer.knocks.nearestBike(x, z, r),
     takeSharedBike: (b) => streamer.knocks.hide('bike', b.x, b.z),
+    trenches: tunnels?.holes ?? [],
+    landmarkAreas,
     manifest, routes, streamer,
   };
   engine.add(api);

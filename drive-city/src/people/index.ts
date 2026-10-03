@@ -69,7 +69,7 @@ export async function install(engine: Engine): Promise<void> {
   const g = tr.graph, sig = tr.signals;
   // The crowd also draws the player and a taxi fare.
   const q = new URLSearchParams(location.search);
-  const room = CROWD_CAP[engine.quality.tier] - 2;   // the player and a taxi fare share the crowd
+  const room = CROWD_CAP[engine.quality.tier] - 2 - tr.riderCap;   // the player, a taxi fare and the scooter riders share the crowd
   const cap = q.has('nopeople') ? 0 : Math.min(room, q.has('peds') ? Math.max(0, Number(q.get('peds')) || 0) : PED_CAP[engine.quality.tier]);
   const rng = new Rng(9001);
   const rnd = () => rng.next();

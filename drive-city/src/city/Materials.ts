@@ -103,16 +103,26 @@ interface FacadeTex { plaster?: THREE.Texture; brick?: THREE.Texture; brickN?: T
 
 function facadeMaterial(env: EnvUniforms, tx: FacadeTex, atlasSize: number, low: boolean): THREE.MeshStandardMaterial {
   const atlas = facadeAtlas(atlasSize), signs = signAtlas();
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, normalMap: tx.brickN ?? null });
+  // Until the photos arrive (they load after the boot, see createCityMaterials): a neutral grey whose
+  // linear value equals the fallback mean (so the wall colour is the vertex colour) and a flat normal
+  // map, so the program has its normal map from the start and the swap is only a uniform change.
+  const white = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1); white.colorSpace = THREE.SRGBColorSpace; white.needsUpdate = true;
+  const flatN = new THREE.DataTexture(new Uint8Array([128, 128, 255, 255]), 1, 1); flatN.needsUpdate = true;
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, normalMap: tx.brickN ?? flatN });
   m.normalScale.set(0.9, 0.9);
   m.userData.wet = true;
-  const white = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1); white.needsUpdate = true;
   const uniforms = {
     tFacCol: { value: atlas.col }, tFacMat: { value: atlas.mat }, tSigns: { value: signs },
     tPlaster: { value: tx.plaster ?? white }, tBrick: { value: tx.brick ?? white },
     uPlasterMean: { value: tx.plaster ? tx.plasterMean : new THREE.Vector3(0.216, 0.216, 0.216) },
     uBrickMean: { value: tx.brick ? tx.brickMean : new THREE.Vector3(0.216, 0.216, 0.216) },
     uGlassTints: { value: GLASS_TINTS.map((c) => new THREE.Color(c)) },
+  };
+  /** The brick and plaster photos, when they arrive. */
+  m.userData.setFacadeTex = (t: FacadeTex) => {
+    if (t.plaster) { uniforms.tPlaster.value = t.plaster; uniforms.uPlasterMean.value = t.plasterMean; }
+    if (t.brick) { uniforms.tBrick.value = t.brick; uniforms.uBrickMean.value = t.brickMean; }
+    if (t.brickN) m.normalMap = t.brickN;
   };
   const S = ST;
   m.customProgramCacheKey = () => `city-facade-${low ? 'lo' : 'hi'}`;
@@ -369,7 +379,10 @@ async function roadMap(size: number): Promise<{ tex: THREE.CanvasTexture; bounds
   } catch (e) { console.warn('[city] road map', e); return null; }
 }
 
-export async function createCityMaterials(engine: Engine, env: EnvUniforms, later: Promise<void> = Promise.resolve()): Promise<CityMaterials> {
+export async function createCityMaterials(engine: Engine, env: EnvUniforms, deferUntil?: Promise<void>): Promise<CityMaterials> {
+  // the photos wait for `deferUntil` (the spawn's tiles, outside shot mode); without it they load now and the
+  // facade's two sets are awaited, so every shot draws the same walls
+  const later = deferUntil ?? Promise.resolve();
   const a = engine.assets;
   const tex = async (name: string, metres: number) => {
     try { return await a.pbr(name, { repeat: [1 / metres, 1 / metres] }); }
@@ -378,7 +391,9 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms, late
   // Only the two sets the facade shader needs are waited for. The rest land on their materials as
   // they arrive: blocking the whole boot on every photo made the first load on GitHub Pages take
   // three minutes, because the browser had to finish 14 MB of images before the game appeared.
-  const [brick, plaster] = await Promise.all([tex('dark_brick_wall', 3), tex('grey_plaster', 4)]);
+  // (The facade's brick and plaster were awaited here until 2026-10-03: ~1 MB before anything could be
+  // drawn. They now arrive like the rest, onto the facade's placeholders.)
+  const facadePhotos = later.then(() => Promise.all([tex('dark_brick_wall', 3), tex('grey_plaster', 4)]));
   /**
    * Give `m` its photo maps when they arrive; until then it is a flat colour. They are asked for only
    * once `later` resolves (the spawn's tiles are in): ~3 MB of them shared the link with the network
@@ -439,8 +454,11 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms, late
     };
     ground.customProgramCacheKey = () => 'city-ground';
   }
+  if (!deferUntil) await facadePhotos;
+  const facade = facadeMaterial(env, { plasterMean: new THREE.Vector3(), brickMean: new THREE.Vector3() }, tier === 'low' ? 1024 : 2048, tier === 'low');
+  void facadePhotos.then(([brick, plaster]) => (facade.userData.setFacadeTex as (t: FacadeTex) => void)({ plaster: plaster.map, brick: brick.map, brickN: brick.normalMap, plasterMean: mean(plaster.map), brickMean: mean(brick.map) }));
   return {
-    facade: facadeMaterial(env, { plaster: plaster.map, brick: brick.map, brickN: brick.normalMap, plasterMean: mean(plaster.map), brickMean: mean(brick.map) }, tier === 'low' ? 1024 : 2048, tier === 'low'),
+    facade,
     road: skin(std({ roughness: 1, color: '#5c5d5f', vertexColors: true }, undefined, 0.9, 0.22, 5, 'ground'), 'asphalt_02', 7, { map: true, normal: true, rough: true }),
     sidewalk: skin(std({ roughness: 0.85, color: '#aeaaa2', vertexColors: true }, undefined, 0.75, 0.18, 1, 'ground'), 'square_brick_paving', 2.4, { map: true, normal: true }),
     paint: std({ roughness: 0.6, color: '#ffffff', vertexColors: true }, undefined, 0, 0.12, 7, 'ground'),

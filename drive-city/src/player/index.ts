@@ -106,7 +106,7 @@ export async function install(engine: Engine): Promise<void> {
   /** On a motorcycle or bicycle the player is in plain sight: drawn in the saddle, leaning with it. */
   const rideMotion: Motion = { speed: 0, action: 'ride', t: 0, ride: 'moto', lean: 0 };
   const seatPos = new THREE.Vector3(), seatFwd = new THREE.Vector3();
-  const twoWheeler = (): TwoWheeler | null => { const b = vehicle().look.body; return b === 'moto' || b === 'bike' ? b : null; };
+  const twoWheeler = (): TwoWheeler | null => { const b = vehicle().look.body; return b === 'moto' || b === 'bike' || b === 'ebike' ? b : null; };
   // No bodywork round you: a crash on a bike hurts.
   engine.events.on('vehicle:impact', (e) => {
     if (mode === 'driving' && twoWheeler() && e.strength > 4) hurt(Math.min(45, (e.strength - 4) * 5));

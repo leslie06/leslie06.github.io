@@ -10,7 +10,8 @@ import type { Network, NetworkEdge } from './Data';
  * Shared by the build (`packNetwork`) and the game (`unpackNetwork`), so the two cannot drift.
  */
 export interface NetworkPack {
-  v: 1;
+  /** 2: `a` is the delta from the edge before's `b`, `b` the delta from its own `a` (consecutive edges share a node). */
+  v: 1 | 2;
   /** Node coordinates as decimetre deltas from the node before. */
   nodes: number[];
   sig: number[];
@@ -36,9 +37,10 @@ export function packNetwork(net: Network): NetworkPack {
   const nodes: number[] = [];
   let px = 0, pz = 0;
   for (let i = 0; i < net.nodes.length; i += 2) { const x = dm(net.nodes[i]), z = dm(net.nodes[i + 1]); nodes.push(x - px, z - pz); px = x; pz = z; }
-  const out: NetworkPack = { v: 1, nodes, sig: net.sig, classes, names, a: [], b: [], pn: [], p: [], c: [], o: [], l: [], w: [], n: [], br: [], h: [], brn: net.br, en: net.en };
+  const out: NetworkPack = { v: 2, nodes, sig: net.sig, classes, names, a: [], b: [], pn: [], p: [], c: [], o: [], l: [], w: [], n: [], br: [], h: [], brn: net.br, en: net.en };
+  let pb = 0;
   net.edges.forEach((e, k) => {
-    out.a.push(e.a); out.b.push(e.b);
+    out.a.push(e.a - pb); out.b.push(e.b - e.a); pb = e.b;
     let qx = dm(net.nodes[2 * e.a]), qz = dm(net.nodes[2 * e.a + 1]);
     out.pn.push(e.p.length / 2);
     for (let i = 0; i < e.p.length; i += 2) { const x = dm(e.p[i]), z = dm(e.p[i + 1]); out.p.push(x - qx, z - qz); qx = x; qz = z; }
@@ -62,13 +64,16 @@ export function unpackNetwork(pk: NetworkPack): Network {
     for (let j = 0; j < n; j++) { ph += pk.h[i++]; hs.push(ph / 10); }
     heights.set(k, hs);
   }
+  // edge ends: absolute in v1, deltas in v2
+  const A = pk.a.slice(), Bn = pk.b.slice();
+  if (pk.v === 2) { let pb = 0; for (let k = 0; k < A.length; k++) { A[k] += pb; Bn[k] += A[k]; pb = Bn[k]; } }
   const edges: NetworkEdge[] = [];
   let pi = 0;
-  for (let k = 0; k < pk.a.length; k++) {
+  for (let k = 0; k < A.length; k++) {
     const n = pk.pn[k], p = new Array<number>(n * 2);
-    let qx = Math.round(nodes[2 * pk.a[k]] * 10), qz = Math.round(nodes[2 * pk.a[k] + 1] * 10);
+    let qx = Math.round(nodes[2 * A[k]] * 10), qz = Math.round(nodes[2 * A[k] + 1] * 10);
     for (let j = 0; j < n; j++) { qx += pk.p[pi++]; qz += pk.p[pi++]; p[2 * j] = qx / 10; p[2 * j + 1] = qz / 10; }
-    const e: NetworkEdge = { a: pk.a[k], b: pk.b[k], p, c: pk.classes[pk.c[k]], o: pk.o[k] as 0 | 1, l: pk.l[k], w: pk.w[k] / 10 };
+    const e: NetworkEdge = { a: A[k], b: Bn[k], p, c: pk.classes[pk.c[k]], o: pk.o[k] as 0 | 1, l: pk.l[k], w: pk.w[k] / 10 };
     if (pk.n[k]) e.n = pk.names[pk.n[k] - 1];
     if (br.has(k)) e.br = 1;
     const h = heights.get(k);

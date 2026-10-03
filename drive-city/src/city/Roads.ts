@@ -325,6 +325,12 @@ const HEADROOM = 4.3;
 /** Parapet height over a deck `h` m up: rising out of the ramp from 0.45 m to full height at 1.45. */
 /** Length over which a parapet rises from its end by a merge or a gore, m. */
 const NOSE = 6;
+/**
+ * Where a deck runs on into a wider one at its level (建国门内大街's 12 m deck into 建国门桥's 9.4), the narrower one
+ * widens to meet it over TAPER m: the parapets started square at the joint, inside the wider road's outer
+ * lanes, and the census's cars stopped dead against their ends.
+ */
+const TAPER = 24;
 const railOf = (h: number) => Math.max(0, Math.min(DECK.rail, (h - 0.45) * 0.9));
 /** Metres between the lamps along a deck (as on a trunk road below). */
 const DECK_LAMP = 32;
@@ -342,9 +348,66 @@ const quad3 = (col: Soup, a: number[], b: number[], c: number[], d: number[]) =>
  * into `col`: the deck top (from where it leaves the ground, so a car drives up without a step),
  * the parapets, the embankment walls and the piers.
  */
-function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number, z: number, h: number, gap: number, maxGap?: number) => boolean, inJunction: (x: number, z: number, h: number) => boolean, joins: (x: number, z: number, h: number, step?: boolean, margin?: number) => boolean, lamps: number[], occupied: (x: number, z: number, y0: number, y1: number) => boolean): void {
-  const hw = r.w / 2, oi = hw + 0.05, oo = hw + 0.05 + DECK.parapet;
+function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, runsOn: (r: RoadPiece, end: 0 | 1) => { hw: number; dot: number; inner: number; alone: boolean }[], below: (x: number, z: number, h: number, gap: number, maxGap?: number) => boolean, inJunction: (x: number, z: number, h: number) => boolean, joins: (x: number, z: number, h: number, step?: boolean | 'any' | 'off' | 'flush' | 'above', margin?: number) => boolean, lamps: number[], occupied: (x: number, z: number, y0: number, y1: number) => boolean): void {
+  const hw = r.w / 2, oo = hw + 0.05 + DECK.parapet;
   const P = (s: number, o: number, y: number): number[] => { const [x, z, nx, nz] = at(l, s); return [x + nx * o, y, z + nz * o]; };
+  // How much wider the carriageway this deck runs on into is, each side, at each end (see TAPER): only where it
+  // runs on into one other carriageway, flush with it and in line (a slip road forking off a wider road widened
+  // towards the road it leaves, and its parapet stood across that road's lanes).
+  const wider = (end: 0 | 1) => {
+    if (hAt(l, end ? l.len : 0) + Y.road < 0.5) return 0;
+    const all = runsOn(r, end), o = all.length === 1 && all[0].alone ? all[0] : null;
+    return o && o.dot >= 0.94 && o.hw - hw >= 0.25 ? Math.min(3, o.hw - hw) : 0;
+  };
+  // Where the deck bends at a joint with the next piece, the parapets are mitred (东直门桥, 2026-10-03): each piece's
+  // parapet ran square to its own end, so on the inside of the bend it stood on into the next piece's lanes for
+  // (half width) x tan(angle / 2) - a car keeping to its lane met it - and on the outside left a notch open.
+  // Inside, the parapet stops that far short of the end; outside it runs on that far past it.
+  // At a fork (a slip road leaving where the main line bends away) the parapet on each side stops short of every
+  // piece turning that way, by the sharpest; the outside is carried on only at a plain joint of two.
+  const mitre = ([0, 1] as const).map((end) => {
+    if (hAt(l, end ? l.len : 0) + Y.road < 0.5) return null;
+    const cut: Record<number, number> = { [-1]: 0, [1]: 0 };
+    let outer = 0, ext = 0;
+    for (const o of runsOn(r, end)) {
+      if (!o.inner) continue;
+      const th = Math.acos(Math.min(1, o.dot));
+      if (th < 0.03) continue;
+      const m = Math.min(6, (hw + 0.05 + DECK.parapet) * Math.tan(th / 2));
+      cut[o.inner] = Math.max(cut[o.inner], m);
+      // (not when the next is wider: the narrower one's parapet carried on would stand in its lanes)
+      if (o.alone && o.hw <= hw + 0.1) { outer = -o.inner; ext = m; }
+    }
+    return cut[-1] || cut[1] ? { cut, outer, ext } : null;
+  });
+  /** Whether the stretch s0..s1 on `side` lies in a mitred-off inner corner. */
+  const mitred = (side: number, s0: number, s1: number) =>
+    (!!mitre[0] && s1 <= mitre[0].cut[side] + 1e-6) || (!!mitre[1] && s0 >= l.len - mitre[1].cut[side] - 1e-6);
+  const w0 = wider(0), w1 = wider(1);
+  const W = { [-1]: [w0, w1], [1]: [w0, w1] } as Record<number, number[]>;
+  /**
+   * The extra half width at s on one side - never over another carriageway above or below this one (the first cut
+   * widened decks over the roads beside and under them: 12 more walls across lanes, 120 more low ceilings) - and
+   * the parapet's inner and outer faces there (signed offsets).
+   */
+  const exMemo = new Map<number, number>();
+  const ex = (s: number, side: number) => {
+    const want = W[side][0] * Math.max(0, 1 - s / TAPER) + W[side][1] * Math.max(0, 1 - (l.len - s) / TAPER);
+    if (want <= 0) return 0;
+    const key = s * 4 + side;
+    let v = exMemo.get(key);
+    if (v === undefined) {
+      const h = hAt(l, s) + Y.road, [x, z, nx, nz] = at(l, s);
+      v = want;
+      for (let g = 0; g <= want + DECK.parapet + 0.3; g += 0.2) {
+        const o = side * (hw + g);
+        if (joins(x + nx * o, z + nz * o, h, 'off', 0)) { v = Math.max(0, g - DECK.parapet - 0.3); break; }
+      }
+      exMemo.set(key, v);
+    }
+    return Math.min(want, v);
+  };
+  const OI = (s: number, side: number) => side * (hw + ex(s, side) + 0.05), OO = (s: number, side: number) => side * (hw + ex(s, side) + 0.05 + DECK.parapet);
   const V = (p: number[], u: number, v: number) => [p[0], p[1], p[2], u, v];
   /** A vertex with its u along the road and v its height: metre UVs on the upright faces. */
   const Y3 = (p: number[], u: number) => [p[0], p[1], p[2], u, p[1]];
@@ -358,8 +421,8 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
     return out;
   };
   /** Whether the parapet's foot at sv stands on another carriageway at this level (with `step`, on one a step lower). */
-  const footOn = (sv: number, side: number, step: boolean) => {
-    const h = hAt(l, sv) + Y.road, f = P(sv, side * (oi + DECK.parapet / 2), 0);
+  const footOn = (sv: number, side: number, step: boolean | 'above') => {
+    const h = hAt(l, sv) + Y.road, f = P(sv, OI(sv, side) + side * DECK.parapet / 2, 0);
     return joins(f[0], f[2], h, step, 0);
   };
   for (const [a, b] of lifted(l, 0.02)) {
@@ -369,6 +432,14 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
     const cuts: number[] = [];
     {
       const c4 = cutsOf(a, b);
+      for (const k of [0, 1] as const) {
+        const mt = mitre[k]; if (!mt) continue;
+        for (const m of [mt.cut[-1], mt.cut[1]]) {
+          if (!m) continue;
+          const sv = k ? l.len - m : m;
+          if (sv > a + 0.05 && sv < b - 0.05 && !c4.some((c) => Math.abs(c - sv) < 0.05)) { c4.push(sv); c4.sort((x, y) => x - y); }
+        }
+      }
       cuts.push(c4[0]);
       for (let k = 0; k < c4.length - 1; k++) {
         const s0 = c4[k], s1 = c4[k + 1], t = [0.15, 0.5, 0.85].map((u) => s0 + (s1 - s0) * u);
@@ -382,7 +453,7 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
     // across, no parapet, so the parapets start where the roads are apart), 'rail' or 'bare'.
     /** How far beyond the parapet's outer face another carriageway at this level begins (within `max`), or -1. */
     const gapAt = (sv: number, side: number, h: number, max: number) => {
-      for (let g = 0.55; g <= max + 1e-6; g += 0.25) { const q = P(sv, side * (oo + g), 0); if (joins(q[0], q[2], h)) return g; }
+      for (let g = 0.55; g <= max + 1e-6; g += 0.25) { const q = P(sv, OO(sv, side) + side * g, 0); if (joins(q[0], q[2], h)) return g; }
       return -1;
     };
     const kind: Record<number, ('merge' | 'gore' | 'rail' | 'bare')[]> = { [-1]: [], [1]: [] };
@@ -395,7 +466,7 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
         // Tested just beyond the parapet's outer face: only a carriageway whose surface reaches past it
         // makes it a merge. One within a metre with a gap between was taken for one, and the gap between
         // a road's two carriageways on 东三环 or 国贸桥 was left open to fall through.
-        const mid = P(sm, side * (oo + 0.3), 0);
+        const mid = P(sm, OO(sm, side) + side * 0.3, 0);
         // Nor one standing on another carriageway at this level: the outer parapet of a slip road
         // still inside the main line it is leaving stood in the main line's lane, beside its own.
         const onLevel = footOn(sm, side, false);
@@ -404,8 +475,10 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
         // The parapet grows out of the deck as the ramp leaves the ground (none under 0.45 m, full
         // height from 1.45): at full height from the first centimetre its end stood in the lane of the
         // road the ramp comes off, a concrete block across it. And none over another carriageway only a
-        // step lower, which it would stand in - beside it or under its own foot.
-        if (kd === 'rail' && ((railOf(hAt(l, s0) + Y.road) <= 0 && railOf(hAt(l, s1) + Y.road) <= 0) || joins(mid[0], mid[2], hm, true) || footOn(sm, side, true))) kd = 'bare';
+        // step lower, which it would stand in - beside it or under its own foot. Nor one whose foot is inside a
+        // carriageway a little higher: its top came up through that deck as a 0.3 m kerb across its lanes (a
+        // service ramp overlapping a tertiary deck 0.6 m above it, -2143,-4415, the census of 2026-10-03).
+        if (kd === 'rail' && ((railOf(hAt(l, s0) + Y.road) <= 0 && railOf(hAt(l, s1) + Y.road) <= 0) || joins(mid[0], mid[2], hm, true) || footOn(sm, side, true) || footOn(sm, side, 'above'))) kd = 'bare';
         kind[side].push(kd); goreW[side].push(gw);
       }
     }
@@ -423,16 +496,23 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
       const [, , n0x, n0z] = at(l, s0);
       // The deck top the wheels run on, parapet to parapet. (Leaving strips out over a road close
       // underneath was tried twice: both times it opened holes the car fell through.)
-      quad3(col, P(s0, -oo, h0), P(s1, -oo, h1), P(s1, oo, h1), P(s0, oo, h0));
+      quad3(col, P(s0, OO(s0, -1), h0), P(s1, OO(s1, -1), h1), P(s1, OO(s1, 1), h1), P(s0, OO(s0, 1), h0));
       if (Math.max(h0, h1) < 0.2) continue;
+      // The taper's widening drawn as paving beside the carriageway (its collider is the deck top above).
+      for (const side of [-1, 1]) {
+        if (ex(s0, side) < 0.01 && ex(s1, side) < 0.01) continue;
+        const a0 = P(s0, side * hw, h0), a1 = P(s1, side * hw, h1), b1 = P(s1, OI(s1, side), h1), b0 = P(s0, OI(s0, side), h0);
+        if (side > 0) st.quad(V(a0, s0, hw), V(a1, s1, hw), V(b1, s1, hw + 1), V(b0, s0, hw + 1), UP, GORE);
+        else st.quad(V(a1, s1, -hw), V(a0, s0, -hw), V(b0, s0, -hw - 1), V(b1, s1, -hw - 1), UP, GORE);
+      }
       // Low enough to be a filled embankment - unless a lower road runs under this edge (OSM's widths
       // overlap a ramp with the road beside it): then it is open underneath, a deck on the lower road.
       const sm = (s0 + s1) / 2, hm = (h0 + h1) / 2;
-      const open = (side: number) => { const q = P(sm, side * oo, 0); return below(q[0], q[2], hm, 1.5); };
+      const open = (side: number) => { const q = P(sm, OO(sm, side), 0); return below(q[0], q[2], hm, 1.5); };
       const openL = open(-1), openR = open(1);
       for (const side of [-1, 1]) {
         const kd = kind[side][k];
-        if (kd === 'merge') continue;
+        if (kd === 'merge' || mitred(side, s0, s1)) continue;
         // Paved across the wedge to the other road (drawn and solid), from our carriageway's edge: all of a
         // gore, and under a parapet's nose while it is still low (else the car went over the nose and
         // into the gap beyond it). A nose with nothing at this level beyond it is no nose: full height.
@@ -440,20 +520,25 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
         const f0 = kd === 'rail' ? nose(side, s0) : 1, f1 = kd === 'rail' ? nose(side, s1) : 1;
         if (kd === 'rail' && Math.min(f0, f1) < 1) { pave = gapAt(sm, side, hm, NOSE); if (pave < 0) { pave = 0; full = true; } }
         if (pave > 0) {
-          const lo = side * (kd === 'gore' ? hw : oo), hi = side * (oo + pave);
-          const a0 = P(s0, lo, h0), a1 = P(s1, lo, h1), b1 = P(s1, hi, h1), b0 = P(s0, hi, h0);
+          const lo = side * (kd === 'gore' ? hw : oo), hi = side * (oo + pave);   // (the UVs)
+          const lo0 = kd === 'gore' ? side * hw : OO(s0, side), lo1 = kd === 'gore' ? side * hw : OO(s1, side);
+          // Never out over another carriageway, whatever its height: measured at each end (a gore's width is
+          // taken at the middle, and where the roads converge it ran 3.7 m into 南二环's other carriageway as a
+          // 0.5 m step across its lanes, 2026-10-03), and short of any road a step above or below this one.
+          const reach = (sv: number, hv: number) => { for (let g = 0; g < pave; g += 0.1) { const q = P(sv, OO(sv, side) + side * (g + 0.1), 0); if (joins(q[0], q[2], hv, 'any', 0)) return g; } return pave; };
+          const pv0 = reach(s0, h0), pv1 = reach(s1, h1);
+          const a0 = P(s0, lo0, h0), a1 = P(s1, lo1, h1), b1 = P(s1, OO(s1, side) + side * pv1, h1), b0 = P(s0, OO(s0, side) + side * pv0, h0);
           if (side > 0) { st.quad(V(a0, s0, lo), V(a1, s1, lo), V(b1, s1, hi), V(b0, s0, hi), UP, GORE); quad3(col, a0, a1, b1, b0); }
           else { st.quad(V(a1, s1, lo), V(a0, s0, lo), V(b0, s0, hi), V(b1, s1, hi), UP, GORE); quad3(col, a1, a0, b0, b1); }
         }
         if (kd === 'gore') continue;
         const bot = (h: number) => (h > DECK.fill || (side < 0 ? openL : openR) ? Math.max(0.2, h - DECK.depth) : 0);
-        const ti = side * oi, to = side * oo;
         const rail = kd === 'rail';
         const r0 = h0 + (rail ? railOf(h0) * (full ? 1 : f0) : 0), r1 = h1 + (rail ? railOf(h1) * (full ? 1 : f1) : 0);
         const n = [n0x * side, 0, n0z * side], inN = [-n[0], 0, -n[2]];
         // Inside face (towards the road), the top, the outside face down to the deck edge or the ground.
-        const i0 = P(s0, ti, h0), i1 = P(s1, ti, h1), i2 = P(s1, ti, r1), i3 = P(s0, ti, r0);
-        const o0 = P(s0, to, bot(h0)), o1 = P(s1, to, bot(h1)), o2 = P(s1, to, r1), o3 = P(s0, to, r0);
+        const i0 = P(s0, OI(s0, side), h0), i1 = P(s1, OI(s1, side), h1), i2 = P(s1, OI(s1, side), r1), i3 = P(s0, OI(s0, side), r0);
+        const o0 = P(s0, OO(s0, side), bot(h0)), o1 = P(s1, OO(s1, side), bot(h1)), o2 = P(s1, OO(s1, side), r1), o3 = P(s0, OO(s0, side), r0);
         // The outside face: a collider only where it is more than a kerb (a car climbs 0.45 m).
         const face = !(side < 0 ? openL : openR) && Math.max(r0, r1) > 0.5;
         if (side > 0) {
@@ -465,7 +550,8 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
           st.quad(Y3(o1, s1), Y3(o0, s0), Y3(o3, s0), Y3(o2, s1), n, CONCRETE);
           if (face) quad3(col, o1, o0, o3, o2);
         }
-        const t0 = P(s0, ti, r0), t1 = P(s1, ti, r1), t2 = P(s1, to, r1), t3 = P(s0, to, r0);
+        const t0 = P(s0, OI(s0, side), r0), t1 = P(s1, OI(s1, side), r1), t2 = P(s1, OO(s1, side), r1), t3 = P(s0, OO(s0, side), r0);
+        const oi = hw + 0.05;
         if (side > 0) st.quad(V(t0, s0, oi), V(t1, s1, oi), V(t2, s1, oo), V(t3, s0, oo), UP, CONCRETE);
         else st.quad(V(t1, s1, -oi), V(t0, s0, -oi), V(t3, s0, -oo), V(t2, s1, -oo), UP, CONCRETE);
       }
@@ -473,19 +559,47 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
       const hi0 = h0 > DECK.fill || openL || openR, hi1 = h1 > DECK.fill || openL || openR;
       if (hi0 && hi1) {
         const y0 = h0 - DECK.depth, y1 = h1 - DECK.depth;
-        st.quad(V(P(s0, oo, y0), s0, oo), V(P(s1, oo, y1), s1, oo), V(P(s1, -oo, y1), s1, -oo), V(P(s0, -oo, y0), s0, -oo), [0, -1, 0], SOFFIT);
+        st.quad(V(P(s0, OO(s0, 1), y0), s0, oo), V(P(s1, OO(s1, 1), y1), s1, oo), V(P(s1, OO(s1, -1), y1), s1, -oo), V(P(s0, OO(s0, -1), y0), s0, -oo), [0, -1, 0], SOFFIT);
       } else if (hi0 !== hi1 && ![-1, -0.5, 0, 0.5, 1].some((u) => { const q = P(hi0 ? s0 : s1, u * oo, 0); return occupied(q[0], q[2], 0, (hi0 ? h0 : h1) - DECK.depth); })) {
         // (Not where another carriageway runs through it: the end of 国贸桥's embankment stood across the
         // slip road beside it as a block of concrete.)
         const sc = hi0 ? s0 : s1, h = hi0 ? h0 : h1, f = hi0 ? 1 : -1;
         const [, , , , tx, tz] = at(l, sc);
-        const q = [P(sc, -oo, 0), P(sc, oo, 0), P(sc, oo, h - DECK.depth), P(sc, -oo, h - DECK.depth)];
+        const q = [P(sc, OO(sc, -1), 0), P(sc, OO(sc, 1), 0), P(sc, OO(sc, 1), h - DECK.depth), P(sc, OO(sc, -1), h - DECK.depth)];
         const nrm = [tx * f, 0, tz * f];
         // Facing the open side (under the deck), which is towards the high end.
         if (f > 0) st.quad(V(q[1], oo, q[1][1]), V(q[0], -oo, q[0][1]), V(q[3], -oo, q[3][1]), V(q[2], oo, q[2][1]), nrm, SOFFIT);
         else st.quad(V(q[0], -oo, q[0][1]), V(q[1], oo, q[1][1]), V(q[2], oo, q[2][1]), V(q[3], -oo, q[3][1]), nrm, SOFFIT);
         quad3(col, q[0], q[1], q[2], q[3]);
       }
+    }
+    // The outside of a mitred joint: the parapet (and the deck under it) carried on past the end.
+    for (const end of [0, 1] as const) {
+      const mt = mitre[end];
+      if (!mt || !mt.outer || (end ? b < l.len - 0.05 : a > 0.05)) continue;
+      const side = mt.outer, k = end ? cuts.length - 2 : 0, mm = mt.ext;
+      if (kind[side][k] !== 'rail') continue;
+      const sc = end ? l.len : 0, h = hAt(l, sc) + Y.road, rt = h + railOf(h), dir = end ? 1 : -1;
+      const [x, z, nx, nz, tx, tz] = at(l, sc), ex2 = tx * dir * mm, ez2 = tz * dir * mm;
+      const Q = (o: number, y: number, far: boolean) => [x + nx * o + (far ? ex2 : 0), y, z + nz * o + (far ? ez2 : 0)];
+      const oi2 = side * (hw + 0.05), oo2 = side * (hw + 0.05 + DECK.parapet);
+      const i0 = Q(oi2, h, false), i1 = Q(oi2, h, true), i2 = Q(oi2, rt, true), i3 = Q(oi2, rt, false);
+      const o0 = Q(oo2, Math.max(0.2, h - DECK.depth), false), o1 = Q(oo2, Math.max(0.2, h - DECK.depth), true), o2 = Q(oo2, rt, true), o3 = Q(oo2, rt, false);
+      const n = [nx * side, 0, nz * side], inN = [-n[0], 0, -n[2]];
+      // both windings drawn (a few triangles; which one faces out depends on the side and the end)
+      const q4 = (a1: number[], b1: number[], c1: number[], d1: number[], nn: number[], solid: boolean) => {
+        st.quad(Y3(a1, 0), Y3(b1, mm), Y3(c1, mm), Y3(d1, 0), nn, CONCRETE);
+        st.quad(Y3(b1, mm), Y3(a1, 0), Y3(d1, 0), Y3(c1, mm), nn, CONCRETE);
+        if (solid) quad3(col, a1, b1, c1, d1);
+      };
+      q4(i1, i0, i3, i2, inN, true);
+      q4(o0, o1, o2, o3, n, true);
+      q4(i3, i2, o2, o3, UP, false);
+      // the deck under it, from the centre line
+      const c0 = Q(0, h, false), e0 = Q(oo2, h, false), e1 = Q(oo2, h, true);
+      tri3(col, c0, e0, e1); tri3(col, c0, e1, e0);
+      st.quad(V(c0, 0, 0), V(e0, 0, 1), V(e1, 1, 1), V(e1, 1, 1), UP, GORE);
+      st.quad(V(c0, 0, 0), V(e1, 1, 1), V(e0, 0, 1), V(e0, 0, 1), UP, GORE);
     }
     // Street lamps on the parapet every DECK_LAMP m (the ground's are kept off the decks), arm over
     // the road: [x, y, z, yaw] with the base on the parapet's top. Right of travel on a one-way deck,
@@ -494,10 +608,10 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, below: (x: number
     for (let sl = a + DECK_LAMP / 2; sl < b - 2; sl += DECK_LAMP) {
       const h = hAt(l, sl) + Y.road;
       if (h < 2.5) continue;
-      const [x, z, nx, nz] = at(l, sl), side = lampSide, o = side * (oi + DECK.parapet / 2);
+      const [x, z, nx, nz] = at(l, sl), side = lampSide, o = OI(sl, side) + side * DECK.parapet / 2;
       if (!r.o) lampSide = -lampSide;
       const lx = x + nx * o, lz = z + nz * o;
-      if (joins(x + nx * side * (oo + 0.3), z + nz * side * (oo + 0.3), h)) continue;
+      if (joins(x + nx * (OO(sl, side) + side * 0.3), z + nz * (OO(sl, side) + side * 0.3), h)) continue;
       // Only on a parapet that is there: where it was left out (its foot on another carriageway, a gore,
       // a bare low edge) the lamp stood in that road's lanes (「电灯柱会无故在马路生成」, 2026-10-02).
       const ck = cuts.findIndex((c, i) => i + 1 < cuts.length && sl >= c && sl < cuts[i + 1]);
@@ -565,6 +679,38 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
       h: h ? [...(a ? [h[0]] : []), ...h, ...(b ? [h[h.length - 1]] : [])] : undefined };
     carLines.push({ r, l: lineOf(ext) });
   }
+  /**
+   * The one carriageway a piece runs on into at its end (start 0, end 1), flush and in line, with its half width and
+   * how far its centre line lies left of ours there; null at a junction, a fork or a step.
+   */
+  const endKey = (x: number, z: number) => `${Math.round(x * 2)},${Math.round(z * 2)}`;
+  const endsAt = new Map<string, { r: RoadPiece; end: 0 | 1 }[]>();
+  for (const { r } of carLines) {
+    const n = r.p.length;
+    for (const end of [0, 1] as const) { const k = endKey(r.p[end ? n - 2 : 0], r.p[end ? n - 1 : 1]); (endsAt.get(k) ?? endsAt.set(k, []).get(k)!).push({ r, end }); }
+  }
+  const runsOnAll = (r: RoadPiece, end: 0 | 1) => {
+    const n = r.p.length, x = r.p[end ? n - 2 : 0], z = r.p[end ? n - 1 : 1];
+    const here = (endsAt.get(endKey(x, z)) ?? []).filter((e) => e.r !== r && !(e.r.p.length === r.p.length && e.r.p[0] === r.p[0] && e.r.p[1] === r.p[1]));
+    return here.map((e) => joint(r, end, x, z, e.r, e.end)).filter((j): j is NonNullable<typeof j> => !!j).map((j) => ({ ...j, alone: here.length === 1 }));
+  };
+  const runsOn = (r: RoadPiece, end: 0 | 1) => { const all = runsOnAll(r, end); return all.length === 1 && all[0].alone ? all[0] : null; };
+  const joint = (r: RoadPiece, end: 0 | 1, x: number, z: number, o: RoadPiece, oe: 0 | 1) => {
+    const n = r.p.length, on = o.p.length;
+    // directions: ours leaving the node outwards is -t at the start, +t at the end; the other's must carry on
+    const tx = end ? x - r.p[n - 4] : r.p[2] - x, tz = end ? z - r.p[n - 3] : r.p[3] - z;
+    const ox = oe ? o.p[on - 2] - o.p[on - 4] : o.p[2] - o.p[0], oz = oe ? o.p[on - 1] - o.p[on - 3] : o.p[3] - o.p[1];
+    const tl = Math.hypot(tx, tz) || 1, ol = Math.hypot(ox, oz) || 1;
+    // at our end the other starts and runs on the same way; at our start the other ends coming in the same way
+    if ((end === 1) === (oe === 1)) return null;
+    const dot = (tx * ox + tz * oz) / (tl * ol);
+    if (dot < 0.42) return null;
+    const hr = r.h ? r.h[end ? r.h.length - 1 : 0] : 0, ho = o.h ? o.h[oe ? o.h.length - 1 : 0] : 0;
+    if (Math.abs(hr - ho) > 0.1) return null;
+    // the side of ours (at() normal: (tz, -tx)) on the inside of the bend at the joint
+    const across = (ox * tz - oz * tx) / (tl * ol);
+    return { hw: o.w / 2, dot, inner: Math.abs(across) < 0.02 ? 0 : (end ? Math.sign(across) : -Math.sign(across)) };
+  };
   /** Where the roads' pieces end - junction mouths, mostly - and their heights: no pier stands in a junction under a deck, where cars cut across between the roads (大望桥 over 西大望路). */
   const ends: [number, number, number][] = [];
   for (const { l } of carLines) { const n = l.P.length - 1; ends.push([l.P[0][0], l.P[0][1], hAt(l, 0)], [l.P[n][0], l.P[n][1], hAt(l, l.len)]); }
@@ -595,7 +741,7 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
     // Up on an interchange: parapets and the structure instead of pavements.
     // (and down in an underpass: its trench walls instead, city/visual/Tunnels.ts)
     const up = [...lifted(l, 0.15), ...sunk(l, 0.15)].map(([a, b]) => [a - 3, b + 3] as [number, number]);
-    if (l.H) bridgeOf(bridge, col, l, r, below, (x, z, h) => ends.some(([ex, ez, eh]) => eh < h - 2.5 && Math.hypot(ex - x, ez - z) < 24), (x, z, h, step, margin = 0.05) => carLines.some((o) => {
+    if (l.H) bridgeOf(bridge, col, l, r, runsOnAll, below, (x, z, h) => ends.some(([ex, ez, eh]) => eh < h - 2.5 && Math.hypot(ex - x, ez - z) < 24), (x, z, h, step, margin = 0.05) => carLines.some((o) => {
       if (o.r === r) return false;
       const p = project(o.l, x, z);
       // Real distance, not the lateral offset: at a node where a dozen short pieces of 建国门桥 meet,
@@ -607,7 +753,7 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
       // One level (a merge), or with `step` a carriageway 0.3-1.5 m lower: a drop a car can take, where a
       // parapet would stand in its lanes. A carriageway lower still beside the edge is a real drop.
       const dh = h - hAt(o.l, p.s) - Y.road;
-      return step ? dh > 0.3 && dh < 1.5 : Math.abs(dh) < 0.5;
+      return step === 'above' ? dh < -0.2 && dh > -2.5 : step === 'any' ? Math.abs(dh) < 2.2 : step === 'off' ? Math.abs(dh) >= 0.15 && Math.abs(dh) < 5 : step === 'flush' ? Math.abs(dh) < 0.15 : step ? dh > 0.3 && dh < 1.5 : Math.abs(dh) < 0.5;
     }), deckLamps, occupied);
     // Pavements with curbs, and the median of one-way main roads.
     const sw = SIDEWALK[r.c] ?? 0;

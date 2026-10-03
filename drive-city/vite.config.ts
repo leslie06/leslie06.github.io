@@ -2,7 +2,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   base: './',
-  server: { port: 5195, open: false, host: '127.0.0.1' },
+  // FROZEN=1 (a second server for long probes, port 5198): no hot reload and no file watching, so
+  // editing src/ does not reload a page in the middle of a measurement.
+  server: process.env.FROZEN ? { port: 5198, open: false, host: '127.0.0.1', hmr: false, watch: null } : { port: 5195, open: false, host: '127.0.0.1' },
   preview: { port: 5196, host: '127.0.0.1' },
   build: {
     target: 'es2022',

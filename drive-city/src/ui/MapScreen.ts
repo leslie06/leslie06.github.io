@@ -8,6 +8,8 @@ import type { UiApi } from '.';
 import { fmtDist } from './Minimap';
 import { Labeller, type LabelStyle, type MapHit } from './MapLabels';
 import { C, F, css, el } from './theme';
+import { loadCity } from '../city/Data';
+import { decodeRail, type RailFileV2 } from '../city/visual/Railways';
 import { L } from './lang';
 
 css(`
@@ -88,6 +90,35 @@ export class MapScreen implements System {
   private savedRender: ((dt: number) => void) | null = null;
   private readonly noRender = () => {};
   private open_ = false;
+  /**
+   * The railways (grey with white dashes) and the subway lines in their colours with their stations
+   * (public/city/metro.json, scripts/city/metro.mjs), as world-space paths: fetched the first time the map
+   * opens, drawn over the roads (2026-10-03, 「地图像高德」).
+   */
+  private overlay: { rails: Path2D; metro: { colour: string; path: Path2D }[]; stations: [number, number, number][] } | null = null;
+  private overlayAsked = false;
+  private loadOverlay(): void {
+    if (this.overlayAsked) return;
+    this.overlayAsked = true;
+    type Metro = { lines: { colour: string; p: number[][]; st: [number, number, string][] }[] };
+    void Promise.all([loadCity<RailFileV2>('rail.json').catch(() => null), loadCity<Metro>('metro.json').catch(() => null)]).then(([rf, mt]) => {
+      const rails = new Path2D();
+      if (rf) for (const r of decodeRail(rf).r) {
+        if (r.k === 1) continue;   // the subway's own tracks are the metro lines
+        for (let i = 0; i < r.p.length; i += 2) if (i) rails.lineTo(r.p[i], r.p[i + 1]); else rails.moveTo(r.p[i], r.p[i + 1]);
+      }
+      const metro: { colour: string; path: Path2D }[] = [], count = new Map<string, [number, number, number]>();
+      for (const l of mt?.lines ?? []) {
+        const path = new Path2D();
+        for (const q of l.p) for (let i = 0; i < q.length; i += 2) if (i) path.lineTo(q[i], q[i + 1]); else path.moveTo(q[i], q[i + 1]);
+        metro.push({ colour: l.colour, path });
+        // a station on several lines is an interchange: drawn larger
+        for (const [x, z, n] of l.st) { const c = count.get(n); if (c) c[2]++; else count.set(n, [x, z, 1]); }
+      }
+      this.overlay = { rails, metro, stations: [...count.values()] };
+      this.drawn.version = -1;
+    });
+  }
   private w = 1; private h = 1; private dpr = 1;
   private cx = 0; private cz = 0; private s = S_OPEN; private ts = S_OPEN;
   /** The world point kept under a screen point while a zoom animates. */
@@ -126,7 +157,7 @@ export class MapScreen implements System {
     const legend = el('div', 'card legend', side);
     el('h2', '', legend).appendChild(L('map.legend'));
     const rows: [MarkKind | 'you' | 'route' | 'search', TKey][] = [['you', 'map.you'], ['waypoint', 'map.waypoint'], ['mission', 'map.mission'], ['pickup', 'map.pickup'], ['dropoff', 'map.dropoff'],
-      ['police', 'map.police'], ['car', 'map.car'], ['landmark', 'map.landmark'], ['jump', 'map.jump'], ['collect', 'map.collect'], ['parking', 'map.parking'], ['shortcut', 'map.shortcut'], ['route', 'map.route'], ['search', 'map.search']];
+      ['police', 'map.police'], ['car', 'map.car'], ['landmark', 'map.landmark'], ['landmarkDone', 'map.landmarkDone'], ['trial', 'map.trial'], ['jump', 'map.jump'], ['collect', 'map.collect'], ['parking', 'map.parking'], ['shortcut', 'map.shortcut'], ['route', 'map.route'], ['search', 'map.search']];
     for (const [kind, key] of rows) {
       const r = el('div', 'row', legend);
       this.legendIcon(el('canvas', '', r), kind);
@@ -165,6 +196,7 @@ export class MapScreen implements System {
     const nav = this.nav, ui = this.ui;
     if (this.open_ || !nav || !ui || ui.state !== 'playing') return;
     this.open_ = true;
+    this.loadOverlay();
     nav.setMapOpen(true);
     // 'paused' keeps ui's pointer-lock listener from opening the pause menu when the lock is released.
     ui.state = 'paused';
@@ -431,6 +463,26 @@ export class MapScreen implements System {
       for (const c of cells) { const p = c.roads[tier]; if (p) ctx.stroke(p); }
     }
 
+    const ov = this.overlay;
+    if (ov) {
+      if (s > 0.1) {
+        ctx.strokeStyle = 'rgba(138,143,148,0.9)'; ctx.lineWidth = 3 / s; ctx.stroke(ov.rails);
+        ctx.setLineDash([6 / s, 6 / s]); ctx.strokeStyle = 'rgba(236,236,232,0.85)'; ctx.lineWidth = 1.4 / s; ctx.stroke(ov.rails); ctx.setLineDash([]);
+      }
+      const mw = (s < 0.15 ? 2 : 3) / s;
+      ctx.strokeStyle = 'rgba(9,11,13,0.55)'; ctx.lineWidth = mw + 2 / s;
+      for (const m of ov.metro) ctx.stroke(m.path);
+      ctx.lineWidth = mw;
+      for (const m of ov.metro) { ctx.strokeStyle = m.colour; ctx.stroke(m.path); }
+      if (s > 0.3) {
+        for (const [x, z, n] of ov.stations) {
+          if (x < x0 - 50 || x > x1 + 50 || z < z0 - 50 || z > z1 + 50) continue;
+          ctx.beginPath(); ctx.arc(x, z, (n > 1 ? 4.5 : 3.2) / s, 0, Math.PI * 2);
+          ctx.fillStyle = '#f4f1e8'; ctx.fill(); ctx.strokeStyle = 'rgba(9,11,13,0.85)'; ctx.lineWidth = 1.4 / s; ctx.stroke();
+        }
+      }
+    }
+
     const sa = nav.searchArea;
     if (sa) {
       const red = Math.floor(time * 1.6) % 2 === 0;
@@ -457,7 +509,7 @@ export class MapScreen implements System {
     for (const lm of nav.landmarks) {
       const sx = X(lm.x), sy = Y(lm.z);
       if (sx < -60 || sx > W + 60 || sy < -20 || sy > H + 20) continue;
-      drawBlip(ctx, 'landmark', sx, sy, s < 0.3 ? 4 : 5, NaN, time);
+      drawBlip(ctx, lm.visited ? 'landmarkDone' : 'landmark', sx, sy, s < 0.3 ? 4 : 5, NaN, time);
       if (s < 0.2) continue;
       ctx.font = `700 ${s > 1 ? 14 : 13}px ${F.ui}`;
       const name = lm.name[lg], w = ctx.measureText(name).width;

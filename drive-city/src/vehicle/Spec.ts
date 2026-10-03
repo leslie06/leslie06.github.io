@@ -508,4 +508,38 @@ export const BIKE: VehicleSpec = {
   },
 };
 
-export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE };
+/**
+ * An electric scooter (电动车, 2026-10-03) with its rider: the delivery riders' and everyone's runabout - 16-inch
+ * wheels, a hub motor on one ratio, 45 km/h flat out (the legal 25 is not what anyone rides at), 130 kg laden.
+ */
+export const EBIKE: VehicleSpec = {
+  ...BIKE,
+  name: 'ebike',
+  mass: 130,
+  com: [0, 0.12, -0.05],
+  inertia: [46, 40, 14],
+  chassis: [
+    { half: [0.2, 0.28, 0.78], at: [0, 0.3, -0.02], round: 0.08 },
+    { half: [0.18, 0.3, 0.25], at: [0, 0.95, -0.12], round: 0.1 },
+  ],
+  wheels: [
+    { x: 0.16, z: 0.64, front: true },
+    { x: -0.16, z: 0.64, front: true },
+    { x: 0.16, z: -0.6, front: false },
+    { x: -0.16, z: -0.6, front: false },
+  ],
+  wheelRadius: 0.25,
+  wheelWidth: 0.07,
+  suspension: { ...BIKE.suspension, stiffnessFront: 7100, stiffnessRear: 7700, bump: 340, rebound: 500 },
+  engine: {
+    idle: 60, redline: 560,
+    torque: [[60, 120], [300, 112], [460, 80], [560, 30]],
+    gears: [1.0], reverse: 1.2, final: 1.0, efficiency: 0.95,
+    shiftUp: 9999, shiftDown: 0, shiftTime: 0.05,
+    frontShare: 0, engineBrake: 0.05,
+    limiterKmh: 45, reverseKmh: 4, launchRpm: 60,
+  },
+  brakes: { force: 1300, frontBias: 0.6 },
+};
+
+export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE, ebike: EBIKE };

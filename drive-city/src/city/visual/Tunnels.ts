@@ -25,6 +25,21 @@ export interface TunnelsFile {
 const CELL = 256, NEAR = 700, FAR = 900;
 /** Wall thickness, the parapet over the ground at full depth, the roof slab under the ground. */
 const WALL_T = 0.45, PARAPET = 1.05, SLAB = 0.9;
+/**
+ * The offset direction at point i of a centre line [x, z, ...]: the adjoining segments' left normals averaged and
+ * stretched by 1/cos of half the bend (a mitre), so offset lines meet at the bisector. At an end, the segment beyond
+ * is the joining way's (`beyond`), when one runs on from there.
+ */
+function mitreNormal(p: number[], i: number, beyond: number[] | null): number[] {
+  const m = p.length / 2, seg = (k: number) => { const L = Math.hypot(p[k * 2 + 2] - p[k * 2], p[k * 2 + 3] - p[k * 2 + 1]) || 1; return [-(p[k * 2 + 3] - p[k * 2 + 1]) / L, (p[k * 2 + 2] - p[k * 2]) / L]; };
+  const a = i > 0 ? seg(i - 1) : beyond ?? seg(0), b = i < m - 1 ? seg(i) : beyond ?? seg(m - 2);
+  let nx = a[0] + b[0], nz = a[1] + b[1];
+  const L = Math.hypot(nx, nz);
+  if (L < 1e-6) return b;
+  nx /= L; nz /= L;
+  const k = 1 / Math.max(0.7, nx * b[0] + nz * b[1]);
+  return [nx * k, nz * k];
+}
 const C = { wall: '#b4b0a7', coping: '#d3cfc7', roof: '#8e8c87', inner: '#c9c6bf', lamp: '#fff1d6' };
 
 export interface TunnelApi extends System {
@@ -53,14 +68,34 @@ export function placeTunnels(engine: Engine, data: TunnelsFile): TunnelApi {
       (cells.get(k) ?? cells.set(k, []).get(k)!).push({ t, i: i / 2 });
     }
   });
+  // Where one tunnel way runs on into another: the next way's first segment normal (or the last one's before ours),
+  // in our direction of travel, so the walls are mitred across the joint too.
+  const endKey = (x: number, z: number) => `${Math.round(x * 2)},${Math.round(z * 2)}`;
+  const ends = new Map<string, { t: number; end: 0 | 1 }[]>();
+  data.t.forEach((r, t) => { const m = r.p.length / 2; for (const end of [0, 1] as const) { const k = endKey(r.p[end ? m * 2 - 2 : 0], r.p[end ? m * 2 - 1 : 1]); (ends.get(k) ?? ends.set(k, []).get(k)!).push({ t, end }); } });
+  const beyondOf = (t: number, end: 0 | 1): number[] | null => {
+    const r = data.t[t], m = r.p.length / 2, x = r.p[end ? m * 2 - 2 : 0], z = r.p[end ? m * 2 - 1 : 1];
+    const others = (ends.get(endKey(x, z)) ?? []).filter((e) => e.t !== t && e.end !== end);
+    if (others.length !== 1) return null;
+    const o = data.t[others[0].t].p, om = o.length / 2;
+    // the other's segment at the joint, as a direction continuing ours
+    const [ax, az, bx, bz] = end ? [o[0], o[1], o[2], o[3]] : [o[om * 2 - 4], o[om * 2 - 3], o[om * 2 - 2], o[om * 2 - 1]];
+    const L = Math.hypot(bx - ax, bz - az) || 1;
+    return [-(bz - az) / L, (bx - ax) / L];
+  };
   type Hull = number[];
   const buildCell = (k: string) => {
     const m = new FlatMesh(), lamps = new FlatMesh(), hulls: Hull[] = [];
     for (const { t, i } of cells.get(k)!) {
       const r = data.t[t], ax = r.p[i * 2], az = r.p[i * 2 + 1], bx = r.p[i * 2 + 2], bz = r.p[i * 2 + 3];
       const ha = r.h[i], hb = r.h[i + 1], hl = (r.l[i] + r.l[i + 1]) / 2, hr = (r.w[i] + r.w[i + 1]) / 2, covered = (r.c[i] & 1) === 1;
-      const L = Math.hypot(bx - ax, bz - az) || 1, nx = -(bz - az) / L, nz = (bx - ax) / L;
-      const P = (x: number, z: number, o: number, y: number) => [x + nx * o, y, z + nz * o];
+      // Offsets along each end's mitred normal (the two segments' normals averaged, stretched by 1/cos of half the
+      // bend), not the segment's own: with that, on the inside of every bend the walls of consecutive segments
+      // overlapped into the lane, a car's corner met them at a ramp's curve (the census, 2026-10-03), and on the
+      // outside they left a notch open.
+      const npt = r.p.length / 2;
+      const na = mitreNormal(r.p, i, i === 0 ? beyondOf(t, 0) : null), nb = mitreNormal(r.p, i + 1, i + 1 === npt - 1 ? beyondOf(t, 1) : null);
+      const P = (x: number, z: number, o: number, y: number) => { const n = x === ax && z === az ? na : nb; return [x + n[0] * o, y, z + n[1] * o]; };
       const prism = (o0: number, o1: number, ya0: number, ya1: number, yb0: number, yb1: number) =>
         hulls.push([...P(ax, az, o0, ya0), ...P(ax, az, o1, ya0), ...P(ax, az, o0, ya1), ...P(ax, az, o1, ya1), ...P(bx, bz, o0, yb0), ...P(bx, bz, o1, yb0), ...P(bx, bz, o0, yb1), ...P(bx, bz, o1, yb1)]);
       // the floor under the road surface (the tile draws the road; this is what the wheels meet)
@@ -68,22 +103,26 @@ export function placeTunnels(engine: Engine, data: TunnelsFile): TunnelApi {
       // the walls: up to a parapet over the ground in a trench (growing with the depth), up to the roof in the tunnel
       // (a tunnel's walls stop just under the ground: level with it they would z-fight its plane)
       const top = (h: number) => (covered ? -0.05 : Math.min(PARAPET, 0.25 - h * 0.4));
+      // No wall where the trench is still under 0.4 m deep: its top stood 0.25 m proud of the ground there, a kerb
+      // across anything driving in from the side (a hutong shortcut's mouth, 2026-10-03), and a car can take the step.
+      const shallow = !covered && Math.min(ha, hb) > -0.4;
       for (const s of [-1, 1]) {
+        if (shallow) break;
         if (!(r.c[i] & (s > 0 ? 2 : 4))) continue;   // a trench beside on that side: one trench, no wall between
         const o0 = s > 0 ? hl : -hr - WALL_T, o1 = s > 0 ? hl + WALL_T : -hr;
-        m.bar(ax, az, bx, bz, o0, o1, ha - 0.2, top(ha), hb - 0.2, top(hb), covered ? C.inner : C.wall);
-        if (!covered) m.bar(ax, az, bx, bz, o0 - 0.04, o1 + 0.04, top(ha), top(ha) + 0.08, top(hb), top(hb) + 0.08, C.coping);
+        m.bar(ax, az, bx, bz, o0, o1, ha - 0.2, top(ha), hb - 0.2, top(hb), covered ? C.inner : C.wall, na, nb);
+        if (!covered) m.bar(ax, az, bx, bz, o0 - 0.04, o1 + 0.04, top(ha), top(ha) + 0.08, top(hb), top(hb) + 0.08, C.coping, na, nb);
         prism(o0, o1, ha - 0.2, top(ha) + (covered ? 0 : 0.08), hb - 0.2, top(hb) + (covered ? 0 : 0.08));
       }
       if (covered) {
-        m.bar(ax, az, bx, bz, -hr - WALL_T, hl + WALL_T, -SLAB, -0.04, -SLAB, -0.04, C.roof);
+        m.bar(ax, az, bx, bz, -hr - WALL_T, hl + WALL_T, -SLAB, -0.04, -SLAB, -0.04, C.roof, na, nb);
         prism(-hr - WALL_T, hl + WALL_T, -SLAB, 0, -SLAB, 0);
         // the lamp strip, unlit so the tunnel reads lit whatever the sun does
         lamps.bar(ax, az, bx, bz, -0.18, 0.18, -SLAB - 0.06, -SLAB, -SLAB - 0.06, -SLAB, C.lamp);
         for (const s of [-1, 1]) {
           if (!(r.c[i] & (s > 0 ? 2 : 4))) continue;
           const o = s > 0 ? hl - 0.05 : -hr + 0.05;
-          lamps.bar(ax, az, bx, bz, o - 0.06, o + 0.06, Math.min(ha, hb) + 3.2, Math.min(ha, hb) + 3.28, Math.min(ha, hb) + 3.2, Math.min(ha, hb) + 3.28, C.lamp);
+          lamps.bar(ax, az, bx, bz, o - 0.06, o + 0.06, Math.min(ha, hb) + 3.2, Math.min(ha, hb) + 3.28, Math.min(ha, hb) + 3.2, Math.min(ha, hb) + 3.28, C.lamp, na, nb);
         }
       }
     }

@@ -77,8 +77,14 @@ export class LaneGraph {
     }
   }
 
+  /**
+   * Metres left of the centre line of a lane's middle. A street with one lane each way keeps its traffic within
+   * 1.4 m of the line (oncoming cars still pass a metre apart): at half its width, 1.75-2 m out, the kerb lane of
+   * a narrow street ran against the house fronts the widths overstate (the drivability census, 2026-10-03).
+   */
   laneOffset(l: Link, lane: number): number {
-    return l.oneway ? l.hw - (lane + 0.5) * l.laneW : -(lane + 0.5) * l.laneW;
+    if (l.oneway) return l.hw - (lane + 0.5) * l.laneW;
+    return l.lanes === 1 ? -Math.min(0.5 * l.laneW, 1.4) : -(lane + 0.5) * l.laneW;
   }
 
   /** Position and direction at arc length `s` along link `l`, `off` metres left of the centre line. */

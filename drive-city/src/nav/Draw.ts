@@ -10,7 +10,7 @@ export type MarkKind = BlipKind | 'waypoint' | 'mission';
 export const INK = 'rgba(9,11,13,0.9)';
 export const POLICE_RED = '#ff3b30', POLICE_BLUE = '#2f7bff';
 export const BLIP_COLOR: Record<MarkKind, string> = {
-  police: POLICE_BLUE, target: C.yellow, pickup: '#3aa6ff', dropoff: '#3ccf72', car: '#d8dbde', landmark: '#d4b264', waypoint: C.yellow, mission: C.yellow,
+  police: POLICE_BLUE, target: C.yellow, pickup: '#3aa6ff', dropoff: '#3ccf72', car: '#d8dbde', landmark: '#d4b264', landmarkDone: '#8a8270', trial: '#5fd1ff', waypoint: C.yellow, mission: C.yellow,
   jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a',
 };
 
@@ -56,6 +56,26 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       ctx.beginPath(); ctx.rect(-s / 2, -s / 2, s, s);
       ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1.5, r * 0.24); ctx.strokeStyle = INK; ctx.stroke();
       ctx.fillStyle = INK; ctx.fillRect(-s * 0.14, -s * 0.14, s * 0.28, s * 0.28);
+      break;
+    }
+    case 'trial': {
+      // A stopwatch: a disc, the crown button, one hand.
+      disc(ctx, x, y + r * 0.1, r * 0.85, col);
+      ctx.fillStyle = INK; ctx.fillRect(x - r * 0.18, y - r * 1.12, r * 0.36, r * 0.3);
+      ctx.beginPath(); ctx.moveTo(x, y + r * 0.1); ctx.lineTo(x + r * 0.35, y - r * 0.32);
+      ctx.lineWidth = Math.max(1.3, r * 0.2); ctx.strokeStyle = INK; ctx.stroke();
+      break;
+    }
+    case 'landmarkDone': {
+      // Checked in: the same diamond, muted, with a white tick.
+      ctx.translate(x, y);
+      ctx.save(); ctx.rotate(Math.PI / 4);
+      const s = r * 1.2;
+      ctx.beginPath(); ctx.rect(-s / 2, -s / 2, s, s);
+      ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1.2, r * 0.2); ctx.strokeStyle = INK; ctx.stroke();
+      ctx.restore();
+      ctx.beginPath(); ctx.moveTo(-r * 0.36, 0); ctx.lineTo(-r * 0.08, r * 0.28); ctx.lineTo(r * 0.4, -r * 0.3);
+      ctx.lineWidth = Math.max(1.4, r * 0.24); ctx.strokeStyle = '#fff'; ctx.stroke();
       break;
     }
     case 'pickup': {

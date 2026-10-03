@@ -6,7 +6,7 @@ import type { CarLook, SharedBike, PeopleApi, PlayerApi, RenderApi, TrafficCars,
 import type { Routes } from '../city/Routes';
 import { Vehicle } from '../vehicle/Vehicle';
 import { SPEC_OF } from '../vehicle/Spec';
-import { bodyOfSpec, specLength, type BodyType } from '../vehicle/Bodies';
+import { bodyOfSpec, bodySettled, readyBodies, specLength, type BodySource, type BodyType } from '../vehicle/Bodies';
 import { defaultLivery } from '../vehicle/CarModel';
 import { ControlFilter } from '../vehicle/ControlFilter';
 import { LaneGraph } from './LaneGraph';
@@ -14,6 +14,9 @@ import { Signals, SignalHeads } from './Signals';
 import { CarKit } from './CarKit';
 import { readyKitLod } from '../vehicle/KitLod';
 import { AiDriver, lineStats, type Leader } from './AiDriver';
+import { Gait, type Motion } from '../character/Animator';
+import { randomLook, SKELETON, J, type Look } from '../character/Body';
+import { SEAT } from '../vehicle/TwoWheelers';
 
 interface Npc {
   car: Vehicle;
@@ -32,6 +35,8 @@ interface Npc {
   hornT: number;
   /** The chase job's getaway car: not despawned for distance, released by the job. */
   runner: boolean;
+  /** The person on an electric scooter (drawn in the crowd), or null. */
+  rider: { gait: Gait; look: Look } | null;
 }
 
 export interface TrafficApi extends TrafficCars {
@@ -45,6 +50,8 @@ export interface TrafficApi extends TrafficCars {
   readonly lineStats: { crossed: number; onRed: number; yields: number };
   /** A getaway car for the chase job: spawned on the road 90-200 m from (x, z), fast and blind to red lights, until released. */
   spawnRunner(x: number, z: number, hx: number, hz: number): { car: Vehicle; release(): void } | null;
+  /** Riders on electric scooters at most (they take places in the player's crowd before the pedestrians). */
+  readonly riderCap: number;
 }
 
 // Beijing traffic: white, black and silver dominate, then grey, dark blue, red, champagne.
@@ -58,6 +65,12 @@ const BUS_LOWER = ['#c3232b', '#c3232b', '#c3232b', '#2f7d4f'];
  * buses (main roads only) and light box trucks. Shares of the car pool; the rest are saloons.
  */
 const MIX: [BodyType, number][] = [['suv', 0.16], ['hatch', 0.14], ['mpv', 0.08], ['bus', 0.09], ['truck', 0.07]];
+/** Electric scooters: mostly white, black, red and blue, a few silver and pastel. */
+const EBIKE_BODY = ['#f0f0ec', '#f0f0ec', '#18191a', '#18191a', '#b3242a', '#2a5bb0', '#b9bcbf', '#9ec9d6', '#e3b8c4'];
+/** The delivery companies' colours (美团 yellow, 饿了么 blue), on the box, the jacket and the helmet. */
+const DELIVERY = ['#f6c300', '#f6c300', '#f6c300', '#1b8ff0', '#1b8ff0'];
+/** Riders keep off the expressways and their ramps. */
+const NO_RIDERS = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link']);
 /** Buses only spawn on these road classes. */
 const BUS_ROADS = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'busway']);
 
@@ -83,6 +96,15 @@ export async function install(engine: Engine): Promise<void> {
    */
   const BIKES = tier === 'low' ? 5 : 8;
   const BIKE_ROADS = new Set(['residential', 'tertiary', 'secondary', 'unclassified', 'living_street']);
+  /**
+   * Electric scooters ridden along the kerb (2026-10-03): Beijing's streets are full of them, delivery riders
+   * (a yellow or blue box, jacket and helmet) and everyone else. Same physics as the player's scooter.
+   */
+  const RIDERS = max === 0 ? 0 : tier === 'low' ? 4 : tier === 'medium' ? 7 : 10;
+  const crowdOf = () => engine.get<PlayerApi>('player')?.crowd;
+  const riderMotion: Motion = { speed: 0, action: 'ride', t: 0, ride: 'ebike', lean: 0 };
+  const seatAt = new THREE.Vector3(), seatFwd = new THREE.Vector3();
+  const PELVIS_Y = SKELETON[J.pelvis].offset[1];
   // How many of each body the pool holds, and one instanced kit per body (each its own livery).
   const counts = new Map<BodyType, number>();
   let rest = max;
@@ -91,7 +113,7 @@ export async function install(engine: Engine): Promise<void> {
   const kits = new Map<BodyType, CarKit>();
   const kitFor = (b: BodyType): CarKit => {
     let k = kits.get(b);
-    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + MAX_PARKED + 2, defaultLivery(b), b); kits.set(b, k); }
+    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2, defaultLivery(b), b); kits.set(b, k); }
     return k;
   };
   const rng = new Rng(4242);
@@ -119,17 +141,34 @@ export async function install(engine: Engine): Promise<void> {
     return hit && Math.abs(hit.point[1] - h) < 0.6 ? hit.point[1] : NaN;
   };
   const makeNpc = (car: Vehicle, body: BodyType): Npc => ({ car, driver: null, filter: new ControlFilter(), active: false, bike: false, hornT: 0, runner: false, prevPos: new THREE.Vector3(), curPos: new THREE.Vector3(), prevQuat: new THREE.Quaternion(), curQuat: new THREE.Quaternion(),
-    upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, body, flipped: 0, parked: false });
-  for (const [b, n] of counts) {
-    if (n <= 0) continue;
+    upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, body, flipped: 0, parked: false, rider: null });
+  // Each body's cars once its model is in (readyBodies in main.ts loads the saloon first, the rest after the
+  // spawn's tiles): until then the pool's places go to saloons, which give theirs back as the others arrive.
+  const fill = (b: BodyType, n: number) => {
     kitFor(b);
     for (let i = 0; i < n; i++) {
       const npc = makeNpc(newCar(b), b);
       npc.car.body.setTranslation({ x: 0, y: -300 - pool.length * 8, z: 0 }, false);
       pool.push(npc);
     }
+  };
+  let sedanExtra = 0;
+  for (const [b, n] of counts) {
+    if (n <= 0) continue;
+    if (b === 'sedan' || bodySettled(b as BodySource)) fill(b, n);
+    else {
+      sedanExtra += n;
+      void readyBodies([b as BodySource]).then(() => {
+        fill(b, n);
+        // as many idle stand-in saloons leave the pool (their bodies stay, as spares)
+        let k = n;
+        for (let i = pool.length - 1; i >= 0 && k > 0; i--) { const p = pool[i]; if (p.body === 'sedan' && !p.active && !p.parked && sedanExtra > 0) { recycle(p); pool.splice(i, 1); sedanExtra--; k--; } }
+      });
+    }
   }
-  const driving = () => { let k = 0; for (const n of pool) if (n.active && !n.parked) k++; return k; };
+  if (sedanExtra) fill('sedan', sedanExtra);
+  const driving = () => { let k = 0; for (const n of pool) if (n.active && !n.parked && !n.rider) k++; return k; };
+  const riding = () => { let k = 0; for (const n of pool) if (n.active && n.rider) k++; return k; };
   const parkedInput = { forward: 0, back: 0, steer: 0, analog: true, handbrake: true };
   const player = () => engine.get<VehicleApi>('vehicle');
   const tmp = { x: 0, z: 0, dx: 0, dz: 0 };
@@ -150,7 +189,7 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   const spawn = () => {
-    let n = pool.find((p) => !p.active && !p.parked);
+    let n = pool.find((p) => !p.active && !p.parked && p.body !== 'ebike');
     if (!n) { if (driving() >= max) return; n = makeNpc(newCar('sedan'), 'sedan'); pool.push(n); }
     const len = specLength(n.car.spec);
     const cam = engine.camera.position;
@@ -223,17 +262,78 @@ export async function install(engine: Engine): Promise<void> {
     }
   };
 
+  /** A delivery rider's look: the company's jacket and helmet (a cap in its colour), dark trousers, mostly men. */
+  const riderLook = (delivery: string | null): Look => {
+    const l = randomLook(rnd);
+    if (!delivery) { if (l.top === 'tee' && rnd() < 0.5) l.top = 'jacket'; return l; }
+    const c = new THREE.Color(delivery);
+    if (rnd() < 0.85) l.fem = 0;
+    l.top = 'jacket'; l.shirt = c; l.inner = c.clone(); l.sleeve = 0.53; l.cap = c.clone(); l.print = false;
+    l.bottom = 'trousers'; l.hem = 0.8; l.pants = new THREE.Color(rnd() < 0.5 ? '#1d1f24' : '#2c3036');
+    l.hairStyle = rnd() < 0.5 ? 'short' : 'buzz'; l.mask = rnd() < 0.25 ? new THREE.Color('#e9eef2') : null;
+    return l;
+  };
+
+  /** Someone on an electric scooter, along the right-hand kerb of a street 70-240 m away, out of sight. */
+  const spawnRider = () => {
+    const cam = engine.camera.position;
+    engine.camera.getWorldDirection(camDir);
+    const ids = g.near(cam.x, cam.z, 240);
+    if (!ids.length) return;
+    const pv = player();
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const id = ids[Math.floor(rnd() * ids.length)];
+      const l = g.links[id];
+      if (l.len < 24 || NO_RIDERS.has(l.cls) || g.endsAfter(id)) continue;
+      const s = 6 + rnd() * (l.len - 12);
+      g.at(l, s, -l.hw + 0.8, tmp);
+      const d = Math.hypot(tmp.x - cam.x, tmp.z - cam.z);
+      if (d < 70 || d > 240) continue;
+      if (d < 190 && ((tmp.x - cam.x) * camDir.x + (tmp.z - cam.z) * camDir.z) / d > 0.3) continue;
+      if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 10)) continue;
+      if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < 25) continue;
+      const lift = deckAt(l, s, tmp.x, tmp.z);
+      if (Number.isNaN(lift)) continue;
+      const body: BodyType = 'ebike';
+      let n = pool.find((p) => !p.active && !p.parked && p.body === body);   // a free slot keeps its own scooter (see spawnBike)
+      if (!n) { n = makeNpc(newCar(body), body); pool.push(n); }
+      kitFor(body);
+      n.car.body.setEnabled(true);
+      n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
+      const delivery = rnd() < 0.55 ? DELIVERY[Math.floor(rnd() * DELIVERY.length)] : null;
+      const vmax = delivery ? 8 + rnd() * 3 : 5.5 + rnd() * 3;
+      n.car.setMoving(Math.min(vmax, l.speed) * 0.8);
+      n.driver = new AiDriver(g, sig, id, s, 0, rnd);
+      n.driver.vmax = vmax; n.driver.kerb = 0.75 + rnd() * 0.4;
+      n.filter.reset();
+      n.taxi = false; n.upper.set(EBIKE_BODY[Math.floor(rnd() * EBIKE_BODY.length)]);
+      n.lower.set(delivery ?? (rnd() < 0.6 ? '#2a2b2d' : '#d9d9d4'));
+      n.rider = { gait: n.rider?.gait ?? new Gait(), look: riderLook(delivery) };
+      n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
+      n.active = true; n.parked = false; n.bike = false; n.runner = false; n.flipped = 0;
+      return;
+    }
+  };
+
+  /** A rider knocked off (a crash, a fall): they get up and run for the pavement, the scooter lies where it fell. */
+  const unseat = (n: Npc) => {
+    if (!n.rider) return;
+    n.rider = null; n.driver = null; n.parked = true;
+    const c = n.car;
+    engine.get<PeopleApi>('people')?.spawnFleeing(c.pos.x + c.left.x * 1.2, c.pos.z + c.left.z * 1.2);
+  };
+
   // The player hit a car: its driver leans on the horn (the player's impact reading is the reliable
   // one; the heavier car being hit reads a much smaller change of velocity).
   engine.events.on('vehicle:impact', ({ point }) => {
     for (const n of pool) {
-      if (!n.active || n.parked || n.hornT > 0) continue;
+      if (!n.active || n.parked || n.hornT > 0 || n.rider) continue;
       if (Math.hypot(n.car.pos.x - point[0], n.car.pos.z - point[2]) < 5) { n.hornT = 3 + rnd() * 3; engine.events.emit('traffic:horn', { x: n.car.pos.x, z: n.car.pos.z }); break; }
     }
   });
 
   const despawn = (n: Npc) => {
-    n.active = false; n.driver = null; n.parked = false; n.bike = false; n.runner = false;
+    n.active = false; n.driver = null; n.parked = false; n.bike = false; n.runner = false; n.rider = null;
     n.car.body.setTranslation({ x: 0, y: -300, z: 0 }, false);
     n.car.body.setEnabled(false);
   };
@@ -243,32 +343,47 @@ export async function install(engine: Engine): Promise<void> {
     let best: Leader | null = null, bestAlong = Infinity;
     // Centre-to-centre distance corrected for both bodies: AiDriver takes one car length (4.6 m)
     // off itself, so a 12 m bus in front is not followed as if it were a saloon.
-    const selfLen = specLength(c.spec);
-    const consider = (px: number, py: number, pz: number, vx: number, vz: number, len = 4.6) => {
+    const selfLen = specLength(c.spec), selfHw = c.spec.single ? 0.4 : 0.95;
+    const consider = (px: number, py: number, pz: number, vx: number, vz: number, len = 4.6, hw = 0.95) => {
       const rx = px - c.pos.x, rz = pz - c.pos.z;
       const along = rx * c.fwd.x + rz * c.fwd.z;
       if (along < 1 || along > 60) return;
       const lat = Math.abs(rx * c.left.x + rz * c.left.z);
-      if (lat > 1.9 + along * 0.03) return;
+      if (lat > selfHw + hw + along * 0.03) return;
       // Not a car on the deck above or the road below (an interchange stacks them in plan).
       if (Math.abs(py - c.pos.y) > 3) return;
       if (along < bestAlong) { bestAlong = along; best = { gap: Math.max(0.5, along - (len + selfLen) / 2 + 4.6), speed: Math.max(0, vx * c.fwd.x + vz * c.fwd.z) }; }
     };
-    for (const o of pool) if (o !== n && o.active) consider(o.car.pos.x, o.car.pos.y, o.car.pos.z, o.car.vel.x, o.car.vel.z, specLength(o.car.spec));
+    for (const o of pool) if (o !== n && o.active) consider(o.car.pos.x, o.car.pos.y, o.car.pos.z, o.car.vel.x, o.car.vel.z, specLength(o.car.spec), o.car.spec.single ? 0.4 : 0.95);
     const pv = player();
     if (pv) consider(pv.car.pos.x, pv.car.pos.y, pv.car.pos.z, pv.car.vel.x, pv.car.vel.z, specLength(pv.car.spec));
     // People in the road: drivers brake for the player on foot and for crossing pedestrians.
     const foot = engine.get<PlayerApi>('player')?.foot;
-    if (foot) consider(foot.pos.x, foot.pos.y, foot.pos.z, 0, 0);
+    if (foot) consider(foot.pos.x, foot.pos.y, foot.pos.z, 0, 0, 0.6, 0.4);
     const people = engine.get<PeopleApi>('people');
-    if (people) for (const q of people.inRoad()) consider(q.x, 0.5, q.z, 0, 0);
+    if (people) for (const q of people.inRoad()) consider(q.x, 0.5, q.z, 0, 0, 0.6, 0.4);
     for (const c of engine.get<WantedApi>('wanted')?.policeCars() ?? []) consider(c.pos.x, c.pos.y, c.pos.z, c.vel.x, c.vel.z);
     return best;
   };
 
+  /** The rider in the saddle, as the player sits on theirs (player/index.ts): the pelvis on SEAT, upright. */
+  const drawRider = (n: Npc, dt: number) => {
+    const crowd = crowdOf(), r = n.rider!;
+    if (!crowd) return;
+    const d = Math.hypot(renderPos.x - engine.camera.position.x, renderPos.z - engine.camera.position.z);
+    if (d > 160) return;
+    const seat = SEAT.ebike;
+    seatAt.set(seat[0], seat[1], seat[2]).applyQuaternion(renderQuat).add(renderPos);
+    seatFwd.set(0, 0, 1).applyQuaternion(renderQuat);
+    riderMotion.speed = n.car.forwardSpeed;
+    r.gait.update(riderMotion, dt, 0.3);
+    seatAt.y -= PELVIS_Y * r.gait.scale;
+    crowd.add(seatAt, Math.atan2(seatFwd.x, seatFwd.z), r.gait, r.look);
+  };
+
   const api: TrafficApi = {
     name: 'traffic',
-    graph: g, signals: sig, lineStats,
+    graph: g, signals: sig, lineStats, riderCap: RIDERS,
     get time() { return t; },
     cars: () => pool.filter((n) => n.active).map((n) => n.car),
     nearestCar(x, z, r) {
@@ -311,7 +426,7 @@ export async function install(engine: Engine): Promise<void> {
         if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 8)) { bs += 12; continue; }
         const lift = deckAt(l, s, tmp.x, tmp.z);
         if (Number.isNaN(lift)) { bs += 12; continue; }
-        const body: BodyType = rnd() < 0.5 ? 'hatch' : 'sedan';
+        const body: BodyType = rnd() < 0.5 && bodySettled('hatch') ? 'hatch' : 'sedan';
         let n = pool.find((p) => !p.active && !p.parked && p.body === body);
         if (!n) { n = makeNpc(newCar(body), body); pool.push(n); }   // a free slot keeps its own car (see spawnBike)
         kitFor(body);
@@ -367,7 +482,7 @@ export async function install(engine: Engine): Promise<void> {
           }
         }
       }
-      if (spawnT <= 0) { spawnT = 0.2; if (driving() < max) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); }
+      if (spawnT <= 0) { spawnT = 0.2; if (driving() < max) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < RIDERS) spawnRider(); }
       // Buses look for a shelter ahead on their side once a second (at the kerb of the link they are on).
       busT -= dt;
       if (busT <= 0) {
@@ -399,6 +514,8 @@ export async function install(engine: Engine): Promise<void> {
         n.curPos.copy(n.car.pos); n.curQuat.copy(n.car.quat);
         const d = Math.hypot(n.car.pos.x - cam.x, n.car.pos.z - cam.z);
         if (n.parked) { if (d > 420) despawn(n); continue; }
+        // A rider comes off in anything harder than a nudge, or when the scooter goes over.
+        if (n.rider && (n.car.impact > 4 || n.car.up.y < 0.6)) { unseat(n); continue; }
         if (n.car.impact > 3) n.driver!.shake();
         // Drivers lean on the horn when the player hits them or sits in their way.
         n.hornT -= dt;
@@ -427,6 +544,7 @@ export async function install(engine: Engine): Promise<void> {
         if (k >= kit.cap) continue;
         kit.set(k, renderPos, renderQuat, n.car, n.upper, n.lower, n.taxi);
         written.set(n.body, k + 1);
+        if (n.rider) drawRider(n, _dt);
       }
       const night = (engine.get<RenderApi>('render')?.night ?? 0) > 0.35;
       for (const [b, kit] of kits) { kit.commit(written.get(b) ?? 0); kit.setHeadlights(night); }

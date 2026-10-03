@@ -10,7 +10,7 @@ import * as city from './city';
 import { registerCityPoses } from './city/Poses';
 import { registerTrafficPoses } from './traffic/Poses';
 import * as vehicle from './vehicle';
-import { readyBodies } from './vehicle/Bodies';
+import { readyBodies, type BodySource } from './vehicle/Bodies';
 import * as player from './player';
 import * as damage from './damage';
 import * as traffic from './traffic';
@@ -29,6 +29,8 @@ import * as stunts from './stunts';
 import * as garage from './garage';
 import * as intro from './intro';
 import * as collect from './collect';
+import * as checkin from './checkin';
+import * as trials from './trials';
 import * as events from './events';
 import * as story from './story';
 import * as leaderboard from './online/Leaderboard';
@@ -55,20 +57,28 @@ async function boot() {
   // The Blender car bodies are their own chunks (~1.3 MB gzipped): fetched alongside the physics, render and city
   // setup, needed from the vehicle on (and by the yard's parked coach). Awaiting them before the city serialised
   // the two downloads: +12 s to playable at 500 KB/s.
-  const bodies = readyBodies();
+  // The saloon and the wheels before the world, and the body of the player's saved car (the garage's or
+  // the one parked at home); the other bodies after the spawn's tiles (below).
+  const saved: BodySource[] = [];
+  for (const [key, pick] of [['drivecity.garage.v1', (j: { body?: string }) => j.body], ['drivecity.home.v1', (j: { car?: { body?: string } }) => j.car?.body]] as const) {
+    try { const b = (pick as (j: unknown) => string | undefined)(JSON.parse(localStorage.getItem(key) ?? 'null') ?? {}); if (b && b !== 'sedan' && ['hatch', 'suv', 'mpv', 'bus', 'truck'].includes(b)) saved.push(b as BodySource); } catch { /* no save */ }
+  }
+  const bodies = readyBodies(shotMode ? undefined : ['sedan', 'wheels', ...saved]);
   await engine.physics.init();
   await render.install(engine);
   await weather.install(engine);
   // Central Beijing from OSM by default; ?world=yard is the M0 driving-school yard (handling sandbox).
   const worldName = new URLSearchParams(location.search).get('world') ?? 'city';
-  if (worldName === 'city') await city.install(engine); else { await bodies; await world.install(engine); }
+  if (worldName === 'city') await city.install(engine); else { await readyBodies(); await world.install(engine); }
   await bodies;
+  // the rest of the bodies now the spawn's tiles are in (traffic adds their cars as they arrive)
+  void readyBodies();
   await vehicle.install(engine);
   await player.install(engine);
   await damage.install(engine);
   if (worldName === 'city') { await traffic.install(engine); await people.install(engine); }
   if (worldName === 'city') await nav.install(engine);
-  if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await intro.install(engine); await events.install(engine); leaderboard.install(engine); await story.install(engine); }
+  if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await checkin.install(engine); await trials.install(engine); await intro.install(engine); await events.install(engine); leaderboard.install(engine); await story.install(engine); }
   await fx.install(engine);
   await audio.install(engine);
   await ui.install(engine, container);

@@ -29,6 +29,7 @@ export async function install(engine: Engine): Promise<void> {
   let windGain: GainNode, hornGain: GainNode, nitroGain: GainNode;
   let nitroWas = false;
   let sirenGain: GainNode, sirenLfo: OscillatorNode, siren2Gain: GainNode, siren2Lfo: OscillatorNode, rotorGain: GainNode, rotorLfo: OscillatorNode;
+  let trainGain: GainNode, clackLfo: OscillatorNode, hornT = 0;
   let cityGain: GainNode, passGain: GainNode, humGain: GainNode;
   let radio: Radio | null = null;
   let stepDist = 0;
@@ -128,6 +129,19 @@ export async function install(engine: Engine): Promise<void> {
     whine.connect(wg).connect(rotorGain);
     rotorGain.connect(master);
     rotorLfo.start(); whine.start();
+    // Trains (city/visual/Trains.ts): a low rumble, and the wheels' clack over the rail joints - noise
+    // gated by a pulse whose rate follows the train's speed (two bogies a 25 m car).
+    trainGain = c.createGain(); trainGain.gain.value = 0;
+    const trl = c.createBiquadFilter(); trl.type = 'lowpass'; trl.frequency.value = 180; trl.Q.value = 0.8;
+    noise(c).connect(trl).connect(trainGain);
+    const clack = c.createGain(); clack.gain.value = 0;
+    clackLfo = c.createOscillator(); clackLfo.type = 'square'; clackLfo.frequency.value = 2;
+    const clackDepth = c.createGain(); clackDepth.gain.value = 0.5;
+    clackLfo.connect(clackDepth).connect(clack.gain);
+    const cbp = c.createBiquadFilter(); cbp.type = 'bandpass'; cbp.frequency.value = 900; cbp.Q.value = 2.5;
+    noise(c).connect(cbp).connect(clack).connect(trainGain);
+    trainGain.connect(master);
+    clackLfo.start();
     // City: a low rumble bed, a whoosh from cars passing close, the hum of their engines.
     cityGain = c.createGain(); cityGain.gain.value = 0;
     const cf = c.createBiquadFilter(); cf.type = 'lowpass'; cf.frequency.value = 320;
@@ -152,6 +166,17 @@ export async function install(engine: Engine): Promise<void> {
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900 + k * 900;
     const g = c.createGain(); g.gain.setValueAtTime(0.05 + k * 0.06, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
     src.connect(lp).connect(g).connect(master); src.start(t, Math.random() * 1.5, 0.12);
+  }
+
+  /** A train's horn: two sawtooth tones a minor third apart (311 / 370 Hz), low-passed, 1.4 s. */
+  function trainHorn(k: number): void {
+    if (!ctx || muted) return;
+    const c = ctx, t = c.currentTime;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09 * k, t + 0.08);
+    g.gain.setValueAtTime(0.09 * k, t + 1.2); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+    for (const f of [311, 370]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.connect(lp); o.start(t); o.stop(t + 1.55); }
+    lp.connect(g).connect(master);
   }
 
   function thump(strength: number, freq = 70): void {
@@ -237,6 +262,17 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('vehicle:impact', ({ strength }) => thump(Math.min(1, strength / 12)));
   engine.events.on('prop:hit', ({ kind, speed }) => knock(kind, speed));
   // A 兔儿爷 found: a bright rising three-note chime.
+  // A landmark checked in: a camera's shutter (two clicks, the mirror up and down) and a bright chime.
+  engine.events.on('checkin', () => {
+    if (!ctx || muted) return;
+    const t0 = ctx.currentTime;
+    burst(t0, 3200, 1.6, 0.45, 0.025); burst(t0 + 0.075, 2200, 1.3, 0.35, 0.035);
+    [1319, 1760, 2093].forEach((f, i) => ring(t0 + 0.18 + i * 0.08, f, 0.1, 0.55));
+  });
+  // Time trials: a beep through each checkpoint, three rising notes at the start and the finish.
+  engine.events.on('trial:checkpoint', () => { if (!ctx || muted) return; ring(ctx.currentTime, 1760, 0.12, 0.18, 'square'); });
+  engine.events.on('trial:start', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; [880, 880, 1760].forEach((f, i) => ring(t0 + i * 0.12, f, 0.1, 0.12, 'square')); });
+  engine.events.on('trial:finish', ({ medal }) => { if (!ctx || muted) return; const t0 = ctx.currentTime; [1047, 1319, 1568, medal >= 2 ? 2093 : 1568].forEach((f, i) => ring(t0 + i * 0.11, f, 0.12, 0.5)); });
   engine.events.on('collect:found', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; [1047, 1319, 1568].forEach((f, i) => ring(t0 + i * 0.09, f, 0.12, 0.6)); });
   // A text message: the two-note phone chime, soft enough to sit under the radio.
   engine.events.on('phone:sms', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; ring(t0, 1568, 0.07, 0.25); ring(t0 + 0.12, 2093, 0.07, 0.35); });
@@ -272,8 +308,8 @@ export async function install(engine: Engine): Promise<void> {
         if (engine.input.state.radioPressed && driving) radio.next();
         radio.update(!!driving, paused);
       }
-      // Engine off while the player is out of the car, and a bicycle has none.
-      const off = !v.occupied || car.spec.name === 'bike';
+      // Engine off while the player is out of the car, and a bicycle or an electric scooter has none.
+      const off = !v.occupied || car.spec.name === 'bike' || car.spec.name === 'ebike';
       const rpm = off ? 0 : car.rpm, thr = paused || off ? 0 : v.controls.throttle;
       const f = rpm / 30;
       shiftDip = Math.max(0, shiftDip - dt);
@@ -330,6 +366,16 @@ export async function install(engine: Engine): Promise<void> {
       }
       siren2Gain.gain.setTargetAtTime(paused || !Number.isFinite(s2) ? 0 : 0.08 * Math.pow(Math.max(0, 1 - s2 / 220), 1.6), t, 0.15);
       siren2Lfo.frequency.setTargetAtTime(s2 < 40 ? 2.7 : 0.41, t, 0.3);
+      // The nearest train: rumble and clack by distance, and now and then the horn as one comes close.
+      const trains = engine.get<System & { nearest(x: number, z: number): { d: number; speed: number; kind: number } }>('trains');
+      if (trains) {
+        const cam = engine.camera.position, nt = trains.nearest(cam.x, cam.z);
+        const k = Number.isFinite(nt.d) ? Math.pow(Math.max(0, 1 - nt.d / 260), 1.8) : 0;
+        trainGain.gain.setTargetAtTime(paused ? 0 : 0.16 * k, t, 0.25);
+        clackLfo.frequency.setTargetAtTime(Math.max(0.5, nt.speed / 12.5), t, 0.5);
+        hornT -= dt;
+        if (!paused && nt.d < 90 && nt.kind === 0 && hornT <= 0) { hornT = 25 + Math.random() * 20; trainHorn(Math.max(0.25, 1 - nt.d / 90)); }
+      }
       const hd = wanted?.heliDistance ?? Infinity;
       rotorGain.gain.setTargetAtTime(paused || !Number.isFinite(hd) ? 0 : 0.22 * Math.pow(Math.max(0, 1 - hd / 420), 1.4), t, 0.2);
       rotorLfo.frequency.setTargetAtTime(11 + Math.max(0, 1 - hd / 200) * 1.5, t, 0.5);

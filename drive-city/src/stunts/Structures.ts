@@ -43,3 +43,22 @@ export function shortcutClear(paths: readonly { p: readonly number[] }[]): numbe
   }
   return out;
 }
+
+/**
+ * The stunt ramps' and overpasses' runs as `clear` zones for the city (world XZ rings): the generator placed them
+ * clear of the trees there were, but the canopy trees came later (2026-10-02) and one grew on overpass 0's
+ * embankment, stopping every run-up (the census follow-up, 2026-10-03). Ramps: the 55 m run-up, the wedge and the
+ * 45 m landing, 4.5 m either side; overpasses: 60 m of run-up to the far foot of the mound, 6 m either side.
+ * Trees, lamps and kerb furniture go; buildings stay (the generator kept them clear).
+ */
+export function stuntClear(ramps: readonly { x: number; z: number; yaw: number }[], overs: readonly { x: number; z: number; yaw: number; gap: number }[]): number[][] {
+  const rect = (x: number, z: number, yaw: number, from: number, to: number, half: number) => {
+    const c = Math.cos(yaw), s = Math.sin(yaw), W = (lx: number, lz: number) => [x + lx * c + lz * s, z - lx * s + lz * c];
+    return [...W(-half, from), ...W(half, from), ...W(half, to), ...W(-half, to)];
+  };
+  const O = OVERPASS;
+  return [
+    ...ramps.map((j) => rect(j.x, j.z, j.yaw, -55, 9 + 45, 4.5)),
+    ...overs.map((o) => rect(o.x, o.z, o.yaw, -60, O.ramp + O.deck + o.gap + O.front + O.top + O.land, O.w / 2 + 2)),
+  ];
+}

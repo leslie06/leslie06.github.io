@@ -15,8 +15,8 @@ import { retry } from '../core/Retry';
  * a full-detail car and CarKit into instanced traffic. Node-safe: no DOM here.
  */
 
-export type BodyType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'moto' | 'bike';
-export const BODY_TYPES: readonly BodyType[] = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'moto', 'bike'];
+export type BodyType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'moto' | 'bike' | 'ebike';
+export const BODY_TYPES: readonly BodyType[] = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'moto', 'bike', 'ebike'];
 export type Detail = 'high' | 'low';
 
 /** What the livery adds to the geometry. */
@@ -787,7 +787,7 @@ export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, 
     case 'mpv': return OLD_CARS || !MODEL_DATA.mpv ? buildCarBody(type, mpvParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
     case 'bus': return OLD_CARS || !MODEL_DATA.bus ? buildBus(spec, opts, detail) : buildModelBody('bus', spec, opts, detail);
     case 'truck': return OLD_CARS || !MODEL_DATA.truck ? buildTruck(spec, opts, detail) : buildModelBody('truck', spec, opts, detail);
-    case 'moto': case 'bike': return buildTwoWheeler(type, spec, detail);
+    case 'moto': case 'bike': case 'ebike': return buildTwoWheeler(type, spec, detail);
     default: return OLD_CARS || !MODEL_DATA.sedan ? buildCarBody(type, sedanParams(spec), spec, opts, detail) : buildModelBody('sedan', spec, opts, detail);
   }
 }
@@ -831,18 +831,33 @@ async function loadPacked(name: string): Promise<Record<string, Model>> {
   await MeshoptDecoder.ready;
   return unpackModel(buf, MeshoptDecoder);
 }
-let bodiesReady: Promise<void> | null = null;
+const loading = new Map<string, Promise<void>>();
+const settled = new Set<string>();
+export type BodySource = (typeof SOURCES)[number];
 
 /**
- * Load the Blender car bodies; await once before the first car is built (main.ts does, before the world). A body
- * that did not arrive after its retries is built the old procedural way, so the game still has cars.
+ * Load Blender car bodies (all, or the ones named); await before building a car of that type. A body that did
+ * not arrive after its retries is built the old procedural way, so the game still has cars. The game boots on
+ * the saloon (the taxi, the police, the intro's car) and the wheels, plus the body of the player's saved car,
+ * and loads the rest after the spawn's tiles (main.ts; traffic adds those cars when they are in): ~0.85 MB
+ * the first drive did not need (2026-10-03).
  */
-export function readyBodies(): Promise<void> {
-  return bodiesReady ??= Promise.all(SOURCES.map(async (k) => {
-    try { MODEL_DATA[k] = await retry(`car body ${k}`, () => loadPacked(k)); }
-    catch (e) { console.warn(`[vehicle] car body ${k} did not load; building it procedurally`, e); }
+export function readyBodies(types: readonly BodySource[] = SOURCES): Promise<void> {
+  return Promise.all(types.map((k) => {
+    let p = loading.get(k);
+    if (!p) {
+      p = (async () => {
+        try { MODEL_DATA[k] = await retry(`car body ${k}`, () => loadPacked(k)); }
+        catch (e) { console.warn(`[vehicle] car body ${k} did not load; building it procedurally`, e); }
+        settled.add(k);
+      })();
+      loading.set(k, p);
+    }
+    return p;
   })).then(() => undefined);
 }
+/** Whether a body's load has finished (loaded, or given up and built procedurally): its cars can be built now. */
+export const bodySettled = (k: BodySource): boolean => settled.has(k);
 
 /**
  * A body modelled in Blender (scripts/blender/vehicles/car.py): groups `hi` (full detail) and `lo` (traffic), and

@@ -31,6 +31,9 @@ export class AiDriver {
   /** A getaway driver: target speed multiplier, and no stopping for red lights. */
   boost = 1;
   reckless = false;
+  /** A rider (an electric scooter): its own top speed, m/s, and it keeps to the right-hand kerb, `kerb` m in from it. */
+  vmax = Infinity;
+  kerb = 0;
   /** Seconds left pulled over to the kerb for a police car with its siren on (set by traffic/). */
   yieldT = 0;
   /** Metres moved right of the lane towards the kerb while yielding (eased in and out). */
@@ -72,7 +75,7 @@ export class AiDriver {
     while (s > l.len && i < this.queue.length) { s -= l.len; l = this.g.links[this.queue[i++]]; }
     const lane = Math.min(this.lane, l.lanes - 1), off = this.g.laneOffset(l, lane);
     // Pulled over: towards the right kerb, never past a car's half width inside it.
-    this.g.at(l, s, Math.max(-l.hw + 1.3, off - this.shift), out);
+    this.g.at(l, s, this.kerb > 0 ? -l.hw + this.kerb : Math.max(-l.hw + 1.3, off - this.shift), out);
   }
 
   /**
@@ -152,7 +155,7 @@ export class AiDriver {
     inp.steer = Math.max(-1, Math.min(1, -wheel / Math.max(0.05, car.maxSteerAngle(v))));
 
     // Target speed: road class, the turn within the next ~45 m, then the light at the end.
-    let vt = yielding ? Math.min(l.speed, 3.5) : l.speed * this.boost;
+    let vt = yielding ? Math.min(l.speed, 3.5) : Math.min(this.vmax, l.speed * this.boost);
     this.along(Math.max(8, v * 1.2), this.q);
     const h0x = this.q.dx, h0z = this.q.dz;
     this.along(Math.max(8, v * 1.2) + 28, this.q);

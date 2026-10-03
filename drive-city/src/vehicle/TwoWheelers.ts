@@ -12,10 +12,10 @@ import STREET from '../city/visual/street.json';
  * axle at x = 0 (`VehicleSpec.single`). Paint goes through the same two tone buckets, so a taken bike
  * keeps its tank colour and traffic's parked ones vary like the cars.
  */
-export type TwoWheeler = Extract<BodyType, 'moto' | 'bike'>;
+export type TwoWheeler = Extract<BodyType, 'moto' | 'bike' | 'ebike'>;
 
 /** Where the rider's pelvis sits, in the body frame. */
-export const SEAT: Record<TwoWheeler, [number, number, number]> = { moto: [0, 0.6, -0.18], bike: [0, 0.7, -0.2] };
+export const SEAT: Record<TwoWheeler, [number, number, number]> = { moto: [0, 0.6, -0.18], bike: [0, 0.7, -0.2], ebike: [0, 0.5, -0.3] };
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 const Y = new THREE.Vector3(0, 1, 0);
@@ -108,6 +108,70 @@ function bike(spec: VehicleSpec, _detail: Detail): BodyParts {
   };
 }
 
+/**
+ * The electric scooter (电动车, 2026-10-03): the step-through runabout of every Beijing street and every delivery
+ * rider - a leg shield and footboard, the long seat over the battery, a top box on the rack behind it (the
+ * delivery riders' big insulated one; most private ones carry a case too), 16-inch moulded wheels. Built from
+ * boxes and tubes like the old two-wheelers. The body takes the upper tone, the top box the lower one, so
+ * traffic paints a 美团 yellow or 饿了么 blue box on a rider's scooter and a dark case on anyone else's.
+ */
+function ebike(spec: VehicleSpec, detail: Detail): BodyParts {
+  const m = new Mesher(), hi = detail === 'high';
+  const r = spec.wheelRadius, zf = spec.wheels[0].z, zr = spec.wheels[2].z;
+  const paint = surf('paint', '#ffffff', 0.3, 0, TONE_UPPER), box2 = surf('paint', '#ffffff', 0.45, 0, TONE_LOWER);
+  const black = surf('trim', '#151617', 0.75, 0), mat = surf('trim', '#232425', 0.95, 0), satin = surf('trim', '#8d9196', 0.35, 0.85);
+  const seat = surf('trim', '#1b1b1d', 0.8, 0);
+  const head = surf('lamp', '#ffffff', 0.08, 0.6, LAMP.head), tail = surf('lamp', '#ffffff', 0.12, 0.1, LAMP.tail), amber = surf('lamp', '#ffffff', 0.2, 0.1, LAMP.amber);
+  // footboard and the body under it
+  box(m, mat, [0, 0.005, 0.0], [0.3, 0.03, 0.56]);
+  box(m, paint, [0, -0.06, 0.0], [0.32, 0.1, 0.6]);
+  // the body under the seat (battery), sweeping down to the board
+  box(m, paint, [0, 0.17, -0.5], [0.32, 0.4, 0.62]);
+  box(m, paint, [0, 0.07, -0.2], [0.3, 0.2, 0.12], 0.6);
+  box(m, black, [0, -0.04, -0.5], [0.24, 0.12, 0.5]);
+  // seat
+  box(m, seat, [0, 0.42, -0.42], [0.29, 0.1, 0.66]);
+  box(m, seat, [0, 0.47, -0.66], [0.27, 0.06, 0.2], 0.12);
+  // leg shield, raked back over the front wheel, and its inner panel
+  box(m, paint, [0, 0.36, 0.34], [0.42, 0.78, 0.07], -0.22);
+  box(m, black, [0, 0.33, 0.29], [0.36, 0.66, 0.03], -0.22);
+  // fork and headstock
+  for (const x of [0.07, -0.07]) tube(m, satin, [x, 0, zf], [x * 0.6, 0.62, zf - 0.17], 0.022, hi ? 8 : 5);
+  tube(m, black, [0, 0.55, zf - 0.15], [0, 0.9, zf - 0.24], 0.03, hi ? 8 : 5);
+  // the handlebar cover with the headlamp and indicators, the bar and grips, mirrors
+  box(m, paint, [0, 0.93, zf - 0.23], [0.36, 0.14, 0.24]);
+  box(m, head, [0, 0.9, zf - 0.105], [0.17, 0.08, 0.02]);
+  for (const x of [0.15, -0.15]) box(m, amber, [x, 0.92, zf - 0.115], [0.05, 0.035, 0.02]);
+  tube(m, satin, [0.3, 0.98, zf - 0.28], [-0.3, 0.98, zf - 0.28], 0.013, 6);
+  for (const x of [0.27, -0.27]) {
+    tube(m, black, [x, 0.98, zf - 0.28], [x * 1.18, 0.98, zf - 0.28], 0.019, 6);
+    tube(m, black, [x * 0.8, 0.98, zf - 0.27], [x * 0.95, 1.2, zf - 0.3], 0.007, 4);
+    box(m, black, [x * 0.98, 1.22, zf - 0.3], [0.1, 0.06, 0.02]);
+  }
+  // mudguards
+  ring(m, paint, [0, 0, zf], r + 0.03, 0.035, 4, hi ? 12 : 7, Math.PI * 0.55, Math.PI * 0.42);
+  ring(m, black, [0, 0, zr], r + 0.03, 0.04, 4, hi ? 12 : 6, Math.PI * 0.6, -Math.PI * 0.12);
+  // the front cowl over the steering column, up to the bar cover
+  box(m, paint, [0, 0.52, zf - 0.17], [0.2, 0.62, 0.12], -0.3);
+  // the rear: tail lamp, plate, rack and the top box
+  box(m, tail, [0, 0.28, -0.83], [0.2, 0.06, 0.04]);
+  for (const x of [0.14, -0.14]) box(m, amber, [x, 0.28, -0.83], [0.05, 0.04, 0.035]);
+  box(m, surf('trim', '#e7e4d6', 0.5, 0), [0, 0.08, -0.86], [0.14, 0.1, 0.01], -0.2);
+  box(m, black, [0, 0.47, -0.82], [0.3, 0.025, 0.3]);
+  box(m, box2, [0, 0.72, -0.84], [0.44, 0.46, 0.42]);
+  box(m, black, [0, 0.96, -0.84], [0.45, 0.025, 0.43]);
+  box(m, tail, [0, 0.64, -1.055], [0.24, 0.025, 0.01]);
+  // the hub motor's side and the kick stand
+  _m.makeRotationZ(Math.PI / 2).setPosition(0, 0, zr);
+  m.geo(satin, new THREE.CylinderGeometry(0.1, 0.1, 0.13, hi ? 16 : 8), _m.clone());
+  tube(m, black, [0.12, -0.05, -0.2], [0.2, -0.22, -0.34], 0.012, 4);
+  return {
+    type: 'ebike', body: m, wheel: spokedWheel(r, 0.055, 5, hi, true), wheelRear: null, dual: 0, calliper: null,
+    headlamps: [new THREE.Vector3(-0.04, 0.9, zf - 0.1), new THREE.Vector3(0.04, 0.9, zf - 0.1)],
+    size: { length: 1.85, width: 0.7, height: 1.25 },
+  };
+}
+
 export function buildTwoWheeler(type: TwoWheeler, spec: VehicleSpec, detail: Detail): BodyParts {
-  return type === 'moto' ? moto(spec, detail) : bike(spec, detail);
+  return type === 'moto' ? moto(spec, detail) : type === 'ebike' ? ebike(spec, detail) : bike(spec, detail);
 }

@@ -46,6 +46,32 @@ const openRing = (r) => (r.length > 1 && eq(r[0], r[r.length - 1]) ? r.slice(0, 
 function pip(x, z, r) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
 function bboxOf(r) { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; for (const [x, z] of r) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } return [x0, z0, x1, z1]; }
 function segDist(px, pz, ax, az, bx, bz) { const dx = bx - ax, dz = bz - az, L = dx * dx + dz * dz; let t = L ? ((px - ax) * dx + (pz - az) * dz) / L : 0; t = clamp(t, 0, 1); return Math.hypot(px - ax - dx * t, pz - az - dz * t); }
+// The game's stunt runs and hutong shortcuts (src/stunts/spots.ts, generated from these tiles by Spots.gen.test.ts):
+// the walls this build puts up later (courtyards, compounds) keep out of them. The compound walls of 2026-10-02
+// left a footpath-wide gate at the mouths of two shortcuts and the cars stopped against them (the census
+// follow-up, 2026-10-03). Ramps: 55 m run-up to 45 m past the wedge, 6 m either side; overpasses: 60 m run-up
+// to past the mound, 7 m; shortcuts: 4.5 m either side of the path and 15 m past its ends (a car comes in off the street).
+const STUNT_SEGS = (() => {
+  const out = [];
+  let src = '';
+  try { src = fs.readFileSync('src/stunts/spots.ts', 'utf8'); } catch { return out; }
+  const get = (n) => { const m = src.match(new RegExp(`export const ${n}[^=]*= (.*?);\\n`)); return m ? JSON.parse(m[1]) : null; };
+  const run = (x, z, yaw, a, b, hw) => { const s = Math.sin(yaw), c = Math.cos(yaw); out.push([x + s * a, z + c * a, x + s * b, z + c * b, hw]); };
+  for (const j of get('JUMPS') ?? []) run(j.x, j.z, j.yaw, -55, 54, 6);
+  for (const o of get('OVERPASSES') ?? []) run(o.x, o.z, o.yaw, -60, 55 + 15 + o.gap + 2 + 12 + 25, 7);
+  for (const { p } of get('SHORTCUTS') ?? []) {
+    const n = p.length / 2;
+    for (let k = 1; k < n; k++) {
+      let ax = p[k * 2 - 2], az = p[k * 2 - 1], bx = p[k * 2], bz = p[k * 2 + 1];
+      const L = Math.hypot(bx - ax, bz - az) || 1, ux = (bx - ax) / L, uz = (bz - az) / L;
+      if (k === 1) { ax -= ux * 15; az -= uz * 15; }
+      if (k === n - 1) { bx += ux * 15; bz += uz * 15; }
+      out.push([ax, az, bx, bz, 4.5]);
+    }
+  }
+  return out;
+})();
+const inStuntRun = (x, z) => STUNT_SEGS.some(([ax, az, bx, bz, hw]) => segDist(x, z, ax, az, bx, bz) < hw);
 /** Drop duplicate and nearly collinear vertices (keeps shapes, shrinks hutong-heavy tiles a lot). */
 function simplifyRing(r, tol = 0.25) {
   let out = r.filter((p, i) => !eq(p, r[(i + 1) % r.length]));
@@ -782,7 +808,9 @@ let smoothed = 0;
 // the lower, unless it is a deck - is shifted sideways by the overlap, easing in and out over TAPER m
 // along it, junction nodes and all (every way through a moved node moves with it). The heights stay as
 // they were: a point is the same point, only somewhere else.
-const TAPER = 30, SHIFT_MAX = 4.5;
+// SHIFT_MAX was 4.5: the drivability census (2026-10-03) found 东四环中路's 辅路 drawn 4.2 m from the main line, a
+// 7 m overlap even at both roads' narrowest, so it was never moved and ran under the main line's ramp down.
+const TAPER = 30, SHIFT_MAX = 7.5;
 let shifted = 0;
 const shiftOf = new Map(); // dense key -> [dx, dz]
 for (let iter = 0; iter < 3; iter++) {
@@ -811,7 +839,7 @@ for (let iter = 0; iter < 3; iter++) {
     if (!v) continue;
     const cur = shiftOf.get(d.key) ?? [0, 0];
     // Added to what earlier rounds moved it by, in the new direction only as far as it is short.
-    if (Math.hypot(v[0], v[1]) > 0.02) { let nx = cur[0] + v[0], nz = cur[1] + v[1]; const m = Math.hypot(nx, nz); if (m > 5) { nx *= 5 / m; nz *= 5 / m; } shiftOf.set(d.key, [nx, nz]); }
+    if (Math.hypot(v[0], v[1]) > 0.02) { let nx = cur[0] + v[0], nz = cur[1] + v[1]; const m = Math.hypot(nx, nz); if (m > SHIFT_MAX) { nx *= SHIFT_MAX / m; nz *= SHIFT_MAX / m; } shiftOf.set(d.key, [nx, nz]); }
   }
   // Every way through a moved point takes the move, and the points move for the next round's test.
   const touched = new Set();
@@ -1108,8 +1136,11 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
           if (Math.abs(ho - hd) > 2.5) continue;
           // one trench only with one like it: a tunnel beside an open trench keeps its wall (else you see
           // the sky from inside it, through the ground's underside)
+          // - unless the two carriageways overlap at one level, where a ramp in a trench runs into a tunnel's mouth
+          // (or out of it): the wall between them stood across the lanes there, and the drivability census's cars
+          // stopped against it at 西直门外大街 (2026-10-03)
           const mine = !!w._road.tunnel || extra.has(d.key), theirs = !!o._road.tunnel || (extra.has(p.key) && extra.has(q.key));
-          if (mine !== theirs) continue;
+          if (mine !== theirs && !(dist < hw0 + ohw - 0.3 && Math.abs(ho - hd) < 0.6)) continue;
           if (left) { wallL = false; l = Math.max(l, dist - ohw + 0.3); } else { wallR = false; r = Math.max(r, dist - ohw + 0.3); }
         } else if ((HT.get(p.key) ?? 0) < 2) {
           const lim = Math.max(hw0 - 0.5, Math.min(hw0, dist - ohw - 0.2));
@@ -1183,10 +1214,10 @@ console.log(`elevation: ${deckX.length} deck crossings (${stacked} restacked), $
 
 const roadSegs = new Map(); // tile key -> [ax, az, bx, bz, halfWidth]
 const carSegs = new Map();  // the same for the carriageways on the ground, for keeping lamp posts out of them
-function addSeg(ax, az, bx, bz, hw, car = false, cls = '', way = 0) {
+function addSeg(ax, az, bx, bz, hw, car = false, cls = '', way = 0, oneway = 0, lanes = 0) {
   eachTile([Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw], (ix, iz) => {
     const k = `${ix}_${iz}`; (roadSegs.get(k) ?? roadSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw]);
-    if (car) (carSegs.get(k) ?? carSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw, cls, way]);
+    if (car) (carSegs.get(k) ?? carSegs.set(k, []).get(k)).push([ax, az, bx, bz, hw, cls, way, oneway, lanes]);
   });
 }
 /** Whether (x, z) is within `margin` of the kerb of a carriageway on the ground other than way `own`'s. */
@@ -1239,7 +1270,7 @@ for (const w of ways) {
   };
   for (let i = 0; i < P.length - 1; i++) {
     const mx = (P[i][0] + P[i + 1][0]) / 2, mz = (P[i][1] + P[i + 1][1]) / 2;
-    { const hm = heightAlong(w, (PS[i] + PS[i + 1]) / 2); addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2, info.car && hm < 2 && (hm > -0.5 || trenchOpen(w, (PS[i] + PS[i + 1]) / 2)), info.cls, w.id); }
+    { const hm = heightAlong(w, (PS[i] + PS[i + 1]) / 2); addSeg(P[i][0], P[i][1], P[i + 1][0], P[i + 1][1], info.w / 2, info.car && hm < 2 && (hm > -0.5 || trenchOpen(w, (PS[i] + PS[i + 1]) / 2)), info.cls, w.id, info.oneway ? 1 : 0, info.lanes); }
     if (!inRegion(mx, mz)) { flush(); cur = null; continue; }
     const [ix, iz] = tileOf(mx, mz);
     if (!cur || cur.ix !== ix || cur.iz !== iz) { flush(); cur = { ix, iz, p: [P[i]], j: [J[i]], s: [PS[i]], a: i > 0 ? P[i - 1] : null, b: null }; }
@@ -1528,16 +1559,28 @@ function segToRing(ax, az, bx, bz, R) {
   }
   return d;
 }
+/**
+ * How far from a carriageway's centre line a car in its outermost lane reaches (half a car and a hand's breadth
+ * past the lane's centre, as LaneGraph lays the lanes out): a building inside that stops the traffic. The first
+ * cut kept buildings clear of 45% of the half width only, and the drivability census (2026-10-03) found cars in
+ * the kerb lane of two-way streets stopping against walls 0.6-0.8 of the half width out.
+ */
+function laneEnvelope(hw, oneway, lanes) {
+  const total = lanes || Math.max(1, Math.round((hw * 2) / 3.4));
+  if (oneway) return total <= 1 ? 1.1 : hw - 0.6;
+  const per = Math.max(1, Math.round(total / 2)), lw = hw / per;
+  return (per - 0.5) * lw + 1.0;
+}
 function blocksRoad(b, old) {
   const seen = new Set(), hits = [];
   eachTile([b.bb[0] - 12, b.bb[1] - 12, b.bb[2] + 12, b.bb[3] + 12], (ix, iz) => {
     for (const s of carSegs.get(`${ix}_${iz}`) ?? []) {
       if (seen.has(s)) continue;
       seen.add(s);
-      const [ax, az, bx, bz, hw, cls, way] = s;
+      const [ax, az, bx, bz, hw, cls, way, oneway, lanes] = s;
       if (b.passWays?.has(way)) continue;
       if (Math.max(ax, bx) + hw < b.bb[0] || Math.min(ax, bx) - hw > b.bb[2] || Math.max(az, bz) + hw < b.bb[1] || Math.min(az, bz) - hw > b.bb[3]) continue;
-      const lim = old && LANES.test(cls) ? 1.2 : Math.max(1.2, 0.45 * hw);
+      const lim = old && LANES.test(cls) ? 1.2 : Math.max(1.2, Math.min(hw - 0.3, laneEnvelope(hw, oneway, lanes)));
       const d = segToRing(ax, az, bx, bz, b.ring);
       if (d < lim) hits.push({ ax, az, bx, bz, hw, cls, way, d });
     }
@@ -1789,7 +1832,7 @@ function inBuilding(x, z, margin = 0) {
         const ok = [];
         for (let sd = 1; sd <= L - 1; sd += 1) {
           const x = ax + ux * sd + nx * off, z = az + uz * sd + nz * off;
-          let good = zone(x, z) === 'old' && hutongContext(x, z) > 0.18 && !houseAt(x, z) && !nearRoad(x, z, 0.2) && deckOver(x, z) === Infinity;
+          let good = zone(x, z) === 'old' && hutongContext(x, z) > 0.18 && !houseAt(x, z) && !nearRoad(x, z, 0.2) && deckOver(x, z) === Infinity && !inStuntRun(x, z);
           if (good) {
             good = false;
             for (let k = 1.5; k <= 12 && !good; k += 1.5) { const b = houseAt(x + nx * k, z + nz * k); if (b) good = b._kind === 'hutong'; }
@@ -2184,7 +2227,7 @@ const COMPOUND_SW = { trunk: 4.5, primary: 4.5, secondary: 4, tertiary: 3.5, unc
   const clear = (x, z, nx, nz) => {
     if (taken.has(`${Math.floor(x)}_${Math.floor(z)}`)) return false;
     for (const k of [0, 0.7, -0.7]) if (inBuilding(x + nx * k, z + nz * k)) return false;
-    return !nearCar(x, z) && !nearRoad(x, z, 0.6) && deckOver(x, z) === Infinity && !onOpen(x, z);
+    return !nearCar(x, z) && !nearRoad(x, z, 0.6) && deckOver(x, z) === Infinity && !onOpen(x, z) && !inStuntRun(x, z);
   };
   const ringArea = (P) => { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; };
   /** Walls along a polyline, `inward` the side to set them on (+1 left of the direction, -1 right, 0 on it). */
@@ -2328,6 +2371,10 @@ for (const [k, t] of tiles) {
   const blocks = new Map();
   const ints = (r) => r.map((v) => Math.round(v));
   for (const [k, t] of tiles) {
+    const bk0 = `${Math.floor(t.ix / 4)}_${Math.floor(t.iz / 4)}`;
+    // every block with a tile in the manifest gets a file, empty or not: the map's crawl asks for each
+    // (a block of roads and trees only, -12_9, was a 404 and a warning on every boot)
+    if (index[k] && !blocks.has(bk0)) blocks.set(bk0, []);
     if (!t.buildings.length && !t.areas.length) continue;
     const e = { k, w: [], g: [], p: [], b: [] };
     for (const a of t.areas) {
@@ -2391,3 +2438,5 @@ execFileSync('node', ['scripts/city/footbridges.mjs'], { stdio: 'inherit' });
 execFileSync('node', ['scripts/city/railways.mjs'], { stdio: 'inherit' });
 // The map's place labels (needs the places export of extract-pbf.mjs; skipped without it).
 execFileSync('node', ['scripts/city/places.mjs'], { stdio: 'inherit' });
+// The subway lines and stations for the map (needs the pbf; skipped without it).
+execFileSync('node', ['scripts/city/metro.mjs'], { stdio: 'inherit' });

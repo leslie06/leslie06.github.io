@@ -25,7 +25,8 @@ export interface Gps {
   turns: Turn[];
 }
 
-export interface LandmarkPin { id: string; name: { zh: string; en: string }; x: number; z: number }
+/** `visited`: checked in (checkin/ sets it); the map and the radar draw those quieter. */
+export interface LandmarkPin { id: string; name: { zh: string; en: string }; x: number; z: number; visited?: boolean }
 
 /** What the minimap and the map screen read on top of the public NavApi. */
 export interface NavSystem extends NavApi {

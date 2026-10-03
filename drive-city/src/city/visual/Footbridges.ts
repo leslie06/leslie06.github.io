@@ -42,9 +42,10 @@ export class FlatMesh {
    * A prism along a -> b in plan: across from o0 to o1 (left of the direction), from y0 to y1 at a and
    * y2 to y3 at b (a sloped stringer or rail). All six faces, wound outwards.
    */
-  bar(ax: number, az: number, bx: number, bz: number, o0: number, o1: number, y0: number, y1: number, y2: number, y3: number, colour: string): void {
+  bar(ax: number, az: number, bx: number, bz: number, o0: number, o1: number, y0: number, y1: number, y2: number, y3: number, colour: string, na?: number[], nb?: number[]): void {
     const L = Math.hypot(bx - ax, bz - az) || 1, nx = -(bz - az) / L, nz = (bx - ax) / L;
-    const P = (x: number, z: number, o: number, y: number) => [x + nx * o, y, z + nz * o];
+    // (`na`/`nb`: the offset directions at each end, for a mitred run of bars; the segment's own normal by default)
+    const P = (x: number, z: number, o: number, y: number) => { const n = x === bx && z === bz ? nb : na; return n ? [x + n[0] * o, y, z + n[1] * o] : [x + nx * o, y, z + nz * o]; };
     const a0 = P(ax, az, o0, y0), a1 = P(ax, az, o1, y0), a2 = P(ax, az, o1, y1), a3 = P(ax, az, o0, y1);
     const b0 = P(bx, bz, o0, y2), b1 = P(bx, bz, o1, y2), b2 = P(bx, bz, o1, y3), b3 = P(bx, bz, o0, y3);
     this.quad(a3, a2, b2, b3, colour);   // top
