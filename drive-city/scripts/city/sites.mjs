@@ -6,7 +6,7 @@
 //           nearest tree within 7 m when there is one (the bird cages hang from it)
 // Each is the most open point of its polygon (sampled on a grid), the polygon's own edge counting as an
 // obstacle (they stay inside it). Format: { v: 1, square: [[x, z, r], ...], park: [[x, z, r, treeX, treeZ], ...] }
-// with r the clearance found (m, one decimal). Run by build.mjs at its end; by hand: node scripts/city/sites.mjs
+// with r the clearance found (m, one decimal); a park spot's tree is [x, z, species, scale] as the tiles have it. Run by build.mjs at its end; by hand: node scripts/city/sites.mjs
 import fs from 'node:fs';
 import path from 'node:path';
 import { TILE } from './region.mjs';
@@ -116,10 +116,11 @@ for (const key of Object.keys(man.tiles).sort((a, b) => { const [ax, az] = a.spl
     const [x, z, c] = best;
     if ((a.k === 'plaza' || a.k === 'park') && c >= CLEAR.square && !tooClose(out.square, x, z, SPACING.square)) out.square.push([Math.round(x * 10) / 10, Math.round(z * 10) / 10, Math.round(c * 10) / 10]);
     else if (a.k !== 'lawn' && c >= CLEAR.park && !tooClose(out.park, x, z, SPACING.park)) {
-      // the nearest tree within 7 m (a bird cage hangs from it)
-      let tx = NaN, tz = NaN, td = 7;
-      for (let i = 0; i < t.trees.length; i += 4) { const d = Math.hypot(t.trees[i] - x, t.trees[i + 1] - z); if (d < td) { td = d; tx = t.trees[i]; tz = t.trees[i + 1]; } }
-      out.park.push([Math.round(x * 10) / 10, Math.round(z * 10) / 10, Math.round(c * 10) / 10, ...(Number.isFinite(tx) ? [Math.round(tx * 10) / 10, Math.round(tz * 10) / 10] : [])]);
+      // the nearest tree within 7 m (a bird cage hangs from one of its branches: its species and scale too)
+      let ti = -1, td = 7;
+      for (let i = 0; i < t.trees.length; i += 4) { const d = Math.hypot(t.trees[i] - x, t.trees[i + 1] - z); if (d < td) { td = d; ti = i; } }
+      // the tree exactly as the tiles have it (its position seeds its variant and turn in the game)
+      out.park.push([Math.round(x * 10) / 10, Math.round(z * 10) / 10, Math.round(c * 10) / 10, ...(ti >= 0 ? [t.trees[ti], t.trees[ti + 1], t.trees[ti + 2], t.trees[ti + 3]] : [])]);
     }
   }
   // memory: keep the last few hundred tiles (walking in order, the neighbours are among them)

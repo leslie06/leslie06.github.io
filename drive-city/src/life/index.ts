@@ -15,6 +15,7 @@ import { nearestKerb, SIDEWALK } from '../people/Pavement';
 import { journalOf } from '../npc/Journal';
 import { DanceGame } from './DanceGame';
 import { LifeProps, type PropKind } from './Props';
+import BRANCHES from './branches.json';
 
 type Kind = 'dance' | 'taichi' | 'chess' | 'birds' | 'jianbing' | 'bbq' | 'busker' | 'tour' | 'police' | 'sweeper';
 const KINDS: Kind[] = ['dance', 'taichi', 'chess', 'birds', 'jianbing', 'bbq', 'busker', 'tour', 'police', 'sweeper'];
@@ -41,7 +42,7 @@ export interface LifeApi extends System {
   debug: { spawn(kind: Kind, x?: number, z?: number): boolean; sites(): { square: number[][]; park: number[][] }; scenes(): { kind: Kind; x: number; z: number; yaw: number; cast: number; state: string; join: { x: number; z: number } | null; people: { x: number; z: number }[] }[]; clear(): void };
 }
 
-interface Placed { kind: PropKind; x: number; y: number; z: number; yaw: number }
+interface Placed { kind: PropKind; x: number; y: number; z: number; yaw: number; sy?: number }
 interface Scene {
   kind: Kind; x: number; z: number; yaw: number; cast: Actor[]; props: Placed[]; t: number; state: string;
   /** Where the music comes from and its clock. */
@@ -359,15 +360,41 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   // --- 遛鸟
+  /**
+   * Where a cage hangs from the tree at (tx, tz) of `species` and `scale`: its branches' undersides
+   * (scripts/trees/branches.mjs: per species and variant, in the model's frame) turned and scaled as the
+   * city draws that tree (city/Streamer.ts treeMatrices, variantOf), those 2.4-5.2 m up, spread round it.
+   */
+  const branchesOf = (tx: number, tz: number, species: number, scale: number): { x: number; y: number; z: number }[] => {
+    const sp = (['huai', 'poplar', 'cypress', 'ginkgo'] as const)[species];
+    if (!sp) return [];
+    const hv = Math.sin(tx * 12.9898 + tz * 78.233 + 3.7) * 43758.5453, v = Math.floor((hv - Math.floor(hv)) * 3);
+    const h = Math.abs(Math.sin(tx * 12.9898 + tz * 78.233) * 43758.5453) % 1, h2 = Math.abs(Math.sin(tx * 4.1 + tz * 9.7) * 23421.631) % 1;
+    const th = h * 6.283, c = Math.cos(th), s = Math.sin(th), sy = scale * (0.88 + 0.24 * h2);
+    const out: { x: number; y: number; z: number }[] = [];
+    for (const [bx, by, bz] of (BRANCHES as Record<string, number[][][]>)[sp][v] ?? []) {
+      const p = { x: tx + (bx * c + bz * s) * scale, y: by * sy, z: tz + (-bx * s + bz * c) * scale };
+      if (p.y < 2.4 || p.y > 5.2 || out.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.2)) continue;
+      out.push(p);
+    }
+    return out.sort((a, b) => a.y - b.y).slice(0, 2);
+  };
   const startBirds = (site: number[], id: string): Scene | null => {
-    if (site.length < 5) return null;
-    const [x, z, , tx, tz] = site, yaw = Math.atan2(x - tx, z - tz);
+    if (site.length < 7) return null;
+    const [x, z, , tx, tz, species, scale] = site;
+    const hangs = branchesOf(tx, tz, species, scale);
+    if (!hangs.length) return null;
+    const yaw = Math.atan2(x - tx, z - tz);
     const p1 = R2(0.6, 1.4, yaw), p2 = R2(-0.8, 1.6, yaw);
     const s = make('birds', tx, tz, yaw, id, [spawn(tx + p1.x, tz + p1.z, looks.elder(false), yaw + Math.PI * 0.8), spawn(tx + p2.x, tz + p2.z, looks.elder(false), yaw - Math.PI * 0.8)]);
     if (!s) return null;
     s.cast[0].act('talk'); s.cast[1].act(null);
     s.cast[0].face(s.cast[1].pos.x, s.cast[1].pos.z); s.cast[1].face(s.cast[0].pos.x, s.cast[0].pos.z);
-    for (const [ox, oy] of [[0.9, 1.95], [-0.8, 2.15]]) { const o = R2(ox, 0.3, yaw); s.props.push({ kind: 'cage', x: tx + o.x, y: oy, z: tz + o.z, yaw }); }
+    // Each cage on a cord from a branch's underside, its hook 0.35-0.6 m below it.
+    hangs.forEach((b, i) => {
+      const cord = 0.35 + 0.25 * i;
+      s.props.push({ kind: 'cord', x: b.x, y: b.y, z: b.z, yaw, sy: cord }, { kind: 'cage', x: b.x, y: b.y - cord - 0.56, z: b.z, yaw: yaw + i });
+    });
     s.music = { kind: 'birds', x: tx, z: tz };
     s.frame = () => talkOffer(s.cast, t('npc.talk'), 2.2, (who) => {
       journal.meet('life.birds');
@@ -619,7 +646,7 @@ export async function install(engine: Engine): Promise<void> {
       case 'dance': { const c = near(sites.square, 'q')[0]; return c ? startDance(c, `q${c[0]}_${c[1]}`) : null; }
       case 'taichi': { const c = near([...sites.park, ...sites.square], 'q')[0]; return c ? startTaichi(c, `q${c[0]}_${c[1]}`) : null; }
       case 'chess': { const c = near(sites.park, 'q').find((s) => s.length < 5) ?? near(sites.park, 'q')[0]; return c ? startChess(c, `q${c[0]}_${c[1]}`) : null; }
-      case 'birds': { const c = near(sites.park, 'q').find((s) => s.length >= 5); return c ? startBirds(c, `q${c[0]}_${c[1]}`) : null; }
+      case 'birds': { for (const c of near(sites.park, 'q').filter((s) => s.length >= 7)) { const sc = startBirds(c, `q${c[0]}_${c[1]}`); if (sc) return sc; } return null; }
       case 'jianbing': return startJianbing();
       case 'bbq': return startBbq();
       case 'busker': return startBusker();
@@ -674,7 +701,7 @@ export async function install(engine: Engine): Promise<void> {
       props.begin();
       music.length = 0;
       for (const s of scenes) {
-        for (const p of s.props) props.place(p.kind, p.x, p.y, p.z, p.yaw);
+        for (const p of s.props) props.place(p.kind, p.x, p.y, p.z, p.yaw, p.sy);
         s.frame?.(dt);
         if (s.music && s.state !== 'scattered') music.push({ id: s.site, kind: s.music.kind, x: s.music.x, z: s.music.z, t: (s.music as { t?: number }).t ?? s.t });
       }

@@ -4,10 +4,10 @@ import type { EnvUniforms } from '../game/Contracts';
 import PROPS from './props.json';
 
 /** The street life's things (scripts/blender/props/life.py -> props.json). */
-export type PropKind = 'stool' | 'chess' | 'cart' | 'grill' | 'lantern' | 'speaker' | 'cage' | 'table' | 'broom' | 'flag' | 'guitar' | 'erhu' | 'bow';
-const KINDS: PropKind[] = ['stool', 'chess', 'cart', 'grill', 'lantern', 'speaker', 'cage', 'table', 'broom', 'flag', 'guitar', 'erhu', 'bow'];
+export type PropKind = 'stool' | 'chess' | 'cart' | 'grill' | 'lantern' | 'speaker' | 'cage' | 'table' | 'broom' | 'flag' | 'guitar' | 'erhu' | 'bow' | 'cord';
+const KINDS: PropKind[] = ['stool', 'chess', 'cart', 'grill', 'lantern', 'speaker', 'cage', 'table', 'broom', 'flag', 'guitar', 'erhu', 'bow', 'cord'];
 /** How many of each can be out at once, and which cast shadows (the small and hand-held ones do not). */
-const CAP: Record<PropKind, number> = { stool: 16, chess: 3, cart: 3, grill: 3, lantern: 4, speaker: 2, cage: 6, table: 4, broom: 3, flag: 2, guitar: 2, erhu: 2, bow: 2 };
+const CAP: Record<PropKind, number> = { stool: 16, chess: 3, cart: 3, grill: 3, lantern: 4, speaker: 2, cage: 6, table: 4, broom: 3, flag: 2, guitar: 2, erhu: 2, bow: 2, cord: 6 };
 const SHADOW = new Set<PropKind>(['chess', 'cart', 'grill', 'speaker', 'table', 'lantern']);
 
 /** Material name -> colour and night glow (a sign, coals, a lantern, the speaker's panel). */
@@ -23,6 +23,15 @@ const LOOK: Record<string, [string, number]> = {
 
 type Model = Record<string, { p: number[]; n: number[]; i: number[] }>;
 function geometry(kind: PropKind): THREE.BufferGeometry {
+  // A cord (a bird cage's, from a branch): 1 m hanging down from its origin, stretched by the y scale.
+  if (kind === 'cord') {
+    const g = new THREE.CylinderGeometry(0.006, 0.006, 1, 4, 1, true).translate(0, -0.5, 0).toNonIndexed();
+    const n = g.getAttribute('position').count, c = new THREE.Color('#3b3128'), cols = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) cols.set([c.r, c.g, c.b], i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    g.setAttribute('aGlow', new THREE.BufferAttribute(new Float32Array(n), 1));
+    return g;
+  }
   const model = (PROPS as unknown as Record<string, Model>)[kind];
   const parts = Object.entries(model).map(([mat, g]) => {
     const [hex, glow] = LOOK[mat] ?? ['#ff00ff', 0];
@@ -76,9 +85,9 @@ export class LifeProps {
   }
 
   /** At (x, y, z) turned `yaw` about up. */
-  place(kind: PropKind, x: number, y: number, z: number, yaw: number): void {
+  place(kind: PropKind, x: number, y: number, z: number, yaw: number, sy = 1): void {
     _q.setFromAxisAngle(_up, yaw);
-    _m.compose(_p.set(x, y, z), _q, _s);
+    _m.compose(_p.set(x, y, z), _q, _s.set(1, sy, 1));
     this.add(kind, _m);
   }
 
