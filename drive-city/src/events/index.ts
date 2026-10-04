@@ -73,7 +73,8 @@ export async function install(engine: Engine): Promise<void> {
     const v = vehicle(), m = missions(), intro = engine.get<IntroApi>('intro')?.step;
     return pl.mode === 'driving' && v.occupied && v.inputEnabled && !v.autopilot
       && (engine.get<WantedApi>('wanted')?.level ?? 0) === 0 && !engine.get<RaceApi>('races')?.active
-      && !m?.busy && !m?.story && !engine.get<GarageApi>('garage')?.open && (intro === undefined || intro === 'off' || intro === 'done');
+      && !m?.busy && !m?.story && !engine.get<GarageApi>('garage')?.open && (intro === undefined || intro === 'off' || intro === 'done')
+      && !engine.get<{ name: string; active: unknown }>('npc')?.active;
   };
 
   const end = (msg: string | null, pay = 0) => {

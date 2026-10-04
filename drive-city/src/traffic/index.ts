@@ -37,6 +37,8 @@ interface Npc {
   runner: boolean;
   /** The person on an electric scooter (drawn in the crowd), or null. */
   rider: { gait: Gait; look: Look } | null;
+  /** Stopped where it is, handbrake on, kept however far away (its driver got out: npc/'s road rage). */
+  held: boolean;
 }
 
 export interface TrafficApi extends TrafficCars {
@@ -52,6 +54,11 @@ export interface TrafficApi extends TrafficCars {
   spawnRunner(x: number, z: number, hx: number, hz: number): { car: Vehicle; release(): void } | null;
   /** Riders on electric scooters at most (they take places in the player's crowd before the pedestrians). */
   readonly riderCap: number;
+  /**
+   * Stop a traffic car where it is and keep it (true), or let its driver drive on (false). False when
+   * `car` is not a driven traffic car (parked, a scooter, a getaway car, the police).
+   */
+  hold?(car: Vehicle, on: boolean): boolean;
 }
 
 // Beijing traffic: white, black and silver dominate, then grey, dark blue, red, champagne.
@@ -141,7 +148,7 @@ export async function install(engine: Engine): Promise<void> {
     return hit && Math.abs(hit.point[1] - h) < 0.6 ? hit.point[1] : NaN;
   };
   const makeNpc = (car: Vehicle, body: BodyType): Npc => ({ car, driver: null, filter: new ControlFilter(), active: false, bike: false, hornT: 0, runner: false, prevPos: new THREE.Vector3(), curPos: new THREE.Vector3(), prevQuat: new THREE.Quaternion(), curQuat: new THREE.Quaternion(),
-    upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, body, flipped: 0, parked: false, rider: null });
+    upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, body, flipped: 0, parked: false, rider: null, held: false });
   // Each body's cars once its model is in (readyBodies in main.ts loads the saloon first, the rest after the
   // spawn's tiles): until then the pool's places go to saloons, which give theirs back as the others arrive.
   const fill = (b: BodyType, n: number) => {
@@ -333,7 +340,7 @@ export async function install(engine: Engine): Promise<void> {
   });
 
   const despawn = (n: Npc) => {
-    n.active = false; n.driver = null; n.parked = false; n.bike = false; n.runner = false; n.rider = null;
+    n.active = false; n.driver = null; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false;
     n.car.body.setTranslation({ x: 0, y: -300, z: 0 }, false);
     n.car.body.setEnabled(false);
   };
@@ -404,6 +411,13 @@ export async function install(engine: Engine): Promise<void> {
       pool[i] = makeNpc(newCar(n.body), n.body);
       return look;
     },
+    hold(car, on) {
+      const n = pool.find((p) => p.active && p.car === car);
+      if (!n || n.parked || n.runner || n.rider || !n.driver) return false;
+      n.held = on;
+      if (!on) { n.filter.reset(); n.driver.shake(); }
+      return true;
+    },
     spawnRunner(x, z, hx, hz) {
       // On the player's own road, the way they are facing, 60-90 m ahead: a chase that starts with
       // the quarry in sight, not a 2 km detour round the one-ways to where it was.
@@ -455,7 +469,7 @@ export async function install(engine: Engine): Promise<void> {
       const body = look.body ?? bodyOfSpec(car.spec);
       let n = pool.find((p) => !p.active && !p.parked);
       if (n) recycle(n); else { n = makeNpc(car, body); pool.push(n); }
-      Object.assign(n, { car, active: true, parked: true, driver: null, flipped: 0, body, bike: false });
+      Object.assign(n, { car, active: true, parked: true, driver: null, flipped: 0, body, bike: false, held: false });
       n.filter.reset();
       kitFor(body);
       n.upper.copy(look.upper); n.lower.copy(look.lower); n.taxi = look.taxi;
@@ -499,7 +513,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       for (const n of pool) {
         if (!n.active) continue;
-        const inp = n.parked ? parkedInput : n.driver!.update(n.car, dt, t, leaderFor(n));
+        const inp = n.parked || n.held ? parkedInput : n.driver!.update(n.car, dt, t, leaderFor(n));
         const c = n.filter.update(inp, n.car.forwardSpeed, dt);
         n.prevPos.copy(n.curPos); n.prevQuat.copy(n.curQuat);
         n.car.step(c, dt);
@@ -514,6 +528,7 @@ export async function install(engine: Engine): Promise<void> {
         n.curPos.copy(n.car.pos); n.curQuat.copy(n.car.quat);
         const d = Math.hypot(n.car.pos.x - cam.x, n.car.pos.z - cam.z);
         if (n.parked) { if (d > 420) despawn(n); continue; }
+        if (n.held) { if (d > 800) despawn(n); continue; }
         // A rider comes off in anything harder than a nudge, or when the scooter goes over.
         if (n.rider && (n.car.impact > 4 || n.car.up.y < 0.6)) { unseat(n); continue; }
         if (n.car.impact > 3) n.driver!.shake();

@@ -233,6 +233,25 @@ export function registerCharacterPoses(): void {
     },
   });
   registerPose({
+    name: 'char_gestures', description: 'The NPC gestures, facing the camera: talk, angry, point, cheer, phone at the ear, stagger, sit.',
+    async apply(e) {
+      const { v, cam, world } = await prepare(e);
+      const p = pavement(e, world);
+      moveCarAway(e, v, p.x - p.ox * 12 + p.dx * 40, p.z - p.oz * 12 + p.dz * 40);
+      const face = Math.atan2(-p.ox, -p.oz);
+      const set: Action[] = ['talk', 'angry', 'point', 'cheer', 'phone', 'stagger', 'sit'];
+      set.forEach((act, i) => {
+        const a = (i - 3) * 1.25;
+        extras.push(person(e, p.x + p.dx * a, p.z + p.dz * a, face, CAST[i], 0, act, 0.4, 0.31 + i * 0.07));
+      });
+      advance(0.6);
+      const gy = extras[0].pos.y;
+      const eye = { x: p.x - p.ox * 6.2, z: p.z - p.oz * 6.2 };
+      cam.override = (c) => { c.position.set(eye.x, gy + 1.5, eye.z); c.lookAt(p.x, gy + 1.0, p.z); c.fov = 62; c.updateProjectionMatrix(); };
+      for (let i = 0; i < 8; i++) e.tick(1 / 60);
+    },
+  });
+  registerPose({
     name: 'char_crowd', description: 'Ninety random people from 6 to 90 m along the pavement and the road (near and far LOD).',
     async apply(e) {
       const { v, cam, world } = await prepare(e);

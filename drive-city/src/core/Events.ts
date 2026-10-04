@@ -9,11 +9,18 @@ export interface GameEvents {
   /** A drift ended; `score` is what it banked (0 when it ended in a crash). */
   'drift:end': { score: number; crashed: boolean };
   /** A car knocked a pedestrian over (or the player shoulder-charged one). */
-  'people:hit': { x: number; z: number; speed: number; byPlayer: boolean };
+  'people:hit': { x: number; z: number; speed: number; byPlayer: boolean; fair?: boolean };
   /** The player got in (`carjacked`: took a traffic car) or out of a car. */
   'player:mode': { mode: 'driving' | 'onfoot'; carjacked: boolean };
   /** Someone on the pavement shouted at the player (a bubble over their head). */
-  'people:shout': { x: number; z: number; text: string };
+  'people:shout': { x: number; z: number; text: string; follow?: { readonly x: number; readonly y: number; readonly z: number } | null; name?: string; secs?: number };
+  /**
+   * Someone says `text` out loud (audio/Babble.ts gives it a voice): at (x, z), or in the player's
+   * car when x is NaN (a passenger). `id` lets a new line from the same speaker cut the old one off.
+   */
+  'npc:voice': { text: string; voice: { pitch: number; rate: number; bright: number }; x: number; z: number; id?: string };
+  /** A new face for the journal (人物志): `id` (npc/Journal.ts), its name, how many met of how many. */
+  'npc:met': { id: string; name: string; n: number; of: number };
   /** A witness finished phoning the police about the player. */
   'people:report': { x: number; z: number };
   /** The player's car knocked a bin, a shared bike or a railing flying (city/Knock.ts). */

@@ -52,6 +52,8 @@ export interface InputState {
   diagPressed: boolean;
   /** Driving, held: nitro (Shift, gamepad B or LB, the touch button). On foot Shift is sprint. */
   nitro: boolean;
+  /** An answer picked in the dialogue box this frame: 1-3 (keys 1-3; the D-pad while `Input.choosing`), 0 none. */
+  choice: number;
 }
 
 const DEADZONE = 0.12;
@@ -69,6 +71,8 @@ export class Input {
   private coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   locked = false;
   enabled = true;
+  /** A question is on screen (dialogue/): the D-pad answers it (left 1, right 2, down 3) instead of its usual jobs. */
+  choosing = false;
   /** Buttons held on the previous poll, to turn gamepad buttons into edges. */
   private padPrev: boolean[] = [];
   private padActive = false;
@@ -156,6 +160,7 @@ export class Input {
     s.diagPressed = p('F9');
     s.mapPressed = p('Tab');
     s.punchPressed = p('KeyE') || this.clicked;
+    s.choice = p('Digit1') || p('Numpad1') ? 1 : p('Digit2') || p('Numpad2') ? 2 : p('Digit3') || p('Numpad3') ? 3 : 0;
     this.clicked = false;
     this.pressed.clear();
     this.pollPad(s);
@@ -212,7 +217,8 @@ export class Input {
       s.lookDY += dz(pad.axes[3] ?? 0) * 10;
       s.cameraPressed ||= edge(8);
       s.enterPressed ||= edge(3);
-      s.resetPressed ||= edge(13);
+      if (this.choosing) { if (edge(14)) s.choice = 1; else if (edge(15)) s.choice = 2; else if (edge(13)) s.choice = 3; }
+      else s.resetPressed ||= edge(13);
       s.sprint ||= b(0);
       s.jumpPressed ||= edge(2);
       s.pausePressed ||= edge(9);
@@ -225,6 +231,6 @@ export class Input {
 
   static empty(): InputState {
     return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
-      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, phonePressed: false, diagPressed: false, nitro: false };
+      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, phonePressed: false, diagPressed: false, nitro: false, choice: 0 };
   }
 }

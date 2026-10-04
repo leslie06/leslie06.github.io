@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { ANKLE_H, BALL, BIND_ROT, HEEL, J, JOINT_COUNT, LOOK_FLOATS, SHIN, SKELETON, THIGH, lookScale, packLook, type Look } from './Body';
 
-export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch' | 'ride' | 'wave';
+/**
+ * `talk`, `angry`, `point`, `cheer`, `phone` (at the ear) and `stagger` (drunk) are arm and body
+ * gestures over the normal locomotion; `sit` is a whole-body pose with the feet on the ground in
+ * front and the pelvis `seat` metres up (the caller puts the root, the feet, on the ground).
+ */
+export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch' | 'ride' | 'wave' | 'talk' | 'angry' | 'point' | 'cheer' | 'phone' | 'stagger' | 'sit';
 
 /** What drives a pose this frame. */
 export interface Motion {
@@ -15,6 +20,8 @@ export interface Motion {
   /** `ride`: which saddle (a motorcycle crouch or an upright pedal), and the machine's lean (roll, rad) to sit with. */
   ride?: 'moto' | 'bike' | 'ebike';
   lean?: number;
+  /** `sit`: seat height above the feet, metres (0.46 a chair or bench). */
+  seat?: number;
 }
 
 const TAU = Math.PI * 2;
@@ -146,6 +153,12 @@ export class Gait {
     else if (m.action === 'punch') { this.locomotion(m.speed, dt); this.shoveArm(m.t); }
     else if (m.action === 'wave') { this.locomotion(m.speed, dt); this.waveArm(m.t); }
     else if (m.action === 'ride') this.ride(m, dt);
+    else if (m.action === 'talk' || m.action === 'angry') { this.locomotion(m.speed, dt); this.talkArms(m.t, m.action === 'angry'); }
+    else if (m.action === 'point') { this.locomotion(m.speed, dt); this.pointArm(m.t); }
+    else if (m.action === 'cheer') { this.locomotion(m.speed, dt); this.cheerArms(m.t); }
+    else if (m.action === 'phone') { this.locomotion(m.speed, dt); this.phoneEar(m.t); }
+    else if (m.action === 'stagger') { this.locomotion(m.speed, dt); this.stagger(m.t); }
+    else if (m.action === 'sit') this.sit(m.t, m.seat ?? 0.46);
     else this.locomotion(m.speed, dt);
     if (this.fade > 0) {
       const k = this.fade * this.fade * (3 - 2 * this.fade);
@@ -485,6 +498,90 @@ export class Gait {
     r[J.shoulderR * 3 + 2] = (-0.3 + 0.28 * w) * up;
     r[J.elbowR * 3] = (-0.45 - 0.35 * w) * up;
     r[J.chest * 3 + 2] = 0.06 * up;
+  }
+
+  /**
+   * Talking with the hands: forearms come up in front and gesture, the head nods. `angry` is the
+   * same faster and bigger, with the chest pushed forward and the right fist shaking.
+   */
+  private talkArms(t: number, angry: boolean): void {
+    const r = this.rot, up = sstep(0, 0.3, t), f = angry ? 2.1 : 1;
+    const g1 = 0.5 + 0.5 * Math.sin(t * 3.1 * f + this.seed * 7), g2 = 0.5 + 0.5 * Math.sin(t * 2.3 * f + 1.7 + this.seed * 3);
+    if (angry) {
+      const shake = Math.sin(t * 17);
+      r[J.shoulderR * 3] = mix(r[J.shoulderR * 3], -1.2 - 0.12 * shake, up); r[J.shoulderR * 3 + 2] = mix(r[J.shoulderR * 3 + 2], -0.3, up);
+      r[J.elbowR * 3] = mix(r[J.elbowR * 3], -1.5 + 0.25 * shake, up);
+      r[J.shoulderL * 3] = mix(r[J.shoulderL * 3], -0.55 - 0.45 * g2, up); r[J.shoulderL * 3 + 2] = mix(r[J.shoulderL * 3 + 2], 0.35, up);
+      r[J.elbowL * 3] = mix(r[J.elbowL * 3], -0.7 - 0.5 * g1, up);
+      r[J.chest * 3] += 0.12 * up; r[J.neck * 3] += 0.08 * up; r[J.head * 3] += 0.05 * up * Math.sin(t * 9);
+      this.fwd += 0.03 * up;
+    } else {
+      r[J.shoulderR * 3] = mix(r[J.shoulderR * 3], -0.45 - 0.3 * g1, up); r[J.shoulderR * 3 + 2] = mix(r[J.shoulderR * 3 + 2], -0.22, up);
+      r[J.elbowR * 3] = mix(r[J.elbowR * 3], -1.25 - 0.4 * g2, up); r[J.wristR * 3] = mix(r[J.wristR * 3], -0.3, up);
+      r[J.shoulderL * 3] = mix(r[J.shoulderL * 3], -0.3 - 0.2 * g2, up); r[J.shoulderL * 3 + 2] = mix(r[J.shoulderL * 3 + 2], 0.2, up);
+      r[J.elbowL * 3] = mix(r[J.elbowL * 3], -1.1 - 0.3 * g1, up);
+      r[J.head * 3] += 0.06 * up * Math.sin(t * 4.2); r[J.head * 3 + 1] += 0.08 * up * Math.sin(t * 1.3);
+    }
+  }
+
+  /** The right arm straight out in front at shoulder height (towards the yaw the caller faces). */
+  private pointArm(t: number): void {
+    const r = this.rot, up = sstep(0, 0.25, t);
+    r[J.shoulderR * 3] = mix(r[J.shoulderR * 3], -1.45, up); r[J.shoulderR * 3 + 1] = 0; r[J.shoulderR * 3 + 2] = mix(r[J.shoulderR * 3 + 2], -0.12, up);
+    r[J.elbowR * 3] = mix(r[J.elbowR * 3], -0.08, up); r[J.wristR * 3] = 0;
+    r[J.chest * 3 + 1] += 0.12 * up;
+  }
+
+  /** Both arms up over the head, pumping. */
+  private cheerArms(t: number): void {
+    const r = this.rot, up = sstep(0, 0.25, t), pump = 0.5 + 0.5 * Math.sin(t * 9);
+    for (const [jS, jE, side] of [[J.shoulderL, J.elbowL, 1], [J.shoulderR, J.elbowR, -1]] as const) {
+      r[jS * 3] = mix(r[jS * 3], -2.2 + 0.25 * pump, up); r[jS * 3 + 2] = mix(r[jS * 3 + 2], -side * 0.55, up);
+      r[jE * 3] = mix(r[jE * 3], -0.35 - 0.55 * pump, up);
+    }
+    r[J.head * 3] -= 0.15 * up; r[J.neck * 3] -= 0.08 * up;
+    this.bob += 0.02 * up * pump;
+  }
+
+  /** A phone at the right ear, the left hand on the hip, the head tipped into the call. */
+  private phoneEar(t: number): void {
+    const r = this.rot, up = sstep(0, 0.35, t);
+    r[J.shoulderR * 3] = mix(r[J.shoulderR * 3], -1.25, up); r[J.shoulderR * 3 + 1] = mix(r[J.shoulderR * 3 + 1], 0.2, up); r[J.shoulderR * 3 + 2] = mix(r[J.shoulderR * 3 + 2], 0.35, up);
+    r[J.elbowR * 3] = mix(r[J.elbowR * 3], -2.65, up); r[J.wristR * 3] = mix(r[J.wristR * 3], -0.3, up);
+    r[J.shoulderL * 3] = mix(r[J.shoulderL * 3], 0.15, up); r[J.shoulderL * 3 + 2] = mix(r[J.shoulderL * 3 + 2], 0.45, up);
+    r[J.elbowL * 3] = mix(r[J.elbowL * 3], -1.5, up);
+    r[J.head * 3 + 2] -= 0.12 * up; r[J.head * 3] += 0.06 * up;
+    if (up > 0.5) this.prop = 1;
+  }
+
+  /** Drunk: the body rolls and sways on a slow beat, the head lolls, the arms hang out. */
+  private stagger(t: number): void {
+    const r = this.rot, w = Math.sin(t * 1.7 + this.seed * 5), h = Math.sin(t * 1.25 + 0.8);
+    r[2] += 0.1 * w; this.sway += 0.05 * w;
+    r[J.spine * 3 + 2] -= 0.08 * w; r[J.chest * 3 + 2] -= 0.06 * w; r[J.chest * 3] += 0.06;
+    r[J.neck * 3 + 2] += 0.12 * h; r[J.head * 3 + 2] += 0.16 * h; r[J.head * 3] += 0.1;
+    r[J.shoulderL * 3 + 2] += 0.22; r[J.shoulderR * 3 + 2] -= 0.22;
+  }
+
+  /** Sitting: pelvis on a seat `seat` m up, feet planted in front (IK), hands on the thighs. */
+  private sit(t: number, seat: number): void {
+    const r = this.rot;
+    this.drop = PELVIS_Y - seat; this.fwd = -0.04; this.sway = 0; this.bob = 0;
+    const pitch = -0.06;
+    r[0] = pitch;
+    this.setPelvis();
+    const reach = Math.max(0.16, Math.min(0.5, seat * 0.95));
+    for (let k = 0; k < 2; k++) {
+      const side = k === 0 ? 1 : -1, f = k === 0 ? footL : footR;
+      f.x = side * 0.13; f.y = ANKLE_H; f.z = reach; f.pitch = 0; f.stance = 1;
+      this.solveLeg(side, f, pitch, 0);
+    }
+    r[J.spine * 3] = 0.06; r[J.chest * 3] = 0.03 + 0.012 * Math.sin(t * 1.5);
+    r[J.neck * 3] = 0.02; r[J.head * 3] = 0.03 + 0.04 * Math.sin(t * 0.4);
+    r[J.head * 3 + 1] = 0.25 * Math.sin(t * 0.23 + this.seed * 9);
+    for (const [jS, jE, side] of [[J.shoulderL, J.elbowL, 1], [J.shoulderR, J.elbowR, -1]] as const) {
+      r[jS * 3] = -0.5; r[jS * 3 + 2] = side * 0.12; r[jE * 3] = -0.95;
+    }
   }
 
   private air(t: number): void {

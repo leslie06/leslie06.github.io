@@ -47,7 +47,9 @@ css(`
 .hud .prompt{position:absolute;left:50%;bottom:17vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:800 15px/1 ${F.ui};letter-spacing:.08em;border-left:3px solid ${C.yellow}}
 .hud .toast{position:absolute;left:50%;bottom:22vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:700 14px/1 ${F.ui};letter-spacing:.08em;opacity:0;transition:opacity .2s}
 .hud .toast.on{opacity:1}
-.hud .shout{position:absolute;left:0;top:0;padding:5px 9px;border-radius:5px;background:rgba(244,241,232,.92);color:#15171a;font:800 13px/1 ${F.ui};white-space:nowrap;pointer-events:none;will-change:transform}
+.hud .shout{position:absolute;left:0;top:0;padding:5px 9px;border-radius:5px;background:rgba(244,241,232,.92);color:#15171a;font:800 13px/1.3 ${F.ui};max-width:220px;width:max-content;pointer-events:none;will-change:transform}
+.hud .shout::after{content:'';position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:rgba(244,241,232,.92)}
+.hud .shout small{display:block;font:800 10px/1.2 ${F.ui};color:#8a6a10;letter-spacing:.06em}
 .hud .shout[hidden]{display:none}
 .hud .flipped,.hud .stuck{position:absolute;left:50%;top:42%;transform:translateX(-50%);padding:12px 20px;border-radius:8px;background:${C.inkGlass};font:700 18px/1 ${F.ui};border-left:3px solid ${C.yellow}}
 .hud .help{position:absolute;left:var(--hud-x);top:calc(var(--hud-y) + 58px);padding:14px 16px;border-radius:8px;background:${C.inkGlass};font:500 13px/1.9 ${F.ui};min-width:260px}
@@ -119,7 +121,7 @@ export class Hud implements HudApi {
   private rideOffEl!: HTMLDivElement;
   private speedoEl!: HTMLDivElement;
   /** Shouts from the pavement: a few bubbles projected from world points. */
-  private bubbles: { el: HTMLDivElement; p: THREE.Vector3; t: number }[] = [];
+  private bubbles: { el: HTMLDivElement; p: THREE.Vector3; t: number; dur: number; follow: { readonly x: number; readonly y: number; readonly z: number } | null }[] = [];
   private readonly proj = new THREE.Vector3();
 
   constructor(private engine: Engine, container: HTMLElement) {
@@ -155,7 +157,6 @@ export class Hud implements HudApi {
     this.toastEl = el('div', 'toast', root);
     this.streetEl = el('div', 'street', root);
     this.promptEl = el('div', 'prompt', root);
-    this.promptEl.appendChild(L('hud.enterCar'));
     this.promptEl.hidden = true;
     this.rideEl = el('div', 'prompt', root);
     this.rideEl.appendChild(L('hud.ride'));
@@ -164,10 +165,15 @@ export class Hud implements HudApi {
     this.rideOffEl.appendChild(L('hud.rideOff'));
     this.rideOffEl.hidden = true;
     this.speedoEl = root.querySelector('.speedo') as HTMLDivElement;
-    for (let i = 0; i < 5; i++) { const b = el('div', 'shout', root); b.hidden = true; this.bubbles.push({ el: b, p: new THREE.Vector3(), t: 0 }); }
-    engine.events.on('people:shout', ({ x, z, text }) => {
-      const b = this.bubbles.reduce((a, c) => (c.t < a.t ? c : a));
-      b.p.set(x, 1.95, z); b.t = 2.2; b.el.textContent = text; b.el.hidden = false;
+    for (let i = 0; i < 6; i++) { const b = el('div', 'shout', root); b.hidden = true; this.bubbles.push({ el: b, p: new THREE.Vector3(), t: 0, dur: 2.2, follow: null }); }
+    engine.events.on('people:shout', ({ x, z, text, follow, name, secs }) => {
+      // One bubble per speaker: a new line from someone already talking replaces theirs.
+      const b = (follow && this.bubbles.find((c) => c.t > 0 && c.follow === follow)) || this.bubbles.reduce((a, c) => (c.t < a.t ? c : a));
+      b.follow = follow ?? null; b.p.set(x, (follow?.y ?? 0) + 1.95, z); b.dur = b.t = secs ?? 2.2;
+      b.el.textContent = '';
+      if (name) el('small', '', b.el).textContent = name;
+      b.el.append(text);
+      b.el.hidden = false;
     });
     this.flipped = el('div', 'flipped', root); this.flipped.appendChild(L('hud.flipped')); this.flipped.hidden = true;
     this.stuck = el('div', 'stuck', root); this.stuck.appendChild(L('hud.stuck')); this.stuck.hidden = true;
@@ -277,7 +283,10 @@ export class Hud implements HudApi {
     const park = this.engine.get<ParkApi>('park');
     this.rideEl.hidden = park?.prompt !== 'board';
     this.rideOffEl.hidden = park?.prompt !== 'exit';
-    this.promptEl.hidden = !(onFoot && pl?.nearCar) || !!park?.prompt;
+    // What F does now (get in, talk, pick up): the player picks it (PlayerApi.prompt).
+    const pr = onFoot && !park?.prompt ? pl?.prompt ?? (pl?.nearCar ? t('hud.enterCar') : null) : null;
+    this.promptEl.hidden = !pr;
+    if (pr && this.promptEl.textContent !== pr) this.promptEl.textContent = pr;
     this.flipped.hidden = onFoot || !(car.flippedTime > 1.2);
     // Pressing on and going nowhere (a dead end with no room to turn, a wedge between posts): R puts
     // the car on the nearest lane, facing out of a dead end. Shown until the car moves again.
@@ -297,10 +306,11 @@ export class Hud implements HudApi {
     for (const b of this.bubbles) {
       if (b.t <= 0) continue;
       b.t -= dt;
+      if (b.follow) b.p.set(b.follow.x, b.follow.y + 1.95, b.follow.z);
       this.proj.copy(b.p).project(this.engine.camera);
       const behind = this.proj.z > 1, far = this.engine.camera.position.distanceTo(b.p) > 45;
       if (b.t <= 0 || behind || far) { b.t = 0; b.el.hidden = true; continue; }
-      b.el.style.transform = `translate(${((this.proj.x + 1) / 2 * w).toFixed(0)}px, ${((1 - this.proj.y) / 2 * h - 8 - (2.2 - b.t) * 14).toFixed(0)}px) translate(-50%, -100%)`;
+      b.el.style.transform = `translate(${((this.proj.x + 1) / 2 * w).toFixed(0)}px, ${((1 - this.proj.y) / 2 * h - 10 - (b.follow ? 0 : (b.dur - b.t) * 14)).toFixed(0)}px) translate(-50%, -100%)`;
       b.el.style.opacity = String(Math.min(1, b.t / 0.5));
     }
   }

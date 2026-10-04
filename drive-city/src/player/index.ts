@@ -4,7 +4,7 @@ import { J, SKELETON } from '../character/Body';
 import { SEAT, type TwoWheeler } from '../vehicle/TwoWheelers';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
-import type { HudApi, MissionApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { HudApi, Interaction, MissionApi, ParkApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import { project } from '../city/Geo';
 import { t } from '../core/I18n';
@@ -93,6 +93,9 @@ export async function install(engine: Engine): Promise<void> {
   };
   let jumpLatch = false;
   let nearCar = false;
+  /** F's offers (PlayerApi.offer): this frame's, collected while systems update, and last frame's, used now. */
+  let offers: Interaction[] = [], offered: Interaction[] = [];
+  let prompt: string | null = null;
   /** Strapped into a fairground ride: physics is off and the seat drives the character. */
   let rideSeat: { pos: THREE.Vector3; yaw: number } | null = null;
   const position = new THREE.Vector3();
@@ -187,6 +190,8 @@ export async function install(engine: Engine): Promise<void> {
     get position() { return mode === 'onfoot' ? position.copy(foot.pos) : position.copy(vehicle().car.pos); },
     get foot() { return mode === 'onfoot' ? footView : null; },
     get nearCar() { return nearCar; },
+    offer(o) { offers.push(o); },
+    get prompt() { return prompt; },
     crowd,
     heroReady,
     getOut() { if (mode === 'driving') exitCar(); },
@@ -261,7 +266,11 @@ export async function install(engine: Engine): Promise<void> {
       const v = vehicle();
       if (inp.jumpPressed) jumpLatch = true;
       nearCar = false;
-      if (mode === 'onfoot' && !rideSeat) {
+      prompt = null;
+      { const t0 = offered; offered = offers; offers = t0; offers.length = 0; }
+      // A fairground ride in reach has F to itself (park/ reads it and shows its own prompt).
+      const parkHas = !!engine.get<ParkApi>('park')?.prompt;
+      if (mode === 'onfoot' && !rideSeat && !parkHas) {
         // Only cars that have (nearly) stopped can be got into.
         const close = traffic()?.nearestCar(foot.pos.x, foot.pos.z, REACH);
         const other = close && close.speed < 4 ? close : null;
@@ -274,9 +283,16 @@ export async function install(engine: Engine): Promise<void> {
         // A shared bike in a rack, when it is nearer than any car.
         const sb = engine.get<WorldApi>('world')?.sharedBike?.(foot.pos.x, foot.pos.z, BIKE_REACH) ?? null;
         const bike = sb && (!target || Math.hypot(sb.x - foot.pos.x, sb.z - foot.pos.z) < Math.hypot(target.pos.x - foot.pos.x, target.pos.z - foot.pos.z)) ? sb : null;
-        nearCar = (!!target || !!bike) && !foot.knock && !entering;
-        if (v.inputEnabled && inp.enterPressed && !foot.knock && !entering) {
-          if (bike) takeSharedBike(bike); else if (target) enterCar(target);
+        // F: the nearest of the car, the bike and whatever is on offer (someone to talk to, a bag to pick up).
+        const dCar = target ? Math.hypot(target.pos.x - foot.pos.x, target.pos.z - foot.pos.z) - 1.2 : Infinity;   // a car is big: measured to its side, not its middle
+        const dBike = bike ? Math.hypot(bike.x - foot.pos.x, bike.z - foot.pos.z) : Infinity;
+        let use: Interaction | null = null, dUse = Infinity;
+        for (const o of offered) { const d = Math.hypot(o.x - foot.pos.x, o.z - foot.pos.z); if (d <= o.r && d < dUse) { dUse = d; use = o; } }
+        const free = !foot.knock && !entering;
+        if (use && dUse < Math.min(dCar, dBike)) { if (free) prompt = use.label; }
+        else { use = null; nearCar = (!!target || !!bike) && free; if (nearCar) prompt = t('hud.enterCar'); }
+        if (v.inputEnabled && inp.enterPressed && free) {
+          if (use) use.use(); else if (bike) takeSharedBike(bike); else if (target) enterCar(target);
         }
       } else if (v.inputEnabled && v.occupied && inp.enterPressed && !v.autopilot) {
         exitCar();

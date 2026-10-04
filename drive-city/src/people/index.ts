@@ -3,13 +3,14 @@ import { t } from '../core/I18n';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
-import type { PeopleApi, PlayerApi, VehicleApi, WantedApi } from '../game/Contracts';
+import type { Actor, PeopleApi, PlayerApi, RenderApi, VehicleApi, WantedApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import type { Link } from '../traffic/LaneGraph';
 import type { Vehicle } from '../vehicle/Vehicle';
 import { Gait, type Action } from '../character/Animator';
 import { randomLook, type Look } from '../character/Body';
 import { CROWD_CAP } from '../character/Crowd';
+import { voiceOf, type VoiceSpec } from '../character/Voice';
 import { installWalkers } from './Walkers';
 
 import { SIDEWALK } from './Pavement';
@@ -29,8 +30,10 @@ const GAP = 4.5;
 /** Spawn and despawn distances from the camera: people further than ~100 m are a few pixels tall. */
 const SPAWN_R = 100, DESPAWN_R = 125;
 const RUN = 4.3;
+/** Scripted people (npc/, missions/) on top of the passers-by: their slots come out of the same room. */
+const ACTORS = 8;
 
-type Mode = 'walk' | 'wait' | 'flee' | 'knocked' | 'down' | 'getup' | 'lost' | 'call';
+type Mode = 'walk' | 'wait' | 'flee' | 'knocked' | 'down' | 'getup' | 'lost' | 'call' | 'script';
 
 interface Ped {
   on: boolean;
@@ -51,6 +54,19 @@ interface Ped {
   gait: Gait; look: Look; seed: number;
   /** Saw something: phones the police once they have stopped running. */
   willCall: boolean;
+  /** A scripted person's handle (spawnActor), or null for a passer-by. */
+  actor: ActorImpl | null;
+  /** A gesture over the walk (a cheer, a chat with the player) and its clock, or null. */
+  gest: Action | null; gestT: number; gestFor: number;
+  /** Turned to face this way while chatting (NaN: no). */
+  faceYaw: number;
+}
+
+/** What a scripted person is told to do (people/ moves it in `stepPed`). */
+interface ActorImpl extends Actor {
+  p: Ped;
+  pts: number[]; ptI: number; speed: number; faceTo: number; gesture: Action | null; gestureT: number;
+  arrivedF: boolean; hitsN: number; aliveF: boolean; voiceS: VoiceSpec;
 }
 
 const wrap = (a: number) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
@@ -114,7 +130,16 @@ export async function install(engine: Engine): Promise<void> {
     pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0,
     yaw: 0, want: 0, pace: 1.3, cur: 1.3, moved: 0,
     gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false,
+    actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN,
   }));
+  // Actor slots after the passers-by: a scripted person always gets one (and passers-by thin out).
+  const actorSlots: Ped[] = Array.from({ length: q.has('nopeople') ? 0 : ACTORS }, () => ({ on: false, mode: 'script' as Mode, t: 0, hold: 0, fear: 0,
+    link: 0, s: 0, side: 1, frac: 0.5, fracT: 0.5, dir: 1, cross: false, road: false, c0x: 0, c0z: 0, c1x: 0, c1z: 0, cl: 1, ct: 0,
+    waitJ: -1, waitPhase: 0, backLink: 0, backS: 0, backDir: 1, backSide: 1,
+    pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0, yaw: 0, want: 0, pace: 1.3, cur: 0, moved: 0,
+    gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false, actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN }));
+  const all: Ped[] = [...actorSlots, ...peds];
+  let actorsOn = 0;
   let active = 0, spawnT = 0, frame = 0;
   const road: THREE.Vector3[] = [];
   const at = { x: 0, z: 0, dx: 0, dz: 0 }, at2 = { x: 0, z: 0, dx: 0, dz: 0 };
@@ -213,10 +238,11 @@ export async function install(engine: Engine): Promise<void> {
     p.mode = 'flee'; p.fear = 4 + rnd() * 3; p.cur = 0; p.pos.y = GROUND;
   };
 
-  const calm = (p: Ped) => p.mode === 'walk' || p.mode === 'wait' || p.mode === 'flee';
+  const calm = (p: Ped) => p.mode === 'walk' || p.mode === 'wait' || p.mode === 'flee' || p.mode === 'script';
 
   /** Run from a threat at (fx, fz): along the pavement away from it (or on across the road). */
   const scare = (p: Ped, fx: number, fz: number, secs: number, byPlayer = false) => {
+    if (p.actor) return;   // a scripted person does what its owner says
     // Scared mid-call: the call is dropped (no report).
     if (p.mode === 'call') { p.mode = 'walk'; p.t = 0; }
     if (!calm(p)) return;
@@ -241,7 +267,12 @@ export async function install(engine: Engine): Promise<void> {
     if (shoutT > 0 && kind === 'scare') return;
     shoutT = kind === 'scare' ? 0.9 : 0.25;
     const text = kind === 'call' ? t('shout.call') : t(`shout.${kind}${1 + Math.floor(rnd() * 3)}` as 'shout.hit1');
-    engine.events.emit('people:shout', { x: p.pos.x, z: p.pos.z, text });
+    speak(p, text, 2.2);
+  };
+  /** A line over their head that follows them, in their own voice. */
+  const speak = (p: Ped, text: string, secs: number, name?: string) => {
+    engine.events.emit('people:shout', { x: p.pos.x, z: p.pos.z, text, follow: p.pos, name, secs });
+    engine.events.emit('npc:voice', { text, voice: p.actor?.voice ?? voiceOf(p.look, p.seed), x: p.pos.x, z: p.pos.z, id: p.actor ? `actor${actorSlots.indexOf(p)}` : undefined });
   };
 
   /**
@@ -267,13 +298,15 @@ export async function install(engine: Engine): Promise<void> {
     shout(p, 'call');
   };
 
-  const knock = (p: Ped, vx: number, vz: number, byPlayer: boolean) => {
+  const knock = (p: Ped, vx: number, vz: number, byPlayer: boolean, quiet = false) => {
     const speed = Math.hypot(vx, vz);
-    p.mode = 'knocked'; p.t = 0; p.cross = false; p.willCall = false;
-    p.vel.set(vx, 0, vz); p.vy = Math.max(2.2, speed * 0.3);
+    p.mode = 'knocked'; p.t = 0; p.cross = false; p.willCall = false; p.gest = null;
+    p.vel.set(vx, 0, vz); p.vy = Math.max(quiet ? 1.2 : 2.2, speed * 0.3);
     p.want = p.yaw = Math.atan2(-vx, -vz);   // face what hit them, fly backwards
-    if (byPlayer) shout(p, speed > 4 ? 'hit' : 'shove');
-    engine.events.emit('people:hit', { x: p.pos.x, z: p.pos.z, speed, byPlayer });
+    if (p.actor) p.actor.hitsN++;
+    if (byPlayer && !p.actor) shout(p, speed > 4 ? 'hit' : 'shove');
+    if (quiet) return;
+    engine.events.emit('people:hit', { x: p.pos.x, z: p.pos.z, speed, byPlayer, fair: p.actor?.fair });
     for (const q of peds) {
       if (!q.on || q === p) continue;
       const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z;
@@ -284,12 +317,15 @@ export async function install(engine: Engine): Promise<void> {
   /** Cars sweep people out of their footprint. */
   const carHits = (car: Vehicle, byPlayer: boolean) => {
     if (car.speed < 2.5) return;
-    for (const p of peds) {
+    for (const p of all) {
       if (!p.on || p.mode === 'knocked') continue;
       const dx = p.pos.x - car.pos.x, dz = p.pos.z - car.pos.z;
       if (dx * dx + dz * dz > 9) continue;
       const lx = dx * car.left.x + dz * car.left.z, lz = dx * car.fwd.x + dz * car.fwd.z, dy = p.pos.y - car.pos.y;
-      if (Math.abs(lx) > 1.1 || Math.abs(lz) > 2.45 || dy < -1.6 || dy > 1) continue;
+      // A thief or a scammer (`fair`) goes over when a car brushes past them at the kerb, not only when
+      // it drives right through them (the pavement's trees and posts stop a car mounting it).
+      const reach = p.actor?.fair ? 1.9 : 1.1;
+      if (Math.abs(lx) > reach || Math.abs(lz) > 2.45 || dy < -1.6 || dy > 1) continue;
       if ((p.mode === 'down' || p.mode === 'getup') && car.speed < 4) continue;
       const side = Math.sign(lx) || 1;
       knock(p, car.vel.x * 0.85 + car.left.x * side * 2.2, car.vel.z * 0.85 + car.left.z * side * 2.2, byPlayer);
@@ -373,6 +409,124 @@ export async function install(engine: Engine): Promise<void> {
     return false;
   };
 
+  /** A scripted person: along its points at its speed, else standing (facing where it was told). */
+  const stepActor = (p: Ped, dt: number) => {
+    const a = p.actor!;
+    a.gestureT += dt;
+    let moving = false;
+    if (a.ptI * 2 < a.pts.length) {
+      let step = a.speed * dt;
+      while (step > 0 && a.ptI * 2 < a.pts.length) {
+        const tx = a.pts[a.ptI * 2], tz = a.pts[a.ptI * 2 + 1], dx = tx - p.pos.x, dz = tz - p.pos.z, d = Math.hypot(dx, dz);
+        if (d > 0.05) p.want = Math.atan2(dx, dz);
+        if (d <= step) { p.pos.x = tx; p.pos.z = tz; step -= d; a.ptI++; if (a.ptI * 2 >= a.pts.length) a.arrivedF = true; }
+        else { p.pos.x += dx / d * step; p.pos.z += dz / d * step; step = 0; }
+      }
+      moving = !a.arrivedF;
+    }
+    if (!moving && Number.isFinite(a.faceTo)) p.want = a.faceTo;
+    p.cur = moving ? a.speed : 0;
+    p.pos.y = GROUND;
+    p.moved = p.cur;
+  };
+
+  class Act implements ActorImpl {
+    pts: number[] = []; ptI = 0; speed = 0; faceTo = NaN; gesture: Action | null = null; gestureT = 0;
+    arrivedF = true; hitsN = 0; aliveF = true; voiceS: VoiceSpec; fair = false; downFor = NaN;
+    constructor(public p: Ped) { this.voiceS = voiceOf(p.look, p.seed); }
+    get alive() { return this.aliveF; }
+    get pos() { return this.p.pos; }
+    get yaw() { return this.p.yaw; }
+    get look() { return this.p.look; }
+    get voice() { return this.voiceS; }
+    get state(): 'script' | 'down' { return this.p.mode === 'script' ? 'script' : 'down'; }
+    get hits() { return this.hitsN; }
+    get arrived() { return this.arrivedF; }
+    goTo(x: number, z: number, speed: number) { this.follow([x, z], speed); }
+    follow(pts: ArrayLike<number>, speed: number) { this.pts = Array.from(pts); this.ptI = 0; this.speed = speed; this.arrivedF = this.pts.length < 2; this.faceTo = NaN; }
+    stop() { this.pts = []; this.ptI = 0; this.arrivedF = true; }
+    face(x: number, z: number) { this.faceTo = Math.atan2(x - this.p.pos.x, z - this.p.pos.z); }
+    act(a: Action | null) { if (a !== this.gesture) { this.gesture = a; this.gestureT = 0; } }
+    say(text: string, secs = 2.8, name?: string) { if (this.aliveF) speak(this.p, text, secs, name); }
+    fall(vx: number, vz: number) { if (this.aliveF && this.p.mode === 'script') knock(this.p, vx, vz, false, true); }
+    getUp() { if (this.p.mode === 'down') this.p.hold = 0; }
+    release(how: 'walk' | 'flee' | 'vanish' = 'walk') {
+      if (!this.aliveF) return;
+      const p = this.p;
+      this.aliveF = false; p.on = false; p.actor = null; actorsOn--;
+      if (how === 'vanish') return;
+      // An ordinary passer-by from here: a pedestrian slot takes over (the farthest one if all are out).
+      let q = peds.find((r) => !r.on);
+      if (q) active++;
+      else { let bd = -1; const cam = engine.camera.position; for (const r of peds) { const d = Math.hypot(r.pos.x - cam.x, r.pos.z - cam.z); if (d > bd) { bd = d; q = r; } } }
+      if (!q) return;
+      const g0 = q.gait; q.gait = p.gait; p.gait = g0;
+      q.on = true; q.look = p.look; q.seed = p.seed; q.pos.copy(p.pos); q.prev.copy(p.prev); q.yaw = p.yaw; q.want = p.yaw;
+      q.vel.set(0, 0, 0); q.vy = 0; q.cross = false; q.willCall = false; q.gest = null; q.faceYaw = NaN; q.pace = 1.2 + rnd() * 0.4; q.frac = q.fracT = 0.5;
+      if (p.mode !== 'script') { q.mode = p.mode; q.t = p.t; q.hold = p.hold; q.vel.copy(p.vel); q.vy = p.vy; return; }   // still down: gets up as a passer-by
+      reattach(q);
+      if (q.mode === 'flee') { q.fear = how === 'flee' ? 6 + rnd() * 3 : 0.01; q.cur = how === 'flee' ? RUN : q.pace; }
+    }
+  }
+
+  const spawnActor = (x: number, z: number, opts?: { look?: Look; yaw?: number; seed?: number }): Actor | null => {
+    const p = actorSlots.find((r) => !r.on);
+    if (!p) return null;
+    p.on = true; p.mode = 'script'; p.t = 0; p.hold = 0; p.cross = false; p.road = false; p.willCall = false; p.gest = null; p.faceYaw = NaN;
+    p.pos.set(x, GROUND, z); p.prev.copy(p.pos); p.vel.set(0, 0, 0); p.vy = 0; p.cur = 0; p.moved = 0;
+    p.yaw = p.want = opts?.yaw ?? 0;
+    p.look = opts?.look ?? randomLook(rnd); p.seed = opts?.seed ?? rnd();
+    const a = new Act(p);
+    p.actor = a; actorsOn++;
+    // Room in the crowd: the farthest passer-by out of view makes way.
+    if (active > cap - actorsOn) {
+      const cam = engine.camera.position;
+      engine.camera.getWorldDirection(camDir);
+      let far: Ped | null = null, bd = 30;
+      for (const r of peds) { if (!r.on) continue; const dx = r.pos.x - cam.x, dz = r.pos.z - cam.z, d = Math.hypot(dx, dz); if (d > bd && (dx * camDir.x + dz * camDir.z) / d < 0.3) { bd = d; far = r; } }
+      if (far) despawn(far);
+    }
+    return a;
+  };
+
+  /** A gesture over the walk for `secs` (a passer-by cheering the player, pointing them out). */
+  const gesture = (p: Ped, a: Action, secs: number) => { p.gest = a; p.gestT = 0; p.gestFor = secs; };
+
+  /** F by a passer-by: they stop, turn to the player and say something to suit the hour, the weather or the stars. */
+  const chat = (p: Ped) => {
+    const foot = pl.foot;
+    if (!foot || !calm(p) || p.actor) return;
+    if (!p.cross) { p.mode = 'wait'; p.t = 0; p.hold = 3.6; p.waitJ = -1; }
+    p.faceYaw = Math.atan2(foot.pos.x - p.pos.x, foot.pos.z - p.pos.z);
+    gesture(p, 'talk', 3.2);
+    const hour = engine.get<RenderApi>('render')?.timeOfDay ?? 15, rain = engine.get<RenderApi>('render')?.rain ?? 0;
+    const wanted = (engine.get<WantedApi>('wanted')?.level ?? 0) > 0;
+    const k = wanted ? 'npc.chat.wanted' : rain > 0.3 && rnd() < 0.6 ? 'npc.chat.rain' : hour >= 5 && hour < 10 && rnd() < 0.6 ? 'npc.chat.morning'
+      : (hour >= 22 || hour < 4) && rnd() < 0.6 ? 'npc.chat.night' : `npc.chat.day${1 + Math.floor(rnd() * 6)}`;
+    speak(p, t(k as 'npc.chat.day1'), 3.4, t('npc.who.passer'));
+  };
+
+  /** Someone near (x, z) calls out: the nearest calm passer-by within r, with a gesture. */
+  let barkT = 0;
+  const bark = (x: number, z: number, r: number, key: string, act: Action, faceX = NaN, faceZ = NaN): boolean => {
+    if (barkT > 0) return false;
+    let best: Ped | null = null, bd = r;
+    for (const p of peds) { if (!p.on || !(p.mode === 'walk' || p.mode === 'wait') || p.cross) continue; const d = Math.hypot(p.pos.x - x, p.pos.z - z); if (d < bd && d > 2) { bd = d; best = p; } }
+    if (!best) return false;
+    barkT = 4 + rnd() * 3;
+    gesture(best, act, 1.8);
+    if (Number.isFinite(faceX)) { if (best.mode === 'walk') { best.mode = 'wait'; best.t = 0; best.hold = 2; best.waitJ = -1; } best.faceYaw = Math.atan2(faceX - best.pos.x, faceZ - best.pos.z); }
+    speak(best, t(key as 'npc.bark.praise1'), 2);
+    return true;
+  };
+  // A stunt pulled off in front of people gets a cheer from the pavement.
+  engine.events.on('stunt:event', ({ kind }) => {
+    if (kind !== 'near' && kind !== 'drift' && kind !== 'air' && kind !== 'smash') return;
+    const v = vehicle();
+    if (!v.occupied || rnd() > 0.45) return;
+    bark(v.car.pos.x, v.car.pos.z, 32, `npc.bark.praise${1 + Math.floor(rnd() * 4)}`, 'cheer');
+  });
+
   const stepPed = (p: Ped, dt: number) => {
     p.t += dt;
     if (p.mode === 'knocked' || p.mode === 'down' || p.mode === 'getup') {
@@ -384,13 +538,14 @@ export async function install(engine: Engine): Promise<void> {
       p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; p.pos.y += p.vy * dt; p.vy -= 9.81 * dt;
       let grounded = false;
       if (p.pos.y <= GROUND) { p.pos.y = GROUND; grounded = true; p.vy = p.vy < -3 ? -p.vy * 0.25 : 0; p.vel.multiplyScalar(Math.exp(-dt * 5)); }
-      if (p.mode === 'knocked' && p.t > 0.45 && grounded && p.vy === 0 && hs < 2.5) { p.mode = 'down'; p.t = 0; p.hold = 1.8 + rnd() * 2.5; }
+      if (p.mode === 'knocked' && p.t > 0.45 && grounded && p.vy === 0 && hs < 2.5) { p.mode = 'down'; p.t = 0; p.hold = p.actor && Number.isFinite(p.actor.downFor) ? p.actor.downFor : 1.8 + rnd() * 2.5; }
       else if (p.mode === 'down') { p.vel.multiplyScalar(Math.exp(-dt * 8)); if (p.t > p.hold) { p.mode = 'getup'; p.t = 0; } }
-      else if (p.mode === 'getup' && p.t > 0.9) reattach(p);
+      else if (p.mode === 'getup' && p.t > 0.9) { if (p.actor) { p.mode = 'script'; p.t = 0; p.cur = 0; p.vel.set(0, 0, 0); } else reattach(p); }
       p.moved = 0;
       return;
     }
     if (p.mode === 'lost') { p.moved = 0; return; }
+    if (p.mode === 'script') { stepActor(p, dt); return; }
     if (p.mode === 'wait') {
       p.moved = 0; p.cur = 0;
       // Only a kerb wait (`cross`) can end early: green with time to walk it, or a gap in traffic.
@@ -408,7 +563,9 @@ export async function install(engine: Engine): Promise<void> {
       return;
     }
     if (p.mode === 'call') {
-      p.t += dt; p.cur += (0 - p.cur) * (1 - Math.exp(-dt * 6));
+      // (p.t already counts up above: counting it here too halved every call.) Standing still on
+      // the phone: `moved` kept the walking speed it was picked at, and the legs walked on the spot.
+      p.cur = 0; p.moved = 0;
       if (p.t > p.hold) { p.mode = 'walk'; p.t = 0; engine.events.emit('people:report', { x: p.pos.x, z: p.pos.z }); }
       return;
     }
@@ -470,9 +627,10 @@ export async function install(engine: Engine): Promise<void> {
       },
     },
     witness,
+    spawnActor,
     shove(x, z, dirX, dirZ) {
       let best: Ped | null = null, bd = 2.2;
-      for (const p of peds) {
+      for (const p of all) {
         if (!p.on || !calm(p)) continue;
         const ex = p.pos.x - x, ez = p.pos.z - z, d = Math.hypot(ex, ez);
         if (d > bd) continue;
@@ -500,9 +658,9 @@ export async function install(engine: Engine): Promise<void> {
     fixedUpdate(dt) {
       if (!cap) return;
       frame++;
-      shoutT = Math.max(0, shoutT - dt);
+      shoutT = Math.max(0, shoutT - dt); barkT -= dt;
       spawnT -= dt;
-      if (spawnT <= 0) { spawnT = 0.05; if (active < cap) trySpawn(active < cap * 0.35); }
+      if (spawnT <= 0) { spawnT = 0.05; if (active < cap - actorsOn) trySpawn(active < cap * 0.35); }
       const v = vehicle(), pc = v.car;
       const horn = v.occupied && v.inputEnabled && engine.input.state.horn;
       const foot = pl.foot;
@@ -514,14 +672,22 @@ export async function install(engine: Engine): Promise<void> {
       pushThreat(pc);
       for (const c of cars) pushThreat(c);
       for (const c of cops) pushThreat(c);
-      for (let i = 0; i < peds.length; i++) {
-        const p = peds[i];
+      for (let i = 0; i < all.length; i++) {
+        const p = all[i];
         if (!p.on) continue;
         p.prev.copy(p.pos);
         stepPed(p, dt);
+        p.gestT += dt;
+        if (p.gest && p.gestT > p.gestFor) p.gest = null;
         const cdx = p.pos.x - cam.x, cdz = p.pos.z - cam.z, cd = Math.hypot(cdx, cdz);
-        if (cd > DESPAWN_R || (p.mode === 'lost' && (p.t > p.hold || (cdx * camDir.x + cdz * camDir.z) < 0))) { despawn(p); continue; }
-        if ((p.cross && p.road) || p.mode === 'down' || p.mode === 'getup') road.push(p.pos);
+        if (p.actor) {
+          // Its owner lets it go; a scripted person left behind out here is dropped.
+          if (cd > 600) { p.actor.release('vanish'); continue; }
+          if (p.mode === 'down' || p.mode === 'getup' || p.moved > 0.5) road.push(p.pos);
+          if (p.mode === 'script') continue;
+        }
+        if (!p.actor && (cd > DESPAWN_R || (p.mode === 'lost' && (p.t > p.hold || (cdx * camDir.x + cdz * camDir.z) < 0)))) { despawn(p); continue; }
+        if (!p.actor && ((p.cross && p.road) || p.mode === 'down' || p.mode === 'getup')) road.push(p.pos);
         // A witness on the phone is scared off it by a car coming at them (the player's way out).
         if (p.mode === 'call') {
           const dx = p.pos.x - pc.pos.x, dz = p.pos.z - pc.pos.z;
@@ -554,6 +720,12 @@ export async function install(engine: Engine): Promise<void> {
           }
         }
       }
+      // Wanted and in plain sight: whoever is near points the player out.
+      const wanted = engine.get<WantedApi>('wanted');
+      if (wanted && wanted.level > 0 && wanted.seen && barkT <= 0 && frame % 30 === 0) {
+        const P = foot?.pos ?? pc.pos;
+        if (foot || pc.speed < 6) bark(P.x, P.z, 20, `npc.bark.wanted${1 + Math.floor(rnd() * 2)}`, 'point', P.x, P.z);
+      }
       carHits(pc, v.occupied);
       for (const c of cars) carHits(c, false);
       for (const c of cops) carHits(c, false);
@@ -563,13 +735,31 @@ export async function install(engine: Engine): Promise<void> {
       const cam = engine.camera.position;
       engine.camera.getWorldDirection(camDir);
       const crowd = pl.crowd;
-      for (const p of peds) {
+      // F by a passer-by: talk to them (the nearest one in front, within reach).
+      const foot = pl.foot;
+      if (foot && pl.offer) {
+        let best: Ped | null = null, bd = 1.9;
+        const fx = Math.sin(foot.yaw), fz = Math.cos(foot.yaw);
+        for (const p of peds) {
+          if (!p.on || !(p.mode === 'walk' || p.mode === 'wait')) continue;
+          const dx = p.pos.x - foot.pos.x, dz = p.pos.z - foot.pos.z, d = Math.hypot(dx, dz);
+          if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.2) { bd = d; best = p; }
+        }
+        if (best) { const b = best; pl.offer({ x: b.pos.x, z: b.pos.z, r: 1.9, label: t('npc.talk'), use: () => chat(b) }); }
+      }
+      // Scripted people first (`all` starts with them): a full crowd drops passers-by, not them.
+      for (const p of all) {
         if (!p.on) continue;
+        if (p.mode !== 'wait') p.faceYaw = NaN;
+        if (Number.isFinite(p.faceYaw)) p.want = p.faceYaw;
         p.yaw += wrap(p.want - p.yaw) * Math.min(1, dt * (p.mode === 'flee' ? 12 : 7));
         const dx = p.pos.x - cam.x, dz = p.pos.z - cam.z, d = Math.hypot(dx, dz);
         if (d > 8 && dx * camDir.x + dz * camDir.z < -0.2 * d) continue;   // behind the camera
-        const action: Action = p.mode === 'knocked' || p.mode === 'down' || p.mode === 'getup' ? p.mode : 'move';
-        p.gait.update({ speed: p.moved, action, t: p.t }, dt, p.seed);
+        const down = p.mode === 'knocked' || p.mode === 'down' || p.mode === 'getup';
+        const a = p.actor;
+        const action: Action = down ? p.mode as Action : p.mode === 'call' ? 'phone' : a?.gesture ?? p.gest ?? 'move';
+        const at = down ? p.t : a?.gesture ? a.gestureT : p.gest ? p.gestT : p.mode === 'call' ? p.t : p.t;
+        p.gait.update({ speed: p.moved, action, t: at }, dt, p.seed);
         if (p.mode === 'call') p.gait.prop = 1;
         draw.lerpVectors(p.prev, p.pos, alpha);
         crowd.add(draw, p.yaw, p.gait, p.look);

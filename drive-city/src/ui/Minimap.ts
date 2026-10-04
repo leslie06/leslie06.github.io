@@ -52,7 +52,7 @@ const ROAD = ['#343c42', '#465057', '#5c656c', '#757d83', '#8f969a'];
 const ROAD_PX = [1.4, 2.4, 3.6, 5, 6.6];
 const GROUND = '#161b1e', WATER = '#1a3444', GREEN = '#1c2f23';
 const REF_SCALE = 0.6;
-const EDGE_KINDS = new Set<MarkKind>(['target', 'pickup', 'dropoff', 'mission', 'waypoint']);
+const EDGE_KINDS = new Set<MarkKind>(['target', 'pickup', 'dropoff', 'mission', 'waypoint', 'encounter', 'suspect']);
 /**
  * The radar's labels: a few, small. Its zoom runs from ~0.8 px/m on foot to ~0.18 at speed, so the
  * interchanges, ring shields, main roads, stations and parks always, side streets and hotels, shops

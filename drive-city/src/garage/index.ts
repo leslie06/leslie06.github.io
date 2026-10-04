@@ -32,7 +32,7 @@ export interface GarageApi extends System {
   show(): void;
   /** Give the player the car they are sitting in as theirs, with these upgrades (the intro's getaway car). */
   adopt(levels: { engine: number; tyres: number; nitro: number }): void;
-  debug: { buy(item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound', paint?: string): boolean };
+  debug: { buy(item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam', paint?: string): boolean };
 }
 
 /**
@@ -106,12 +106,17 @@ export async function install(engine: Engine): Promise<void> {
       carLevels: profile ? { engine: profile.engine, tyres: profile.tyres, nitro: profile.nitro } : null,
       health: Math.round(dmg?.health() ?? 100),
       taxi: v.look.taxi,
+      dashcam: !!engine.get<{ name: string; dashcam: boolean }>('npc')?.dashcam,
     });
   };
 
-  const buy = (item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound', paint?: string): boolean => {
+  const buy = (item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam', paint?: string): boolean => {
     const v = vehicle();
-    if (item === 'repair') {
+    if (item === 'dashcam') {
+      const npc = engine.get<{ name: string; dashcam: boolean }>('npc');
+      if (!npc || npc.dashcam || !pay(PRICE.dashcam)) return false;
+      npc.dashcam = true; toast(t('garage.bought.dashcam'));
+    } else if (item === 'repair') {
       const dmg = engine.get<DamageApi>('damage'), h = dmg?.health() ?? 100;
       const cost = Math.ceil((100 - h) * PRICE.repairPerPoint);
       if (h >= 100 || !pay(cost)) return false;

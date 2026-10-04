@@ -4,7 +4,9 @@ import { lang, t } from '../core/I18n';
 import { Rng } from '../core/Rng';
 import { project } from '../city/Geo';
 import { LANDMARKS } from '../city/landmarks';
-import type { Blip, HudApi, MissionApi, NavApi, PlayerApi, RaceApi, VehicleApi, WantedApi } from '../game/Contracts';
+import type { Blip, DialogueApi, HudApi, MissionApi, NavApi, PlayerApi, RaceApi, RenderApi, VehicleApi, WantedApi } from '../game/Contracts';
+import { paxLook, pickPax, PaxRide, type PaxKind } from './Passengers';
+import { journalOf } from '../npc/Journal';
 import type { TrafficApi } from '../traffic';
 import { Gait } from '../character/Animator';
 import { randomLook, type Look } from '../character/Body';
@@ -68,11 +70,13 @@ const PLACES: { zh: string; en: string; road: string; lat: number; lon: number }
 export interface MissionSystem extends MissionApi {
   /** Shots and testing: put a fare on the kerb near the player now. */
   debug: {
-    startFare(): boolean;
+    /** `pax`: who it is (Passengers.ts), else as chance has it. */
+    startFare(pax?: PaxKind): boolean;
     /** The short jobs: where they start, start one by name, which one runs. */
     jobPosts(): { kind: string; x: number; z: number; ready: boolean }[];
     startJob(kind: 'delivery' | 'chase' | 'trial'): boolean;
     job(): string | null;
+    ride(): { kind: PaxKind; smooth: number; viewers: number; heat: string; vomited: boolean; told: string[] } | null;
     state(): { stage: string; pickup: { x: number; z: number } | null; dest: { x: number; z: number; label: string } | null; limit: number; elapsed: number;
       shift: { on: boolean; clock: number; fares: number; earned: number }; hailers: { x: number; z: number; tier: number; urgent: boolean }[] };
   };
@@ -99,10 +103,11 @@ export async function install(engine: Engine): Promise<void> {
   const banner = new Banner();
   // Every landmark is a fare destination except the player's own house: nobody hails a taxi to be
   // driven to your garage.
+  const RAIL = new Set(['station', 'southstation', 'weststation']);
   const places = [...LANDMARKS.filter((l) => l.id !== 'home')
-    .map((l) => ({ lat: l.lat, lon: l.lon, zh: l.name.zh, en: l.name.en, road: '' })), ...PLACES].map((p) => {
+    .map((l) => ({ lat: l.lat, lon: l.lon, zh: l.name.zh, en: l.name.en, road: '', id: l.id })), ...PLACES.map((p) => ({ ...p, id: '' }))].map((p) => {
     const [x, z] = project(p.lat, p.lon);
-    return { x, z, zh: p.zh, en: p.en, road: p.road, kerb: undefined as Kerb | null | undefined };
+    return { x, z, zh: p.zh, en: p.en, road: p.road, id: p.id, rail: RAIL.has(p.id), kerb: undefined as Kerb | null | undefined };
   });
   const at = { x: 0, z: 0, dx: 0, dz: 0 };
   const byRoad = new Map<string, number[]>();
@@ -134,7 +139,13 @@ export async function install(engine: Engine): Promise<void> {
   const shift = { on: false, clock: 0, fares: 0, earned: 0, away: 0 };
 
   /** `urgent`: a street event's rush fare - red, flashing, gone in URGENT_WAIT s, double pay on a tighter clock. */
-  interface Hailer { pos: THREE.Vector3; yaw: number; look: Look; gait: Gait; t: number; tier: number; marker: Marker; urgent: boolean }
+  interface Hailer { pos: THREE.Vector3; yaw: number; look: Look; gait: Gait; t: number; tier: number; marker: Marker; urgent: boolean; pax: PaxKind; seed: number }
+  /** Who is aboard (Passengers.ts) and how the ride is going for them. */
+  let pax: PaxKind = 'normal', paxSeed = 0, ride: PaxRide | null = null, rideT = 0, lmT = 0;
+  /** A second toast after the fare's (how the passenger rated the ride), on the game clock. */
+  let lateToast = '', lateT = 0;
+  const dlg = () => engine.get<DialogueApi>('dialogue');
+  const journal = journalOf(engine);
   let urgentRide = false;
   const hailers: Hailer[] = [];
   const spareMarkers = Array.from({ length: HAILERS + 1 }, () => new Marker(engine.scene));
@@ -173,7 +184,9 @@ export async function install(engine: Engine): Promise<void> {
       const r = rnd();
       const tr0 = urgent ? 2 : r < TIERS[0].weight ? 0 : r < TIERS[0].weight + TIERS[1].weight ? 1 : 2;
       const m = spareMarkers.pop()!;
-      const h: Hailer = { pos: new THREE.Vector3(at.x, 0.045, at.z), yaw: Math.atan2(-side * at.dz, side * at.dx), look: randomLook(rnd), gait: new Gait(), t: rnd() * 3, tier: tr0, marker: m, urgent };
+      // The rush fare is the one with a train to catch.
+      const kind: PaxKind = urgent ? 'rush' : pickPax(rnd, engine.get<RenderApi>('render')?.timeOfDay ?? 15);
+      const h: Hailer = { pos: new THREE.Vector3(at.x, 0.045, at.z), yaw: Math.atan2(-side * at.dz, side * at.dx), look: paxLook(kind, rnd), gait: new Gait(), t: rnd() * 3, tier: tr0, marker: m, urgent, pax: kind, seed: rnd() };
       m.show(at.x, at.z, urgent ? URGENT_COLOR : TIERS[tr0].color, urgent ? 0.8 : 0.5);
       hailers.push(h);
       return true;
@@ -183,7 +196,7 @@ export async function install(engine: Engine): Promise<void> {
 
   const endFare = (msg: string | null, wait = 1.5) => {
     if (msg) toast(msg);
-    stage = 'wait'; timer = wait; dest = null;
+    stage = 'wait'; timer = wait; dest = null; ride = null;
     if (client.walkT >= client.walkDur) client.visible = false;
     nav()?.clearTarget('mission');
     marker.hide();
@@ -224,10 +237,24 @@ export async function install(engine: Engine): Promise<void> {
       limit = urgentRide ? tripLen / 12 + 6 : tripLen / 10.5 + 10; elapsed = 0; crashes = 0; tips = 0; tier = tr0;
       nav()?.setTarget({ x, z, kind: 'mission', label });
       marker.show(x, z, TIERS[tr0].color);
-      const say = (['taxi.say1', 'taxi.say2', 'taxi.say3'] as const)[Math.floor(rnd() * 3)];
-      toast(t(say, { place: label }));
+      ride = new PaxRide(pax, client.look, paxSeed, (who, text) => dlg()?.say(who, text, { prio: 1 }), rnd);
+      rideT = 0; lmT = 1;
+      ride.board(label, rnd);
       return true;
     };
+    // A train to catch: the nearest station by road, whatever the colour said.
+    if (pax === 'rush') {
+      let bestP: (typeof places)[number] | null = null, bestLen = Infinity;
+      for (const p of places) {
+        if (!p.rail) continue;
+        if (p.kerb === undefined) p.kerb = resolve(p);
+        if (!p.kerb) continue;
+        const len = nav()?.route(car.pos.x, car.pos.z, heading, p.kerb.x, p.kerb.z)?.len ?? Infinity;
+        if (len >= 300 && len <= 6500 && len < bestLen) { bestLen = len; bestP = p; }
+      }
+      if (bestP) return set(bestP.kerb!.x, bestP.kerb!.z, lang() === 'zh' ? bestP.zh : bestP.en, bestLen);
+      pax = 'normal';
+    }
     for (const i of places.map((_, k) => k).sort(() => rnd() - 0.5)) {
       const p = places[i], d = Math.hypot(p.x - car.pos.x, p.z - car.pos.z);
       if (d > T.max || d < T.min * 0.4) continue;
@@ -246,10 +273,16 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('vehicle:impact', (e) => {
     if (stage !== 'ride' || e.strength < 3) return;
     crashes++;
-    if (careT <= 0) { toast(t('taxi.careful')); careT = 6; }
+    if (careT <= 0) { ride?.react('crash'); careT = 6; }
   });
-  // Stunts with a passenger aboard are tipped (Crazy Taxi's "crazy through").
-  engine.events.on('stunt:event', ({ points }) => { if (stage === 'ride') tips += Math.max(1, Math.round(points / 12)); });
+  engine.events.on('vehicle:land', ({ airTime }) => { if (stage === 'ride' && airTime > 0.3) ride?.react('air'); });
+  // Stunts with a passenger aboard are tipped (Crazy Taxi's "crazy through"), and they have something to say.
+  engine.events.on('stunt:event', ({ kind, points }) => {
+    if (stage !== 'ride') return;
+    tips += Math.max(1, Math.round(points / 12));
+    const m = kind === 'near' || kind === 'oncoming' ? 'near' : kind === 'drift' ? 'drift' : kind === 'redlight' ? 'redlight' : kind === 'smash' ? 'crash' : null;
+    if (m) ride?.react(m, points);
+  });
   engine.events.on('vehicle:reset', () => { if (stage === 'boarding' || stage === 'ride' || stage === 'alight') { client.visible = false; client.walkT = client.walkDur; endFare(null, 2); } });
 
   const door = new THREE.Vector3();
@@ -270,7 +303,14 @@ export async function install(engine: Engine): Promise<void> {
     },
     get objective() { return api.story ?? jobs?.objective ?? objective; },
     debug: {
-      startFare: () => { if (!inTaxi()) return false; stage = 'pickup'; clearHailers(); return spawnHailer(12, 60) || spawnHailer(); },
+      startFare: (kind) => {
+        if (!inTaxi()) return false;
+        stage = 'pickup'; clearHailers();
+        const ok = spawnHailer(12, 60) || spawnHailer();
+        if (ok && kind) { const h = hailers[hailers.length - 1]; h.pax = kind; h.look = paxLook(kind, rnd); }
+        return ok;
+      },
+      ride: () => (ride ? { kind: ride.kind, smooth: ride.smooth, viewers: ride.viewers, heat: ride.heat, vomited: ride.vomited, told: [...ride.told] } : null),
       jobPosts: () => jobs?.postList ?? [],
       startJob: (kind) => jobs?.startKind(kind) ?? false,
       job: () => jobs?.kind ?? null,
@@ -284,6 +324,7 @@ export async function install(engine: Engine): Promise<void> {
     fixedUpdate(dt) {
       const v = vehicle(), car = v.car;
       careT -= dt; scaredT -= dt; summaryT -= dt;
+      if (lateT > 0 && (lateT -= dt) <= 0 && lateToast) { toast(lateToast); lateToast = ''; }
       // The short jobs (Jobs.ts): while one runs, no fare is offered and a running fare is dropped.
       if (!jobs) jobs = new Jobs(engine, { places, resolve, addCash: (n) => api.addCash(n), toast, rnd });
       jobs.fixedUpdate(dt);
@@ -329,7 +370,7 @@ export async function install(engine: Engine): Promise<void> {
           const side = Math.sign((client.pos.x - car.pos.x) * car.left.x + (client.pos.z - car.pos.z) * car.left.z) || 1;
           door.copy(car.pos).addScaledVector(car.left, side * 1.15).addScaledVector(car.fwd, -0.45); door.y = client.pos.y;
           walk(client.pos, door);
-          tier = h.tier; urgentRide = h.urgent;
+          tier = h.tier; urgentRide = h.urgent; pax = h.pax; paxSeed = h.seed;
           dropHailer(h);
           stage = 'boarding';
           break;
@@ -344,17 +385,43 @@ export async function install(engine: Engine): Promise<void> {
           }
           break;
         case 'ride': {
-          elapsed += dt;
-          if (wanted) { alight(car.pos.x, car.pos.z); toast(t('taxi.scared')); dest = null; break; }
+          elapsed += dt; rideT += dt;
+          if (ride) {
+            ride.step(dt, car.vel.x, car.vel.z, car.speed, rnd);
+            // The old Beijinger has a story for every landmark passed.
+            if (ride.kind === 'chatty' && (lmT -= dt) <= 0) {
+              lmT = 1;
+              for (const p of places) if (p.id && !ride.told.has(p.id) && Math.hypot(p.x - car.pos.x, p.z - car.pos.z) < 160) { ride.landmark(p.id, lang() === 'zh' ? p.zh : p.en, rnd); break; }
+            }
+            // The mystery passenger brings the police with him; lose them and he pays triple.
+            if (ride.kind === 'mystery') {
+              const w = engine.get<WantedApi>('wanted');
+              if (ride.heat === 'calm' && rideT > 4) { ride.heat = 'hot'; w?.crime('report', car.pos.x, car.pos.z); ride.line('pax.mystery.wanted'); }
+              else if (ride.heat === 'hot' && (w?.level ?? 0) === 0 && rideT > 8) { ride.heat = 'lost'; ride.line('pax.mystery.lost', { place: dest!.label }); }
+            }
+          }
+          if (wanted && ride?.kind !== 'mystery') { alight(car.pos.x, car.pos.z); toast(t('taxi.scared')); dest = null; break; }
           if (pl.mode !== 'driving' || !v.look.taxi) { endFare(t('taxi.left')); break; }
           if (elapsed > limit) { alight(car.pos.x, car.pos.z); toast(t('taxi.late')); dest = null; break; }
           if (Math.hypot(car.pos.x - dest!.x, car.pos.z - dest!.z) < 12 && car.speed < 2.5) {
             const left = 1 - elapsed / limit, r = RATINGS.find((q) => left >= q.min)!;
-            const base = payFor(tripLen / 1000) * (urgentRide ? 2 : 1), bonus = Math.round(base * r.bonus), tip = Math.max(0, tips - crashes * 3);
-            const total = base + bonus + tip;
+            const kind = ride?.kind ?? 'normal';
+            const triple = kind === 'mystery' && ride?.heat === 'lost';
+            const base = payFor(tripLen / 1000) * (urgentRide ? 2 : 1) * (triple ? 3 : 1), bonus = Math.round(base * r.bonus * (kind === 'rush' ? 2 : 1));
+            const stuntTip = Math.max(0, tips - crashes * 3), tip = ride ? ride.tip(stuntTip) : stuntTip;
+            const cleaning = ride?.vomited ? 30 : 0;
+            const total = Math.max(0, base + bonus + tip - cleaning);
             api.addCash(total);
             shift.fares++; shift.earned += total; shift.clock += r.time;
             toast(t('taxi.paidArcade', { rating: t(r.key), pay: base + bonus, tip, s: r.time }));
+            if (ride) {
+              ride.line(`pax.${kind}.arrive`);
+              if (kind !== 'normal') journal.meet(`pax.${kind}`);
+              const extra = triple ? t('pax.mystery.triple', { n: base }) : cleaning ? t('pax.drunk.cleaning', { n: cleaning })
+                : kind === 'queasy' ? t('pax.queasy.tip', { n: Math.round(ride.smooth), tip }) : kind === 'streamer' ? t('pax.streamer.tip', { n: ride.viewers, tip }) : '';
+              if (extra) { lateToast = extra; lateT = 1.7; }
+            }
+            ride = null;
             alight(dest!.x, dest!.z);
             dest = null;
           }
@@ -367,7 +434,8 @@ export async function install(engine: Engine): Promise<void> {
       // The objective line.
       const clock = shift.on ? fmt(shift.clock) : '';
       if (stage === 'ride' && dest) {
-        objective = t('taxi.rideLine', { place: dest.label, time: fmt(limit - elapsed) }) + (shift.on ? `  ·  ${t('taxi.clock', { t: clock })}` : '') + (tips > 0 ? `  ·  ${t('taxi.tips', { n: tips })}` : '');
+        objective = t('taxi.rideLine', { place: dest.label, time: fmt(limit - elapsed) }) + (shift.on ? `  ·  ${t('taxi.clock', { t: clock })}` : '') + (tips > 0 && ride?.kind !== 'queasy' ? `  ·  ${t('taxi.tips', { n: tips })}` : '')
+          + (ride?.kind === 'queasy' ? `  ·  ${t('pax.obj.smooth', { n: Math.round(ride.smooth) })}` : ride?.kind === 'streamer' ? `  ·  ${t('pax.obj.viewers', { n: ride.viewers })}` : '');
       } else if (stage === 'boarding') objective = t('taxi.boarding');
       else if (summaryT > 0) objective = summary;
       else if ((stage === 'pickup' || stage === 'wait') && inTaxi() && !other) {

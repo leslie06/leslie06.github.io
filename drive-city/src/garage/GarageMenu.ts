@@ -35,7 +35,7 @@ css(`
 }
 `);
 
-type Item = 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound';
+type Item = 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam';
 export interface GarageView {
   cash: number;
   /** The car in the garage is your car (the upgrades are on it). */
@@ -48,6 +48,8 @@ export interface GarageView {
   carLevels: { engine: number; tyres: number; nitro: number } | null;
   health: number;
   taxi: boolean;
+  /** A dashcam is fitted (the player's, whatever car: npc/'s scammers run from it). */
+  dashcam: boolean;
 }
 
 const pips = (n: number, of: number) => '●'.repeat(n) + '○'.repeat(Math.max(0, of - n));
@@ -94,6 +96,7 @@ export class GarageMenu {
     stage('nitro', 3, lv.nitro > 0 ? t('garage.nitroWhat', { s: NITRO[lv.nitro] }) : t('garage.nitroNone'));
     const cost = Math.ceil((100 - v.health) * PRICE.repairPerPoint);
     this.row(p, t('garage.repair'), t('garage.repairWhat', { n: v.health }), v.health < 100 ? cost : undefined, v.health < 100 && v.cash >= cost, () => this.onBuy('repair'), v.health < 100 ? t('garage.fix') : t('garage.fine'));
+    this.row(p, t('garage.dashcam'), t('garage.dashcamWhat'), v.dashcam ? undefined : PRICE.dashcam, !v.dashcam && v.cash >= PRICE.dashcam, () => this.onBuy('dashcam'), v.dashcam ? t('garage.dashcamHave') : t('garage.buy'));
     // Paint: one swatch per colour.
     const r = el('div', 'row', p);
     el('div', 'name', r).textContent = t('garage.paint');

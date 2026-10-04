@@ -20,9 +20,12 @@ export const LANGS: readonly Lang[] = ['zh', 'en'];
 /** Each language named in itself: the switch must be readable by someone who can't read the other one. */
 export const LANG_NAME: Record<Lang, string> = { zh: '中文', en: 'EN' };
 
+import { NPC_EN, NPC_ZH } from './i18n/npc';
+
 const STORE_KEY = 'drivecity.lang.v1';
 
 const EN = {
+  ...NPC_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
@@ -304,7 +307,7 @@ const EN = {
   'event.urgentBanner': "URGENT",
   'map.jump': "Stunt ramp",
   'map.collect': "兔儿爷 (nearby)",
-  'pause.progress': "Stunt jumps {j}/{jt}  ·  兔儿爷 {r}/{rt}  ·  landmarks {c}/{ct}  ·  time-trial medals {m}/{mt}\nBest taxi shift ¥{taxi}  ·  best combo {combo}",
+  'pause.progress': "Stunt jumps {j}/{jt}  ·  兔儿爷 {r}/{rt}  ·  landmarks {c}/{ct}  ·  time-trial medals {m}/{mt}\nBest taxi shift ¥{taxi}  ·  best combo {combo}  ·  Who's Who {npc}/{npct}",
   'jump.firstOver': "OVERPASS FLIGHT · {m} m · +¥{n} · {i}/{of}",
   'jump.againOver': "Overpass flight · {m} m",
   'under.name': "Underground car park",
@@ -403,6 +406,7 @@ export type TKey = keyof typeof EN;
 export type TParams = Record<string, string | number>;
 
 const ZH: Record<TKey, string> = {
+  ...NPC_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',
@@ -684,7 +688,7 @@ const ZH: Record<TKey, string> = {
   'event.urgentBanner': "急单",
   'map.jump': "特技跳台",
   'map.collect': "兔儿爷（附近）",
-  'pause.progress': "特技跳 {j}/{jt}  ·  兔儿爷 {r}/{rt}  ·  地标打卡 {c}/{ct}  ·  计时赛奖牌 {m}/{mt}\n最佳出租班 ¥{taxi}  ·  最佳连击 {combo}",
+  'pause.progress': "特技跳 {j}/{jt}  ·  兔儿爷 {r}/{rt}  ·  地标打卡 {c}/{ct}  ·  计时赛奖牌 {m}/{mt}\n最佳出租班 ¥{taxi}  ·  最佳连击 {combo}  ·  人物志 {npc}/{npct}",
   'jump.firstOver': "高架飞跃 · 飞了 {m} 米 · +¥{n} · {i}/{of}",
   'jump.againOver': "高架飞跃 · 飞了 {m} 米",
   'under.name': "地下停车场",

@@ -32,6 +32,8 @@ import * as collect from './collect';
 import * as checkin from './checkin';
 import * as trials from './trials';
 import * as events from './events';
+import * as npc from './npc';
+import * as dialogue from './dialogue';
 import * as story from './story';
 import * as leaderboard from './online/Leaderboard';
 import * as underground from './underground';
@@ -76,9 +78,9 @@ async function boot() {
   await vehicle.install(engine);
   await player.install(engine);
   await damage.install(engine);
-  if (worldName === 'city') { await traffic.install(engine); await people.install(engine); }
+  if (worldName === 'city') { await traffic.install(engine); await people.install(engine); await dialogue.install(engine); }
   if (worldName === 'city') await nav.install(engine);
-  if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await checkin.install(engine); await trials.install(engine); await intro.install(engine); await events.install(engine); leaderboard.install(engine); await story.install(engine); }
+  if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await checkin.install(engine); await trials.install(engine); await intro.install(engine); await events.install(engine); await npc.install(engine); leaderboard.install(engine); await story.install(engine); }
   await fx.install(engine);
   await audio.install(engine);
   await ui.install(engine, container);

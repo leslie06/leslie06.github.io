@@ -11,7 +11,7 @@ export const INK = 'rgba(9,11,13,0.9)';
 export const POLICE_RED = '#ff3b30', POLICE_BLUE = '#2f7bff';
 export const BLIP_COLOR: Record<MarkKind, string> = {
   police: POLICE_BLUE, target: C.yellow, pickup: '#3aa6ff', dropoff: '#3ccf72', car: '#d8dbde', landmark: '#d4b264', landmarkDone: '#8a8270', trial: '#5fd1ff', waypoint: C.yellow, mission: C.yellow,
-  jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a',
+  jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a', encounter: '#ff9f1c', suspect: '#ff3b30',
 };
 
 /** Police lights: red/blue at ~2.5 Hz. */
@@ -134,6 +134,19 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       ctx.fillStyle = col; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, r * 0.2);
       for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(x + s * r * 0.32, y - r * 0.75, r * 0.22, r * 0.5, s * 0.25, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
       ctx.beginPath(); ctx.arc(x, y, r * 0.62, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      break;
+    }
+    case 'encounter': {
+      // Something going on: an orange disc with a question mark (GTA's stranger blip).
+      disc(ctx, x, y, r, col);
+      ctx.fillStyle = INK; ctx.font = `900 ${Math.round(r * 1.35)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('?', x, y + r * 0.08);
+      break;
+    }
+    case 'suspect': {
+      // Someone to catch: a red disc with a white ring.
+      disc(ctx, x, y, r, col);
+      ctx.beginPath(); ctx.arc(x, y, r * 0.45, 0, Math.PI * 2); ctx.lineWidth = Math.max(1.2, r * 0.22); ctx.strokeStyle = '#fff'; ctx.stroke();
       break;
     }
     case 'mission':

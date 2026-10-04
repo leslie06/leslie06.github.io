@@ -294,7 +294,8 @@ export async function install(engine: Engine): Promise<void> {
     v.inputEnabled = true;
   };
 
-  engine.events.on('people:hit', (e) => { if (e.byPlayer) crime('hit_person', e.x, e.z); });
+  // A thief or a scammer put down is not a crime (npc/: `fair`).
+  engine.events.on('people:hit', (e) => { if (e.byPlayer && !e.fair) crime('hit_person', e.x, e.z); });
   engine.events.on('people:report', (e) => crime('report', e.x, e.z));
   engine.events.on('player:mode', (e) => { if (e.carjacked) { readPlayer(); crime('carjack', P.x, P.z); } });
   /** The player drove into (ox, oz): moving, and mostly towards it (being rammed is not a crime). */

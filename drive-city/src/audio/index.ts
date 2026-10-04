@@ -3,6 +3,8 @@ import type { VehicleApi, WantedApi, RenderApi, PlayerApi } from '../game/Contra
 import type { TrafficApi } from '../traffic';
 import type { HudApi } from '../game/Contracts';
 import { Radio } from './Radio';
+import { babble } from './Babble';
+import * as THREE from 'three';
 
 export interface AudioApi extends System {
   /** Must be called synchronously inside a user gesture (the start button). */
@@ -257,6 +259,31 @@ export async function install(engine: Engine): Promise<void> {
     const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 0.8;
     o.connect(f).connect(g).connect(master); o.start(t0); o.stop(t0 + 1);
   }
+  /**
+   * Someone talking (npc/, dialogue/, a shout from the pavement): Babble.ts, quieter with distance,
+   * panned to where they stand; a passenger (x NaN) is in the car, centred. A new line from the same
+   * speaker (`id`) fades the old one out.
+   */
+  const talking = new Map<string, GainNode>();
+  const camF = new THREE.Vector3();
+  engine.events.on('npc:voice', ({ text, voice, x, z, id }) => {
+    if (!ctx || muted) return;
+    const c = ctx, cam = engine.camera.position;
+    let vol = 0.12, pan = 0;
+    if (Number.isFinite(x)) {
+      const dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz);
+      if (d > 45) return;
+      vol *= Math.max(0.12, 1 - d / 45);
+      engine.camera.getWorldDirection(camF);
+      pan = d > 0.5 ? Math.max(-1, Math.min(1, (dx * -camF.z + dz * camF.x) / d)) * 0.75 : 0;
+    }
+    const out = c.createGain();
+    const panner = c.createStereoPanner(); panner.pan.value = pan;
+    out.connect(panner).connect(master);
+    if (id) { const old = talking.get(id); if (old) old.gain.setTargetAtTime(0, c.currentTime, 0.03); talking.set(id, out); }
+    const end = babble(c, out, noiseBuf, text, voice, vol, c.currentTime + 0.02);
+    setTimeout(() => { panner.disconnect(); if (id && talking.get(id) === out) talking.delete(id); }, (end - c.currentTime + 0.4) * 1000);
+  });
   engine.events.on('traffic:horn', ({ x, z }) => npcHorn(x, z));
   engine.events.on('wanted:level', ({ up }) => stinger(up));
   engine.events.on('vehicle:impact', ({ strength }) => thump(Math.min(1, strength / 12)));

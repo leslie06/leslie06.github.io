@@ -11,6 +11,9 @@ import type { CarModel } from '../vehicle/CarModel';
 import type { BodyType } from '../vehicle/Bodies';
 import type { PathPilot, PilotOptions } from '../vehicle/Autopilot';
 import type { Props } from '../world/Props';
+import type { Action } from '../character/Animator';
+import type { Look } from '../character/Body';
+import type { VoiceSpec } from '../character/Voice';
 
 export interface DriftState {
   active: boolean;
@@ -142,7 +145,17 @@ export interface PlayerApi extends System {
    * kept and read every step, so the ride writes its own pose into it and the player follows.
    */
   setRiding(seat: { pos: THREE.Vector3; yaw: number } | null, at?: { x: number; y: number; z: number; yaw: number }): void;
+  /**
+   * Something on foot the player can use with F (talk to someone, pick something up). Offer it every
+   * frame it is available; the player takes the nearest of the offers, the cars and the bikes in
+   * reach (an offer's `r` is its reach) and shows its `label` as the prompt.
+   */
+  offer?(o: Interaction): void;
+  /** The prompt the HUD shows (what F does now), or null. */
+  readonly prompt?: string | null;
 }
+
+export interface Interaction { x: number; z: number; r: number; label: string; use(): void }
 
 // --- Amusement park (park/): 北京欢乐谷 and its rides -------------------------------------------
 
@@ -166,7 +179,7 @@ export interface HomeApi extends System {
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------
 
-export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut';
+export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect';
 /** A marker on the minimap and map. `heading` (atan2(x, z)) turns it into an arrow. */
 export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string }
 export interface NavTarget { x: number; z: number; kind: 'waypoint' | 'mission'; label?: string }
@@ -248,6 +261,76 @@ export interface PeopleApi extends System {
   spawnFleeing(x: number, z: number): void;
   /** Shove whoever is within reach in front of (x, z) along (dirX, dirZ). True if someone went over. */
   shove(x: number, z: number, dirX: number, dirZ: number): boolean;
+  /**
+   * A scripted person (npc/, missions/) standing at (x, z): moved and posed by its owner, drawn
+   * before the crowd of passers-by (whose numbers make room), knocked over by cars and shoves like
+   * anyone. Null when there is no slot.
+   */
+  spawnActor?(x: number, z: number, opts?: { look?: Look; yaw?: number; seed?: number }): Actor | null;
+}
+
+/** A scripted person. Everything is in world metres; the owner polls it (hits, arrived, alive). */
+export interface Actor {
+  readonly alive: boolean;
+  /** Feet. */
+  readonly pos: THREE.Vector3;
+  readonly yaw: number;
+  readonly look: Look;
+  readonly voice: VoiceSpec;
+  /** 'script': on its feet doing what it is told; 'down': knocked, lying or getting up. */
+  readonly state: 'script' | 'down';
+  /** Times knocked over (cars, shoves, `fall`). */
+  readonly hits: number;
+  /** Reached the end of its `goTo` / `follow`. */
+  readonly arrived: boolean;
+  /** Knocking it over is no crime (a thief, a scammer, someone who swung at you). */
+  fair: boolean;
+  /** Seconds to lie on the ground after a fall before getting up (default 2-4). */
+  downFor: number;
+  goTo(x: number, z: number, speed: number): void;
+  /** Along [x0, z0, x1, z1, ...]. */
+  follow(pts: ArrayLike<number>, speed: number): void;
+  stop(): void;
+  /** Face a point while standing (null: keep the walking heading). */
+  face(x: number, z: number): void;
+  /** A gesture over whatever it is doing (talk, angry, point, cheer, phone, wave, stagger, sit), or null. */
+  act(a: Action | null): void;
+  /** A bubble over its head (and its voice): `secs` on screen. */
+  say(text: string, secs?: number, name?: string): void;
+  /** Throw itself down here (a scammer's fall, a trip): `vx, vz` a little shove. */
+  fall(vx: number, vz: number): void;
+  /** Lying down: get up now (else after `downFor`). */
+  getUp(): void;
+  /** Hand back: an ordinary pedestrian from here (`flee`: running away), or gone at once (`vanish`). */
+  release(how?: 'walk' | 'flee' | 'vanish'): void;
+}
+
+/** Who is talking in the dialogue box (dialogue/). */
+export interface Speaker {
+  name: string;
+  /** The avatar's disc and the name's colour. */
+  color: string;
+  look?: Look;
+  voice?: VoiceSpec;
+  /** Where the voice comes from (a live point), or null/absent: in the car with the player. */
+  at?: { readonly x: number; readonly z: number } | null;
+}
+
+/**
+ * The dialogue box: lines from people in the world (a passenger, a stranger, a contact), one at a
+ * time, each with the speaker's avatar and voice, and questions with two or three answers (keys
+ * 1-3, the D-pad, a tap). The game goes on underneath. `prio`: 3 story, 2 encounters, 1
+ * passengers, 0 chatter; a line of higher priority cuts in, a stale low one is dropped.
+ */
+export interface DialogueApi extends System {
+  say(who: Speaker, text: string, opts?: { prio?: number; secs?: number }): void;
+  ask(who: Speaker, text: string, options: string[], onPick: (i: number) => void, opts?: { prio?: number; timeout?: number; fallback?: number }): void;
+  /** Drop everything of this priority or lower (default: all). */
+  clear(prio?: number): void;
+  /** Something is on screen or waiting. */
+  readonly busy: boolean;
+  /** A question is waiting for its answer. */
+  readonly asking: boolean;
 }
 
 export interface HudApi extends System {
