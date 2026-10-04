@@ -133,7 +133,9 @@ export async function install(engine: Engine): Promise<void> {
       if (n !== shown && root) { shown = n; txt.textContent = it.text.slice(0, n); }
       const typed = n >= it.text.length, typedAt = it.text.length / cps();
       if (!it.ask) {
-        if (typed && t > typedAt + holdFor(it)) finish();
+        // A line being read out (audio/Speech.ts) is not cut off by the next: wait for the voice (6 s at most).
+        const talking = typeof speechSynthesis !== 'undefined' && speechSynthesis.speaking && t < typedAt + holdFor(it) + 6;
+        if (typed && t > typedAt + holdFor(it) && !talking) finish();
         return;
       }
       if (!typed) return;

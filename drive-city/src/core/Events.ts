@@ -18,7 +18,7 @@ export interface GameEvents {
    * Someone says `text` out loud (audio/Babble.ts gives it a voice): at (x, z), or in the player's
    * car when x is NaN (a passenger). `id` lets a new line from the same speaker cut the old one off.
    */
-  'npc:voice': { text: string; voice: { pitch: number; rate: number; bright: number }; x: number; z: number; id?: string };
+  'npc:voice': { text: string; voice: { pitch: number; rate: number; bright: number; fem?: number; age?: number }; x: number; z: number; id?: string };
   /** A story chapter was done (story/): whose it was (laok, xiaoyu, daliu, wang). */
   'story:done': { chapter: string; who: string };
   /** A hailer is getting into the taxi (missions/): which one (`MissionApi.hailers`). */
