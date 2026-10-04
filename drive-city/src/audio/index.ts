@@ -6,6 +6,7 @@ import { Radio } from './Radio';
 import { babble } from './Babble';
 import { StreetMusic, type MusicSource } from './StreetMusic';
 import { Speech } from './Speech';
+import { VoiceClips } from './VoiceClips';
 import { lang } from '../core/I18n';
 import * as THREE from 'three';
 
@@ -272,12 +273,14 @@ export async function install(engine: Engine): Promise<void> {
   const talking = new Map<string, GainNode>();
   const camF = new THREE.Vector3();
   /**
-   * Spoken lines: the device's own speech synthesis reads them (Speech.ts) - a dialogue box line cuts in, a
-   * shout only when nothing else is being said, quieter with distance. Anything else (a second shout at once,
+   * Spoken lines: recorded with neural voices (VoiceClips.ts, 2026-10-05) and panned and faded by distance;
+   * a line with no recording (English) goes to the device's own speech synthesis (Speech.ts - a dialogue box
+   * line cuts in, a shout only when nothing else is being said), and anything else (a second shout at once,
    * no local voice, `?voice=babble`) babbles (Babble.ts), which was all there was until 2026-10-04 and,
    * at a tenth of the knocks' level, read as no voice at all.
    */
   const speech = new Speech();
+  const clips = new VoiceClips(`${import.meta.env.BASE_URL}voice/`);
   const babbleOnly = new URLSearchParams(location.search).get('voice') === 'babble';
   engine.events.on('npc:voice', ({ text, voice, x, z, id }) => {
     if (!ctx || muted || engine.paused) return;
@@ -289,13 +292,14 @@ export async function install(engine: Engine): Promise<void> {
       if (d > 45) return;
       near = Math.max(0.15, 1 - d / 45);
     }
-    if (!babbleOnly && speech.say(text, voice, lang(), line ? 1 : 0.35 + 0.65 * near, line)) return;
-    const vol = 0.3 * near;
     if (Number.isFinite(x)) {
       const dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz);
       engine.camera.getWorldDirection(camF);
       pan = d > 0.5 ? Math.max(-1, Math.min(1, (dx * -camF.z + dz * camF.x) / d)) * 0.75 : 0;
     }
+    if (!babbleOnly && clips.play(c, master, text, voice, lang(), (line ? 1 : 0.35 + 0.65 * near) * 1.2, line ? pan * 0.5 : pan, line)) return;
+    if (!babbleOnly && speech.say(text, voice, lang(), line ? 1 : 0.35 + 0.65 * near, line)) return;
+    const vol = 0.3 * near;
     const out = c.createGain();
     const panner = c.createStereoPanner(); panner.pan.value = pan;
     out.connect(panner).connect(master);
@@ -303,7 +307,7 @@ export async function install(engine: Engine): Promise<void> {
     const end = babble(c, out, noiseBuf, text, voice, vol, c.currentTime + 0.02);
     setTimeout(() => { panner.disconnect(); if (id && talking.get(id) === out) talking.delete(id); }, (end - c.currentTime + 0.4) * 1000);
   });
-  engine.events.on('game:pause', ({ paused }) => { if (paused) speech.stop(); });
+  engine.events.on('game:pause', ({ paused }) => { if (paused) { speech.stop(); clips.stop(ctx); } });
   engine.events.on('traffic:horn', ({ x, z }) => npcHorn(x, z));
   // A traffic officer's whistle: two sharp trills.
   engine.events.on('life:whistle', ({ x, z }) => {
@@ -344,12 +348,12 @@ export async function install(engine: Engine): Promise<void> {
     get radio() { return radio; },
     setMuted(m) {
       muted = m;
-      if (m) speech.stop();
+      if (m) { speech.stop(); clips.stop(ctx); }
       try { localStorage.setItem('drivecity.muted', m ? '1' : '0'); } catch { /* ignore */ }
       if (ctx) master.gain.setTargetAtTime(m ? 0 : 0.8, ctx.currentTime, 0.05);
     },
     unlock() {
-      speech.unlock();
+      speech.unlock(); clips.prepare();
       if (ctx) { void ctx.resume(); return; }
       try {
         ctx = new AudioContext();

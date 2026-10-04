@@ -2,6 +2,7 @@ import type { Engine } from '../core/Engine';
 import { lang } from '../core/I18n';
 import type { DialogueApi, Speaker } from '../game/Contracts';
 import { portrait } from '../character/Portrait';
+import { lineTalking } from '../audio/VoiceClips';
 import { C, F, css, el } from '../ui/theme';
 
 css(`
@@ -133,8 +134,8 @@ export async function install(engine: Engine): Promise<void> {
       if (n !== shown && root) { shown = n; txt.textContent = it.text.slice(0, n); }
       const typed = n >= it.text.length, typedAt = it.text.length / cps();
       if (!it.ask) {
-        // A line being read out (audio/Speech.ts) is not cut off by the next: wait for the voice (6 s at most).
-        const talking = typeof speechSynthesis !== 'undefined' && speechSynthesis.speaking && t < typedAt + holdFor(it) + 6;
+        // A line being said (audio/VoiceClips.ts, Speech.ts) is not cut off by the next: wait for the voice (6 s at most).
+        const talking = (lineTalking() || (typeof speechSynthesis !== 'undefined' && speechSynthesis.speaking)) && t < typedAt + holdFor(it) + 6;
         if (typed && t > typedAt + holdFor(it) && !talking) finish();
         return;
       }
