@@ -3,6 +3,7 @@ import { lang, t } from '../core/I18n';
 import { shotMode } from '../debug/ShotMode';
 import type { HudApi } from '../game/Contracts';
 import { STARTS } from '../races';
+import { COURSES } from '../trials/Courses';
 
 /**
  * The online leaderboards: the street races' times (each start line's course is fixed by its seed),
@@ -15,11 +16,13 @@ import { STARTS } from '../races';
  * Off in shot mode and on a dev server (so probes and local play never write the real boards),
  * unless `?lb=<base url>` points it somewhere; `?lb=0` turns it off anywhere.
  */
-export type BoardId = 'race0' | 'race1' | 'race2' | 'race3' | 'combo' | 'taxi' | 'heist';
+export type BoardId = 'race0' | 'race1' | 'race2' | 'race3' | 'combo' | 'taxi' | 'heist' | `trial_${string}`;
 export interface BoardDef { id: BoardId; asc: boolean }
 export const BOARDS: BoardDef[] = [
   ...STARTS.map((_, i) => ({ id: `race${i}` as BoardId, asc: true })),
   { id: 'combo', asc: false }, { id: 'taxi', asc: false }, { id: 'heist', asc: true },
+  // the time trials (trials/), one board a course, the fastest time
+  ...COURSES.map((c) => ({ id: `trial_${c.id}` as BoardId, asc: true })),
 ];
 export interface BoardRow { name: string; score: number; me: boolean }
 export interface BoardData { board: BoardId; asc: boolean; total: number; top: BoardRow[]; me: { rank: number; score: number } | null }
@@ -97,6 +100,7 @@ export function install(engine: Engine): void {
     },
     fetch: async (board) => enabled ? await call('GET', undefined, `?g=${GAME}&b=${board}&p=${pid}`) as BoardData | null : null,
     label(board) {
+      if (board.startsWith('trial_')) { const c = COURSES.find((q) => `trial_${q.id}` === board); return t('lb.trial', { road: c ? (lang() === 'zh' ? c.zh : c.en) : board }); }
       if (board.startsWith('race')) { const s = STARTS[+board.slice(4)]; return t('lb.race', { road: s ? (lang() === 'zh' ? s.zh : s.en) : board }); }
       return t(`lb.${board as 'combo' | 'taxi' | 'heist'}`);
     },
@@ -110,6 +114,7 @@ export function install(engine: Engine): void {
   engine.events.on('race:finish', ({ race, time }) => api.submit(`race${race}` as BoardId, time * 1000));
   engine.events.on('stunt:bank', ({ points, lost }) => { if (!lost) api.submit('combo', points); });
   engine.events.on('taxi:shift', ({ earned }) => api.submit('taxi', earned));
+  engine.events.on('trial:finish', ({ id, time }) => api.submit(`trial_${id}`, time * 1000));
   engine.events.on('game:start', () => { if (enabled) for (const [b, v] of Object.entries(pending)) void send(b as BoardId, v, false); });
   engine.add(api);
 }

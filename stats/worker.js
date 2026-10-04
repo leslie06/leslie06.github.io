@@ -108,6 +108,11 @@ export const BOARDS = {
     combo: { asc: false, min: 1, max: 5e6 },
     taxi: { asc: false, min: 1, max: 2e5 },
     heist: { asc: true, min: 30e3, max: 30 * 60e3 },
+    // 计时赛（drive-city/src/trials/Courses.ts 的 COURSES，3.8-7.8 km）：最快的时间
+    trial_changan: { asc: true, min: 40e3, max: 30 * 60e3 }, trial_e2: { asc: true, min: 40e3, max: 30 * 60e3 },
+    trial_e3: { asc: true, min: 40e3, max: 30 * 60e3 }, trial_w2: { asc: true, min: 40e3, max: 30 * 60e3 },
+    trial_e4: { asc: true, min: 40e3, max: 30 * 60e3 }, trial_n4: { asc: true, min: 40e3, max: 30 * 60e3 },
+    trial_jingtong: { asc: true, min: 40e3, max: 30 * 60e3 },
   },
 };
 const LB_TOP = 10;

@@ -120,6 +120,8 @@ await post({ g: 'bcity', b: 'combo', p: 'pb', n: '小李', v: 9000 });
 lb = await top('combo', 'pa');
 ok('积分榜从高到低', lb.top[0].score === 9000 && lb.me.rank === 2);
 ok('超出范围的成绩不收', (await post({ g: 'bcity', b: 'race0', p: 'pd', v: 1000 })).status === 400);
+ok('计时赛榜收成绩', (await post({ g: 'bcity', b: 'trial_changan', p: 'pa', n: '阿飞', v: 343400 })).status === 200);
+ok('计时赛太快不收', (await post({ g: 'bcity', b: 'trial_e2', p: 'pa', v: 20e3 })).status === 400);
 ok('不在白名单的榜不收', (await post({ g: 'bcity', b: 'hack', p: 'pd', v: 5000 })).status === 400);
 ok('别的游戏的榜不收', (await post({ g: 'kart', b: 'race0', p: 'pd', v: 50000 })).status === 400);
 ok('像网址的名字换成默认', (await post({ g: 'bcity', b: 'taxi', p: 'pe', n: 'www.spam.com', v: 500 })).body.name === '车手');

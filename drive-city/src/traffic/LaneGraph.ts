@@ -51,13 +51,18 @@ export class LaneGraph {
         const m = e.p.length / 2, pts = new Float32Array(e.p.length), cum = new Float32Array(m);
         for (let k = 0; k < m; k++) { const i = fwd ? k : m - 1 - k; pts[k * 2] = e.p[i * 2]; pts[k * 2 + 1] = e.p[i * 2 + 1]; }
         for (let k = 1; k < m; k++) cum[k] = cum[k - 1] + Math.hypot(pts[k * 2] - pts[k * 2 - 2], pts[k * 2 + 1] - pts[k * 2 - 1]);
-        const lanes = e.o ? (e.l || Math.max(1, Math.round(e.w / 3.3))) : Math.max(1, e.l ? Math.round(e.l / 2) : Math.floor(e.w / 2 / 3.1));
-        const laneW = (e.o ? e.w : e.w / 2) / lanes;
+        // Down in an underpass the lanes keep 0.6 m off each side: the build pulls a trench's walls up to 0.5 m into the
+        // carriageway where a road alongside leaves no room outside, and the outer lane ran along them (紫竹院路's and
+        // 东四环中路's tunnels stopped the census's cars, 2026-10-04).
+        const sunk = !!e.h && Math.min(...e.h) < -0.5;
+        const ew = sunk ? Math.max(3, e.w - 1.2) : e.w;
+        const lanes = e.o ? (e.l || Math.max(1, Math.round(ew / 3.3))) : Math.max(1, e.l ? Math.round(e.l / 2) : Math.floor(ew / 2 / 3.1));
+        const laneW = (e.o ? ew : ew / 2) / lanes;
         const dir = (a: number, b: number) => { const dx = pts[b * 2] - pts[a * 2], dz = pts[b * 2 + 1] - pts[a * 2 + 1], L = Math.hypot(dx, dz) || 1; return [dx / L, dz / L]; };
         const [d0x, d0z] = dir(0, 1), [d1x, d1z] = dir(m - 2, m - 1);
         let h: Float32Array | null = null, hmax = 0;
         if (e.h) { h = new Float32Array(m); for (let k = 0; k < m; k++) { h[k] = e.h[fwd ? k : m - 1 - k]; hmax = Math.max(hmax, Math.abs(h[k])); } }
-        return { h, hmax, id: this.links.length, from: fwd ? e.a : e.b, to: fwd ? e.b : e.a, pts, cum, len: cum[m - 1], cls: e.c, lanes, laneW, hw: e.w / 2, oneway: !!e.o,
+        return { h, hmax, id: this.links.length, from: fwd ? e.a : e.b, to: fwd ? e.b : e.a, pts, cum, len: cum[m - 1], cls: e.c, lanes, laneW, hw: ew / 2, oneway: !!e.o,
           speed: SPEED[e.c] ?? 8, rev: -1, name: e.n ?? '', d0x, d0z, d1x, d1z };
       };
       const f = make(true);

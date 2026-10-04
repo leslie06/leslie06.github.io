@@ -24,7 +24,7 @@ export interface TunnelsFile {
 
 const CELL = 256, NEAR = 700, FAR = 900;
 /** Wall thickness, the parapet over the ground at full depth, the roof slab under the ground. */
-const WALL_T = 0.45, PARAPET = 1.05, SLAB = 0.9;
+const WALL_T = 0.45, PARAPET = 1.05, SLAB = 0.9, FLARE = 0.8;
 /**
  * The offset direction at point i of a centre line [x, z, ...]: the adjoining segments' left normals averaged and
  * stretched by 1/cos of half the bend (a mitre), so offset lines meet at the bisector. At an end, the segment beyond
@@ -108,11 +108,20 @@ export function placeTunnels(engine: Engine, data: TunnelsFile): TunnelApi {
       const shallow = !covered && Math.min(ha, hb) > -0.4;
       for (const s of [-1, 1]) {
         if (shallow) break;
-        if (!(r.c[i] & (s > 0 ? 2 : 4))) continue;   // a trench beside on that side: one trench, no wall between
+        const bit = s > 0 ? 2 : 4;
+        if (!(r.c[i] & bit)) continue;   // a trench beside on that side: one trench, no wall between
         const o0 = s > 0 ? hl : -hr - WALL_T, o1 = s > 0 ? hl + WALL_T : -hr;
-        m.bar(ax, az, bx, bz, o0, o1, ha - 0.2, top(ha), hb - 0.2, top(hb), covered ? C.inner : C.wall, na, nb);
-        if (!covered) m.bar(ax, az, bx, bz, o0 - 0.04, o1 + 0.04, top(ha), top(ha) + 0.08, top(hb), top(hb) + 0.08, C.coping, na, nb);
-        prism(o0, o1, ha - 0.2, top(ha) + (covered ? 0 : 0.08), hb - 0.2, top(hb) + (covered ? 0 : 0.08));
+        // Where a wall starts or stops along the way (two carriageways' trenches parting or meeting), its end flares
+        // out FLARE m over the segment: it stood square across the inner lane's edge (pulled 0.5 m into the lanes
+        // where there is no room outside) and a car met it head on (紫竹院路's tunnel, the census of 2026-10-04).
+        const q = s > 0 ? hl : hr, k = (q + FLARE) / Math.max(1, q);
+        const fa = i > 0 && !(r.c[i - 1] & bit) ? k : 1, fb = i + 1 < r.c.length && !(r.c[i + 1] & bit) ? k : 1;
+        const wa = [na[0] * fa, na[1] * fa], wb = [nb[0] * fb, nb[1] * fb];
+        m.bar(ax, az, bx, bz, o0, o1, ha - 0.2, top(ha), hb - 0.2, top(hb), covered ? C.inner : C.wall, wa, wb);
+        if (!covered) m.bar(ax, az, bx, bz, o0 - 0.04, o1 + 0.04, top(ha), top(ha) + 0.08, top(hb), top(hb) + 0.08, C.coping, wa, wb);
+        const W = (x: number, z: number, o: number, y: number) => { const n = x === ax && z === az ? wa : wb; return [x + n[0] * o, y, z + n[1] * o]; };
+        const ya0 = ha - 0.2, ya1 = top(ha) + (covered ? 0 : 0.08), yb0 = hb - 0.2, yb1 = top(hb) + (covered ? 0 : 0.08);
+        hulls.push([...W(ax, az, o0, ya0), ...W(ax, az, o1, ya0), ...W(ax, az, o0, ya1), ...W(ax, az, o1, ya1), ...W(bx, bz, o0, yb0), ...W(bx, bz, o1, yb0), ...W(bx, bz, o0, yb1), ...W(bx, bz, o1, yb1)]);
       }
       if (covered) {
         m.bar(ax, az, bx, bz, -hr - WALL_T, hl + WALL_T, -SLAB, -0.04, -SLAB, -0.04, C.roof, na, nb);
