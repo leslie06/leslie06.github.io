@@ -19,6 +19,8 @@ const KEY = 'drivecity.rabbits.v1';
 export interface CollectApi extends System {
   readonly found: number;
   readonly total: number;
+  /** The ones not found yet (where; the street's gossip points at them: life/). */
+  left?(): { x: number; z: number }[];
   debug: { spots(): { x: number; z: number }[]; reset(): void };
 }
 
@@ -107,6 +109,7 @@ export async function install(engine: Engine): Promise<void> {
   const api: CollectApi = {
     name: 'collect',
     get found() { return found.size; },
+    left: () => RABBITS.filter((_, i) => !found.has(i)),
     total: n,
     debug: { spots: () => RABBITS, reset: () => { found.clear(); save(); } },
     fixedUpdate() {

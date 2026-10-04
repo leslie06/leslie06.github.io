@@ -151,6 +151,11 @@ export interface PlayerApi extends System {
    * reach (an offer's `r` is its reach) and shows its `label` as the prompt.
    */
   offer?(o: Interaction): void;
+  /**
+   * Held in a seat (`setRiding`) and drawn doing this (dancing in a square, tai chi in a park), or null.
+   * The clock starts at `t` (a group's), so the player moves with them.
+   */
+  setPose?(a: Action | null, t?: number): void;
   /** The prompt the HUD shows (what F does now), or null. */
   readonly prompt?: string | null;
 }
@@ -293,8 +298,13 @@ export interface Actor {
   stop(): void;
   /** Face a point while standing (null: keep the walking heading). */
   face(x: number, z: number): void;
-  /** A gesture over whatever it is doing (talk, angry, point, cheer, phone, wave, stagger, sit), or null. */
-  act(a: Action | null): void;
+  /**
+   * A gesture over whatever it is doing (talk, angry, point, cheer, phone, wave, stagger, sit, dance...), or
+   * null. `t` sets its clock (a group on the same clock moves together), `seat` the seat height for sitting.
+   */
+  act(a: Action | null, opts?: { t?: number; seat?: number }): void;
+  /** World matrix of skeleton joint `j` (character/Body.ts `J`) as drawn this frame (a prop in a hand). */
+  joint(j: number, out: THREE.Matrix4): void;
   /** A bubble over its head (and its voice): `secs` on screen. */
   say(text: string, secs?: number, name?: string): void;
   /** Throw itself down here (a scammer's fall, a trip): `vx, vz` a little shove. */

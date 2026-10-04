@@ -28,6 +28,8 @@ export interface JumpApi extends System {
   readonly total: number;
   /** In flight off a ramp right now. */
   readonly flying: boolean;
+  /** Ramps and overpasses not flown yet: where each launches (life/'s gossip). */
+  left?(): { x: number; z: number }[];
   debug: { ramps(): { x: number; z: number; yaw: number }[]; overpasses(): { x: number; z: number; yaw: number; gap: number }[]; last(): { ramp: number; dist: number } | null };
 }
 
@@ -146,6 +148,7 @@ export function installJumps(engine: Engine): void {
   const api: JumpApi = {
     name: 'jumps',
     get done() { return done.size; },
+    left: () => launchers.filter((j) => !done.has(j.id)).map((j) => ({ x: j.x, z: j.z })),
     total: JUMPS.length + OVERPASSES.length,
     get flying() { return !!flight; },
     debug: { ramps: () => JUMPS, overpasses: () => OVERPASSES, last: () => last },

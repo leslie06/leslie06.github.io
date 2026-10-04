@@ -2512,6 +2512,7 @@ execFileSync('npx', ['tsx', 'scripts/city/shelters.mts'], { stdio: 'inherit' });
 execFileSync('node', ['scripts/city/entrances.mjs'], { stdio: 'inherit' });
 execFileSync('node', ['scripts/city/footbridges.mjs'], { stdio: 'inherit' });
 execFileSync('node', ['scripts/city/railways.mjs'], { stdio: 'inherit' });
+execFileSync('node', ['--max-old-space-size=8000', 'scripts/city/sites.mjs'], { stdio: 'inherit' });
 // The map's place labels (needs the places export of extract-pbf.mjs; skipped without it).
 execFileSync('node', ['scripts/city/places.mjs'], { stdio: 'inherit' });
 // The subway lines and stations for the map (needs the pbf; skipped without it).

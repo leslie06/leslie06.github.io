@@ -19,6 +19,8 @@ export interface GameEvents {
    * car when x is NaN (a passenger). `id` lets a new line from the same speaker cut the old one off.
    */
   'npc:voice': { text: string; voice: { pitch: number; rate: number; bright: number }; x: number; z: number; id?: string };
+  /** A traffic officer blew the whistle (life/). */
+  'life:whistle': { x: number; z: number };
   /** A new face for the journal (人物志): `id` (npc/Journal.ts), its name, how many met of how many. */
   'npc:met': { id: string; name: string; n: number; of: number };
   /** A witness finished phoning the police about the player. */

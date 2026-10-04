@@ -4,6 +4,7 @@ import type { TrafficApi } from '../traffic';
 import type { HudApi } from '../game/Contracts';
 import { Radio } from './Radio';
 import { babble } from './Babble';
+import { StreetMusic, type MusicSource } from './StreetMusic';
 import * as THREE from 'three';
 
 export interface AudioApi extends System {
@@ -34,6 +35,7 @@ export async function install(engine: Engine): Promise<void> {
   let trainGain: GainNode, clackLfo: OscillatorNode, hornT = 0;
   let cityGain: GainNode, passGain: GainNode, humGain: GainNode;
   let radio: Radio | null = null;
+  let street: StreetMusic | null = null;
   let stepDist = 0;
   let noiseBuf: AudioBuffer;
   let shiftDip = 0;
@@ -51,6 +53,7 @@ export async function install(engine: Engine): Promise<void> {
     noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    street = new StreetMusic(c, master, noiseBuf);
 
     // Engine.
     const shaper = c.createWaveShaper();
@@ -285,6 +288,17 @@ export async function install(engine: Engine): Promise<void> {
     setTimeout(() => { panner.disconnect(); if (id && talking.get(id) === out) talking.delete(id); }, (end - c.currentTime + 0.4) * 1000);
   });
   engine.events.on('traffic:horn', ({ x, z }) => npcHorn(x, z));
+  // A traffic officer's whistle: two sharp trills.
+  engine.events.on('life:whistle', ({ x, z }) => {
+    if (!ctx || muted) return;
+    const c = ctx, t0 = c.currentTime, cam = engine.camera.position, vol = 0.12 * Math.max(0.2, 1 - Math.hypot(x - cam.x, z - cam.z) / 90);
+    for (const [s, d] of [[0, 0.22], [0.3, 0.5]]) {
+      const o = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = 2900; lfo.frequency.value = 28; lg.gain.value = 180; lfo.connect(lg).connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t0 + s); g.gain.exponentialRampToValueAtTime(vol, t0 + s + 0.02); g.gain.setValueAtTime(vol, t0 + s + d - 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t0 + s + d);
+      o.connect(g).connect(master); o.start(t0 + s); lfo.start(t0 + s); o.stop(t0 + s + d + 0.02); lfo.stop(t0 + s + d + 0.02);
+    }
+  });
   engine.events.on('wanted:level', ({ up }) => stinger(up));
   engine.events.on('vehicle:impact', ({ strength }) => thump(Math.min(1, strength / 12)));
   engine.events.on('prop:hit', ({ kind, speed }) => knock(kind, speed));
@@ -334,6 +348,13 @@ export async function install(engine: Engine): Promise<void> {
       if (radio) {
         if (engine.input.state.radioPressed && driving) radio.next();
         radio.update(!!driving, paused);
+      }
+      // The street's music (life/: a square dance's speaker, a busker, birds), heard where it is.
+      if (street) {
+        const cam = engine.camera.position;
+        engine.camera.getWorldDirection(camF);
+        const fl = Math.hypot(camF.x, camF.z) || 1;
+        street.update(engine.get<{ name: string; music: readonly MusicSource[] }>('life')?.music ?? [], cam.x, cam.z, camF.x / fl, camF.z / fl, paused);
       }
       // Engine off while the player is out of the car, and a bicycle or an electric scooter has none.
       const off = !v.occupied || car.spec.name === 'bike' || car.spec.name === 'ebike';

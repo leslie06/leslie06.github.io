@@ -12,6 +12,10 @@ export const ENTRIES: [string, TKey][] = [
   ['enc.thief', 'npc.j.thief'], ['enc.scam', 'npc.j.scam'], ['enc.rage', 'npc.j.rage'], ['enc.pregnant', 'npc.j.pregnant'],
   ['pax.rush', 'pax.name.rush'], ['pax.queasy', 'pax.name.queasy'], ['pax.chatty', 'pax.name.chatty'],
   ['pax.streamer', 'pax.name.streamer'], ['pax.drunk', 'pax.name.drunk'], ['pax.mystery', 'pax.name.mystery'],
+  // street life (life/)
+  ['life.dance', 'life.who.auntie'], ['life.taichi', 'life.who.master'], ['life.chess', 'life.who.chess'], ['life.birds', 'life.who.birds'],
+  ['life.jianbing', 'life.who.jianbing'], ['life.bbq', 'life.who.bbq'], ['life.busker', 'life.who.busker'], ['life.erhu', 'life.who.erhu'],
+  ['life.tour', 'life.who.guide'], ['life.police', 'life.who.police'], ['life.sweeper', 'life.who.sweeper'],
 ];
 
 export class Journal {

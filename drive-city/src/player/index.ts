@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Motion } from '../character/Animator';
+import type { Action, Motion } from '../character/Animator';
 import { J, SKELETON } from '../character/Body';
 import { SEAT, type TwoWheeler } from '../vehicle/TwoWheelers';
 import type { Engine } from '../core/Engine';
@@ -96,6 +96,8 @@ export async function install(engine: Engine): Promise<void> {
   /** F's offers (PlayerApi.offer): this frame's, collected while systems update, and last frame's, used now. */
   let offers: Interaction[] = [], offered: Interaction[] = [];
   let prompt: string | null = null;
+  /** Posed in place (PlayerApi.setPose): the action and its clock. */
+  let pose: Action | null = null, poseT = 0;
   /** Strapped into a fairground ride: physics is off and the seat drives the character. */
   let rideSeat: { pos: THREE.Vector3; yaw: number } | null = null;
   const position = new THREE.Vector3();
@@ -192,6 +194,7 @@ export async function install(engine: Engine): Promise<void> {
     get nearCar() { return nearCar; },
     offer(o) { offers.push(o); },
     get prompt() { return prompt; },
+    setPose(a, t = 0) { pose = a; poseT = t; },
     crowd,
     heroReady,
     getOut() { if (mode === 'driving') exitCar(); },
@@ -322,6 +325,12 @@ export async function install(engine: Engine): Promise<void> {
         foot.animate(dt);
         drawFeet.lerpVectors(prevFeet, curFeet, alpha);
         if (hero) hero.draw(drawFeet, foot.yaw, foot.gait); else crowd.add(drawFeet, foot.yaw, foot.gait, look);
+      } else if (mode === 'onfoot' && rideSeat && pose) {
+        // In place and posed: dancing with the square, tai chi with the park.
+        poseT += dt;
+        foot.gait.update({ speed: 0, action: pose, t: poseT }, dt, 0.3);
+        drawFeet.copy(rideSeat.pos);
+        if (hero) hero.draw(drawFeet, rideSeat.yaw, foot.gait); else crowd.add(drawFeet, rideSeat.yaw, foot.gait, look);
       } else if (mode === 'driving' && twoWheeler()) {
         // The pelvis on the saddle, the saddle leaning with the drawn body, the feet-root under it.
         const two = twoWheeler()!, seat = SEAT[two], lean = v.lean;

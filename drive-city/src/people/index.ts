@@ -7,7 +7,7 @@ import type { Actor, PeopleApi, PlayerApi, RenderApi, VehicleApi, WantedApi } fr
 import type { TrafficApi } from '../traffic';
 import type { Link } from '../traffic/LaneGraph';
 import type { Vehicle } from '../vehicle/Vehicle';
-import { Gait, type Action } from '../character/Animator';
+import { Gait, jointMatrices, type Action } from '../character/Animator';
 import { randomLook, type Look } from '../character/Body';
 import { CROWD_CAP } from '../character/Crowd';
 import { voiceOf, type VoiceSpec } from '../character/Voice';
@@ -31,7 +31,7 @@ const GAP = 4.5;
 const SPAWN_R = 100, DESPAWN_R = 125;
 const RUN = 4.3;
 /** Scripted people (npc/, missions/) on top of the passers-by: their slots come out of the same room. */
-const ACTORS = 8;
+const ACTORS = 40;
 
 type Mode = 'walk' | 'wait' | 'flee' | 'knocked' | 'down' | 'getup' | 'lost' | 'call' | 'script';
 
@@ -65,10 +65,11 @@ interface Ped {
 /** What a scripted person is told to do (people/ moves it in `stepPed`). */
 interface ActorImpl extends Actor {
   p: Ped;
-  pts: number[]; ptI: number; speed: number; faceTo: number; gesture: Action | null; gestureT: number;
+  pts: number[]; ptI: number; speed: number; faceTo: number; gesture: Action | null; gestureT: number; seat: number;
   arrivedF: boolean; hitsN: number; aliveF: boolean; voiceS: VoiceSpec;
 }
 
+const jointTmp = Array.from({ length: 17 }, () => new THREE.Matrix4());
 const wrap = (a: number) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
 /**
@@ -431,7 +432,7 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   class Act implements ActorImpl {
-    pts: number[] = []; ptI = 0; speed = 0; faceTo = NaN; gesture: Action | null = null; gestureT = 0;
+    pts: number[] = []; ptI = 0; speed = 0; faceTo = NaN; gesture: Action | null = null; gestureT = 0; seat = 0.46;
     arrivedF = true; hitsN = 0; aliveF = true; voiceS: VoiceSpec; fair = false; downFor = NaN;
     constructor(public p: Ped) { this.voiceS = voiceOf(p.look, p.seed); }
     get alive() { return this.aliveF; }
@@ -446,7 +447,12 @@ export async function install(engine: Engine): Promise<void> {
     follow(pts: ArrayLike<number>, speed: number) { this.pts = Array.from(pts); this.ptI = 0; this.speed = speed; this.arrivedF = this.pts.length < 2; this.faceTo = NaN; }
     stop() { this.pts = []; this.ptI = 0; this.arrivedF = true; }
     face(x: number, z: number) { this.faceTo = Math.atan2(x - this.p.pos.x, z - this.p.pos.z); }
-    act(a: Action | null) { if (a !== this.gesture) { this.gesture = a; this.gestureT = 0; } }
+    act(a: Action | null, o?: { t?: number; seat?: number }) {
+      if (a !== this.gesture) { this.gesture = a; this.gestureT = 0; }
+      if (o?.t !== undefined) this.gestureT = o.t;
+      if (o?.seat !== undefined) this.seat = o.seat;
+    }
+    joint(j: number, out: THREE.Matrix4) { jointMatrices(this.p.pos, this.p.yaw, this.p.gait, jointTmp); out.copy(jointTmp[j]); }
     say(text: string, secs = 2.8, name?: string) { if (this.aliveF) speak(this.p, text, secs, name); }
     fall(vx: number, vz: number) { if (this.aliveF && this.p.mode === 'script') knock(this.p, vx, vz, false, true); }
     getUp() { if (this.p.mode === 'down') this.p.hold = 0; }
@@ -759,7 +765,7 @@ export async function install(engine: Engine): Promise<void> {
         const a = p.actor;
         const action: Action = down ? p.mode as Action : p.mode === 'call' ? 'phone' : a?.gesture ?? p.gest ?? 'move';
         const at = down ? p.t : a?.gesture ? a.gestureT : p.gest ? p.gestT : p.mode === 'call' ? p.t : p.t;
-        p.gait.update({ speed: p.moved, action, t: at }, dt, p.seed);
+        p.gait.update({ speed: p.moved, action, t: at, seat: a?.seat }, dt, p.seed);
         if (p.mode === 'call') p.gait.prop = 1;
         draw.lerpVectors(p.prev, p.pos, alpha);
         crowd.add(draw, p.yaw, p.gait, p.look);

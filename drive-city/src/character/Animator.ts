@@ -6,7 +6,10 @@ import { ANKLE_H, BALL, BIND_ROT, HEEL, J, JOINT_COUNT, LOOK_FLOATS, SHIN, SKELE
  * gestures over the normal locomotion; `sit` is a whole-body pose with the feet on the ground in
  * front and the pelvis `seat` metres up (the caller puts the root, the feet, on the ground).
  */
-export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch' | 'ride' | 'wave' | 'talk' | 'angry' | 'point' | 'cheer' | 'phone' | 'stagger' | 'sit';
+export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch' | 'ride' | 'wave' | 'talk' | 'angry' | 'point' | 'cheer' | 'phone' | 'stagger' | 'sit'
+  | 'dance' | 'taichi' | 'sweep' | 'strum' | 'photo' | 'direct' | 'cook' | 'erhu' | 'drink' | 'chess';
+/** The square dance's tempo (life/ and the music keep to it): beats a minute. */
+export const DANCE_BPM = 128;
 
 /** What drives a pose this frame. */
 export interface Motion {
@@ -159,6 +162,14 @@ export class Gait {
     else if (m.action === 'phone') { this.locomotion(m.speed, dt); this.phoneEar(m.t); }
     else if (m.action === 'stagger') { this.locomotion(m.speed, dt); this.stagger(m.t); }
     else if (m.action === 'sit') this.sit(m.t, m.seat ?? 0.46);
+    else if (m.action === 'dance') { this.drop = 0.035 * (0.5 + 0.5 * Math.cos(m.t * DANCE_BPM / 60 * TAU)); this.locomotion(0, dt); this.danceArms(m.t); }
+    else if (m.action === 'taichi') { this.drop = 0.11 + 0.03 * Math.sin(m.t * TAU / 8); this.locomotion(0, dt); this.taichiArms(m.t); }
+    else if (m.action === 'sweep') { this.locomotion(m.speed, dt); this.sweepArms(m.t); }
+    else if (m.action === 'strum') { this.locomotion(0, dt); this.strumArms(m.t); }
+    else if (m.action === 'photo') { this.locomotion(m.speed, dt); this.photoArms(m.t); }
+    else if (m.action === 'direct') { this.locomotion(0, dt); this.directArms(m.t); }
+    else if (m.action === 'cook') { this.locomotion(0, dt); this.cookArms(m.t); }
+    else if (m.action === 'erhu' || m.action === 'drink' || m.action === 'chess') { this.sit(m.t, m.seat ?? 0.36); this.seatedArms(m.action, m.t); }
     else this.locomotion(m.speed, dt);
     if (this.fade > 0) {
       const k = this.fade * this.fade * (3 - 2 * this.fade);
@@ -581,6 +592,91 @@ export class Gait {
     r[J.head * 3 + 1] = 0.25 * Math.sin(t * 0.23 + this.seed * 9);
     for (const [jS, jE, side] of [[J.shoulderL, J.elbowL, 1], [J.shoulderR, J.elbowR, -1]] as const) {
       r[jS * 3] = -0.5; r[jS * 3 + 2] = side * 0.12; r[jE * 3] = -0.95;
+    }
+  }
+
+  /** Both arms to a pose (shoulder x, z abduction outward, elbow) for each side, mixed by k. */
+  private arms(lx: number, lz: number, le: number, rx: number, rz: number, re: number, k: number): void {
+    const r = this.rot;
+    r[J.shoulderL * 3] = mix(r[J.shoulderL * 3], lx, k); r[J.shoulderL * 3 + 2] = mix(r[J.shoulderL * 3 + 2], lz, k); r[J.elbowL * 3] = mix(r[J.elbowL * 3], le, k);
+    r[J.shoulderR * 3] = mix(r[J.shoulderR * 3], rx, k); r[J.shoulderR * 3 + 2] = mix(r[J.shoulderR * 3 + 2], -rz, k); r[J.elbowR * 3] = mix(r[J.elbowR * 3], re, k);
+  }
+
+  /**
+   * 广场舞: four moves of eight beats each, round and round (everyone on the same clock moves together):
+   * arms swinging front and back, both up and down on the beat, a fan of the forearms out to the sides,
+   * claps in front of the chest. The knees bounce on every beat (the caller drops the pelvis).
+   */
+  private danceArms(t: number): void {
+    const r = this.rot, b = t * DANCE_BPM / 60, move = Math.floor(b / 8) % 4, ph = b * TAU, up = sstep(0, 0.4, t);
+    const s = Math.sin(ph / 2), c = Math.cos(ph);
+    if (move === 0) this.arms(-0.6 * s, 0.15, -0.5, 0.6 * s, 0.15, -0.5, up);
+    else if (move === 1) { const h = 0.5 + 0.5 * c; this.arms(-1.2 - 1.2 * h, -0.45, -0.3, -1.2 - 1.2 * h, -0.45, -0.3, up); }
+    else if (move === 2) this.arms(-0.2, 1.2 + 0.25 * s, -0.9 - 0.4 * c, -0.2, 1.2 - 0.25 * s, -0.9 + 0.4 * c, up);
+    else { const k = 0.5 + 0.5 * c; this.arms(-0.9, -0.25 - 0.25 * k, -1.2 - 0.3 * k, -0.9, -0.25 - 0.25 * k, -1.2 - 0.3 * k, up); }
+    r[J.chest * 3 + 1] += 0.18 * s * up; r[J.chest * 3 + 2] += 0.06 * Math.sin(ph) * up;
+    r[J.head * 3 + 2] += 0.05 * Math.sin(ph) * up;
+  }
+
+  /** 太极: slow circles of both arms (an 8 s cycle), the chest turning with them. */
+  private taichiArms(t: number): void {
+    const r = this.rot, a = t * TAU / 8, up = sstep(0, 1, t);
+    this.arms(-0.75 - 0.45 * Math.sin(a), 0.2 + 0.35 * Math.cos(a), -0.7 - 0.4 * Math.cos(a), -0.75 - 0.45 * Math.sin(a + Math.PI), 0.2 + 0.35 * Math.cos(a + Math.PI), -0.7 - 0.4 * Math.cos(a + Math.PI), up);
+    r[J.chest * 3 + 1] += 0.35 * Math.sin(a) * up; r[J.spine * 3 + 1] += 0.15 * Math.sin(a) * up;
+    r[J.head * 3 + 1] += 0.3 * Math.sin(a) * up;
+  }
+
+  /** Sweeping: both hands low on a broom in front, swung side to side by the shoulders. */
+  private sweepArms(t: number): void {
+    const r = this.rot, s = Math.sin(t * 2.6), up = sstep(0, 0.3, t);
+    this.arms(-0.75, -0.3, -0.75, -0.45, -0.1, -0.35, up);
+    r[J.chest * 3 + 1] += 0.4 * s * up; r[J.spine * 3] += 0.18 * up; r[J.chest * 3] += 0.12 * up;
+  }
+
+  /** A guitar: the left hand up the neck, the right strumming at the belly. */
+  private strumArms(t: number): void {
+    const r = this.rot, up = sstep(0, 0.3, t), s = Math.sin(t * 2 * TAU * 1.5);
+    this.arms(-1.0, 0.55, -1.35, -0.55, -0.15, -1.7 - 0.12 * s, up);
+    r[J.wristR * 3] = mix(r[J.wristR * 3], 0.35 * s, up);
+    r[J.head * 3] += 0.15 * up; r[J.head * 3 + 2] += 0.05 * Math.sin(t * 2.2) * up;
+  }
+
+  /** Taking a picture: both hands hold the phone up at eye level in front. */
+  private photoArms(t: number): void {
+    const up = sstep(0, 0.4, t);
+    this.arms(-1.35, -0.25, -1.45, -1.35, -0.25, -1.45, up);
+    if (up > 0.5) this.prop = 1;
+  }
+
+  /** A traffic officer: the left arm out to the side (stop), the right waving the traffic through. */
+  private directArms(t: number): void {
+    const r = this.rot, up = sstep(0, 0.3, t), w = Math.sin(t * TAU / 2.2);
+    this.arms(-0.05, 1.45, -0.05, -1.45 - 0.2 * w, 0.2 + 0.6 * (0.5 + 0.5 * w), -0.2 - 0.6 * (0.5 - 0.5 * w), up);
+    r[J.head * 3 + 1] += 0.4 * Math.sin(t * TAU / 6) * up;
+  }
+
+  /** Cooking at a griddle: both forearms forward and low, a spatula hand working. */
+  private cookArms(t: number): void {
+    const r = this.rot, up = sstep(0, 0.3, t), s = Math.sin(t * 5.5);
+    this.arms(-0.55, 0.1, -1.25, -0.6 - 0.15 * s, 0.12, -1.15 + 0.2 * s, up);
+    r[J.spine * 3] += 0.12 * up; r[J.head * 3] += 0.2 * up;
+  }
+
+  /** Seated: playing the 二胡 (the left hand up its neck, the right bowing), drinking, or over a chessboard. */
+  private seatedArms(a: Action, t: number): void {
+    const r = this.rot;
+    if (a === 'erhu') {
+      const s = Math.sin(t * TAU / 1.6);
+      this.arms(-0.75, 0.15, -1.75, -0.55, 0.35 + 0.3 * s, -1.05 - 0.45 * s, 1);
+      r[J.head * 3 + 2] += 0.1 * Math.sin(t * 0.9); r[J.head * 3] += 0.08;
+    } else if (a === 'drink') {
+      const cyc = t % 6, lift = sstep(0, 0.6, cyc) * (1 - sstep(2.2, 2.8, cyc));
+      this.arms(-0.5, 0.12, -0.95, -0.5 - 0.6 * lift, 0.15, -0.95 - 1.2 * lift, 1);
+      r[J.head * 3] -= 0.35 * lift;
+    } else {
+      const cyc = t % 9, reach = sstep(0, 0.5, cyc) * (1 - sstep(1.5, 2.1, cyc));
+      this.arms(-0.75, 0.1, -1.6, -0.75 - 0.4 * reach, 0.1, -1.6 + 0.9 * reach, 1);
+      r[J.spine * 3] += 0.18; r[J.head * 3] += 0.3;
     }
   }
 
