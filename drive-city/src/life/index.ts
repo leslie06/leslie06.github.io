@@ -14,7 +14,7 @@ import type { Action } from '../character/Animator';
 import { nearestKerb, SIDEWALK } from '../people/Pavement';
 import { journalOf } from '../npc/Journal';
 import { DanceGame } from './DanceGame';
-import { LifeProps, type PropKind } from './Props';
+import { clearOfWorld, LifeProps, PropBodies, type PropKind } from './Props';
 import BRANCHES from './branches.json';
 
 type Kind = 'dance' | 'taichi' | 'chess' | 'birds' | 'jianbing' | 'bbq' | 'busker' | 'tour' | 'police' | 'sweeper';
@@ -39,10 +39,10 @@ export interface LifeApi extends System {
   gossip(who: Speaker): boolean;
   /** What is playing in the street, for audio/. */
   readonly music: readonly MusicSource[];
-  debug: { spawn(kind: Kind, x?: number, z?: number): boolean; sites(): { square: number[][]; park: number[][] }; scenes(): { kind: Kind; x: number; z: number; yaw: number; cast: number; state: string; join: { x: number; z: number } | null; people: { x: number; z: number }[] }[]; clear(): void };
+  debug: { spawn(kind: Kind, x?: number, z?: number): boolean; sites(): { square: number[][]; park: number[][] }; bodies(): { kind: string; mass: number; sleeping: boolean; type: number }[]; scenes(): { kind: Kind; x: number; z: number; yaw: number; cast: number; state: string; join: { x: number; z: number } | null; people: { x: number; z: number }[]; props: { kind: string; x: number; y: number; z: number; solid: boolean }[] }[]; clear(): void };
 }
 
-interface Placed { kind: PropKind; x: number; y: number; z: number; yaw: number; sy?: number }
+interface Placed { kind: PropKind; x: number; y: number; z: number; yaw: number; sy?: number; body?: ReturnType<PropBodies['add']> }
 interface Scene {
   kind: Kind; x: number; z: number; yaw: number; cast: Actor[]; props: Placed[]; t: number; state: string;
   /** Where the music comes from and its clock. */
@@ -85,6 +85,8 @@ export async function install(engine: Engine): Promise<void> {
   const pick = <T>(xs: readonly T[]) => xs[Math.floor(rnd() * xs.length)];
   const journal = journalOf(engine);
   const props = new LifeProps(engine.scene, engine.get<RenderApi>('render')?.uniforms);
+  const bodies = new PropBodies(engine);
+  const _pm = new THREE.Matrix4();
   const budget = BUDGET[engine.quality.tier];
   const dance = new DanceGame(engine, (hits, of) => danceDone(hits, of));
 
@@ -177,6 +179,7 @@ export async function install(engine: Engine): Promise<void> {
   const spawn = (x: number, z: number, look: Look, yaw: number): Actor | null => people.spawnActor!(x, z, { look, yaw });
   const end = (s: Scene, how: 'walk' | 'vanish' = 'walk') => {
     for (const a of s.cast) if (a.alive) a.release(how);
+    for (const p of s.props) { bodies.remove(p.body); p.body = null; }
     s.cast = [];
     used.set(s.site, clock + 240);
     scenes.splice(scenes.indexOf(s), 1);
@@ -417,10 +420,18 @@ export async function install(engine: Engine): Promise<void> {
   const startJianbing = (): Scene | null => {
     const k = kioskNear((kk) => !free(`k${kk[0].toFixed(0)}_${kk[1].toFixed(0)}`));
     if (!k) return null;
-    const ax = Math.sin(k.yaw), az = Math.cos(k.yaw), d = k.len / 2 + 3;
-    const p = pavementAt(k.x + ax * d, k.z + az * d, 12, 0.55);
-    if (!p || inLandmark(p.x, p.z)) return null;
-    const yaw = Math.atan2(-p.side * at.dz, p.side * at.dx);   // the customers' side to the road
+    // Along the pavement from either end of the kiosk, the first spot with room for the cart, its cook and
+    // the queue and no street tree, post or wall in it (a cart by a trunk was pinned by it).
+    const ax = Math.sin(k.yaw), az = Math.cos(k.yaw);
+    let p: ReturnType<typeof pavementAt> = null, yaw = 0;
+    search: for (let d = k.len / 2 + 2.5; d < k.len / 2 + 16; d += 1.5) for (const end of [1, -1]) for (const frac of [0.55, 0.4, 0.7]) {
+      const c = pavementAt(k.x + ax * d * end, k.z + az * d * end, 12, frac);
+      if (!c || inLandmark(c.x, c.z)) continue;
+      const y = Math.atan2(-c.side * at.dz, c.side * at.dx);   // the customers' side to the road
+      if (!clearOfWorld(engine.physics, c.x, c.z, y, 1.3, 1.95, 0, -0.65)) continue;
+      p = c; yaw = y; break search;
+    }
+    if (!p) return null;
     const cook = R2(0, 0.8, yaw);
     const cast: (Actor | null)[] = [spawn(p.x + cook.x, p.z + cook.z, looks.vendor(), yaw + Math.PI)];
     const queue = 1 + Math.floor(rnd() * 3);
@@ -449,9 +460,13 @@ export async function install(engine: Engine): Promise<void> {
       const id = `b${p.x.toFixed(0)}_${p.z.toFixed(0)}`;
       if (!free(id)) continue;
       const yaw = p.yaw, cast: (Actor | null)[] = [];
+      const tables = budget >= 22 ? 2 : 1;
+      // room along the pavement for the grill, the lantern and the tables with their stools, clear of trees and posts
+      const reach = 3.2 + tables * 2.4;
+      if (!clearOfWorld(engine.physics, p.x, p.z, yaw, 1.1, reach / 2, 0, reach / 2 - 1.4)) continue;
       const cookAt = R2(0, 0.6, yaw);
       cast.push(spawn(p.x + cookAt.x, p.z + cookAt.z, looks.vendor(), yaw + Math.PI));
-      const tables = budget >= 22 ? 2 : 1, placed: Placed[] = [];
+      const placed: Placed[] = [];
       for (let ti = 0; ti < tables; ti++) {
         const c = R2(0, 2.4 + ti * 2.4, yaw), cx = p.x + c.x, cz = p.z + c.z;   // along the pavement
         placed.push({ kind: 'table', x: cx, y: 0.045, z: cz, yaw });
@@ -669,11 +684,14 @@ export async function install(engine: Engine): Promise<void> {
     debug: {
       spawn: (kind, x, z) => { load(); focus = x !== undefined && z !== undefined ? { x, z } : null; const ok = !!start(kind); focus = null; return ok; },
       sites: () => sites,
-      scenes: () => scenes.map((s) => ({ kind: s.kind, x: s.x, z: s.z, yaw: s.yaw, cast: s.cast.length, state: s.state, join: s.joinAt ?? null, people: s.cast.map((a) => ({ x: a.pos.x, z: a.pos.z })) })),
+      bodies: () => bodies.info(),
+      scenes: () => scenes.map((s) => ({ kind: s.kind, x: s.x, z: s.z, yaw: s.yaw, cast: s.cast.length, state: s.state, join: s.joinAt ?? null, people: s.cast.map((a) => ({ x: a.pos.x, z: a.pos.z })),
+        props: s.props.map((p) => { const t = p.body?.translation(); return { kind: p.kind, x: t?.x ?? p.x, y: t?.y ?? p.y, z: t?.z ?? p.z, solid: !!p.body }; }) })),
       clear: () => { while (scenes.length) end(scenes[0], 'vanish'); },
     },
     fixedUpdate(dt) {
       clock += dt; whistleCool -= dt;
+      bodies.update();
       for (const s of [...scenes]) { s.t += dt; s.step(dt); }
       // A cast member knocked down and gone (a car, a shove): the scene carries on without them.
       for (const s of scenes) s.cast = s.cast.filter((a) => a.alive);
@@ -701,7 +719,12 @@ export async function install(engine: Engine): Promise<void> {
       props.begin();
       music.length = 0;
       for (const s of scenes) {
-        for (const p of s.props) props.place(p.kind, p.x, p.y, p.z, p.yaw, p.sy);
+        for (const p of s.props) {
+          // Solid things get their body when first put down, and are drawn where it has got to.
+          if (p.body === undefined) p.body = PropBodies.solid(p.kind) ? bodies.add(p.kind, p.x, p.y, p.z, p.yaw) : null;
+          if (p.body) props.add(p.kind, bodies.matrix(p.body, _pm));
+          else props.place(p.kind, p.x, p.y, p.z, p.yaw, p.sy);
+        }
         s.frame?.(dt);
         if (s.music && s.state !== 'scattered') music.push({ id: s.site, kind: s.music.kind, x: s.music.x, z: s.music.z, t: (s.music as { t?: number }).t ?? s.t });
       }

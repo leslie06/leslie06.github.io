@@ -12,7 +12,7 @@ import type { Action } from '../character/Animator';
 import { randomLook, type Look } from '../character/Body';
 import { nearestKerb, SIDEWALK } from '../people/Pavement';
 import { journalOf } from '../npc/Journal';
-import { LifeProps, type PropKind } from '../life/Props';
+import { clearOfWorld, LifeProps, PropBodies, type PropKind } from '../life/Props';
 import { setPoliceOnEdge } from '../ui/Minimap';
 
 export type ContactId = 'laok' | 'xiaoyu' | 'daliu' | 'wang' | 'laozhang' | 'liujie' | 'feilong';
@@ -97,6 +97,8 @@ export async function install(engine: Engine): Promise<void> {
   const rnd = () => rng.next();
   const journal = journalOf(engine);
   const props = new LifeProps(engine.scene, engine.get<RenderApi>('render')?.uniforms);
+  const bodies = new PropBodies(engine);
+  const _pm = new THREE.Matrix4();
   const dlg = () => engine.get<DialogueApi>('dialogue');
   const toast = (s: string) => engine.get<HudApi>('hud')?.toast(s);
   const missions = () => engine.get<MissionApi>('missions');
@@ -122,7 +124,9 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   // Where each one is: the pavement nearest their place (resolved once the graph is in).
-  interface Here { d: Def; x: number; z: number; yaw: number; actor: Actor | null; chatted: boolean; looks: Look }
+  interface Here { d: Def; x: number; z: number; yaw: number; actor: Actor | null; chatted: boolean; looks: Look; bodies: (ReturnType<PropBodies['add']>)[];
+    /** Their pavement (link, arc length, side), and whether the spot has been checked clear of trees and posts. */
+    k: { link: number; s: number; side: number } | null; settled: boolean }
   const here: Here[] = DEFS.map((d) => {
     const [ax, az] = project(d.lat, d.lon);
     const k = nearestKerb(g, ax, az, 220, 0.8);
@@ -132,7 +136,7 @@ export async function install(engine: Engine): Promise<void> {
       g.at(l, k.s, k.side * (l.hw + w * d.frac), at);
       x = at.x; z = at.z; yaw = Math.atan2(-k.side * at.dz, k.side * at.dx);   // facing the road
     }
-    return { d, x, z, yaw, actor: null, chatted: false, looks: d.look(rnd) };
+    return { d, x, z, yaw, actor: null, chatted: false, looks: d.look(rnd), bodies: [], k: k ? { link: k.link, s: k.s, side: k.side } : null, settled: !d.props.length };
   });
 
   const speakerOf = (h: Here): Speaker => ({ name: `${t(h.d.name)} ${heartText(heartsOf(h.d.id))}`, color: h.d.color, look: h.looks, voice: h.actor?.voice, at: h.actor?.pos ?? null });
@@ -208,14 +212,33 @@ export async function install(engine: Engine): Promise<void> {
       for (const h of here) {
         const d = Math.hypot(h.x - cam.x, h.z - cam.z);
         if (show && d < NEAR && !h.actor?.alive) {
+          // A table or a cart needs a spot clear of the street trees and posts (their colliders are in by now):
+          // along the same pavement, nearest first.
+          if (!h.settled && h.k) {
+            h.settled = true;
+            const l = g.links[h.k.link], w = SIDEWALK[l.cls] ?? 2.5;
+            for (const ds of [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 13, -13]) {
+              const s2 = h.k.s + ds;
+              if (s2 < 2 || s2 > l.len - 2) continue;
+              g.at(l, s2, h.k.side * (l.hw + w * h.d.frac), at);
+              const yaw = Math.atan2(-h.k.side * at.dz, h.k.side * at.dx);
+              if (!clearOfWorld(engine.physics, at.x, at.z, yaw, 1.1, 1.3)) continue;
+              h.x = at.x; h.z = at.z; h.yaw = yaw;
+              break;
+            }
+          }
           h.actor = people.spawnActor!(h.x, h.z, { look: h.looks, yaw: h.yaw });
           h.actor?.act(h.d.act, { seat: h.d.seat });
           h.chatted = false;
-        } else if (d > NEAR + 40 && h.actor?.alive) { h.actor.release('vanish'); h.actor = null; }
+          // their table, stool or cart, solid (put back where it belongs each time they are)
+          for (const b of h.bodies) bodies.remove(b);
+          h.bodies = h.d.props.map(([k, ox, oz, yaw]) => { const c = Math.cos(h.yaw), s = Math.sin(h.yaw); return bodies.add(k, h.x + ox * c + oz * s, 0.045, h.z - ox * s + oz * c, h.yaw + yaw); });
+        } else if (d > NEAR + 40 && h.actor?.alive) { h.actor.release('vanish'); h.actor = null; for (const b of h.bodies) bodies.remove(b); h.bodies = []; }
         // Knocked off their spot: back to it.
         const a = h.actor;
         if (a?.alive && a.state === 'script' && Math.hypot(a.pos.x - h.x, a.pos.z - h.z) > 0.5 && a.arrived) a.goTo(h.x, h.z, 1.3);
       }
+      bodies.update();
       setPoliceOnEdge(heartsOf('xiaoyu') >= 2);
       const story = engine.get<StoryApi>('story');
       if (story) story.payScale = heartsOf('laok') >= 3 ? 1.25 : 1;
@@ -244,10 +267,12 @@ export async function install(engine: Engine): Promise<void> {
       for (const h of here) {
         const a = h.actor;
         if (!a?.alive) continue;
-        for (const [k, ox, oz, yaw] of h.d.props) {
+        h.d.props.forEach(([k, ox, oz, yaw], i) => {
+          const b = h.bodies[i];
+          if (b) { props.add(k, bodies.matrix(b, _pm)); return; }
           const c = Math.cos(h.yaw), s = Math.sin(h.yaw);
           props.place(k, h.x + ox * c + oz * s, 0.045, h.z - ox * s + oz * c, h.yaw + yaw);
-        }
+        });
         if (f && Math.hypot(a.pos.x - f.pos.x, a.pos.z - f.pos.z) < 2.6 && !dlg()?.asking) {
           pl.offer?.({ x: a.pos.x, z: a.pos.z, r: 2.6, label: t('con.talk', { name: t(h.d.name) }), use: () => talk(h) });
         }

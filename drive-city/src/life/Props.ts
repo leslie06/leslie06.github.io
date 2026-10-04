@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { EnvUniforms } from '../game/Contracts';
+import { CG, groups } from '../core/Physics';
 import PROPS from './props.json';
 
 /** The street life's things (scripts/blender/props/life.py -> props.json). */
@@ -100,3 +101,92 @@ export class LifeProps {
   }
 }
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _up = new THREE.Vector3(0, 1, 0);
+
+/**
+ * The things that stand on the ground are solid (2026-10-04, 「给煎饼车、烤串桌和马扎加上碰撞」): a box each, a
+ * dynamic body asleep until something hits it - the car shoves a 140 kg cart and sends a 1.5 kg 马扎 flying,
+ * the player on foot walks into them (CG.PROP: wheel rays ignore them, so a car never rides up onto a stool).
+ * Half sizes and centre in the prop's frame, mass, and the knock it makes (audio/'s `prop:hit` sounds).
+ */
+const BODY: Partial<Record<PropKind, { half: [number, number, number]; at: [number, number, number]; mass: number; sound: 'bin' | 'rail' }>> = {
+  cart: { half: [0.76, 0.52, 0.45], at: [0, 0.55, 0], mass: 140, sound: 'rail' },
+  grill: { half: [0.56, 0.4, 0.14], at: [0, 0.42, 0], mass: 25, sound: 'rail' },
+  table: { half: [0.4, 0.31, 0.4], at: [0, 0.31, 0], mass: 6, sound: 'bin' },
+  stool: { half: [0.16, 0.18, 0.13], at: [0, 0.18, 0], mass: 1.5, sound: 'bin' },
+  chess: { half: [0.36, 0.28, 0.36], at: [0, 0.28, 0], mass: 8, sound: 'bin' },
+  speaker: { half: [0.23, 0.42, 0.19], at: [0, 0.45, 0], mass: 14, sound: 'bin' },
+  lantern: { half: [0.05, 1.1, 0.05], at: [0, 1.1, 0], mass: 6, sound: 'rail' },
+};
+type Body = import('@dimforge/rapier3d-compat').RigidBody;
+interface Engineish {
+  physics: import('../core/Physics').Physics;
+  events: { emit(type: 'prop:hit', p: { kind: 'bin' | 'bike' | 'rail'; x: number; y: number; z: number; speed: number }): void };
+}
+
+/** The solid props' bodies: made when a prop is put down, gone with it; `matrix` is where one is now. */
+export class PropBodies {
+  private live = new Map<Body, { kind: PropKind; moving: boolean }>();
+  constructor(private engine: Engineish) {}
+
+  static solid(kind: PropKind): boolean { return !!BODY[kind]; }
+
+  add(kind: PropKind, x: number, y: number, z: number, yaw: number): Body | null {
+    const b = BODY[kind];
+    if (!b) return null;
+    const { R, world } = this.engine.physics;
+    _q.setFromAxisAngle(_up, yaw);
+    const body = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(x, y, z).setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w })
+      .setLinearDamping(0.3).setAngularDamping(0.6).setCcdEnabled(b.mass < 10).setCanSleep(true).setSleeping(true));
+    const col = world.createCollider(R.ColliderDesc.cuboid(...b.half).setTranslation(...b.at).setDensity(0).setFriction(0.8).setRestitution(0.15)
+      .setCollisionGroups(groups(CG.PROP, CG.WORLD | CG.CAR | CG.PROP | CG.PED)), body);
+    body.setAdditionalMassProperties(b.mass, { x: b.at[0], y: b.at[1] * 0.8, z: b.at[2] }, { x: b.mass * 0.08, y: b.mass * 0.1, z: b.mass * 0.08 }, { x: 0, y: 0, z: 0, w: 1 }, true);
+    this.engine.physics.tag(col, { surface: b.sound === 'rail' ? 'metal' : 'plastic', tag: 'prop' });
+    this.live.set(body, { kind, moving: false });
+    return body;
+  }
+
+  remove(body: Body | null | undefined): void {
+    if (!body || !this.live.has(body)) return;
+    this.live.delete(body);
+    this.engine.physics.untag(body.collider(0));
+    this.engine.physics.world.removeRigidBody(body);
+  }
+
+  /** The body's transform as the prop's matrix. */
+  matrix(body: Body, out: THREE.Matrix4): THREE.Matrix4 {
+    const t = body.translation(), r = body.rotation();
+    return out.compose(_p.set(t.x, t.y, t.z), _q.set(r.x, r.y, r.z, r.w), _s.set(1, 1, 1));
+  }
+
+  /** Probes: each body's kind, mass, whether asleep, and its type (0 dynamic). */
+  info(): { kind: PropKind; mass: number; sleeping: boolean; type: number }[] {
+    return [...this.live].map(([b, s]) => ({ kind: s.kind, mass: b.mass(), sleeping: b.isSleeping(), type: b.bodyType() as unknown as number }));
+  }
+
+  /** Each step: a knock sounds as one starts moving (and again only once it has come to rest). */
+  update(): void {
+    for (const [body, s] of this.live) {
+      const v = body.linvel(), sp = Math.hypot(v.x, v.y, v.z);
+      if (!s.moving && sp > 1.2) {
+        s.moving = true;
+        const t = body.translation();
+        this.engine.events.emit('prop:hit', { kind: BODY[s.kind]!.sound, x: t.x, y: t.y, z: t.z, speed: sp * 1.6 });
+      } else if (s.moving && body.isSleeping()) s.moving = false;
+    }
+  }
+}
+
+/**
+ * Nothing fixed stands in this patch of pavement (a street tree's trunk, a lamp or signal post, a subway
+ * kiosk, a wall): a box `hx` x `hz` (half sizes) centred (ox, oz) in a frame at (x, z) turned `yaw`, from
+ * 0.25 m to 1.6 m up, against the static colliders (only those near the camera exist: ask there). A stall
+ * set down by a trunk was pinned by it - a car ran into the tree, not the cart.
+ */
+export function clearOfWorld(physics: import('../core/Physics').Physics, x: number, z: number, yaw: number, hx: number, hz: number, ox = 0, oz = 0): boolean {
+  const { R, world } = physics;
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  _q.setFromAxisAngle(_up, yaw);
+  const hit = world.intersectionWithShape({ x: x + ox * c + oz * s, y: 0.92, z: z - ox * s + oz * c }, { x: _q.x, y: _q.y, z: _q.z, w: _q.w }, new R.Cuboid(hx, 0.67, hz),
+    R.QueryFilterFlags.EXCLUDE_DYNAMIC, groups(CG.PROP, CG.WORLD));
+  return !hit;
+}
