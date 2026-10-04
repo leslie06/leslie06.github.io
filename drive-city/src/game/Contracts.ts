@@ -186,7 +186,9 @@ export interface HomeApi extends System {
 
 export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact';
 /** A marker on the minimap and map. `heading` (atan2(x, z)) turns it into an arrow. */
-export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string }
+export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string;
+  /** The label's colour (a contact's own), else the map's default. */
+  color?: string }
 export interface NavTarget { x: number; z: number; kind: 'waypoint' | 'mission'; label?: string }
 
 export interface NavApi extends System {

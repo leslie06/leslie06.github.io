@@ -239,6 +239,18 @@ export class Minimap implements System {
     if (!this.turnEl.hidden) boxes.push(0, H - 40, W, H);
     for (const b of nav.blips()) { const bx = toX(b.x, b.z), by = toY(b.x, b.z); if (bx > -8 && bx < W + 8 && by > -8 && by < H + 8) boxes.push(bx - 7, by - 7, bx + 7, by + 7); }
     if (tg) { const bx = toX(tg.x, tg.z), by = toY(tg.x, tg.z); boxes.push(bx - 8, by - 20, bx + 8, by + 6); }
+    // The people you know: their names beside their marks, in their colours (the name only: the radar is small).
+    ctx.textBaseline = 'middle';
+    for (const b of nav.blips()) {
+      if (b.kind !== 'contact' || !b.label) continue;
+      const sx = toX(b.x, b.z), sy = toY(b.x, b.z);
+      if (sx < 6 || sx > W - 6 || sy < 6 || sy > H - 6) continue;
+      const name = b.label.split(' · ')[0], font = `800 11px ${F.ui}`;
+      ctx.font = font;
+      const w = ctx.measureText(name).width;
+      if (this.labels.label(sx + 7, sy - 7, sx + 10 + w, sy + 7)) this.labels.halo(ctx, name, sx + 8, sy, b.color ?? '#f4f1e8', 'left', font, 3);
+      else if (this.labels.label(sx - 10 - w, sy - 7, sx - 7, sy + 7)) this.labels.halo(ctx, name, sx - 8, sy, b.color ?? '#f4f1e8', 'right', font, 3);
+    }
     this.labels.draw(nav, { ctx, W, H, s, X: toX, Y: toY, x0, z0, x1, z1, lg: lang() });
     // Landmarks (small, inside only), then blips, then the target on top.
     for (const lm of nav.landmarks) {

@@ -503,9 +503,20 @@ export class MapScreen implements System {
     const boxes = this.labels.boxes;
     boxes.length = 0;
     for (const v of this.reserved) boxes.push(v);
-    // Landmarks first (they win label space), then street names at street zoom.
+    // The people you know first (their names in their own colours, right of the mark or else left),
+    // then landmarks, then street names at street zoom.
     ctx.textBaseline = 'middle';
     const lg = lang();
+    for (const bl of nav.blips()) {
+      if (bl.kind !== 'contact' || !bl.label) continue;
+      const sx = X(bl.x), sy = Y(bl.z);
+      if (sx < -80 || sx > W + 80 || sy < -20 || sy > H + 20) continue;
+      const font = `800 13px ${F.ui}`;
+      ctx.font = font;
+      const w = ctx.measureText(bl.label).width;
+      if (this.label(sx + 9, sy - 9, sx + 13 + w, sy + 9)) this.halo(bl.label, sx + 11, sy, bl.color ?? C.paper, 'left', font);
+      else if (this.label(sx - 13 - w, sy - 9, sx - 9, sy + 9)) this.halo(bl.label, sx - 11, sy, bl.color ?? C.paper, 'right', font);
+    }
     for (const lm of nav.landmarks) {
       const sx = X(lm.x), sy = Y(lm.z);
       if (sx < -60 || sx > W + 60 || sy < -20 || sy > H + 20) continue;
@@ -521,7 +532,13 @@ export class MapScreen implements System {
       const sx = X(bl.x), sy = Y(bl.z);
       if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
       drawBlip(ctx, bl.kind, sx, sy, 7, bl.heading === undefined ? NaN : screenAngle(bl.heading, Math.PI), time, bl.flash ?? false);
-      if (bl.label && bl.kind !== 'police' && bl.kind !== 'car') this.halo(bl.label, sx + 11, sy, C.paper, 'left', `600 12px ${F.ui}`);
+      // Other blips' labels take what room is left (they used to be drawn over the contacts' names).
+      if (bl.label && bl.kind !== 'police' && bl.kind !== 'car' && bl.kind !== 'contact') {
+        const font = `600 12px ${F.ui}`;
+        ctx.font = font;
+        const w = ctx.measureText(bl.label).width;
+        if (this.label(sx + 9, sy - 8, sx + 13 + w, sy + 8)) this.halo(bl.label, sx + 11, sy, C.paper, 'left', font);
+      }
     }
     const tg = nav.target;
     if (tg) {

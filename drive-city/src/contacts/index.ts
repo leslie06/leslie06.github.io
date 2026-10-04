@@ -284,7 +284,7 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('vehicle:reset', () => { duel = 0; });
   engine.get<NavApi>('nav')?.addBlips(() => {
     blips.length = 0;
-    if (show) for (const h of here) blips.push({ kind: 'contact', x: h.x, z: h.z, label: t(h.d.name) });
+    if (show) for (const h of here) blips.push({ kind: 'contact', x: h.x, z: h.z, label: t('con.mapLabel', { name: t(h.d.name), role: t(`con.role.${h.d.id}` as TKey) }), color: h.d.color });
     return blips;
   });
   engine.add(api);

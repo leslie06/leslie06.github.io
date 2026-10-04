@@ -255,6 +255,9 @@ export const NPC_EN = {
   // --- contacts in person (contacts/)
   'con.who.laozhang': 'Old Zhang', 'con.who.liujie': 'Sister Liu', 'con.who.feilong': 'Little Dragon',
   'con.talk': 'F  Talk to {name}',
+  'con.role.laok': 'tea table', 'con.role.xiaoyu': 'phone repairs', 'con.role.daliu': 'garage', 'con.role.wang': 'police station',
+  'con.role.laozhang': 'cab rank', 'con.role.liujie': 'jianbing', 'con.role.feilong': 'racer',
+  'con.mapLabel': '{name} · {role}',
   'con.optTask': 'Any work?', 'con.optChat': 'How are things?', 'con.optBye': 'See you',
   'con.noTask': 'Nothing right now. Keep your phone on.',
   'con.task': "Here's the job: {task}",
@@ -595,6 +598,9 @@ export const NPC_ZH: Record<NpcKey, string> = {
 
   'con.who.laozhang': '老张', 'con.who.liujie': '刘姐', 'con.who.feilong': '小飞龙',
   'con.talk': 'F  找{name}聊聊',
+  'con.role.laok': '茶摊', 'con.role.xiaoyu': '修手机', 'con.role.daliu': '汽修', 'con.role.wang': '派出所',
+  'con.role.laozhang': '出租站', 'con.role.liujie': '煎饼摊', 'con.role.feilong': '飙车',
+  'con.mapLabel': '{name} · {role}',
   'con.optTask': '最近有什么活？', 'con.optChat': '聊两句', 'con.optBye': '回头见',
   'con.noTask': '眼下没事儿，手机开着就行。',
   'con.task': '活儿是这样：{task}',
