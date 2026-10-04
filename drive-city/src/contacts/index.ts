@@ -136,7 +136,7 @@ export async function install(engine: Engine): Promise<void> {
       g.at(l, k.s, k.side * (l.hw + w * d.frac), at);
       x = at.x; z = at.z; yaw = Math.atan2(-k.side * at.dz, k.side * at.dx);   // facing the road
     }
-    return { d, x, z, yaw, actor: null, chatted: false, looks: d.look(rnd), bodies: [], k: k ? { link: k.link, s: k.s, side: k.side } : null, settled: !d.props.length };
+    return { d, x, z, yaw, actor: null, chatted: false, looks: d.look(rnd), bodies: [], k: k ? { link: k.link, s: k.s, side: k.side } : null, settled: false };
   });
 
   const speakerOf = (h: Here): Speaker => ({ name: `${t(h.d.name)} ${heartText(heartsOf(h.d.id))}`, color: h.d.color, look: h.looks, voice: h.actor?.voice, at: h.actor?.pos ?? null });
@@ -212,8 +212,9 @@ export async function install(engine: Engine): Promise<void> {
       for (const h of here) {
         const d = Math.hypot(h.x - cam.x, h.z - cam.z);
         if (show && d < NEAR && !h.actor?.alive) {
-          // A table or a cart needs a spot clear of the street trees and posts (their colliders are in by now):
-          // along the same pavement, nearest first.
+          // Their spot clear of the street trees and posts (their colliders are in by now) - room for a table
+          // or a cart, or just to stand: along the same pavement, nearest first.
+          const room = h.d.props.length ? [1.1, 1.3] : [0.7, 0.7];
           if (!h.settled && h.k) {
             h.settled = true;
             const l = g.links[h.k.link], w = SIDEWALK[l.cls] ?? 2.5;
@@ -222,7 +223,7 @@ export async function install(engine: Engine): Promise<void> {
               if (s2 < 2 || s2 > l.len - 2) continue;
               g.at(l, s2, h.k.side * (l.hw + w * h.d.frac), at);
               const yaw = Math.atan2(-h.k.side * at.dz, h.k.side * at.dx);
-              if (!clearOfWorld(engine.physics, at.x, at.z, yaw, 1.1, 1.3)) continue;
+              if (!clearOfWorld(engine.physics, at.x, at.z, yaw, room[0], room[1])) continue;
               h.x = at.x; h.z = at.z; h.yaw = yaw;
               break;
             }

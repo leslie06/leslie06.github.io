@@ -504,10 +504,19 @@ export async function install(engine: Engine): Promise<void> {
   const startBusker = (): Scene | null => {
     const k = kioskNear((kk) => !free(`k${kk[0].toFixed(0)}_${kk[1].toFixed(0)}`));
     if (!k) return null;
-    const ax = Math.sin(k.yaw), az = Math.cos(k.yaw), d = -(k.len / 2 + 2.5);
-    const p = pavementAt(k.x + ax * d, k.z + az * d, 12, 0.85);
-    if (!p || inLandmark(p.x, p.z)) return null;
-    const erhu = rnd() < 0.45, yaw = Math.atan2(-p.side * at.dz, p.side * at.dx);
+    // Back by the wall end of the pavement, beyond the kiosk's far end first: the first spot with room to play
+    // (and a stool) and no street tree, post or wall in it.
+    const ax = Math.sin(k.yaw), az = Math.cos(k.yaw);
+    let p: ReturnType<typeof pavementAt> = null, yaw = 0;
+    search: for (let d = k.len / 2 + 2.5; d < k.len / 2 + 16; d += 1.5) for (const end of [-1, 1]) for (const frac of [0.85, 0.7, 0.55]) {
+      const c = pavementAt(k.x + ax * d * end, k.z + az * d * end, 12, frac);
+      if (!c || inLandmark(c.x, c.z)) continue;
+      const y = Math.atan2(-c.side * at.dz, c.side * at.dx);
+      if (!clearOfWorld(engine.physics, c.x, c.z, y, 0.9, 0.9)) continue;
+      p = c; yaw = y; break search;
+    }
+    if (!p) return null;
+    const erhu = rnd() < 0.45;
     const s = make('busker', p.x, p.z, yaw, k.id, [spawn(p.x, p.z, erhu ? looks.elder(false) : looks.busker(), yaw + Math.PI)]);
     if (!s) return null;
     const a = s.cast[0];
