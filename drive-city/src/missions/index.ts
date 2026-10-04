@@ -4,7 +4,7 @@ import { lang, t } from '../core/I18n';
 import { Rng } from '../core/Rng';
 import { project } from '../city/Geo';
 import { LANDMARKS } from '../city/landmarks';
-import type { Blip, DialogueApi, HudApi, MissionApi, NavApi, PlayerApi, RaceApi, RenderApi, VehicleApi, WantedApi } from '../game/Contracts';
+import type { Blip, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RaceApi, RenderApi, VehicleApi, WantedApi } from '../game/Contracts';
 import { paxLook, pickPax, PaxRide, type PaxKind } from './Passengers';
 import { journalOf } from '../npc/Journal';
 import type { TrafficApi } from '../traffic';
@@ -139,11 +139,17 @@ export async function install(engine: Engine): Promise<void> {
   const shift = { on: false, clock: 0, fares: 0, earned: 0, away: 0 };
 
   /** `urgent`: a street event's rush fare - red, flashing, gone in URGENT_WAIT s, double pay on a tighter clock. */
-  interface Hailer { pos: THREE.Vector3; yaw: number; look: Look; gait: Gait; t: number; tier: number; marker: Marker; urgent: boolean; pax: PaxKind; seed: number }
+  interface Hailer { id: number; pos: THREE.Vector3; yaw: number; look: Look; gait: Gait; t: number; tier: number; marker: Marker; urgent: boolean; pax: PaxKind; seed: number }
+  let hailerIds = 0;
+  /** Fares won from the pirate cab: hailer id -> multiplier; the one aboard now. */
+  const contested = new Map<number, number>();
+  let fareMult = 1;
   /** Who is aboard (Passengers.ts) and how the ride is going for them. */
   let pax: PaxKind = 'normal', paxSeed = 0, ride: PaxRide | null = null, rideT = 0, lmT = 0;
   /** A second toast after the fare's (how the passenger rated the ride), on the game clock. */
   let lateToast = '', lateT = 0;
+  const laters: { t: number; fn: () => void }[] = [];
+  const after = (fn: () => void, secs: number) => laters.push({ t: secs, fn });
   const dlg = () => engine.get<DialogueApi>('dialogue');
   const journal = journalOf(engine);
   let urgentRide = false;
@@ -186,7 +192,7 @@ export async function install(engine: Engine): Promise<void> {
       const m = spareMarkers.pop()!;
       // The rush fare is the one with a train to catch.
       const kind: PaxKind = urgent ? 'rush' : pickPax(rnd, engine.get<RenderApi>('render')?.timeOfDay ?? 15, engine.get<{ name: string; specialPax: number }>('contacts')?.specialPax ?? 1);
-      const h: Hailer = { pos: new THREE.Vector3(at.x, 0.045, at.z), yaw: Math.atan2(-side * at.dz, side * at.dx), look: paxLook(kind, rnd), gait: new Gait(), t: rnd() * 3, tier: tr0, marker: m, urgent, pax: kind, seed: rnd() };
+      const h: Hailer = { id: ++hailerIds, pos: new THREE.Vector3(at.x, 0.045, at.z), yaw: Math.atan2(-side * at.dz, side * at.dx), look: paxLook(kind, rnd), gait: new Gait(), t: rnd() * 3, tier: tr0, marker: m, urgent, pax: kind, seed: rnd() };
       m.show(at.x, at.z, urgent ? URGENT_COLOR : TIERS[tr0].color, urgent ? 0.8 : 0.5);
       hailers.push(h);
       return true;
@@ -240,6 +246,7 @@ export async function install(engine: Engine): Promise<void> {
       ride = new PaxRide(pax, client.look, paxSeed, (who, text) => dlg()?.say(who, text, { prio: 1 }), rnd);
       rideT = 0; lmT = 1;
       ride.board(label, rnd);
+      if (fareMult > 1) after(() => ride && ride.line('pax.legit'), 3.5);
       return true;
     };
     // A train to catch: the nearest station by road, whatever the colour said.
@@ -302,6 +309,16 @@ export async function install(engine: Engine): Promise<void> {
       return true;
     },
     get objective() { return api.story ?? jobs?.objective ?? objective; },
+    hailers: () => hailers.map((h) => ({ id: h.id, x: h.pos.x, z: h.pos.z })),
+    contest(id, mult) { contested.set(id, mult); },
+    taken(id, x, z) {
+      const h = hailers.find((q) => q.id === id);
+      if (!h) return;
+      // They walk over to the other car and are gone.
+      const a = engine.get<PeopleApi>('people')?.spawnActor?.(h.pos.x, h.pos.z, { look: h.look, yaw: h.yaw });
+      if (a) { a.goTo(x, z, 1.6); setTimeout(() => a.alive && a.release('vanish'), 4000); }
+      dropHailer(h);
+    },
     debug: {
       startFare: (kind) => {
         if (!inTaxi()) return false;
@@ -325,6 +342,7 @@ export async function install(engine: Engine): Promise<void> {
       const v = vehicle(), car = v.car;
       careT -= dt; scaredT -= dt; summaryT -= dt;
       if (lateT > 0 && (lateT -= dt) <= 0 && lateToast) { toast(lateToast); lateToast = ''; }
+      for (let i = laters.length - 1; i >= 0; i--) if ((laters[i].t -= dt) <= 0) { const l = laters[i]; laters.splice(i, 1); l.fn(); }
       // The short jobs (Jobs.ts): while one runs, no fare is offered and a running fare is dropped.
       if (!jobs) jobs = new Jobs(engine, { places, resolve, addCash: (n) => api.addCash(n), toast, rnd });
       jobs.fixedUpdate(dt);
@@ -371,6 +389,8 @@ export async function install(engine: Engine): Promise<void> {
           door.copy(car.pos).addScaledVector(car.left, side * 1.15).addScaledVector(car.fwd, -0.45); door.y = client.pos.y;
           walk(client.pos, door);
           tier = h.tier; urgentRide = h.urgent; pax = h.pax; paxSeed = h.seed;
+          fareMult = contested.get(h.id) ?? 1; contested.clear();
+          engine.events.emit('taxi:board', { id: h.id });
           dropHailer(h);
           stage = 'boarding';
           break;
@@ -407,7 +427,7 @@ export async function install(engine: Engine): Promise<void> {
             const left = 1 - elapsed / limit, r = RATINGS.find((q) => left >= q.min)!;
             const kind = ride?.kind ?? 'normal';
             const triple = kind === 'mystery' && ride?.heat === 'lost';
-            const base = payFor(tripLen / 1000) * (urgentRide ? 2 : 1) * (triple ? 3 : 1), bonus = Math.round(base * r.bonus * (kind === 'rush' ? 2 : 1));
+            const base = Math.round(payFor(tripLen / 1000) * (urgentRide ? 2 : 1) * (triple ? 3 : 1) * fareMult), bonus = Math.round(base * r.bonus * (kind === 'rush' ? 2 : 1));
             const stuntTip = Math.max(0, tips - crashes * 3), tip = ride ? ride.tip(stuntTip) : stuntTip;
             const cleaning = ride?.vomited ? 30 : 0;
             // 老张's word at the rank (contacts/): fares +20%.

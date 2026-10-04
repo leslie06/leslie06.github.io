@@ -21,6 +21,8 @@ export interface GameEvents {
   'npc:voice': { text: string; voice: { pitch: number; rate: number; bright: number }; x: number; z: number; id?: string };
   /** A story chapter was done (story/): whose it was (laok, xiaoyu, daliu, wang). */
   'story:done': { chapter: string; who: string };
+  /** A hailer is getting into the taxi (missions/): which one (`MissionApi.hailers`). */
+  'taxi:board': { id: number };
   /** A taxi fare was paid (missions/). */
   'taxi:fare': { pay: number; kind: string };
   /** A street event's race against the red saloon ended (events/). */

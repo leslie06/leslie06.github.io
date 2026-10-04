@@ -253,6 +253,12 @@ export interface MissionApi extends System {
   readonly busy: boolean;
   /** Put an urgent fare on a kerb near the taxi (a street event): true if one appeared. */
   urgentFare?(): boolean;
+  /** The people hailing the taxi now (still listed while another passenger gets in). */
+  hailers?(): { id: number; x: number; z: number }[];
+  /** Hailer `id` leaves with another car standing at (x, z) (the pirate cab: events/). */
+  taken?(id: number, x: number, z: number): void;
+  /** Hailer `id`'s fare pays `mult` times when they get in (a fare won from the pirate cab). */
+  contest?(id: number, mult: number): void;
 }
 
 /** Pedestrians on the pavements. Implemented by people/. */

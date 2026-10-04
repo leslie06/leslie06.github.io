@@ -10,7 +10,7 @@ const KEY = 'drivecity.npc.v1';
  */
 export const ENTRIES: [string, TKey][] = [
   ['enc.thief', 'npc.j.thief'], ['enc.scam', 'npc.j.scam'], ['enc.rage', 'npc.j.rage'], ['enc.pregnant', 'npc.j.pregnant'],
-  ['enc.courier', 'npc.j.courier'], ['enc.daijia', 'npc.j.daijia'], ['enc.tail', 'npc.j.tail'], ['enc.foreigner', 'npc.j.foreigner'],
+  ['enc.courier', 'npc.j.courier'], ['enc.daijia', 'npc.j.daijia'], ['enc.tail', 'npc.j.tail'], ['enc.foreigner', 'npc.j.foreigner'], ['enc.blackcab', 'npc.j.blackcab'],
   ['pax.rush', 'pax.name.rush'], ['pax.queasy', 'pax.name.queasy'], ['pax.chatty', 'pax.name.chatty'],
   ['pax.streamer', 'pax.name.streamer'], ['pax.drunk', 'pax.name.drunk'], ['pax.mystery', 'pax.name.mystery'],
   // street life (life/)

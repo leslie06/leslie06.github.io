@@ -14,6 +14,7 @@ import { Banner } from '../ui/Banner';
 import { ControlFilter } from '../vehicle/ControlFilter';
 import { TAXI, type VehicleSpec } from '../vehicle/Spec';
 import { Vehicle } from '../vehicle/Vehicle';
+import { journalOf } from '../npc/Journal';
 
 /** Seconds of free driving between events: the first comes sooner. */
 const FIRST = [35, 55], GAP = [55, 100];
@@ -25,11 +26,13 @@ const RIVAL: VehicleSpec = { ...TAXI, engine: { ...TAXI.engine, torque: TAXI.eng
 const SPRINT = [1200, 1800];
 const RED = new THREE.Color('#b3121c'), BLACK = new THREE.Color('#111214');
 
-type Kind = 'fugitive' | 'challenge' | 'urgent';
+type Kind = 'fugitive' | 'challenge' | 'urgent' | 'blackcab';
+/** The pirate cab's paint: no roof sign, a tired dark saloon. */
+const PIRATE = new THREE.Color('#2b2c2f');
 
 export interface EventsApi extends System {
   readonly active: Kind | null;
-  debug: { start(kind: Kind): boolean; wait(): number; state(): { kind: Kind | null; hits: number; left: number; rivalLeft: number; playerLeft: number; runner: { x: number; z: number; yaw: number; speed: number } | null } };
+  debug: { start(kind: Kind): boolean; wait(): number; state(): { black: { id: number; x: number; z: number; hits: number } | null; kind: Kind | null; hits: number; left: number; rivalLeft: number; playerLeft: number; runner: { x: number; z: number; yaw: number; speed: number } | null } };
 }
 
 /**
@@ -59,6 +62,10 @@ export async function install(engine: Engine): Promise<void> {
   let active: Kind | null = null, wait = FIRST[0] + rnd() * (FIRST[1] - FIRST[0]), clock = 0, hits = 0, hitCd = 0, stillT = 0;
   let runner: { car: Vehicle; release(): void } | null = null;
   let finish: { x: number; z: number; label: string } | null = null, racing = false, rivalOn = false;
+  /** 黑车抢客: the hailer it is going for, and how often the player has rammed it; the rival's paint; seconds it drives off for after. */
+  let black: { id: number; x: number; z: number; hits: number } | null = null, shoutT = 0, leaving = 0;
+  let paintU = RED, paintL = BLACK;
+  const leaveGoal = new THREE.Vector3();
 
   const vehicle = () => engine.get<VehicleApi>('vehicle')!;
   const missions = () => engine.get<MissionApi>('missions');
@@ -81,8 +88,10 @@ export async function install(engine: Engine): Promise<void> {
     if (msg) toast(msg);
     if (pay) missions()?.addCash(pay);
     if (runner) { runner.release(); runner = null; }
-    if (rivalOn) { rivalOn = false; rival.car.body.setTranslation({ x: 0, y: -700, z: 0 }, false); rival.car.body.setEnabled(false); kit.commit(0); }
-    racing = false; finish = null; active = null;
+    // The pirate cab drives off before it goes (it would vanish in plain view); the racer goes at once.
+    if (rivalOn && active === 'blackcab') { leaving = 10; leaveGoal.copy(rival.car.pos).addScaledVector(rival.car.fwd, 300); }
+    else if (rivalOn) { rivalOn = false; rival.car.body.setTranslation({ x: 0, y: -700, z: 0 }, false); rival.car.body.setEnabled(false); kit.commit(0); }
+    racing = false; finish = null; active = null; black = null;
     story(null);
     nav()?.clearTarget('mission');
     marker.hide();
@@ -138,8 +147,64 @@ export async function install(engine: Engine): Promise<void> {
     return true;
   };
 
-  const start = (kind: Kind): boolean => kind === 'fugitive' ? startFugitive() : kind === 'challenge' ? startChallenge() : startUrgent();
+  /**
+   * 黑车抢客: in a taxi looking for a fare, an unlicensed cab heads for one of the people hailing, from about
+   * as far off as the player. Get there first and that fare pays double; ram it twice and it gives up (x1.5);
+   * if it gets there first the fare is gone with it.
+   */
+  const startBlack = (): boolean => {
+    const m = missions(), v = vehicle(), c = v.car, n = nav();
+    if (!m?.hailers || !m.contest || !n || !v.look.taxi || leaving > 0) return false;
+    const hs = m.hailers().filter((h) => { const d = Math.hypot(h.x - c.pos.x, h.z - c.pos.z); return d > 70 && d < 240; });
+    if (!hs.length) return false;
+    const h = hs[Math.floor(rnd() * hs.length)], dP = Math.hypot(h.x - c.pos.x, h.z - c.pos.z), g = tr.graph;
+    const at = { x: 0, z: 0, dx: 0, dz: 0 }, ids = g.near(h.x, h.z, dP * 1.1);
+    for (let k = 0; k < 40 && ids.length; k++) {
+      const l = g.links[ids[Math.floor(rnd() * ids.length)]];
+      if (l.len < 25 || l.cls === 'service' || l.cls === 'living_street' || l.hmax > 0.3) continue;
+      g.at(l, 5 + rnd() * (l.len - 10), g.laneOffset(l, 0), at);
+      const dh = Math.hypot(at.x - h.x, at.z - h.z), dp = Math.hypot(at.x - c.pos.x, at.z - c.pos.z);
+      if (dh < dP * 0.7 || dh > dP * 1.05 || dp < 50 || tr.nearestCar(at.x, at.z, 7)) continue;
+      const heading = Math.atan2(at.dx, at.dz);
+      if (!n.route(at.x, at.z, heading, h.x, h.z)) continue;
+      const r = rival;
+      r.car.body.setEnabled(true);
+      r.car.reset({ x: at.x, y: 0.03 + RIVAL.wheelRadius + 0.08, z: at.z }, heading);
+      r.car.setMoving(8);
+      r.driver.reset(); r.filter.reset();
+      r.prevPos.copy(r.car.pos); r.curPos.copy(r.car.pos); r.prevQuat.copy(r.car.quat); r.curQuat.copy(r.car.quat);
+      rivalOn = true; paintU = PIRATE; paintL = PIRATE;
+      black = { id: h.id, x: h.x, z: h.z, hits: 0 };
+      m.contest(h.id, 2);
+      active = 'blackcab'; clock = 0; shoutT = 2;
+      flash(t('event.blackBanner'), '#ff2d55');
+      toast(t('event.black'));
+      return true;
+    }
+    return false;
+  };
+  engine.events.on('taxi:board', ({ id }) => {
+    if (active !== 'blackcab' || black?.id !== id) return;
+    journalOf(engine).meet('enc.blackcab');
+    // a banner: the boarding's own toast (the shift starting) would cover a toast
+    if (black.hits < 2) flash(t('event.blackWon'), '#3ccf72');
+    end(null);
+  });
 
+  const start = (kind: Kind): boolean => kind === 'fugitive' ? startFugitive() : kind === 'challenge' ? startChallenge() : kind === 'blackcab' ? startBlack() : startUrgent();
+
+  // Ramming the pirate cab: twice and it gives up on the fare.
+  engine.events.on('vehicle:impact', ({ strength }) => {
+    if (active !== 'blackcab' || !black || strength < 2.5 || hitCd > 0) return;
+    const c = vehicle().car;
+    if (Math.hypot(rival.car.pos.x - c.pos.x, rival.car.pos.z - c.pos.z) > 6.5) return;
+    black.hits++; hitCd = 0.8;
+    if (black.hits < 2) { toast(t('event.blackHit', { n: black.hits })); return; }
+    missions()?.contest?.(black.id, 1.5);
+    toast(t('event.blackScared'));
+    journalOf(engine).meet('enc.blackcab');
+    end(null);
+  });
   engine.events.on('vehicle:impact', ({ strength }) => {
     if (active !== 'fugitive' || !runner || strength < 2.5 || hitCd > 0) return;
     const c = vehicle().car;
@@ -160,7 +225,7 @@ export async function install(engine: Engine): Promise<void> {
       wait: () => wait,
       state: () => {
         const c = vehicle().car;
-        return { kind: active, hits, left: FUGITIVE_TIME - clock,
+        return { black, kind: active, hits, left: FUGITIVE_TIME - clock,
           rivalLeft: finish ? Math.hypot(rival.car.pos.x - finish.x, rival.car.pos.z - finish.z) : -1,
           playerLeft: finish ? Math.hypot(c.pos.x - finish.x, c.pos.z - finish.z) : -1,
           runner: runner ? { x: runner.car.pos.x, z: runner.car.pos.z, yaw: Math.atan2(runner.car.fwd.x, runner.car.fwd.z), speed: runner.car.speed } : null };
@@ -169,17 +234,54 @@ export async function install(engine: Engine): Promise<void> {
     fixedUpdate(dt) {
       hitCd -= dt;
       const v = vehicle(), c = v.car;
+      // The pirate cab driving off after its event.
+      if (leaving > 0 && rivalOn && active === null) {
+        leaving -= dt;
+        const r = rival, rc = r.car;
+        r.driver.topSpeed = 14;
+        r.prevPos.copy(r.curPos); r.prevQuat.copy(r.curQuat);
+        const n = nav();
+        const inp = r.driver.update(rc, { x: leaveGoal.x, z: leaveGoal.z, vx: 0, vz: 0 }, false, dt, n ? (a, b, cc, d, e) => n.route(a, b, cc, d, e) : null, false);
+        rc.step(r.filter.update(inp, rc.forwardSpeed, dt), dt);
+        if (leaving <= 0) { rivalOn = false; rc.body.setTranslation({ x: 0, y: -700, z: 0 }, false); rc.body.setEnabled(false); kit.commit(0); paintU = RED; paintL = BLACK; }
+      }
       if (!active) {
         if (!free()) return;
         wait -= dt;
         if (wait > 0) return;
         // A taxi looking for fares gets the rush fare more often; otherwise a chase or a race.
-        const choices: Kind[] = v.look.taxi ? ['urgent', 'urgent', 'fugitive', 'challenge'] : ['fugitive', 'challenge'];
+        const choices: Kind[] = v.look.taxi ? ['urgent', 'urgent', 'blackcab', 'blackcab', 'fugitive', 'challenge'] : ['fugitive', 'challenge'];
         const first = choices[Math.floor(rnd() * choices.length)];
         if (!start(first) && !start(first === 'fugitive' ? 'challenge' : 'fugitive')) wait = 8;
         return;
       }
       if (active === 'urgent') { active = null; return; }
+      if (active === 'blackcab' && black) {
+        const r = rival, rc = r.car, m = missions();
+        const me = Math.hypot(c.pos.x - black.x, c.pos.z - black.z), it = Math.hypot(rc.pos.x - black.x, rc.pos.z - black.z);
+        clock += dt;
+        // The hailer gone (picked up by the player: taxi:board ends it; dropped by the fares system): over.
+        if (!m?.hailers?.().some((h) => h.id === black!.id)) { end(null); return; }
+        if (it < 8 && rc.speed < 3.5) {
+          m.taken?.(black.id, rc.pos.x - rc.left.x * 1.3, rc.pos.z - rc.left.z * 1.3);
+          journalOf(engine).meet('enc.blackcab');
+          end(t('event.blackLost'));
+          return;
+        }
+        if (clock > 90) { end(null); return; }
+        // A fair race: it slows for the kerb near the end, and a little when it is well ahead.
+        r.driver.topSpeed = it < 30 ? 6 : Math.max(11, Math.min(20, 15 + (it - me) * 0.05));
+        r.prevPos.copy(r.curPos); r.prevQuat.copy(r.curQuat);
+        const n = nav();
+        const inp = r.driver.update(rc, { x: black.x, z: black.z, vx: 0, vz: 0 }, false, dt, n ? (a, b, cc, d, e) => n.route(a, b, cc, d, e) : null, false);
+        if (it < 9) { inp.forward = 0; inp.back = 0; inp.handbrake = true; }
+        rc.step(r.filter.update(inp, rc.forwardSpeed, dt), dt);
+        // The driver leans out touting for the fare.
+        shoutT -= dt;
+        if (it < 45 && shoutT <= 0) { shoutT = 5; engine.events.emit('people:shout', { x: rc.pos.x, z: rc.pos.z, text: t(rnd() < 0.5 ? 'event.blackShout1' : 'event.blackShout2'), follow: rc.pos, secs: 2.4 }); }
+        story(t('event.blackLine', { me: Math.round(me), it: Math.round(it) }));
+        return;
+      }
       clock += dt;
       if (pl.mode !== 'driving' && clock > 3) { end(t('event.abandon')); return; }
       if (active === 'fugitive' && runner) {
@@ -216,7 +318,7 @@ export async function install(engine: Engine): Promise<void> {
       marker.update(dt);
       if (rivalOn) {
         const p = new THREE.Vector3().lerpVectors(rival.prevPos, rival.curPos, alpha), q = new THREE.Quaternion().slerpQuaternions(rival.prevQuat, rival.curQuat, alpha);
-        kit.set(0, p, q, rival.car, RED, BLACK, false);
+        kit.set(0, p, q, rival.car, paintU, paintL, false);
         kit.commit(1);
       }
       const n = nav();
@@ -225,6 +327,7 @@ export async function install(engine: Engine): Promise<void> {
         n.addBlips(() => {
           blips.length = 0;
           if (active === 'fugitive' && runner) blips.push({ kind: 'car', x: runner.car.pos.x, z: runner.car.pos.z, heading: Math.atan2(runner.car.fwd.x, runner.car.fwd.z), flash: true });
+          if (active === 'blackcab' && rivalOn) blips.push({ kind: 'suspect', x: rival.car.pos.x, z: rival.car.pos.z, heading: Math.atan2(rival.car.fwd.x, rival.car.fwd.z), flash: true });
           if (active === 'challenge' && rivalOn) blips.push({ kind: 'car', x: rival.car.pos.x, z: rival.car.pos.z, heading: Math.atan2(rival.car.fwd.x, rival.car.fwd.z) });
           return blips;
         });

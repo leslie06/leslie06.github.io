@@ -300,6 +300,19 @@ export const NPC_EN = {
   'perk.liujie1': 'Sister Liu: jianbing on the house', 'perk.liujie3': "Sister Liu: the street's news",
   'perk.laok3': 'Lao K: +25% from heists',
 
+  // --- 黑车抢客 (events/)
+  'event.blackBanner': 'PIRATE CAB',
+  'event.black': 'An unlicensed cab is going for your fare - get there first!',
+  'event.blackLine': 'Beat the pirate cab to the fare  ·  you {me} m  ·  it {it} m  ·  ram it to scare it off',
+  'event.blackWon': 'You got there first: this fare pays double',
+  'event.blackLost': 'The pirate cab took your fare',
+  'event.blackScared': 'You scared the pirate cab off: this fare pays 1.5x',
+  'event.blackShout1': 'Need a ride? Cheap!',
+  'event.blackShout2': 'Hop in, cheaper than a cab!',
+  'event.blackHit': 'Rammed the pirate cab {n}/2',
+  'pax.legit': 'A proper cab - much better!',
+  'npc.j.blackcab': 'The pirate cab driver',
+
   // --- P3 encounters (npc/)
   'npc.who.courier': 'Delivery rider', 'npc.who.boss': 'Tipsy boss', 'npc.who.client': 'Client', 'npc.who.foreigner': 'Tourist',
   'npc.j.courier': 'The fallen delivery rider', 'npc.j.daijia': 'The boss who needed a driver', 'npc.j.tail': 'The suspicious client', 'npc.j.foreigner': 'The lost tourist',
@@ -626,6 +639,18 @@ export const NPC_ZH: Record<NpcKey, string> = {
   'perk.laozhang2': '老张：车费加两成', 'perk.laozhang4': '老张：特殊乘客更多',
   'perk.liujie1': '刘姐：煎饼免费', 'perk.liujie3': '刘姐：打听消息',
   'perk.laok3': '老K：抢劫分成多两成半',
+
+  'event.blackBanner': '黑车抢客',
+  'event.black': '有黑车来抢你的客，抢先接到乘客！',
+  'event.blackLine': '抢在黑车前接客 · 你 {me} 米 · 黑车 {it} 米 · 撞它能吓跑它',
+  'event.blackWon': '抢到了！这一单车费翻倍',
+  'event.blackLost': '乘客被黑车拉走了',
+  'event.blackScared': '黑车被你吓跑了，这单车费 1.5 倍',
+  'event.blackShout1': '走吗走吗？便宜！',
+  'event.blackShout2': '上车上车，比出租便宜！',
+  'event.blackHit': '撞了黑车 {n}/2 下',
+  'pax.legit': '还是正规出租车靠谱！',
+  'npc.j.blackcab': '黑车司机',
 
   'npc.who.courier': '外卖小哥', 'npc.who.boss': '喝多的老板', 'npc.who.client': '神秘委托人', 'npc.who.foreigner': '外国游客',
   'npc.j.courier': '摔了的外卖小哥', 'npc.j.daijia': '叫代驾的老板', 'npc.j.tail': '跟车的委托人', 'npc.j.foreigner': '问路的老外',
