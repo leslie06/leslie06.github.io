@@ -45,6 +45,10 @@ interface Save { ch: number; heists: number; best: number; combo: number; store?
 
 export interface StoryApi extends System {
   readonly chapter: Chapter;
+  /** The task running and whose it is (contacts/ says it again in person), or null. */
+  readonly task: { who: string; text: string } | null;
+  /** Heist pay multiplier (老K's favour: contacts/). */
+  payScale: number;
   readonly heist: Heist;
   readonly phone: Phone;
   debug: {
@@ -93,6 +97,7 @@ export async function install(engine: Engine): Promise<void> {
   let visited = [false, false, false], seen = [0, 0, 0], jacked: unknown = null, drop: Stop | null = null, alarm = false, lastLv = 0, aimed = false, dropCd = 0;
   again = save.heists > 0;
   const outbox: { at: number; who: Who; key: TKey; p?: TParams }[] = [];
+  let taskNow: { who: string; text: string } | null = null;
 
   const chapter = (): Chapter => CHAPTERS[Math.min(save.ch, CHAPTERS.length - 1)];
   const vehicle = () => engine.get<VehicleApi>('vehicle')!;
@@ -158,6 +163,7 @@ export async function install(engine: Engine): Promise<void> {
   };
   /** The chapter's task is done: pay, the closing texts, on to the next. */
   const close = (lines: [Who, TKey, TParams?][], cash: number) => {
+    engine.events.emit('story:done', { chapter: chapter(), who: lines[0]?.[0] ?? 'laok' });
     if (cash) pay(cash);
     say(lines, 0.8);
     if (cash) toast(t('story.paid', { n: cash }));
@@ -194,7 +200,8 @@ export async function install(engine: Engine): Promise<void> {
   const heistDone = () => {
     const secs = clock - getaway, first = !again;
     heist = 'off'; drop = null; story(null); heistTarget(null, '');
-    const cash = first ? PAY.heist : PAY.again;
+    const cash = Math.round((first ? PAY.heist : PAY.again) * api.payScale);
+    engine.events.emit('story:done', { chapter: 'heist', who: 'laok' });
     save.heists++;
     if (!save.best || secs < save.best) save.best = secs;
     engine.get<LeaderboardApi>('leaderboard')?.submit('heist', secs * 1000);
@@ -234,6 +241,8 @@ export async function install(engine: Engine): Promise<void> {
     name: 'story',
     get chapter() { return chapter(); },
     get heist() { return heist; },
+    get task() { return taskNow; },
+    payScale: 1,
     phone,
     debug: {
       state: () => ({ chapter: chapter(), phase, heist, calm, visited: [...visited], spots: spots(), left: heist === 'inside' ? HEIST_WAIT - hT : 0, drop }),
@@ -336,6 +345,7 @@ export async function install(engine: Engine): Promise<void> {
         else if (heist === 'go') { who = 'laok'; text = t('story.t.go', { place: save.store?.label ?? '' }); }
       }
       phone.setTask(who ? sender(who) : null, text);
+      taskNow = who && text ? { who, text } : null;
       phone.update(dt, ui === 'playing');
       // Scouting: a ring at each place still to photograph.
       if (ch === 'scout' && phase === 'task') spots().forEach((s, i) => { if (visited[i]) markers[i].hide(); else markers[i].show(s.x, s.z, '#5ac8fa'); });

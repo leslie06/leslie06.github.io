@@ -54,6 +54,9 @@ export async function install(engine: Engine): Promise<void> {
   let open = false, dismissed = false, impoundNext = false;
 
   const vehicle = () => engine.get<VehicleApi>('vehicle')!;
+  /** 大刘's discount and 王队's word on the fine (contacts/). */
+  const contacts = () => engine.get<{ name: string; discount: number; fineScale: number }>('contacts');
+  const priced = (n: number) => Math.round(n * (1 - (contacts()?.discount ?? 0)));
   const cashOf = () => engine.get<MissionApi>('missions')?.cash ?? 0;
   const pay = (n: number) => { if (cashOf() < n) return false; engine.get<MissionApi>('missions')?.addCash(-n); return true; };
   const toast = (s: string) => engine.get<HudApi>('hud')?.toast(s);
@@ -107,6 +110,7 @@ export async function install(engine: Engine): Promise<void> {
       health: Math.round(dmg?.health() ?? 100),
       taxi: v.look.taxi,
       dashcam: !!engine.get<{ name: string; dashcam: boolean }>('npc')?.dashcam,
+      discount: contacts()?.discount ?? 0,
     });
   };
 
@@ -144,7 +148,7 @@ export async function install(engine: Engine): Promise<void> {
       if (profile?.impounded) return false;
       const have = owned === v.car && profile ? profile[item] : (profile?.[item] ?? 0);
       const prices = PRICE[item];
-      if (have >= prices.length || !pay(prices[have])) return false;
+      if (have >= prices.length || !pay(priced(prices[have]))) return false;
       if (owned !== v.car) own();
       profile![item] = have + 1;
       apply(v.car, profile!);
@@ -201,7 +205,7 @@ export async function install(engine: Engine): Promise<void> {
   // Busted: the fine, and your car to the pound if you were in it. The swap waits for the respawn
   // (the police reset the car to the spawn), so the busted screen still shows the car you were in.
   engine.events.on('wanted:busted', ({ level }) => {
-    const fine = Math.min(cashOf(), FINE.base + FINE.perStar * Math.max(1, level));
+    const fine = Math.min(cashOf(), Math.round((FINE.base + FINE.perStar * Math.max(1, level)) * (contacts()?.fineScale ?? 1)));
     if (fine > 0) engine.get<MissionApi>('missions')?.addCash(-fine);
     const v = vehicle();
     impoundNext = !!owned && v.car === owned;

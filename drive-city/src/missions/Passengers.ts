@@ -18,9 +18,9 @@ export type PaxKind = 'normal' | 'rush' | 'queasy' | 'chatty' | 'streamer' | 'dr
 export const PAX_COLOR: Record<PaxKind, string> = { normal: '#cfd6dd', rush: '#7fb2ff', queasy: '#9fdc8c', chatty: '#e6b35c', streamer: '#ff7fbf', drunk: '#c79bff', mystery: '#8d949b' };
 
 /** Who is hailing, by the hour (0..24). */
-export function pickPax(rnd: () => number, hour: number): PaxKind {
+export function pickPax(rnd: () => number, hour: number, special = 1): PaxKind {
   const night = hour >= 21 || hour < 4;
-  const w: [PaxKind, number][] = [['normal', 0.36], ['rush', 0.13], ['queasy', 0.12], ['chatty', 0.14], ['streamer', 0.11], ['drunk', night ? 0.16 : 0], ['mystery', 0.05]];
+  const w: [PaxKind, number][] = [['normal', 0.36 / special], ['rush', 0.13], ['queasy', 0.12], ['chatty', 0.14], ['streamer', 0.11], ['drunk', night ? 0.16 : 0], ['mystery', 0.05]];
   let r = rnd() * w.reduce((a, [, x]) => a + x, 0);
   for (const [k, x] of w) { if ((r -= x) <= 0) return k; }
   return 'normal';

@@ -14,6 +14,13 @@ import { nearestKerb, SIDEWALK } from '../people/Pavement';
 import { Marker } from '../missions/Marker';
 import { PLAYER_LOOK } from '../player';
 import { journalOf } from './Journal';
+import { pickAddress, type Stop } from '../missions/Address';
+import { LANDMARKS } from '../city/landmarks';
+import { project } from '../city/Geo';
+import { SPEC_OF } from '../vehicle/Spec';
+import { Vehicle as VehicleClass } from '../vehicle/Vehicle';
+import type { RenderApi } from '../game/Contracts';
+import type { Action } from '../character/Animator';
 
 /** Seconds of free play before the first encounter, and between them. */
 const FIRST = [30, 50], GAP = [50, 90];
@@ -22,7 +29,7 @@ export const BAG_REWARD = 200, BAG_KEEP = 300, SCAM_ASK = 200, RAGE_ASK = 100;
 const THIEF_SPEED = 5.0;
 const DASHCAM_KEY = 'drivecity.dashcam';
 
-type Kind = 'thief' | 'scam' | 'pregnant' | 'rage';
+type Kind = 'thief' | 'scam' | 'pregnant' | 'rage' | 'courier' | 'daijia' | 'tail' | 'foreigner';
 
 export interface NpcApi extends System {
   /** The encounter running now, or null. */
@@ -630,9 +637,304 @@ export async function install(engine: Engine): Promise<void> {
     }, { prio: 2, timeout: 12, fallback: 1 });
   };
 
+
+  // ---------------------------------------------------------------- P3: four more
+
+  /** A kerb ahead of the player, min..max m away, in front: where someone waves from. */
+  const kerbAhead = (min: number, max: number): { x: number; z: number; yaw: number; side: number; l: Link; s: number } | null => {
+    const P = pl.position, f = facing();
+    const ids = g.near(P.x, P.z, max);
+    for (let k = 0; k < 30 && ids.length; k++) {
+      const l = g.links[ids[Math.floor(rnd() * ids.length)]];
+      if (!SIDEWALK[l.cls] || l.len < 20 || l.hmax > 0.3) continue;
+      const s = 6 + rnd() * (l.len - 12), side = l.oneway ? -1 : rnd() < 0.5 ? 1 : -1;
+      g.at(l, s, side * (l.hw + 0.9), at);
+      const dx = at.x - P.x, dz = at.z - P.z, d = Math.hypot(dx, dz);
+      if (d < min || d > max || (dx * f.x + dz * f.z) / d < 0.35) continue;
+      return { x: at.x, z: at.z, yaw: Math.atan2(-side * at.dz, side * at.dx), side, l, s };
+    }
+    return null;
+  };
+  const night = () => { const h = engine.get<RenderApi>('render')?.timeOfDay ?? 15; return h >= 19.5 || h < 3; };
+  const fmtLeft = (s: number) => fmt(s);
+  /** Stopped (or on foot) by a point: arrived. */
+  const arrived = (x: number, z: number, r = 12) => {
+    const c = vehicle().car, P = pl.position;
+    return Math.hypot(P.x - x, P.z - z) < r && (pl.mode !== 'driving' || c.speed < 2.5);
+  };
+  /** Someone waiting at a kerb: speak when the player is near, board (walk to the car and vanish) when they stop. */
+  const W = { who: null as Actor | null, kerb: new THREE.Vector3(), waved: false, looks: null as Look | null, dest: null as { x: number; z: number; label: string } | null, limit: 0, elapsed: 0, n: 0, lineT: 0 };
+  const waiter = (kind: Kind, look: Look, act: Action | null, seat?: number): boolean => {
+    const driving = pl.mode === 'driving';
+    const k = kerbAhead(driving ? 60 : 25, driving ? 160 : 90);
+    if (!k) return false;
+    const a = people.spawnActor!(k.x, k.z, { look, yaw: k.yaw });
+    if (!a) return false;
+    a.act(act, { seat });
+    W.who = a; W.kerb.set(k.x, 0, k.z); W.waved = false; W.looks = look; W.dest = null; W.n = 0; W.lineT = 8;
+    cast = [a];
+    marker.show(k.x, k.z, '#ff9f1c', 0.6);
+    active = kind; clock = 0; setPhase('wait');
+    return true;
+  };
+  const waiterSpeaker = (key: TKey, color: string): Speaker => ({ name: t(key), color, look: W.looks ?? undefined, voice: W.who?.voice, at: W.who?.alive ? W.who.pos : null });
+  /** Within reach to be asked: driving and stopped by them, or on foot beside them. */
+  const reached = () => {
+    const a = W.who; if (!a?.alive) return false;
+    const c = vehicle().car, P = pl.position, d = Math.hypot(a.pos.x - P.x, a.pos.z - P.z);
+    return pl.mode === 'driving' ? d < 8.5 && c.speed < 3 : d < 3;
+  };
+  /** Into the car on the kerb side: they walk to the door and are gone (riding along). */
+  const board = () => {
+    const a = W.who, c = vehicle().car;
+    if (!a?.alive) return;
+    if (pl.mode !== 'driving') { letGo(a, 'vanish'); W.who = null; return; }
+    const side = Math.sign((a.pos.x - c.pos.x) * c.left.x + (a.pos.z - c.pos.z) * c.left.z) || 1;
+    a.act(null); a.goTo(c.pos.x + c.left.x * side * 1.2 - c.fwd.x * 0.5, c.pos.z + c.left.z * side * 1.2 - c.fwd.z * 0.5, 1.4);
+    after(2.5, () => { if (a.alive) letGo(a, 'vanish'); });
+    W.who = null;
+  };
+  const toTarget = (d: { x: number; z: number; label: string }) => { nav()?.setTarget({ x: d.x, z: d.z, kind: 'mission', label: d.label }); marker.show(d.x, d.z, '#3ccf72'); };
+
+  // --- 外卖小哥摔了
+  const courierLook = (): Look => {
+    const l = randomLook(rnd), c = new THREE.Color(pick(['#f6c300', '#1b8ff0']));
+    l.fem = 0; l.top = 'jacket'; l.shirt = c; l.inner = c.clone(); l.sleeve = 0.53; l.cap = c.clone(); l.bottom = 'trousers'; l.hem = 0.8; l.pants = new THREE.Color('#1d1f24'); l.print = false; l.mask = null;
+    return l;
+  };
+  const stops: Stop[] = [];
+  const startCourier = (): boolean => waiter('courier', courierLook(), 'sit', 0.15);
+  const courierStep = () => {
+    const sp = waiterSpeaker('npc.who.courier', '#f6c300');
+    if (phase === 'wait') {
+      story(t('npc.obj.courierWave'));
+      if (!W.waved && W.who && Math.hypot(W.who.pos.x - pl.position.x, W.who.pos.z - pl.position.z) < 40) { W.waved = true; W.who.act('wave'); }
+      if (reached()) {
+        setPhase('ask');
+        dlg()?.ask(sp, t('npc.courier.ask'), [t('npc.courier.optYes'), t('npc.courier.optNo')], (i) => {
+          if (active !== 'courier') return;
+          journal.meet('enc.courier');
+          if (i !== 0) { end(null); return; }
+          const P = pl.position, n = nav(), r = () => rnd();
+          stops.length = 0;
+          const a1 = pickAddress(g, n, r, P.x, P.z, 300, 900) ?? pickAddress(g, n, r, P.x, P.z, 300, 900, [], 100, false);
+          const a2 = a1 && (pickAddress(g, n, r, a1.x, a1.z, 300, 900, [a1]) ?? pickAddress(g, n, r, a1.x, a1.z, 300, 900, [a1], 100, false));
+          if (!a1 || !a2) { end(null); return; }
+          stops.push(a1, a2);
+          dlg()?.say(sp, t('npc.courier.thanks'), { prio: 2 });
+          W.n = 0; startLeg();
+        }, { prio: 2, timeout: 12, fallback: 1 });
+      } else if (clock > 90 || Math.hypot(W.kerb.x - pl.position.x, W.kerb.z - pl.position.z) > 350) end(null);
+      return;
+    }
+    if (phase === 'run') {
+      const d = stops[W.n];
+      W.elapsed += 1 / 60;
+      story(t('npc.obj.courier', { i: W.n + 1, place: d.label, time: fmtLeft(W.limit - W.elapsed) }));
+      if (W.elapsed > W.limit) { end(t('npc.courierLate')); return; }
+      if (arrived(d.x, d.z)) {
+        const n = 30 + Math.round((W.limit - W.elapsed) * 0.6);
+        pay(n); toast(t('npc.courierDrop', { n }));
+        W.n++;
+        if (W.n >= stops.length) { pay(60); after(1.8, () => toast(t('npc.courierDone', { n: 60 }))); end(null); }
+        else startLeg();
+      }
+    }
+  };
+  const startLeg = () => {
+    const d = stops[W.n], P = pl.position;
+    const len = nav()?.route(P.x, P.z, Math.atan2(facing().x, facing().z), d.x, d.z)?.len ?? Math.hypot(d.x - P.x, d.z - P.z) * 1.4;
+    W.limit = len / 8 + 30; W.elapsed = 0;
+    toTarget(d);
+    setPhase('run');
+  };
+
+  // --- 代驾 (night)
+  const D = { car: null as Vehicle | null, dmg: 0, fee: 260 };
+  const startDaijia = (): boolean => {
+    if (!night()) return false;
+    const look = randomLook(rnd);
+    look.fem = 0; look.age = 0.45; look.top = 'jacket'; look.shirt = new THREE.Color('#1a1b20'); look.inner = new THREE.Color('#eef0f2'); look.pants = new THREE.Color('#1a1b20'); look.cap = null; look.mask = null; look.build = 0.8; look.glasses = rnd() < 0.5;
+    if (!waiter('daijia', look, 'stagger')) return false;
+    // his car, parked at the kerb beside him
+    const a = W.who!, k = { x: a.pos.x, z: a.pos.z };
+    let best: Link | null = null, bd = 20, bs = 0;
+    for (const id of g.near(k.x, k.z, 25)) { const l = g.links[id], pr = g.project(l, k.x, k.z, l.len / 2); if (pr.d < bd) { bd = pr.d; best = l; bs = pr.s; } }
+    if (!best) { end(null); return false; }
+    g.at(best, Math.min(best.len - 3, bs + 4), 0, at);
+    const lat = ((k.x - at.x) * at.dz - (k.z - at.z) * at.dx) >= 0 ? 1 : -1;
+    g.at(best, Math.min(best.len - 3, bs + 4), lat * (best.hw - 1.2), at);
+    const car = new VehicleClass(engine.physics, SPEC_OF.suv, { x: at.x, y: 0.6, z: at.z }, Math.atan2(at.dx, at.dz));
+    tr.parkCar(car, { upper: new THREE.Color('#121316'), lower: new THREE.Color('#121316'), taxi: false, parked: true, body: 'suv' });
+    D.car = car; D.dmg = 0;
+    return true;
+  };
+  const daijiaStep = () => {
+    const sp = waiterSpeaker('npc.who.boss', '#9aa0a5');
+    const v = vehicle();
+    if (phase === 'wait') {
+      if (!W.waved && W.who && Math.hypot(W.who.pos.x - pl.position.x, W.who.pos.z - pl.position.z) < 35) { W.waved = true; W.who.say(t('npc.daijia.wave'), 2.4, t('npc.who.boss')); }
+      const f = pl.foot, a = W.who;
+      if (f && a?.alive && Math.hypot(a.pos.x - f.pos.x, a.pos.z - f.pos.z) < 2.6) pl.offer?.({ x: a.pos.x, z: a.pos.z, r: 2.6, label: t('npc.talk'), use: () => {
+        setPhase('ask');
+        dlg()?.ask(sp, t('npc.daijia.ask', { n: D.fee }), [t('npc.daijia.optYes'), t('npc.daijia.optNo')], (i) => {
+          if (active !== 'daijia') return;
+          journal.meet('enc.daijia');
+          if (i !== 0) { end(null); return; }
+          setPhase('getin');
+          const c = D.car!;
+          a.goTo(c.pos.x + c.left.x * -1.2, c.pos.z + c.left.z * -1.2, 1.0);
+        }, { prio: 2, timeout: 12, fallback: 1 });
+      } });
+      if (clock > 120 || Math.hypot(W.kerb.x - pl.position.x, W.kerb.z - pl.position.z) > 350) end(null);
+      return;
+    }
+    if (phase === 'getin') {
+      story(t('npc.obj.daijiaGetIn'));
+      const a = cast[0];
+      if (a?.alive && a.arrived) letGo(a, 'vanish');
+      if (pl.mode === 'driving' && v.car === D.car) {
+        if (cast[0]?.alive) letGo(cast[0], 'vanish');
+        const P = pl.position, n = nav(), r = () => rnd();
+        const d = pickAddress(g, n, r, P.x, P.z, 800, 1600) ?? pickAddress(g, n, r, P.x, P.z, 600, 1400, [], 100, false);
+        if (!d) { end(null); return; }
+        W.dest = d;
+        const len = n?.route(P.x, P.z, Math.atan2(v.car.fwd.x, v.car.fwd.z), d.x, d.z)?.len ?? 1500;
+        W.limit = len / 9 + 45; W.elapsed = 0; W.lineT = 10;
+        toTarget(d);
+        setPhase('drive');
+      } else if (phaseT > 75) end(null);
+      return;
+    }
+    if (phase === 'drive') {
+      const d = W.dest!;
+      W.elapsed += 1 / 60; W.lineT -= 1 / 60;
+      story(t('npc.obj.daijia', { place: d.label, time: fmtLeft(W.limit - W.elapsed) }));
+      if (W.lineT <= 0) { W.lineT = 14 + rnd() * 6; dlg()?.say({ ...sp, at: null }, t(pick(['npc.daijia.ride1', 'npc.daijia.ride2', 'npc.daijia.ride3'] as const)), { prio: 1 }); }
+      if (pl.mode !== 'driving' || v.car !== D.car || W.elapsed > W.limit + 60) { end(null); return; }
+      if (arrived(d.x, d.z, 14)) {
+        const dmg = Math.min(D.fee - 40, Math.round(D.dmg)), n = D.fee - dmg;
+        pay(n); dlg()?.say({ ...sp, at: null }, t('npc.daijia.done'), { prio: 2 });
+        toast(t('npc.daijiaPaid', { n, dmg }));
+        end(null);
+      }
+    }
+  };
+  engine.events.on('vehicle:impact', ({ strength }) => {
+    if (active !== 'daijia' || phase !== 'drive' || strength < 2) return;
+    D.dmg += (strength - 2) * 12;
+    if (rnd() < 0.6) dlg()?.say({ name: t('npc.who.boss'), color: '#9aa0a5', look: W.looks ?? undefined }, t('npc.daijia.bump'), { prio: 1 });
+  });
+
+  // --- 跟上那辆车 (in a taxi)
+  const TL = { run: null as { car: Vehicle; release(): void; bolt(): void } | null, close: 0, far: 0, said: 0, t: 0 };
+  const startTail = (): boolean => {
+    if (pl.mode !== 'driving' || !vehicle().look.taxi) return false;
+    const look = randomLook(rnd);
+    look.top = 'coat'; look.shirt = new THREE.Color('#2a2622'); look.cap = new THREE.Color('#2a2622'); look.glasses = true; look.mask = null;
+    return waiter('tail', look, 'wave');
+  };
+  const tailStep = (dt: number) => {
+    const sp = waiterSpeaker('npc.who.client', '#c79bff');
+    const c = vehicle().car;
+    if (phase === 'wait') {
+      story(t('npc.obj.pregWave'));
+      if (!W.waved && W.who && Math.hypot(W.who.pos.x - c.pos.x, W.who.pos.z - c.pos.z) < 45) { W.waved = true; W.who.say(t('npc.tail.wave'), 2, t('npc.who.client')); }
+      if (reached() && pl.mode === 'driving') {
+        board();
+        dlg()?.say({ ...sp, at: null }, t('npc.tail.ask'), { prio: 2 });
+        after(2.5, () => {
+          if (active !== 'tail') return;
+          const r = tr.spawnRunner(c.pos.x, c.pos.z, c.fwd.x, c.fwd.z, { calm: true });
+          if (!r) { end(null); return; }
+          TL.run = r; TL.close = 0; TL.far = 0; TL.said = 0; TL.t = 0;
+          setPhase('tail');
+        });
+        setPhase('boarding');
+      } else if (clock > 90 || Math.hypot(W.kerb.x - c.pos.x, W.kerb.z - c.pos.z) > 350) end(null);
+      return;
+    }
+    if (phase === 'tail' && TL.run) {
+      const rc = TL.run.car, d = Math.hypot(rc.pos.x - c.pos.x, rc.pos.z - c.pos.z), csp = { ...sp, at: null };
+      TL.t += dt; TL.said -= dt;
+      story(t('npc.obj.tail', { m: Math.round(d), time: fmtLeft(70 - TL.t) }));
+      TL.close = d < 14 ? TL.close + dt : Math.max(0, TL.close - dt);
+      TL.far = d > 130 ? TL.far + dt : 0;
+      if (d < 24 && TL.said <= 0) { TL.said = 6; dlg()?.say(csp, t('npc.tail.close'), { prio: 1 }); }
+      if (d > 100 && TL.said <= 0) { TL.said = 6; dlg()?.say(csp, t('npc.tail.far'), { prio: 1 }); }
+      if (TL.close > 2.5) { TL.run.bolt(); dlg()?.say(csp, t('npc.tail.spotted'), { prio: 2 }); journal.meet('enc.tail'); const r = TL.run; TL.run = null; after(8, () => r.release()); end(t('npc.tailFail')); return; }
+      if (TL.far > 6 || pl.mode !== 'driving') { journal.meet('enc.tail'); TL.run.release(); TL.run = null; end(t('npc.tailFail')); return; }
+      if (TL.t > 70) {
+        dlg()?.say(csp, t('npc.tail.done'), { prio: 2 });
+        pay(260); toast(t('npc.tailPaid', { n: 260 })); journal.meet('enc.tail');
+        const r = TL.run; TL.run = null; after(6, () => r.release());
+        end(null);
+      }
+    }
+  };
+
+  // --- 老外问路
+  const lmPts = LANDMARKS.filter((l) => l.id !== 'home').map((l) => { const [x, z] = project(l.lat, l.lon); return { id: l.id, x, z, zh: l.name.zh, en: l.name.en }; });
+  const told = new Set<string>();
+  const startForeigner = (): boolean => {
+    if (pl.mode !== 'driving') return false;
+    const look = randomLook(rnd);
+    look.skin = new THREE.Color('#f2d6c4'); look.hair = new THREE.Color(pick(['#c9a46a', '#8a5a33', '#d8c08a'])); look.height = 1.84; look.age = 0.3; look.cap = rnd() < 0.5 ? new THREE.Color('#2f6db5') : null; look.mask = null;
+    if (!waiter('foreigner', look, 'wave')) return false;
+    // somewhere famous 700-2500 m by road
+    const c = vehicle().car, n = nav();
+    for (const l of lmPts.slice().sort(() => rnd() - 0.5)) {
+      const d = Math.hypot(l.x - c.pos.x, l.z - c.pos.z);
+      if (d < 600 || d > 2500) continue;
+      const k = nearestKerb(g, l.x, l.z, 220, 0.8);
+      if (!k) continue;
+      const len = n?.route(c.pos.x, c.pos.z, Math.atan2(c.fwd.x, c.fwd.z), k.x, k.z)?.len ?? d * 1.4;
+      if (len > 3200) continue;
+      W.dest = { x: k.x, z: k.z, label: lang() === 'zh' ? l.zh : l.en }; W.limit = len / 9 + 40;
+      (W as { lm?: string }).lm = l.id;
+      return true;
+    }
+    end(null);
+    return false;
+  };
+  const foreignerStep = () => {
+    const sp = waiterSpeaker('npc.who.foreigner', '#5fd1ff');
+    const c = vehicle().car;
+    if (phase === 'wait') {
+      if (!W.waved && W.who && Math.hypot(W.who.pos.x - c.pos.x, W.who.pos.z - c.pos.z) < 45) { W.waved = true; W.who.say(t('npc.foreigner.wave'), 2, t('npc.who.foreigner')); }
+      if (reached() && pl.mode === 'driving') {
+        setPhase('ask');
+        dlg()?.ask(sp, t('npc.foreigner.ask', { place: W.dest!.label }), [t('npc.foreigner.optYes'), t('npc.foreigner.optNo')], (i) => {
+          if (active !== 'foreigner') return;
+          journal.meet('enc.foreigner');
+          if (i !== 0) { end(null); return; }
+          board(); told.clear(); W.n = 0; W.elapsed = 0;
+          toTarget(W.dest!);
+          setPhase('ride');
+        }, { prio: 2, timeout: 12, fallback: 1 });
+      } else if (clock > 90 || Math.hypot(W.kerb.x - c.pos.x, W.kerb.z - c.pos.z) > 350) end(null);
+      return;
+    }
+    if (phase === 'ride') {
+      const d = W.dest!, csp = { ...sp, at: null };
+      W.elapsed += 1 / 60;
+      story(t('npc.obj.foreigner', { place: d.label, time: fmtLeft(W.limit - W.elapsed) }));
+      if (phaseT % 1 < 1 / 60) for (const l of lmPts) {
+        if (told.has(l.id) || l.id === (W as { lm?: string }).lm || Math.hypot(l.x - c.pos.x, l.z - c.pos.z) > 170) continue;
+        told.add(l.id); W.n++; dlg()?.say(csp, t('npc.foreigner.wow', { place: lang() === 'zh' ? l.zh : l.en }), { prio: 1 }); break;
+      }
+      if (pl.mode !== 'driving' || (wanted()?.level ?? 0) > 0 || W.elapsed > W.limit + 90) { end(t('taxi.scared')); return; }
+      if (arrived(d.x, d.z, 14)) {
+        const n = 150 + 20 * W.n + (W.elapsed < W.limit ? 60 : 0);
+        pay(n); dlg()?.say(csp, t('npc.foreigner.done'), { prio: 2 }); toast(t('npc.foreignerPaid', { n }));
+        end(null);
+      }
+    }
+  };
+
   // ---------------------------------------------------------------- the director
 
-  const starters: Record<Exclude<Kind, 'rage'>, () => boolean> = { thief: startThief, scam: startScam, pregnant: startPregnant };
+  const starters: Record<Exclude<Kind, 'rage'>, () => boolean> = { thief: startThief, scam: startScam, pregnant: startPregnant, courier: startCourier, daijia: startDaijia, tail: startTail, foreigner: startForeigner };
   const start = (kind: Kind): boolean => (kind === 'rage' ? startRage() : starters[kind]());
 
   engine.events.on('vehicle:reset', () => { if (active) { if (active === 'rage' && R.car) tr.hold?.(R.car, false); end(null); } });
@@ -657,7 +959,10 @@ export async function install(engine: Engine): Promise<void> {
         wait -= dt;
         if (wait > 0) return;
         const v = vehicle(), driving = pl.mode === 'driving';
-        const kinds: Exclude<Kind, 'rage'>[] = !driving ? ['thief'] : v.car.speed > 14 ? ['pregnant'] : ['thief', 'scam', 'scam', 'pregnant'];
+        const nt = night(), taxi = v.look.taxi;
+        const kinds: Exclude<Kind, 'rage'>[] = !driving ? ['thief', 'courier', ...(nt ? ['daijia', 'daijia'] as const : [])]
+          : v.car.speed > 14 ? ['pregnant', 'courier', 'foreigner', ...(taxi ? ['tail'] as const : [])]
+          : ['thief', 'scam', 'scam', 'pregnant', 'courier', 'foreigner', ...(taxi ? ['tail', 'tail'] as const : []), ...(nt ? ['daijia'] as const : [])];
         const first = pick(kinds);
         if (!starters[first]() && !kinds.some((k) => k !== first && starters[k]())) wait = 6;
         return;
@@ -667,6 +972,10 @@ export async function install(engine: Engine): Promise<void> {
       else if (active === 'scam') scamStep(dt);
       else if (active === 'pregnant') pregStep(dt);
       else if (active === 'rage') rageStep(dt);
+      else if (active === 'courier') courierStep();
+      else if (active === 'daijia') daijiaStep();
+      else if (active === 'tail') tailStep(dt);
+      else if (active === 'foreigner') foreignerStep();
     },
     update(dt) {
       marker.update(dt); marker2.update(dt);
@@ -680,6 +989,11 @@ export async function install(engine: Engine): Promise<void> {
     if (active === 'thief' && phase === 'return' && T.victim?.alive) blips.push({ kind: 'encounter', x: T.victim.pos.x, z: T.victim.pos.z });
     if (active === 'pregnant' && (phase === 'wait' || phase === 'board')) blips.push({ kind: 'encounter', x: B.kerb.x, z: B.kerb.z, flash: true });
     if (active === 'pregnant' && phase === 'ride' && B.dest) blips.push({ kind: 'dropoff', x: B.dest.x, z: B.dest.z, label: B.dest.label });
+    if ((active === 'courier' || active === 'daijia' || active === 'tail' || active === 'foreigner') && phase === 'wait') blips.push({ kind: 'encounter', x: W.kerb.x, z: W.kerb.z, flash: true });
+    if (active === 'courier' && phase === 'run' && stops[W.n]) blips.push({ kind: 'dropoff', x: stops[W.n].x, z: stops[W.n].z, label: stops[W.n].label });
+    if ((active === 'daijia' && phase === 'drive' || active === 'foreigner' && phase === 'ride') && W.dest) blips.push({ kind: 'dropoff', x: W.dest.x, z: W.dest.z, label: W.dest.label });
+    if (active === 'daijia' && phase === 'getin' && D.car) blips.push({ kind: 'target', x: D.car.pos.x, z: D.car.pos.z });
+    if (active === 'tail' && TL.run) blips.push({ kind: 'suspect', x: TL.run.car.pos.x, z: TL.run.car.pos.z, heading: Math.atan2(TL.run.car.fwd.x, TL.run.car.fwd.z) });
     return blips;
   });
   engine.add(api);

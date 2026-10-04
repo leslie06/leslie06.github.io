@@ -19,6 +19,12 @@ export interface GameEvents {
    * car when x is NaN (a passenger). `id` lets a new line from the same speaker cut the old one off.
    */
   'npc:voice': { text: string; voice: { pitch: number; rate: number; bright: number }; x: number; z: number; id?: string };
+  /** A story chapter was done (story/): whose it was (laok, xiaoyu, daliu, wang). */
+  'story:done': { chapter: string; who: string };
+  /** A taxi fare was paid (missions/). */
+  'taxi:fare': { pay: number; kind: string };
+  /** A street event's race against the red saloon ended (events/). */
+  'challenge:result': { won: boolean };
   /** A traffic officer blew the whistle (life/). */
   'life:whistle': { x: number; z: number };
   /** A new face for the journal (人物志): `id` (npc/Journal.ts), its name, how many met of how many. */

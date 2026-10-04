@@ -34,6 +34,8 @@ const ON = [55, 210], OFF = 270;
 export const PRICE = { jianbing: 8, bbq: 25, tip: 10, photo: 20 };
 
 export interface LifeApi extends System {
+  /** Where the nearest 兔儿爷 or stunt ramp not done yet is, said by `who` and marked on the map. */
+  gossip(who: Speaker): boolean;
   /** What is playing in the street, for audio/. */
   readonly music: readonly MusicSource[];
   debug: { spawn(kind: Kind, x?: number, z?: number): boolean; sites(): { square: number[][]; park: number[][] }; scenes(): { kind: Kind; x: number; z: number; yaw: number; cast: number; state: string; join: { x: number; z: number } | null; people: { x: number; z: number }[] }[]; clear(): void };
@@ -636,6 +638,7 @@ export async function install(engine: Engine): Promise<void> {
   const api: LifeApi = {
     name: 'life',
     get music() { return music; },
+    gossip: (who) => gossip(who),
     debug: {
       spawn: (kind, x, z) => { load(); focus = x !== undefined && z !== undefined ? { x, z } : null; const ok = !!start(kind); focus = null; return ok; },
       sites: () => sites,

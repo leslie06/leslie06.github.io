@@ -185,7 +185,7 @@ export async function install(engine: Engine): Promise<void> {
       const tr0 = urgent ? 2 : r < TIERS[0].weight ? 0 : r < TIERS[0].weight + TIERS[1].weight ? 1 : 2;
       const m = spareMarkers.pop()!;
       // The rush fare is the one with a train to catch.
-      const kind: PaxKind = urgent ? 'rush' : pickPax(rnd, engine.get<RenderApi>('render')?.timeOfDay ?? 15);
+      const kind: PaxKind = urgent ? 'rush' : pickPax(rnd, engine.get<RenderApi>('render')?.timeOfDay ?? 15, engine.get<{ name: string; specialPax: number }>('contacts')?.specialPax ?? 1);
       const h: Hailer = { pos: new THREE.Vector3(at.x, 0.045, at.z), yaw: Math.atan2(-side * at.dz, side * at.dx), look: paxLook(kind, rnd), gait: new Gait(), t: rnd() * 3, tier: tr0, marker: m, urgent, pax: kind, seed: rnd() };
       m.show(at.x, at.z, urgent ? URGENT_COLOR : TIERS[tr0].color, urgent ? 0.8 : 0.5);
       hailers.push(h);
@@ -410,7 +410,9 @@ export async function install(engine: Engine): Promise<void> {
             const base = payFor(tripLen / 1000) * (urgentRide ? 2 : 1) * (triple ? 3 : 1), bonus = Math.round(base * r.bonus * (kind === 'rush' ? 2 : 1));
             const stuntTip = Math.max(0, tips - crashes * 3), tip = ride ? ride.tip(stuntTip) : stuntTip;
             const cleaning = ride?.vomited ? 30 : 0;
-            const total = Math.max(0, base + bonus + tip - cleaning);
+            // 老张's word at the rank (contacts/): fares +20%.
+            const total = Math.max(0, Math.round((base + bonus + tip - cleaning) * (engine.get<{ name: string; fareScale: number }>('contacts')?.fareScale ?? 1)));
+            engine.events.emit('taxi:fare', { pay: total, kind });
             api.addCash(total);
             shift.fares++; shift.earned += total; shift.clock += r.time;
             toast(t('taxi.paidArcade', { rating: t(r.key), pay: base + bonus, tip, s: r.time }));

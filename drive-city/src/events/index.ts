@@ -193,8 +193,8 @@ export async function install(engine: Engine): Promise<void> {
       if (active === 'challenge' && finish) {
         const r = rival, rc = r.car;
         const me = Math.hypot(c.pos.x - finish.x, c.pos.z - finish.z), it = Math.hypot(rc.pos.x - finish.x, rc.pos.z - finish.z);
-        if (me < 20) { end(t('event.won', { n: RACE_PRIZE }), RACE_PRIZE); return; }
-        if (it < 20) { end(t('event.lost')); return; }
+        if (me < 20) { engine.events.emit('challenge:result', { won: true }); end(t('event.won', { n: RACE_PRIZE }), RACE_PRIZE); return; }
+        if (it < 20) { engine.events.emit('challenge:result', { won: false }); end(t('event.lost')); return; }
         if (clock > 150 || me > SPRINT[1] + 700) { end(t('event.abandon')); return; }
         // Rubber band: faster when behind the player, easing off when well ahead.
         r.driver.topSpeed = Math.max(20, Math.min(36, 29 + (it - me) * 0.03));

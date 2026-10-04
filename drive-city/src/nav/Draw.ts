@@ -11,7 +11,7 @@ export const INK = 'rgba(9,11,13,0.9)';
 export const POLICE_RED = '#ff3b30', POLICE_BLUE = '#2f7bff';
 export const BLIP_COLOR: Record<MarkKind, string> = {
   police: POLICE_BLUE, target: C.yellow, pickup: '#3aa6ff', dropoff: '#3ccf72', car: '#d8dbde', landmark: '#d4b264', landmarkDone: '#8a8270', trial: '#5fd1ff', waypoint: C.yellow, mission: C.yellow,
-  jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a', encounter: '#ff9f1c', suspect: '#ff3b30',
+  jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a', encounter: '#ff9f1c', suspect: '#ff3b30', contact: '#b07cff',
 };
 
 /** Police lights: red/blue at ~2.5 Hz. */
@@ -141,6 +141,14 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       disc(ctx, x, y, r, col);
       ctx.fillStyle = INK; ctx.font = `900 ${Math.round(r * 1.35)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('?', x, y + r * 0.08);
+      break;
+    }
+    case 'contact': {
+      // Someone you know: a purple disc with a head and shoulders.
+      disc(ctx, x, y, r, col);
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(x, y - r * 0.22, r * 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, y + r * 0.42, r * 0.5, r * 0.3, 0, Math.PI, 0); ctx.fill();
       break;
     }
     case 'suspect': {

@@ -48,6 +48,8 @@ export interface GarageView {
   carLevels: { engine: number; tyres: number; nitro: number } | null;
   health: number;
   taxi: boolean;
+  /** 大刘's discount on the parts (0..1). */
+  discount: number;
   /** A dashcam is fitted (the player's, whatever car: npc/'s scammers run from it). */
   dashcam: boolean;
 }
@@ -87,7 +89,7 @@ export class GarageMenu {
     // Buying moves your parts onto this car: show the stages you own, not this car's stock ones.
     const lv = v.mine ? v : v.carLevels ?? v;
     const stage = (key: 'engine' | 'tyres' | 'nitro', of: number, what: string) => {
-      const have = lv[key], price = PRICE[key][have];
+      const have = lv[key], base = PRICE[key][have], price = base === undefined ? undefined : Math.round(base * (1 - v.discount));
       const label = price === undefined ? t('garage.max') : key === 'nitro' && have === 0 ? t('garage.fit') : t('garage.upgrade');
       this.row(p, t(`garage.${key}` as 'garage.engine'), `${pips(have, of)} ${what}`, price, price !== undefined && v.cash >= price && !v.impounded, () => this.onBuy(key), label);
     };

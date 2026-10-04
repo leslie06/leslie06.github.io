@@ -20,10 +20,15 @@ css(`
 .hud .dlg .bar{grid-column:1/-1;height:3px;border-radius:2px;background:rgba(244,241,232,.12);overflow:hidden;margin-top:2px}
 .hud .dlg .bar[hidden]{display:none}
 .hud .dlg .bar i{display:block;height:100%;background:${C.yellow};width:100%}
-body.dc-touch .hud .dlg{bottom:38vh;width:min(520px,70vw);padding:8px 11px;grid-template-columns:40px 1fr;gap:9px}
-body.dc-touch .hud .dlg .av{width:40px;height:40px}
-body.dc-touch .hud .dlg .txt{font-size:14px}
-body.dc-touch .hud .dlg .opts button{padding:10px 12px}
+/* A phone on its side: the radar is top left, the pads bottom right and the stick bottom left, so the box
+   goes top centre, narrow, between them, its answers stacked (big enough to tap). */
+body.dc-touch .hud .dlg{top:calc(15vh + env(safe-area-inset-top,0px));bottom:auto;width:min(400px,38vw);padding:7px 10px;grid-template-columns:34px 1fr;gap:8px}
+body.dc-touch .hud .dlg.off{transform:translate(-50%,-10px)}
+body.dc-touch .hud .dlg .av{width:34px;height:34px;font-size:15px}
+body.dc-touch .hud .dlg .who{font-size:11px;margin:0 0 2px}
+body.dc-touch .hud .dlg .txt{font-size:13px;line-height:1.35}
+body.dc-touch .hud .dlg .opts{flex-direction:column;gap:5px;margin-top:6px}
+body.dc-touch .hud .dlg .opts button{padding:8px 10px;font-size:13px;text-align:left}
 `);
 
 interface Item {

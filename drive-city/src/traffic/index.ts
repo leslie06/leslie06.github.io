@@ -51,7 +51,7 @@ export interface TrafficApi extends TrafficCars {
   /** Stop lines traffic has crossed, and how many on red (diagnostics: `.scratch/order.mjs`). */
   readonly lineStats: { crossed: number; onRed: number; yields: number };
   /** A getaway car for the chase job: spawned on the road 90-200 m from (x, z), fast and blind to red lights, until released. */
-  spawnRunner(x: number, z: number, hx: number, hz: number): { car: Vehicle; release(): void } | null;
+  spawnRunner(x: number, z: number, hx: number, hz: number, opts?: { calm?: boolean }): { car: Vehicle; release(): void; bolt(): void } | null;
   /** Riders on electric scooters at most (they take places in the player's crowd before the pedestrians). */
   readonly riderCap: number;
   /**
@@ -418,7 +418,7 @@ export async function install(engine: Engine): Promise<void> {
       if (!on) { n.filter.reset(); n.driver.shake(); }
       return true;
     },
-    spawnRunner(x, z, hx, hz) {
+    spawnRunner(x, z, hx, hz, opts) {
       // On the player's own road, the way they are facing, 60-90 m ahead: a chase that starts with
       // the quarry in sight, not a 2 km detour round the one-ways to where it was.
       let best = -1, bd = 40, bs = 0;
@@ -448,12 +448,13 @@ export async function install(engine: Engine): Promise<void> {
         n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
         n.car.setMoving(l.speed);
         n.driver = new AiDriver(g, sig, id, s, 0, rnd);
-        n.driver.boost = 1.3; n.driver.reckless = true;
+        // `calm`: an ordinary driver (a car to follow), until `bolt` makes it a getaway.
+        if (!opts?.calm) { n.driver.boost = 1.3; n.driver.reckless = true; }
         n.filter.reset(); paint(n); n.taxi = false; n.upper.set('#161718'); n.lower.set('#161718');
         n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
         n.active = true; n.parked = false; n.bike = false; n.runner = true; n.flipped = 0;
         const npc = n;
-        return { car: npc.car, release: () => { if (npc.active && npc.runner) despawn(npc); } };
+        return { car: npc.car, release: () => { if (npc.active && npc.runner) despawn(npc); }, bolt: () => { if (npc.driver) { npc.driver.boost = 1.35; npc.driver.reckless = true; } } };
       }
       return null;
     },

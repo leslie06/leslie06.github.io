@@ -39,7 +39,9 @@ const STOP: DriveInput = { forward: 0, back: 0, steer: 0, analog: true, handbrak
 /** Where they look once they have lost sight of the player: 175 m at one star, 395 at five. */
 const searchRadius = (lv: number) => 120 + 55 * lv;
 /** Seconds out of sight (outside the circle) to lose them. */
-const evadeTime = (lv: number) => 7 + 3.5 * lv;
+/** 小雨's favour (contacts/) shortens it. */
+let evadeScale = 1;
+const evadeTime = (lv: number) => (7 + 3.5 * lv) * evadeScale;
 /**
  * Seconds dispatch knows where the player is after a new star (the crime was just called in: GTA's
  * police drive straight to you before they have to find you), and after each sighting (breaking line
@@ -338,6 +340,7 @@ export async function install(engine: Engine): Promise<void> {
       cops: () => cops.filter((c) => c.active).map((c) => ({ x: c.car.pos.x, z: c.car.pos.z, speed: c.car.speed, role: c.role, sees: c.sees, swat: c.swat, hp: c.hp, wreck: c.wreck, block: c.block, boost: c.car.boost, forward: c.driver.input.forward })),
     },
     fixedUpdate(dt) {
+      evadeScale = engine.get<{ name: string; evadeScale: number }>('contacts')?.evadeScale ?? 1;
       clock += dt;
       readPlayer();
       // nav installs after police: hand it the blips on the first step it is there.
