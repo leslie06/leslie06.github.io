@@ -7,7 +7,9 @@ import type { Look } from './Body';
  */
 export interface VoiceSpec { pitch: number; rate: number; bright: number;
   /** Who it is, for a spoken voice (audio/Speech.ts picks a man's or a woman's, an old one's): 0 male .. 1 female, 0 young .. 1 old. */
-  fem?: number; age?: number }
+  fem?: number; age?: number;
+  /** A contact's id (contacts/): their own recorded voice for their own lines (audio/VoiceClips.ts). */
+  character?: string }
 
 /** A voice to go with a look: lower for men, slower and a little lower with age; `seed` 0..1 varies it. */
 export function voiceOf(look: Look, seed: number): VoiceSpec {

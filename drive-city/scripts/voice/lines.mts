@@ -11,7 +11,7 @@ import { NPC_ZH } from '../../src/core/i18n/npc';
 const HUD = /(^|\.)(obj|opt[A-Za-z]*|who|name|role|mapLabel|hearts|unlock|hint[A-Za-z]*|banner|talk|j|wins|met|pickBag|bagGot|legit)(\.|\d|$)|^(map|garage|perk|pax\.obj|life\.(buy|tip|game))\b/;
 const TOAST = /[+-]¥|¥\{|^F |·|：\+|体力 \+/;
 /** HUD text that reads like speech. */
-const SHOWN = /^life\.(dir|thing|noCash|taichi\.done)|^event\.black(?!Shout)|^con\.warning/;
+const SHOWN = /^life\.(dir|thing|noCash|taichi\.done)|^event\.black(?!Shout)|^con\.warning|^npc\.\w+(Late|Gone|Fled|Fail)$/;
 
 /** What a line with a parameter is recorded as. Lines with parameters not listed here are not recorded. */
 const SPOKEN: Record<string, string> = {

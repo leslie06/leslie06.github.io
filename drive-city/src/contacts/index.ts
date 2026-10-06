@@ -139,7 +139,8 @@ export async function install(engine: Engine): Promise<void> {
     return { d, x, z, yaw, actor: null, chatted: false, looks: d.look(rnd), bodies: [], k: k ? { link: k.link, s: k.s, side: k.side } : null, settled: false };
   });
 
-  const speakerOf = (h: Here): Speaker => ({ name: `${t(h.d.name)} ${heartText(heartsOf(h.d.id))}`, color: h.d.color, look: h.looks, voice: h.actor?.voice, at: h.actor?.pos ?? null });
+  // Their voice carries who they are: their lines are recorded in their own voice (audio/VoiceClips.ts).
+  const speakerOf = (h: Here): Speaker => ({ name: `${t(h.d.name)} ${heartText(heartsOf(h.d.id))}`, color: h.d.color, look: h.looks, voice: h.actor ? { ...h.actor.voice, character: h.d.id } : undefined, at: h.actor?.pos ?? null });
 
   // 小飞龙's race: agreed on foot, it starts once the player is driving off near him.
   let duel = 0;

@@ -1,0 +1,8256 @@
+{
+ "version": 1,
+ "_note": "对话框和路人台词（由 scripts/voice/dialogue.mts 生成，别手改：改台词改 core/i18n，改语气改脚本里的 INSTRUCT）。每句 × 说它的音色各录 1 个版本。",
+ "tts": {
+  "provider": "aliyun-bailian",
+  "model": "cosyvoice-v3.5-plus",
+  "format": "mp3",
+  "sampleRate": 24000,
+  "variantsDefault": 1,
+  "languageHints": [
+   "zh"
+  ],
+  "voiceListUrl": "https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list",
+  "emotions": [
+   "neutral",
+   "fearful",
+   "angry",
+   "sad",
+   "surprised",
+   "happy",
+   "disgusted"
+  ]
+ },
+ "archetypes": {
+  "my": {
+   "name": "青年男",
+   "voiceHint": "复用路人原型的音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-tourist1-399631640b4c425985345da3fb1a02d8"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "青年男性，30 岁左右，标准普通话，音色明亮，语调起伏大，兴奋又好奇，语速中等。",
+     "previewText": "师傅，请问去三里屯怎么走？这桥叫什么桥来着？"
+    }
+   ],
+   "style": "二十多岁的北京小伙子，说话自然、口语化。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "mm": {
+   "name": "中年男",
+   "voiceHint": "复用路人原型的音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-driver1-fb7c7041902248cc801935372d3bc393"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "中年男性，45 岁左右，北京口音很重、儿化音多，音色粗哑、中低音，嗓门大，语速偏快，火气大，爱唠叨。",
+     "previewText": "会不会开车啊！这路堵的，到地方得天黑。"
+    }
+   ],
+   "style": "四十来岁的北京爷们儿，京腔，说话直来直去。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "mo": {
+   "name": "老年男",
+   "voiceHint": "复用路人原型的音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-uncle1-1529faae13d7483988cfce86f543fa72"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "老年男性，65 岁左右，北京本地口音，儿化音重。音色沙哑、偏低，中气略弱，语速缓慢，句尾爱拖长音，说话慢条斯理，带点倚老卖老的教训口吻。",
+     "previewText": "吃了吗您呐？这天儿，热得邪乎。"
+    }
+   ],
+   "style": "七十岁左右的北京老大爷，京腔儿化音重，说话慢悠悠。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "fy": {
+   "name": "青年女",
+   "voiceHint": "复用路人原型的音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-tourist2-9549b55dd75a403fad9a96742e4c1ee7"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "青年女性，25 岁左右，标准普通话，音色清甜明亮，语调上扬，兴奋又好奇，语速中等偏快。",
+     "previewText": "来来来，往这边看，笑一个！我的天，北京真大！"
+    }
+   ],
+   "style": "二十多岁的年轻姑娘，普通话，说话自然、口语化。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "fm": {
+   "name": "中年女",
+   "voiceHint": "新设计",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-fm1-ee3167deee82448597578232355950c8"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "中年女性，40 岁左右，北京口音，中音，音色明亮温和，语速中等，说话爽快利落、有亲和力。",
+     "previewText": "来啦？今儿吃点儿什么？这雨下的，出门忘带伞了。"
+    }
+   ],
+   "style": "四十来岁的北京大姐，京腔，说话爽快。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "fo": {
+   "name": "老年女",
+   "voiceHint": "复用路人原型的音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-auntie1-a8e2edd6ec3941d8a1b99bb63520414f"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "中老年女性，55 岁左右，北京口音，嗓门大、音调偏高，声音洪亮略尖，语速快，热情爱咋呼，说话一惊一乍。",
+     "previewText": "哟，遛弯儿呢？一会儿跳完舞，去买俩西红柿。"
+    }
+   ],
+   "style": "六十多岁的北京大妈，嗓门大，说话热络。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "xm": {
+   "name": "外国游客",
+   "voiceHint": "新设计",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-xm1-657896bfe1f64261b9c5cf55fef49b7c"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "青年男性，25 岁左右，母语是英语的外国人，说中文发音生硬、声调不准，带明显的美式英语口音，语气热情友好、充满好奇。",
+     "previewText": "Excuse me，请问，您能带我去天安门吗？Thank you so much！"
+    }
+   ],
+   "style": "来北京旅游的外国小伙子，中文不太流利，带明显的外国口音，英文部分是美式英语。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "laok": {
+   "name": "老K",
+   "voiceHint": "熟人专属音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-laok1-c14c60abcb2a427e8a30d6e6b28dd312"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "老年男性，60 岁左右，北京口音，音色低沉沙哑、有磁性，语速缓慢，说话沉稳，带江湖气。",
+     "previewText": "小子，来了？坐。这北京城啊，钱都在路上跑。"
+    }
+   ],
+   "style": "老K，六十岁上下的北京老江湖，做中间人生意，京腔，说话慢条斯理、不怒自威。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "xiaoyu": {
+   "name": "小雨",
+   "voiceHint": "熟人专属音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-xiaoyu1-33b415d3642a4c9286e5076037261f96"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "青年女性，22 岁左右，音色清亮偏甜，语速偏快，说话机灵俏皮，标准普通话。",
+     "previewText": "哟，你怎么来了？我这正刷机呢，等会儿。"
+    }
+   ],
+   "style": "小雨，二十出头的技术宅姑娘，说话快、机灵、带点儿调皮。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "daliu": {
+   "name": "大刘",
+   "voiceHint": "熟人专属音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-daliu1-55a9f42106a840fbbc630fe27f8e3524"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "中年男性，45 岁左右，北京口音，音色浑厚略粗，嗓门大，说话憨厚爽朗，语速中等。",
+     "previewText": "来啦！车怎么样？齐活儿！车给你弄好了。"
+    }
+   ],
+   "style": "大刘，四十多岁的修车师傅、老司机，京腔，憨厚爽快，爱吹当年。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "wang": {
+   "name": "王队",
+   "voiceHint": "熟人专属音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-wang1-0741b65ccf3e4f08822bfe97689d8767"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "中年男性，50 岁左右，音色低沉有力，吐字清晰，语速偏慢，严肃威严，带命令口吻。",
+     "previewText": "又是你。别给我惹事儿。我盯着你呢，好好开车。"
+    }
+   ],
+   "style": "王队，五十岁的老刑警队长，声音沉稳威严，说话简短，略带警告。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "laozhang": {
+   "name": "老张",
+   "voiceHint": "熟人专属音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-laozhang1-b819818966f34305ac289f7ad7fbb24c"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "老年男性，70 岁左右，北京口音很重，儿化音多，音色温和略沙哑，语速缓慢，和蔼爱唠叨。",
+     "previewText": "小伙子，跑出租啦？开出租就两条：嘴要甜，车要稳。"
+    }
+   ],
+   "style": "老张，七十岁的老出租车司机，京腔儿化音重，慢悠悠，和蔼爱唠叨。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "liujie": {
+   "name": "刘姐",
+   "voiceHint": "熟人专属音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-liujie1-bdfdc3aef2e54b70bbb7897cdc01e3f5"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "中年女性，45 岁左右，北京口音，嗓门亮，音色明快，语速偏快，热情麻利。",
+     "previewText": "来啦？今儿吃点儿什么？加个蛋不？薄脆给你多放点儿。"
+    }
+   ],
+   "style": "刘姐，四十多岁摆煎饼摊的大姐，京腔，热情麻利。",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "feilong": {
+   "name": "小飞龙",
+   "voiceHint": "熟人专属音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-feilong1-c38c04113daf4de0a8ae36c6c94eb0d4"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "青年男性，19 岁左右，音色清亮偏高，语速很快，语气嚣张、爱挑衅，带点儿痞气。",
+     "previewText": "哟，开出租的也敢来找我？三环上我叫小飞龙。"
+    }
+   ],
+   "style": "小飞龙，十九岁的飙车小子，嚣张、语速快、爱挑衅。",
+   "rateRange": [
+    1,
+    1
+   ]
+  }
+ },
+ "lines": [
+  {
+   "id": "con.daliu.chat1",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我开车那会儿，三环上没人跑得过我。",
+   "instruct": "得意地吹当年。"
+  },
+  {
+   "id": "con.daliu.chat2",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "变速箱得好好伺候，跟伺候家里人一样。",
+   "instruct": "认真地叮嘱。"
+  },
+  {
+   "id": "con.daliu.greet",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来啦！车怎么样？",
+   "instruct": "热情地大声招呼。"
+  },
+  {
+   "id": "con.daliu.repaired",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "齐活儿！车给你弄好了。",
+   "instruct": "干脆利落，透着得意。"
+  },
+  {
+   "id": "con.feilong.chat1",
+   "archetype": "feilong",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "三环上我叫小飞龙，没人不知道。",
+   "instruct": "嚣张地炫耀。"
+  },
+  {
+   "id": "con.feilong.duelOn",
+   "archetype": "feilong",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "行啊，开上车跟紧我！",
+   "instruct": "兴奋地应战。"
+  },
+  {
+   "id": "con.feilong.greet",
+   "archetype": "feilong",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，开出租的也敢来找我？",
+   "instruct": "轻蔑地挑衅。"
+  },
+  {
+   "id": "con.feilong.lost",
+   "archetype": "feilong",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这水平？回去练练吧！",
+   "instruct": "嘲讽地大笑。"
+  },
+  {
+   "id": "con.feilong.noCar",
+   "archetype": "feilong",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "车都没有还比？",
+   "instruct": "不屑地嘲笑。"
+  },
+  {
+   "id": "con.feilong.pink",
+   "archetype": "feilong",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "三场都输给你，我服了。我这套改装件归你了！",
+   "instruct": "不甘心地认输，最后爽快起来。"
+  },
+  {
+   "id": "con.feilong.won",
+   "archetype": "feilong",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……算你走运。下回再比！",
+   "instruct": "不服气，嘴硬。"
+  },
+  {
+   "id": "con.laok.chat1",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这北京城啊，钱都在路上跑。",
+   "instruct": "意味深长地感慨。"
+  },
+  {
+   "id": "con.laok.chat2",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "做事儿要稳，跑得快不如跑得稳。",
+   "instruct": "语重心长地教导。"
+  },
+  {
+   "id": "con.laok.greet",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小子，来了？坐。",
+   "instruct": "慢悠悠地招呼，带点儿江湖气。"
+  },
+  {
+   "id": "con.laozhang.chat1",
+   "archetype": "laozhang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "北京站门口的客最多，赶火车的给钱也痛快。",
+   "instruct": "传授经验，慢悠悠。"
+  },
+  {
+   "id": "con.laozhang.chat2",
+   "archetype": "laozhang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "开出租就两条：嘴要甜，车要稳。",
+   "instruct": "笑呵呵地传授心得。"
+  },
+  {
+   "id": "con.laozhang.greet",
+   "archetype": "laozhang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子，跑出租啦？",
+   "instruct": "和蔼地打招呼。"
+  },
+  {
+   "id": "con.liujie.chat1",
+   "archetype": "liujie",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这条街上的事儿，没有我不知道的。",
+   "instruct": "得意地说，带点儿神秘。"
+  },
+  {
+   "id": "con.liujie.free",
+   "archetype": "liujie",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拿着，不要钱！",
+   "instruct": "大方爽快地把东西塞过去。"
+  },
+  {
+   "id": "con.liujie.greet",
+   "archetype": "liujie",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来啦？今儿吃点儿什么？",
+   "instruct": "热情地招呼客人。"
+  },
+  {
+   "id": "con.noTask",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "眼下没事儿，手机开着就行。",
+   "instruct": "随意地说。"
+  },
+  {
+   "id": "con.noTask",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "眼下没事儿，手机开着就行。",
+   "instruct": "随意地说。"
+  },
+  {
+   "id": "con.noTask",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "眼下没事儿，手机开着就行。",
+   "instruct": "随意地说。"
+  },
+  {
+   "id": "con.noTask",
+   "archetype": "wang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "眼下没事儿，手机开着就行。",
+   "instruct": "随意地说。"
+  },
+  {
+   "id": "con.noTask",
+   "archetype": "laozhang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "眼下没事儿，手机开着就行。",
+   "instruct": "随意地说。"
+  },
+  {
+   "id": "con.noTask",
+   "archetype": "liujie",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "眼下没事儿，手机开着就行。",
+   "instruct": "随意地说。"
+  },
+  {
+   "id": "con.noTask",
+   "archetype": "feilong",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "眼下没事儿，手机开着就行。",
+   "instruct": "随意地说。"
+  },
+  {
+   "id": "con.wang.chat1",
+   "archetype": "wang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我盯着你呢，好好开车。",
+   "instruct": "严肃地警告。"
+  },
+  {
+   "id": "con.wang.chat2",
+   "archetype": "wang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "最近这片儿不太平，晚上少出来。",
+   "instruct": "压低声音，提醒。"
+  },
+  {
+   "id": "con.wang.greet",
+   "archetype": "wang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "又是你。别给我惹事儿。",
+   "instruct": "冷淡，带着警告。"
+  },
+  {
+   "id": "con.xiaoyu.chat1",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "交警那边的频道我都听着呢。",
+   "instruct": "得意地小声透露。"
+  },
+  {
+   "id": "con.xiaoyu.chat2",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "回头给你车上装个好点儿的导航。",
+   "instruct": "轻快地许诺。"
+  },
+  {
+   "id": "con.xiaoyu.greet",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，你怎么来了？我这正刷机呢，等会儿。",
+   "instruct": "有点儿惊讶，手上忙着，语气随意。"
+  },
+  {
+   "id": "event.blackShout1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走吗走吗？便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走吗走吗？便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走吗走吗？便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走吗走吗？便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走吗走吗？便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走吗走吗？便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "上车上车，比出租便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "上车上车，比出租便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "上车上车，比出租便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "上车上车，比出租便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "上车上车，比出租便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "event.blackShout2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "上车上车，比出租便宜！",
+   "instruct": "探出车窗吆喝揽客。"
+  },
+  {
+   "id": "life.bbq.buy",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来了您嘞！羊肉串儿十串！",
+   "instruct": "吆喝着应声。"
+  },
+  {
+   "id": "life.bbq.buy",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来了您嘞！羊肉串儿十串！",
+   "instruct": "吆喝着应声。"
+  },
+  {
+   "id": "life.bbq.buy",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来了您嘞！羊肉串儿十串！",
+   "instruct": "吆喝着应声。"
+  },
+  {
+   "id": "life.bbq.buy",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来了您嘞！羊肉串儿十串！",
+   "instruct": "吆喝着应声。"
+  },
+  {
+   "id": "life.bbq.buy",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来了您嘞！羊肉串儿十串！",
+   "instruct": "吆喝着应声。"
+  },
+  {
+   "id": "life.bbq.buy",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来了您嘞！羊肉串儿十串！",
+   "instruct": "吆喝着应声。"
+  },
+  {
+   "id": "life.bbq.toast",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走一个！",
+   "instruct": "举杯，豪爽地。"
+  },
+  {
+   "id": "life.bbq.toast",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走一个！",
+   "instruct": "举杯，豪爽地。"
+  },
+  {
+   "id": "life.bbq.toast",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走一个！",
+   "instruct": "举杯，豪爽地。"
+  },
+  {
+   "id": "life.bbq.toast",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走一个！",
+   "instruct": "举杯，豪爽地。"
+  },
+  {
+   "id": "life.bbq.toast",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走一个！",
+   "instruct": "举杯，豪爽地。"
+  },
+  {
+   "id": "life.bbq.toast",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走一个！",
+   "instruct": "举杯，豪爽地。"
+  },
+  {
+   "id": "life.busker.thanks",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢老板！给您来首拿手的！",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.busker.thanks",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢老板！给您来首拿手的！",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.busker.thanks",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢老板！给您来首拿手的！",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.busker.thanks",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢老板！给您来首拿手的！",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.busker.thanks",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢老板！给您来首拿手的！",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.busker.thanks",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢老板！给您来首拿手的！",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.chess.none",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "观棋不语真君子，别打扰我们下棋。",
+   "instruct": "头也不抬，不耐烦。"
+  },
+  {
+   "id": "life.chess.none",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "观棋不语真君子，别打扰我们下棋。",
+   "instruct": "头也不抬，不耐烦。"
+  },
+  {
+   "id": "life.chess.none",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "观棋不语真君子，别打扰我们下棋。",
+   "instruct": "头也不抬，不耐烦。"
+  },
+  {
+   "id": "life.chess.none",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "观棋不语真君子，别打扰我们下棋。",
+   "instruct": "头也不抬，不耐烦。"
+  },
+  {
+   "id": "life.chess.none",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "观棋不语真君子，别打扰我们下棋。",
+   "instruct": "头也不抬，不耐烦。"
+  },
+  {
+   "id": "life.chess.none",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "观棋不语真君子，别打扰我们下棋。",
+   "instruct": "头也不抬，不耐烦。"
+  },
+  {
+   "id": "life.dance.bad",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，多跳几回就会了。",
+   "instruct": "和气地安慰。"
+  },
+  {
+   "id": "life.dance.bad",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，多跳几回就会了。",
+   "instruct": "和气地安慰。"
+  },
+  {
+   "id": "life.dance.bad",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，多跳几回就会了。",
+   "instruct": "和气地安慰。"
+  },
+  {
+   "id": "life.dance.bad",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，多跳几回就会了。",
+   "instruct": "和气地安慰。"
+  },
+  {
+   "id": "life.dance.bad",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，多跳几回就会了。",
+   "instruct": "和气地安慰。"
+  },
+  {
+   "id": "life.dance.bad",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，多跳几回就会了。",
+   "instruct": "和气地安慰。"
+  },
+  {
+   "id": "life.dance.good",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子跳得不错嘛！",
+   "instruct": "开心地夸奖。"
+  },
+  {
+   "id": "life.dance.good",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子跳得不错嘛！",
+   "instruct": "开心地夸奖。"
+  },
+  {
+   "id": "life.dance.good",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子跳得不错嘛！",
+   "instruct": "开心地夸奖。"
+  },
+  {
+   "id": "life.dance.good",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子跳得不错嘛！",
+   "instruct": "开心地夸奖。"
+  },
+  {
+   "id": "life.dance.good",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子跳得不错嘛！",
+   "instruct": "开心地夸奖。"
+  },
+  {
+   "id": "life.dance.good",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子跳得不错嘛！",
+   "instruct": "开心地夸奖。"
+  },
+  {
+   "id": "life.dance.join",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来来来，跟着我们跳！",
+   "instruct": "热情地招呼。"
+  },
+  {
+   "id": "life.dance.join",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来来来，跟着我们跳！",
+   "instruct": "热情地招呼。"
+  },
+  {
+   "id": "life.dance.join",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来来来，跟着我们跳！",
+   "instruct": "热情地招呼。"
+  },
+  {
+   "id": "life.dance.join",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来来来，跟着我们跳！",
+   "instruct": "热情地招呼。"
+  },
+  {
+   "id": "life.dance.join",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来来来，跟着我们跳！",
+   "instruct": "热情地招呼。"
+  },
+  {
+   "id": "life.dance.join",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来来来，跟着我们跳！",
+   "instruct": "热情地招呼。"
+  },
+  {
+   "id": "life.dance.scatter1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！开车的往哪儿开呢！",
+   "instruct": "受惊后大声埋怨。"
+  },
+  {
+   "id": "life.dance.scatter1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！开车的往哪儿开呢！",
+   "instruct": "受惊后大声埋怨。"
+  },
+  {
+   "id": "life.dance.scatter1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！开车的往哪儿开呢！",
+   "instruct": "受惊后大声埋怨。"
+  },
+  {
+   "id": "life.dance.scatter1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！开车的往哪儿开呢！",
+   "instruct": "受惊后大声埋怨。"
+  },
+  {
+   "id": "life.dance.scatter1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！开车的往哪儿开呢！",
+   "instruct": "受惊后大声埋怨。"
+  },
+  {
+   "id": "life.dance.scatter1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！开车的往哪儿开呢！",
+   "instruct": "受惊后大声埋怨。"
+  },
+  {
+   "id": "life.dance.scatter2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这孩子，吓死我了！",
+   "instruct": "惊魂未定，拍着胸口。"
+  },
+  {
+   "id": "life.dance.scatter2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这孩子，吓死我了！",
+   "instruct": "惊魂未定，拍着胸口。"
+  },
+  {
+   "id": "life.dance.scatter2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这孩子，吓死我了！",
+   "instruct": "惊魂未定，拍着胸口。"
+  },
+  {
+   "id": "life.dance.scatter2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这孩子，吓死我了！",
+   "instruct": "惊魂未定，拍着胸口。"
+  },
+  {
+   "id": "life.dance.scatter2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这孩子，吓死我了！",
+   "instruct": "惊魂未定，拍着胸口。"
+  },
+  {
+   "id": "life.dance.scatter2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这孩子，吓死我了！",
+   "instruct": "惊魂未定，拍着胸口。"
+  },
+  {
+   "id": "life.jianbing.buy",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "加个蛋不？薄脆给你多放点儿。",
+   "instruct": "麻利热情地问。"
+  },
+  {
+   "id": "life.jianbing.buy",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "加个蛋不？薄脆给你多放点儿。",
+   "instruct": "麻利热情地问。"
+  },
+  {
+   "id": "life.jianbing.buy",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "加个蛋不？薄脆给你多放点儿。",
+   "instruct": "麻利热情地问。"
+  },
+  {
+   "id": "life.jianbing.buy",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "加个蛋不？薄脆给你多放点儿。",
+   "instruct": "麻利热情地问。"
+  },
+  {
+   "id": "life.jianbing.buy",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "加个蛋不？薄脆给你多放点儿。",
+   "instruct": "麻利热情地问。"
+  },
+  {
+   "id": "life.jianbing.buy",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "加个蛋不？薄脆给你多放点儿。",
+   "instruct": "麻利热情地问。"
+  },
+  {
+   "id": "life.police.stop",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "站住！闯红灯了！",
+   "instruct": "吹完哨子大声喝止。"
+  },
+  {
+   "id": "life.police.stop",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "站住！闯红灯了！",
+   "instruct": "吹完哨子大声喝止。"
+  },
+  {
+   "id": "life.police.stop",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "站住！闯红灯了！",
+   "instruct": "吹完哨子大声喝止。"
+  },
+  {
+   "id": "life.police.stop",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "站住！闯红灯了！",
+   "instruct": "吹完哨子大声喝止。"
+  },
+  {
+   "id": "life.police.stop",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "站住！闯红灯了！",
+   "instruct": "吹完哨子大声喝止。"
+  },
+  {
+   "id": "life.police.stop",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "站住！闯红灯了！",
+   "instruct": "吹完哨子大声喝止。"
+  },
+  {
+   "id": "life.taichi.join",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢慢来，气沉丹田。",
+   "instruct": "慢悠悠、平和地指点。"
+  },
+  {
+   "id": "life.taichi.join",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢慢来，气沉丹田。",
+   "instruct": "慢悠悠、平和地指点。"
+  },
+  {
+   "id": "life.taichi.join",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢慢来，气沉丹田。",
+   "instruct": "慢悠悠、平和地指点。"
+  },
+  {
+   "id": "life.taichi.join",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢慢来，气沉丹田。",
+   "instruct": "慢悠悠、平和地指点。"
+  },
+  {
+   "id": "life.taichi.join",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢慢来，气沉丹田。",
+   "instruct": "慢悠悠、平和地指点。"
+  },
+  {
+   "id": "life.taichi.join",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢慢来，气沉丹田。",
+   "instruct": "慢悠悠、平和地指点。"
+  },
+  {
+   "id": "life.tour.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "能帮我们拍张合影吗？",
+   "instruct": "礼貌地请求。"
+  },
+  {
+   "id": "life.tour.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "能帮我们拍张合影吗？",
+   "instruct": "礼貌地请求。"
+  },
+  {
+   "id": "life.tour.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "能帮我们拍张合影吗？",
+   "instruct": "礼貌地请求。"
+  },
+  {
+   "id": "life.tour.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "能帮我们拍张合影吗？",
+   "instruct": "礼貌地请求。"
+  },
+  {
+   "id": "life.tour.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "能帮我们拍张合影吗？",
+   "instruct": "礼貌地请求。"
+  },
+  {
+   "id": "life.tour.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "能帮我们拍张合影吗？",
+   "instruct": "礼貌地请求。"
+  },
+  {
+   "id": "life.tour.guide1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "各位游客这边请，跟上小旗！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "各位游客这边请，跟上小旗！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "各位游客这边请，跟上小旗！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "各位游客这边请，跟上小旗！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "各位游客这边请，跟上小旗！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "各位游客这边请，跟上小旗！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "大家在这儿拍照留念，五分钟后集合！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "大家在这儿拍照留念，五分钟后集合！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "大家在这儿拍照留念，五分钟后集合！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "大家在这儿拍照留念，五分钟后集合！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "大家在这儿拍照留念，五分钟后集合！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.guide2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "大家在这儿拍照留念，五分钟后集合！",
+   "instruct": "拿着小喇叭大声招呼。"
+  },
+  {
+   "id": "life.tour.thanks",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢！这个给您。",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.tour.thanks",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢！这个给您。",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.tour.thanks",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢！这个给您。",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.tour.thanks",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢！这个给您。",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.tour.thanks",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢！这个给您。",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "life.tour.thanks",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢！这个给您。",
+   "instruct": "开心地道谢。"
+  },
+  {
+   "id": "npc.bark.praise1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "倍儿棒！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "倍儿棒！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "倍儿棒！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "倍儿棒！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "倍儿棒！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "倍儿棒！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好家伙！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好家伙！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好家伙！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好家伙！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好家伙！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好家伙！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "牛！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "牛！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "牛！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "牛！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "牛！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "牛！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise4",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise4",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise4",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise4",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise4",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.praise4",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "npc.bark.wanted1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就是他！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就是他！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就是他！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就是他！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就是他！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就是他！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "警察！在这儿！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "警察！在这儿！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "警察！在这儿！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "警察！在这儿！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "警察！在这儿！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.bark.wanted2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "警察！在这儿！",
+   "instruct": "指着大声喊。"
+  },
+  {
+   "id": "npc.chat.day1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿天儿不错啊。",
+   "instruct": "悠闲地搭话。"
+  },
+  {
+   "id": "npc.chat.day1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿天儿不错啊。",
+   "instruct": "悠闲地搭话。"
+  },
+  {
+   "id": "npc.chat.day1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿天儿不错啊。",
+   "instruct": "悠闲地搭话。"
+  },
+  {
+   "id": "npc.chat.day1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿天儿不错啊。",
+   "instruct": "悠闲地搭话。"
+  },
+  {
+   "id": "npc.chat.day1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿天儿不错啊。",
+   "instruct": "悠闲地搭话。"
+  },
+  {
+   "id": "npc.chat.day1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿天儿不错啊。",
+   "instruct": "悠闲地搭话。"
+  },
+  {
+   "id": "npc.chat.day2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您找哪儿？问路得问我们老北京。",
+   "instruct": "热心又自豪。"
+  },
+  {
+   "id": "npc.chat.day2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您找哪儿？问路得问我们老北京。",
+   "instruct": "热心又自豪。"
+  },
+  {
+   "id": "npc.chat.day2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您找哪儿？问路得问我们老北京。",
+   "instruct": "热心又自豪。"
+  },
+  {
+   "id": "npc.chat.day2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您找哪儿？问路得问我们老北京。",
+   "instruct": "热心又自豪。"
+  },
+  {
+   "id": "npc.chat.day2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您找哪儿？问路得问我们老北京。",
+   "instruct": "热心又自豪。"
+  },
+  {
+   "id": "npc.chat.day2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您找哪儿？问路得问我们老北京。",
+   "instruct": "热心又自豪。"
+  },
+  {
+   "id": "npc.chat.day3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿堵车，开车不如骑车。",
+   "instruct": "絮叨地抱怨。"
+  },
+  {
+   "id": "npc.chat.day3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿堵车，开车不如骑车。",
+   "instruct": "絮叨地抱怨。"
+  },
+  {
+   "id": "npc.chat.day3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿堵车，开车不如骑车。",
+   "instruct": "絮叨地抱怨。"
+  },
+  {
+   "id": "npc.chat.day3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿堵车，开车不如骑车。",
+   "instruct": "絮叨地抱怨。"
+  },
+  {
+   "id": "npc.chat.day3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿堵车，开车不如骑车。",
+   "instruct": "絮叨地抱怨。"
+  },
+  {
+   "id": "npc.chat.day3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿堵车，开车不如骑车。",
+   "instruct": "絮叨地抱怨。"
+  },
+  {
+   "id": "npc.chat.day4",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "听说附近有个兔儿爷，您找着没？",
+   "instruct": "神秘地透露。"
+  },
+  {
+   "id": "npc.chat.day4",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "听说附近有个兔儿爷，您找着没？",
+   "instruct": "神秘地透露。"
+  },
+  {
+   "id": "npc.chat.day4",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "听说附近有个兔儿爷，您找着没？",
+   "instruct": "神秘地透露。"
+  },
+  {
+   "id": "npc.chat.day4",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "听说附近有个兔儿爷，您找着没？",
+   "instruct": "神秘地透露。"
+  },
+  {
+   "id": "npc.chat.day4",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "听说附近有个兔儿爷，您找着没？",
+   "instruct": "神秘地透露。"
+  },
+  {
+   "id": "npc.chat.day4",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "听说附近有个兔儿爷，您找着没？",
+   "instruct": "神秘地透露。"
+  },
+  {
+   "id": "npc.chat.day5",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别闯红灯啊，摄像头都拍着呢。",
+   "instruct": "好心提醒。"
+  },
+  {
+   "id": "npc.chat.day5",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别闯红灯啊，摄像头都拍着呢。",
+   "instruct": "好心提醒。"
+  },
+  {
+   "id": "npc.chat.day5",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别闯红灯啊，摄像头都拍着呢。",
+   "instruct": "好心提醒。"
+  },
+  {
+   "id": "npc.chat.day5",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别闯红灯啊，摄像头都拍着呢。",
+   "instruct": "好心提醒。"
+  },
+  {
+   "id": "npc.chat.day5",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别闯红灯啊，摄像头都拍着呢。",
+   "instruct": "好心提醒。"
+  },
+  {
+   "id": "npc.chat.day5",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别闯红灯啊，摄像头都拍着呢。",
+   "instruct": "好心提醒。"
+  },
+  {
+   "id": "npc.chat.day6",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾，借过借过。",
+   "instruct": "客气地让路。"
+  },
+  {
+   "id": "npc.chat.day6",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾，借过借过。",
+   "instruct": "客气地让路。"
+  },
+  {
+   "id": "npc.chat.day6",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾，借过借过。",
+   "instruct": "客气地让路。"
+  },
+  {
+   "id": "npc.chat.day6",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾，借过借过。",
+   "instruct": "客气地让路。"
+  },
+  {
+   "id": "npc.chat.day6",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾，借过借过。",
+   "instruct": "客气地让路。"
+  },
+  {
+   "id": "npc.chat.day6",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾，借过借过。",
+   "instruct": "客气地让路。"
+  },
+  {
+   "id": "npc.chat.morning",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "吃了吗您？",
+   "instruct": "热情地打招呼。"
+  },
+  {
+   "id": "npc.chat.morning",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "吃了吗您？",
+   "instruct": "热情地打招呼。"
+  },
+  {
+   "id": "npc.chat.morning",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "吃了吗您？",
+   "instruct": "热情地打招呼。"
+  },
+  {
+   "id": "npc.chat.morning",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "吃了吗您？",
+   "instruct": "热情地打招呼。"
+  },
+  {
+   "id": "npc.chat.morning",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "吃了吗您？",
+   "instruct": "热情地打招呼。"
+  },
+  {
+   "id": "npc.chat.morning",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "吃了吗您？",
+   "instruct": "热情地打招呼。"
+  },
+  {
+   "id": "npc.chat.night",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么晚了还溜达呢？",
+   "instruct": "有点儿意外地问。"
+  },
+  {
+   "id": "npc.chat.night",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么晚了还溜达呢？",
+   "instruct": "有点儿意外地问。"
+  },
+  {
+   "id": "npc.chat.night",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么晚了还溜达呢？",
+   "instruct": "有点儿意外地问。"
+  },
+  {
+   "id": "npc.chat.night",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么晚了还溜达呢？",
+   "instruct": "有点儿意外地问。"
+  },
+  {
+   "id": "npc.chat.night",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么晚了还溜达呢？",
+   "instruct": "有点儿意外地问。"
+  },
+  {
+   "id": "npc.chat.night",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么晚了还溜达呢？",
+   "instruct": "有点儿意外地问。"
+  },
+  {
+   "id": "npc.chat.rain",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这雨下的，出门忘带伞了。",
+   "instruct": "无奈地抱怨。"
+  },
+  {
+   "id": "npc.chat.rain",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这雨下的，出门忘带伞了。",
+   "instruct": "无奈地抱怨。"
+  },
+  {
+   "id": "npc.chat.rain",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这雨下的，出门忘带伞了。",
+   "instruct": "无奈地抱怨。"
+  },
+  {
+   "id": "npc.chat.rain",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这雨下的，出门忘带伞了。",
+   "instruct": "无奈地抱怨。"
+  },
+  {
+   "id": "npc.chat.rain",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这雨下的，出门忘带伞了。",
+   "instruct": "无奈地抱怨。"
+  },
+  {
+   "id": "npc.chat.rain",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这雨下的，出门忘带伞了。",
+   "instruct": "无奈地抱怨。"
+  },
+  {
+   "id": "npc.chat.wanted",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我……我什么都没看见。",
+   "instruct": "紧张，结结巴巴。"
+  },
+  {
+   "id": "npc.chat.wanted",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我……我什么都没看见。",
+   "instruct": "紧张，结结巴巴。"
+  },
+  {
+   "id": "npc.chat.wanted",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我……我什么都没看见。",
+   "instruct": "紧张，结结巴巴。"
+  },
+  {
+   "id": "npc.chat.wanted",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我……我什么都没看见。",
+   "instruct": "紧张，结结巴巴。"
+  },
+  {
+   "id": "npc.chat.wanted",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我……我什么都没看见。",
+   "instruct": "紧张，结结巴巴。"
+  },
+  {
+   "id": "npc.chat.wanted",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我……我什么都没看见。",
+   "instruct": "紧张，结结巴巴。"
+  },
+  {
+   "id": "npc.courier.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥们儿，我脚扭了……帮我送两单行吗？配送费分你！",
+   "instruct": "疼得龇牙，又急又恳切。"
+  },
+  {
+   "id": "npc.courier.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥们儿，我脚扭了……帮我送两单行吗？配送费分你！",
+   "instruct": "疼得龇牙，又急又恳切。"
+  },
+  {
+   "id": "npc.courier.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥们儿，我脚扭了……帮我送两单行吗？配送费分你！",
+   "instruct": "疼得龇牙，又急又恳切。"
+  },
+  {
+   "id": "npc.courier.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥们儿，我脚扭了……帮我送两单行吗？配送费分你！",
+   "instruct": "疼得龇牙，又急又恳切。"
+  },
+  {
+   "id": "npc.courier.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥们儿，我脚扭了……帮我送两单行吗？配送费分你！",
+   "instruct": "疼得龇牙，又急又恳切。"
+  },
+  {
+   "id": "npc.courier.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥们儿，我脚扭了……帮我送两单行吗？配送费分你！",
+   "instruct": "疼得龇牙，又急又恳切。"
+  },
+  {
+   "id": "npc.courier.thanks",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太好了！超时要扣钱的，快！",
+   "instruct": "如释重负，急切地催。"
+  },
+  {
+   "id": "npc.courier.thanks",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太好了！超时要扣钱的，快！",
+   "instruct": "如释重负，急切地催。"
+  },
+  {
+   "id": "npc.courier.thanks",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太好了！超时要扣钱的，快！",
+   "instruct": "如释重负，急切地催。"
+  },
+  {
+   "id": "npc.courier.thanks",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太好了！超时要扣钱的，快！",
+   "instruct": "如释重负，急切地催。"
+  },
+  {
+   "id": "npc.courier.thanks",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太好了！超时要扣钱的，快！",
+   "instruct": "如释重负，急切地催。"
+  },
+  {
+   "id": "npc.courier.thanks",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太好了！超时要扣钱的，快！",
+   "instruct": "如释重负，急切地催。"
+  },
+  {
+   "id": "npc.daijia.bump",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎！我的车！",
+   "instruct": "心疼地叫。"
+  },
+  {
+   "id": "npc.daijia.bump",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎！我的车！",
+   "instruct": "心疼地叫。"
+  },
+  {
+   "id": "npc.daijia.bump",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎！我的车！",
+   "instruct": "心疼地叫。"
+  },
+  {
+   "id": "npc.daijia.bump",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎！我的车！",
+   "instruct": "心疼地叫。"
+  },
+  {
+   "id": "npc.daijia.bump",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎！我的车！",
+   "instruct": "心疼地叫。"
+  },
+  {
+   "id": "npc.daijia.bump",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎！我的车！",
+   "instruct": "心疼地叫。"
+  },
+  {
+   "id": "npc.daijia.done",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？好好好，钱拿着……",
+   "instruct": "醉醺醺，含糊地道谢。"
+  },
+  {
+   "id": "npc.daijia.done",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？好好好，钱拿着……",
+   "instruct": "醉醺醺，含糊地道谢。"
+  },
+  {
+   "id": "npc.daijia.done",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？好好好，钱拿着……",
+   "instruct": "醉醺醺，含糊地道谢。"
+  },
+  {
+   "id": "npc.daijia.done",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？好好好，钱拿着……",
+   "instruct": "醉醺醺，含糊地道谢。"
+  },
+  {
+   "id": "npc.daijia.done",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？好好好，钱拿着……",
+   "instruct": "醉醺醺，含糊地道谢。"
+  },
+  {
+   "id": "npc.daijia.done",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？好好好，钱拿着……",
+   "instruct": "醉醺醺，含糊地道谢。"
+  },
+  {
+   "id": "npc.daijia.ride1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿……我这车刚买的……",
+   "instruct": "醉醺醺地嘟囔。"
+  },
+  {
+   "id": "npc.daijia.ride1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿……我这车刚买的……",
+   "instruct": "醉醺醺地嘟囔。"
+  },
+  {
+   "id": "npc.daijia.ride1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿……我这车刚买的……",
+   "instruct": "醉醺醺地嘟囔。"
+  },
+  {
+   "id": "npc.daijia.ride1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿……我这车刚买的……",
+   "instruct": "醉醺醺地嘟囔。"
+  },
+  {
+   "id": "npc.daijia.ride1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿……我这车刚买的……",
+   "instruct": "醉醺醺地嘟囔。"
+  },
+  {
+   "id": "npc.daijia.ride1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿……我这车刚买的……",
+   "instruct": "醉醺醺地嘟囔。"
+  },
+  {
+   "id": "npc.daijia.ride2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我跟你说，我年轻的时候……",
+   "instruct": "醉醺醺，开始絮叨。"
+  },
+  {
+   "id": "npc.daijia.ride2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我跟你说，我年轻的时候……",
+   "instruct": "醉醺醺，开始絮叨。"
+  },
+  {
+   "id": "npc.daijia.ride2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我跟你说，我年轻的时候……",
+   "instruct": "醉醺醺，开始絮叨。"
+  },
+  {
+   "id": "npc.daijia.ride2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我跟你说，我年轻的时候……",
+   "instruct": "醉醺醺，开始絮叨。"
+  },
+  {
+   "id": "npc.daijia.ride2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我跟你说，我年轻的时候……",
+   "instruct": "醉醺醺，开始絮叨。"
+  },
+  {
+   "id": "npc.daijia.ride2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我跟你说，我年轻的时候……",
+   "instruct": "醉醺醺，开始絮叨。"
+  },
+  {
+   "id": "npc.daijia.ride3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝……到哪儿了？",
+   "instruct": "打着嗝，迷迷糊糊。"
+  },
+  {
+   "id": "npc.daijia.ride3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝……到哪儿了？",
+   "instruct": "打着嗝，迷迷糊糊。"
+  },
+  {
+   "id": "npc.daijia.ride3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝……到哪儿了？",
+   "instruct": "打着嗝，迷迷糊糊。"
+  },
+  {
+   "id": "npc.daijia.ride3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝……到哪儿了？",
+   "instruct": "打着嗝，迷迷糊糊。"
+  },
+  {
+   "id": "npc.daijia.ride3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝……到哪儿了？",
+   "instruct": "打着嗝，迷迷糊糊。"
+  },
+  {
+   "id": "npc.daijia.ride3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝……到哪儿了？",
+   "instruct": "打着嗝，迷迷糊糊。"
+  },
+  {
+   "id": "npc.daijia.wave",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子！会开车不？",
+   "instruct": "醉醺醺地招手喊。"
+  },
+  {
+   "id": "npc.daijia.wave",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子！会开车不？",
+   "instruct": "醉醺醺地招手喊。"
+  },
+  {
+   "id": "npc.daijia.wave",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子！会开车不？",
+   "instruct": "醉醺醺地招手喊。"
+  },
+  {
+   "id": "npc.daijia.wave",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子！会开车不？",
+   "instruct": "醉醺醺地招手喊。"
+  },
+  {
+   "id": "npc.daijia.wave",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子！会开车不？",
+   "instruct": "醉醺醺地招手喊。"
+  },
+  {
+   "id": "npc.daijia.wave",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小伙子！会开车不？",
+   "instruct": "醉醺醺地招手喊。"
+  },
+  {
+   "id": "npc.foreigner.ask",
+   "archetype": "xm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "Excuse me……请问，您能带我去这个地方吗？",
+   "instruct": "礼貌又有点儿紧张。"
+  },
+  {
+   "id": "npc.foreigner.done",
+   "archetype": "xm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "Thank you so much！谢谢！这个给你！",
+   "instruct": "非常感激，热情。"
+  },
+  {
+   "id": "npc.foreigner.wave",
+   "archetype": "xm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "Excuse me! Hello!",
+   "instruct": "大声招手。"
+  },
+  {
+   "id": "npc.foreigner.wow",
+   "archetype": "xm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "Wow！那是什么？Amazing！",
+   "instruct": "惊叹，非常兴奋。"
+  },
+  {
+   "id": "npc.preg.air",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你飞什么啊！",
+   "instruct": "又惊又气。"
+  },
+  {
+   "id": "npc.preg.air",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你飞什么啊！",
+   "instruct": "又惊又气。"
+  },
+  {
+   "id": "npc.preg.air",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你飞什么啊！",
+   "instruct": "又惊又气。"
+  },
+  {
+   "id": "npc.preg.air",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你飞什么啊！",
+   "instruct": "又惊又气。"
+  },
+  {
+   "id": "npc.preg.air",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你飞什么啊！",
+   "instruct": "又惊又气。"
+  },
+  {
+   "id": "npc.preg.air",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你飞什么啊！",
+   "instruct": "又惊又气。"
+  },
+  {
+   "id": "npc.preg.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我媳妇要生了！最近的医院，快！",
+   "instruct": "焦急万分地喊。"
+  },
+  {
+   "id": "npc.preg.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我媳妇要生了！最近的医院，快！",
+   "instruct": "焦急万分地喊。"
+  },
+  {
+   "id": "npc.preg.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我媳妇要生了！最近的医院，快！",
+   "instruct": "焦急万分地喊。"
+  },
+  {
+   "id": "npc.preg.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我媳妇要生了！最近的医院，快！",
+   "instruct": "焦急万分地喊。"
+  },
+  {
+   "id": "npc.preg.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我媳妇要生了！最近的医院，快！",
+   "instruct": "焦急万分地喊。"
+  },
+  {
+   "id": "npc.preg.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我媳妇要生了！最近的医院，快！",
+   "instruct": "焦急万分地喊。"
+  },
+  {
+   "id": "npc.preg.bump1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……慢点儿！慢点儿！",
+   "instruct": "疼得直哼哼。"
+  },
+  {
+   "id": "npc.preg.bump1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……慢点儿！慢点儿！",
+   "instruct": "疼得直哼哼。"
+  },
+  {
+   "id": "npc.preg.bump1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……慢点儿！慢点儿！",
+   "instruct": "疼得直哼哼。"
+  },
+  {
+   "id": "npc.preg.bump1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……慢点儿！慢点儿！",
+   "instruct": "疼得直哼哼。"
+  },
+  {
+   "id": "npc.preg.bump1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……慢点儿！慢点儿！",
+   "instruct": "疼得直哼哼。"
+  },
+  {
+   "id": "npc.preg.bump1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……慢点儿！慢点儿！",
+   "instruct": "疼得直哼哼。"
+  },
+  {
+   "id": "npc.preg.bump2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您稳着点儿！",
+   "instruct": "紧张地央求。"
+  },
+  {
+   "id": "npc.preg.bump2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您稳着点儿！",
+   "instruct": "紧张地央求。"
+  },
+  {
+   "id": "npc.preg.bump2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您稳着点儿！",
+   "instruct": "紧张地央求。"
+  },
+  {
+   "id": "npc.preg.bump2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您稳着点儿！",
+   "instruct": "紧张地央求。"
+  },
+  {
+   "id": "npc.preg.bump2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您稳着点儿！",
+   "instruct": "紧张地央求。"
+  },
+  {
+   "id": "npc.preg.bump2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您稳着点儿！",
+   "instruct": "紧张地央求。"
+  },
+  {
+   "id": "npc.preg.done",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了！谢谢您！孩子生了一定告诉您！",
+   "instruct": "激动、感激。"
+  },
+  {
+   "id": "npc.preg.done",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了！谢谢您！孩子生了一定告诉您！",
+   "instruct": "激动、感激。"
+  },
+  {
+   "id": "npc.preg.done",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了！谢谢您！孩子生了一定告诉您！",
+   "instruct": "激动、感激。"
+  },
+  {
+   "id": "npc.preg.done",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了！谢谢您！孩子生了一定告诉您！",
+   "instruct": "激动、感激。"
+  },
+  {
+   "id": "npc.preg.done",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了！谢谢您！孩子生了一定告诉您！",
+   "instruct": "激动、感激。"
+  },
+  {
+   "id": "npc.preg.done",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了！谢谢您！孩子生了一定告诉您！",
+   "instruct": "激动、感激。"
+  },
+  {
+   "id": "npc.preg.late",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要……要生了！",
+   "instruct": "痛苦地喘着气。"
+  },
+  {
+   "id": "npc.preg.late",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要……要生了！",
+   "instruct": "痛苦地喘着气。"
+  },
+  {
+   "id": "npc.preg.late",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要……要生了！",
+   "instruct": "痛苦地喘着气。"
+  },
+  {
+   "id": "npc.preg.late",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要……要生了！",
+   "instruct": "痛苦地喘着气。"
+  },
+  {
+   "id": "npc.preg.late",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要……要生了！",
+   "instruct": "痛苦地喘着气。"
+  },
+  {
+   "id": "npc.preg.late",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要……要生了！",
+   "instruct": "痛苦地喘着气。"
+  },
+  {
+   "id": "npc.preg.ride1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呼——吸——呼——吸——",
+   "instruct": "跟着节奏深呼吸。"
+  },
+  {
+   "id": "npc.preg.ride1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呼——吸——呼——吸——",
+   "instruct": "跟着节奏深呼吸。"
+  },
+  {
+   "id": "npc.preg.ride1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呼——吸——呼——吸——",
+   "instruct": "跟着节奏深呼吸。"
+  },
+  {
+   "id": "npc.preg.ride1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呼——吸——呼——吸——",
+   "instruct": "跟着节奏深呼吸。"
+  },
+  {
+   "id": "npc.preg.ride1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呼——吸——呼——吸——",
+   "instruct": "跟着节奏深呼吸。"
+  },
+  {
+   "id": "npc.preg.ride1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呼——吸——呼——吸——",
+   "instruct": "跟着节奏深呼吸。"
+  },
+  {
+   "id": "npc.preg.ride2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "还有多远啊？",
+   "instruct": "焦急地问。"
+  },
+  {
+   "id": "npc.preg.ride2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "还有多远啊？",
+   "instruct": "焦急地问。"
+  },
+  {
+   "id": "npc.preg.ride2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "还有多远啊？",
+   "instruct": "焦急地问。"
+  },
+  {
+   "id": "npc.preg.ride2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "还有多远啊？",
+   "instruct": "焦急地问。"
+  },
+  {
+   "id": "npc.preg.ride2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "还有多远啊？",
+   "instruct": "焦急地问。"
+  },
+  {
+   "id": "npc.preg.ride2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "还有多远啊？",
+   "instruct": "焦急地问。"
+  },
+  {
+   "id": "npc.preg.ride3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老公，我害怕……",
+   "instruct": "害怕，声音发抖。"
+  },
+  {
+   "id": "npc.preg.ride3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老公，我害怕……",
+   "instruct": "害怕，声音发抖。"
+  },
+  {
+   "id": "npc.preg.ride3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老公，我害怕……",
+   "instruct": "害怕，声音发抖。"
+  },
+  {
+   "id": "npc.preg.ride3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老公，我害怕……",
+   "instruct": "害怕，声音发抖。"
+  },
+  {
+   "id": "npc.preg.ride3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老公，我害怕……",
+   "instruct": "害怕，声音发抖。"
+  },
+  {
+   "id": "npc.preg.ride3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老公，我害怕……",
+   "instruct": "害怕，声音发抖。"
+  },
+  {
+   "id": "npc.preg.ride4",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，马上到！",
+   "instruct": "强装镇定地安慰。"
+  },
+  {
+   "id": "npc.preg.ride4",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，马上到！",
+   "instruct": "强装镇定地安慰。"
+  },
+  {
+   "id": "npc.preg.ride4",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，马上到！",
+   "instruct": "强装镇定地安慰。"
+  },
+  {
+   "id": "npc.preg.ride4",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，马上到！",
+   "instruct": "强装镇定地安慰。"
+  },
+  {
+   "id": "npc.preg.ride4",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，马上到！",
+   "instruct": "强装镇定地安慰。"
+  },
+  {
+   "id": "npc.preg.ride4",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，马上到！",
+   "instruct": "强装镇定地安慰。"
+  },
+  {
+   "id": "npc.preg.wave",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅！师傅停一下！",
+   "instruct": "慌张地拦车。"
+  },
+  {
+   "id": "npc.preg.wave",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅！师傅停一下！",
+   "instruct": "慌张地拦车。"
+  },
+  {
+   "id": "npc.preg.wave",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅！师傅停一下！",
+   "instruct": "慌张地拦车。"
+  },
+  {
+   "id": "npc.preg.wave",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅！师傅停一下！",
+   "instruct": "慌张地拦车。"
+  },
+  {
+   "id": "npc.preg.wave",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅！师傅停一下！",
+   "instruct": "慌张地拦车。"
+  },
+  {
+   "id": "npc.preg.wave",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅！师傅停一下！",
+   "instruct": "慌张地拦车。"
+  },
+  {
+   "id": "npc.rage.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你说这事儿怎么办吧！",
+   "instruct": "咄咄逼人地质问。"
+  },
+  {
+   "id": "npc.rage.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你说这事儿怎么办吧！",
+   "instruct": "咄咄逼人地质问。"
+  },
+  {
+   "id": "npc.rage.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你说这事儿怎么办吧！",
+   "instruct": "咄咄逼人地质问。"
+  },
+  {
+   "id": "npc.rage.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你说这事儿怎么办吧！",
+   "instruct": "咄咄逼人地质问。"
+  },
+  {
+   "id": "npc.rage.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你说这事儿怎么办吧！",
+   "instruct": "咄咄逼人地质问。"
+  },
+  {
+   "id": "npc.rage.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你说这事儿怎么办吧！",
+   "instruct": "咄咄逼人地质问。"
+  },
+  {
+   "id": "npc.rage.down",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算你狠！",
+   "instruct": "捂着脸，不甘心。"
+  },
+  {
+   "id": "npc.rage.down",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算你狠！",
+   "instruct": "捂着脸，不甘心。"
+  },
+  {
+   "id": "npc.rage.down",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算你狠！",
+   "instruct": "捂着脸，不甘心。"
+  },
+  {
+   "id": "npc.rage.down",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算你狠！",
+   "instruct": "捂着脸，不甘心。"
+  },
+  {
+   "id": "npc.rage.down",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算你狠！",
+   "instruct": "捂着脸，不甘心。"
+  },
+  {
+   "id": "npc.rage.down",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算你狠！",
+   "instruct": "捂着脸，不甘心。"
+  },
+  {
+   "id": "npc.rage.film",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "行，你等着！我都拍下来了！",
+   "instruct": "气急败坏地威胁。"
+  },
+  {
+   "id": "npc.rage.film",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "行，你等着！我都拍下来了！",
+   "instruct": "气急败坏地威胁。"
+  },
+  {
+   "id": "npc.rage.film",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "行，你等着！我都拍下来了！",
+   "instruct": "气急败坏地威胁。"
+  },
+  {
+   "id": "npc.rage.film",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "行，你等着！我都拍下来了！",
+   "instruct": "气急败坏地威胁。"
+  },
+  {
+   "id": "npc.rage.film",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "行，你等着！我都拍下来了！",
+   "instruct": "气急败坏地威胁。"
+  },
+  {
+   "id": "npc.rage.film",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "行，你等着！我都拍下来了！",
+   "instruct": "气急败坏地威胁。"
+  },
+  {
+   "id": "npc.rage.left",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跑？我记住你车牌了！",
+   "instruct": "冲着车尾大吼。"
+  },
+  {
+   "id": "npc.rage.left",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跑？我记住你车牌了！",
+   "instruct": "冲着车尾大吼。"
+  },
+  {
+   "id": "npc.rage.left",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跑？我记住你车牌了！",
+   "instruct": "冲着车尾大吼。"
+  },
+  {
+   "id": "npc.rage.left",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跑？我记住你车牌了！",
+   "instruct": "冲着车尾大吼。"
+  },
+  {
+   "id": "npc.rage.left",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跑？我记住你车牌了！",
+   "instruct": "冲着车尾大吼。"
+  },
+  {
+   "id": "npc.rage.left",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跑？我记住你车牌了！",
+   "instruct": "冲着车尾大吼。"
+  },
+  {
+   "id": "npc.rage.out1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你怎么开车的！",
+   "instruct": "暴怒地吼。"
+  },
+  {
+   "id": "npc.rage.out1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你怎么开车的！",
+   "instruct": "暴怒地吼。"
+  },
+  {
+   "id": "npc.rage.out1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你怎么开车的！",
+   "instruct": "暴怒地吼。"
+  },
+  {
+   "id": "npc.rage.out1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你怎么开车的！",
+   "instruct": "暴怒地吼。"
+  },
+  {
+   "id": "npc.rage.out1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你怎么开车的！",
+   "instruct": "暴怒地吼。"
+  },
+  {
+   "id": "npc.rage.out1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你怎么开车的！",
+   "instruct": "暴怒地吼。"
+  },
+  {
+   "id": "npc.rage.out2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "下来！你给我下来！",
+   "instruct": "拍着车窗大吼。"
+  },
+  {
+   "id": "npc.rage.out2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "下来！你给我下来！",
+   "instruct": "拍着车窗大吼。"
+  },
+  {
+   "id": "npc.rage.out2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "下来！你给我下来！",
+   "instruct": "拍着车窗大吼。"
+  },
+  {
+   "id": "npc.rage.out2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "下来！你给我下来！",
+   "instruct": "拍着车窗大吼。"
+  },
+  {
+   "id": "npc.rage.out2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "下来！你给我下来！",
+   "instruct": "拍着车窗大吼。"
+  },
+  {
+   "id": "npc.rage.out2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "下来！你给我下来！",
+   "instruct": "拍着车窗大吼。"
+  },
+  {
+   "id": "npc.rage.out3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "新车！今儿刚提的新车！",
+   "instruct": "心疼又愤怒。"
+  },
+  {
+   "id": "npc.rage.out3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "新车！今儿刚提的新车！",
+   "instruct": "心疼又愤怒。"
+  },
+  {
+   "id": "npc.rage.out3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "新车！今儿刚提的新车！",
+   "instruct": "心疼又愤怒。"
+  },
+  {
+   "id": "npc.rage.out3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "新车！今儿刚提的新车！",
+   "instruct": "心疼又愤怒。"
+  },
+  {
+   "id": "npc.rage.out3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "新车！今儿刚提的新车！",
+   "instruct": "心疼又愤怒。"
+  },
+  {
+   "id": "npc.rage.out3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "新车！今儿刚提的新车！",
+   "instruct": "心疼又愤怒。"
+  },
+  {
+   "id": "npc.rage.paid",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这还差不多。下回长点儿眼！",
+   "instruct": "余怒未消，数落。"
+  },
+  {
+   "id": "npc.rage.paid",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这还差不多。下回长点儿眼！",
+   "instruct": "余怒未消，数落。"
+  },
+  {
+   "id": "npc.rage.paid",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这还差不多。下回长点儿眼！",
+   "instruct": "余怒未消，数落。"
+  },
+  {
+   "id": "npc.rage.paid",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这还差不多。下回长点儿眼！",
+   "instruct": "余怒未消，数落。"
+  },
+  {
+   "id": "npc.rage.paid",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这还差不多。下回长点儿眼！",
+   "instruct": "余怒未消，数落。"
+  },
+  {
+   "id": "npc.rage.paid",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这还差不多。下回长点儿眼！",
+   "instruct": "余怒未消，数落。"
+  },
+  {
+   "id": "npc.rage.punch",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我让你撞！",
+   "instruct": "恶狠狠地。"
+  },
+  {
+   "id": "npc.rage.punch",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我让你撞！",
+   "instruct": "恶狠狠地。"
+  },
+  {
+   "id": "npc.rage.punch",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我让你撞！",
+   "instruct": "恶狠狠地。"
+  },
+  {
+   "id": "npc.rage.punch",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我让你撞！",
+   "instruct": "恶狠狠地。"
+  },
+  {
+   "id": "npc.rage.punch",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我让你撞！",
+   "instruct": "恶狠狠地。"
+  },
+  {
+   "id": "npc.rage.punch",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我让你撞！",
+   "instruct": "恶狠狠地。"
+  },
+  {
+   "id": "npc.scam.cam1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这有行车记录仪，咱调出来看看？",
+   "instruct": "不慌不忙，带点儿得意。"
+  },
+  {
+   "id": "npc.scam.cam1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这有行车记录仪，咱调出来看看？",
+   "instruct": "不慌不忙，带点儿得意。"
+  },
+  {
+   "id": "npc.scam.cam1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这有行车记录仪，咱调出来看看？",
+   "instruct": "不慌不忙，带点儿得意。"
+  },
+  {
+   "id": "npc.scam.cam1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这有行车记录仪，咱调出来看看？",
+   "instruct": "不慌不忙，带点儿得意。"
+  },
+  {
+   "id": "npc.scam.cam1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这有行车记录仪，咱调出来看看？",
+   "instruct": "不慌不忙，带点儿得意。"
+  },
+  {
+   "id": "npc.scam.cam1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这有行车记录仪，咱调出来看看？",
+   "instruct": "不慌不忙，带点儿得意。"
+  },
+  {
+   "id": "npc.scam.cam2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……哎哟，我这腿突然好了！",
+   "instruct": "尴尬地改口，讪讪地。"
+  },
+  {
+   "id": "npc.scam.cam2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……哎哟，我这腿突然好了！",
+   "instruct": "尴尬地改口，讪讪地。"
+  },
+  {
+   "id": "npc.scam.cam2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……哎哟，我这腿突然好了！",
+   "instruct": "尴尬地改口，讪讪地。"
+  },
+  {
+   "id": "npc.scam.cam2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……哎哟，我这腿突然好了！",
+   "instruct": "尴尬地改口，讪讪地。"
+  },
+  {
+   "id": "npc.scam.cam2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……哎哟，我这腿突然好了！",
+   "instruct": "尴尬地改口，讪讪地。"
+  },
+  {
+   "id": "npc.scam.cam2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……哎哟，我这腿突然好了！",
+   "instruct": "尴尬地改口，讪讪地。"
+  },
+  {
+   "id": "npc.scam.demand",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赔钱！不赔钱今儿谁也别想走！",
+   "instruct": "蛮横地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.demand",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赔钱！不赔钱今儿谁也别想走！",
+   "instruct": "蛮横地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.demand",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赔钱！不赔钱今儿谁也别想走！",
+   "instruct": "蛮横地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.demand",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赔钱！不赔钱今儿谁也别想走！",
+   "instruct": "蛮横地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.demand",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赔钱！不赔钱今儿谁也别想走！",
+   "instruct": "蛮横地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.demand",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赔钱！不赔钱今儿谁也别想走！",
+   "instruct": "蛮横地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.fall1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟喂！撞死我了！",
+   "instruct": "夸张地哀嚎。"
+  },
+  {
+   "id": "npc.scam.fall1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟喂！撞死我了！",
+   "instruct": "夸张地哀嚎。"
+  },
+  {
+   "id": "npc.scam.fall1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟喂！撞死我了！",
+   "instruct": "夸张地哀嚎。"
+  },
+  {
+   "id": "npc.scam.fall1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟喂！撞死我了！",
+   "instruct": "夸张地哀嚎。"
+  },
+  {
+   "id": "npc.scam.fall1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟喂！撞死我了！",
+   "instruct": "夸张地哀嚎。"
+  },
+  {
+   "id": "npc.scam.fall1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟喂！撞死我了！",
+   "instruct": "夸张地哀嚎。"
+  },
+  {
+   "id": "npc.scam.fall2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "腿……我的腿断了！",
+   "instruct": "夸张地嚎叫。"
+  },
+  {
+   "id": "npc.scam.fall2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "腿……我的腿断了！",
+   "instruct": "夸张地嚎叫。"
+  },
+  {
+   "id": "npc.scam.fall2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "腿……我的腿断了！",
+   "instruct": "夸张地嚎叫。"
+  },
+  {
+   "id": "npc.scam.fall2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "腿……我的腿断了！",
+   "instruct": "夸张地嚎叫。"
+  },
+  {
+   "id": "npc.scam.fall2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "腿……我的腿断了！",
+   "instruct": "夸张地嚎叫。"
+  },
+  {
+   "id": "npc.scam.fall2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "腿……我的腿断了！",
+   "instruct": "夸张地嚎叫。"
+  },
+  {
+   "id": "npc.scam.hit",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你还真撞啊！",
+   "instruct": "真被撞了，又惊又疼。"
+  },
+  {
+   "id": "npc.scam.hit",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你还真撞啊！",
+   "instruct": "真被撞了，又惊又疼。"
+  },
+  {
+   "id": "npc.scam.hit",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你还真撞啊！",
+   "instruct": "真被撞了，又惊又疼。"
+  },
+  {
+   "id": "npc.scam.hit",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你还真撞啊！",
+   "instruct": "真被撞了，又惊又疼。"
+  },
+  {
+   "id": "npc.scam.hit",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你还真撞啊！",
+   "instruct": "真被撞了，又惊又疼。"
+  },
+  {
+   "id": "npc.scam.hit",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你还真撞啊！",
+   "instruct": "真被撞了，又惊又疼。"
+  },
+  {
+   "id": "npc.scam.paid",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞，您慢走！",
+   "instruct": "得意地堆笑。"
+  },
+  {
+   "id": "npc.scam.paid",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞，您慢走！",
+   "instruct": "得意地堆笑。"
+  },
+  {
+   "id": "npc.scam.paid",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞，您慢走！",
+   "instruct": "得意地堆笑。"
+  },
+  {
+   "id": "npc.scam.paid",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞，您慢走！",
+   "instruct": "得意地堆笑。"
+  },
+  {
+   "id": "npc.scam.paid",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞，您慢走！",
+   "instruct": "得意地堆笑。"
+  },
+  {
+   "id": "npc.scam.paid",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞，您慢走！",
+   "instruct": "得意地堆笑。"
+  },
+  {
+   "id": "npc.scam.paidShort",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这么点儿？得，算我倒霉。",
+   "instruct": "嫌少，嘟囔。"
+  },
+  {
+   "id": "npc.scam.paidShort",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这么点儿？得，算我倒霉。",
+   "instruct": "嫌少，嘟囔。"
+  },
+  {
+   "id": "npc.scam.paidShort",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这么点儿？得，算我倒霉。",
+   "instruct": "嫌少，嘟囔。"
+  },
+  {
+   "id": "npc.scam.paidShort",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这么点儿？得，算我倒霉。",
+   "instruct": "嫌少，嘟囔。"
+  },
+  {
+   "id": "npc.scam.paidShort",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这么点儿？得，算我倒霉。",
+   "instruct": "嫌少，嘟囔。"
+  },
+  {
+   "id": "npc.scam.paidShort",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这么点儿？得，算我倒霉。",
+   "instruct": "嫌少，嘟囔。"
+  },
+  {
+   "id": "npc.scam.report",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞了人还想跑？我报警！",
+   "instruct": "撒泼地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.report",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞了人还想跑？我报警！",
+   "instruct": "撒泼地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.report",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞了人还想跑？我报警！",
+   "instruct": "撒泼地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.report",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞了人还想跑？我报警！",
+   "instruct": "撒泼地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.report",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞了人还想跑？我报警！",
+   "instruct": "撒泼地嚷嚷。"
+  },
+  {
+   "id": "npc.scam.report",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞了人还想跑？我报警！",
+   "instruct": "撒泼地嚷嚷。"
+  },
+  {
+   "id": "npc.tail.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，跟上前面那辆黑车！别让他发现！",
+   "instruct": "压低声音，紧张又急切。"
+  },
+  {
+   "id": "npc.tail.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，跟上前面那辆黑车！别让他发现！",
+   "instruct": "压低声音，紧张又急切。"
+  },
+  {
+   "id": "npc.tail.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，跟上前面那辆黑车！别让他发现！",
+   "instruct": "压低声音，紧张又急切。"
+  },
+  {
+   "id": "npc.tail.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，跟上前面那辆黑车！别让他发现！",
+   "instruct": "压低声音，紧张又急切。"
+  },
+  {
+   "id": "npc.tail.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，跟上前面那辆黑车！别让他发现！",
+   "instruct": "压低声音，紧张又急切。"
+  },
+  {
+   "id": "npc.tail.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，跟上前面那辆黑车！别让他发现！",
+   "instruct": "压低声音，紧张又急切。"
+  },
+  {
+   "id": "npc.tail.close",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太近了！往后点儿！",
+   "instruct": "紧张地压低声音提醒。"
+  },
+  {
+   "id": "npc.tail.close",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太近了！往后点儿！",
+   "instruct": "紧张地压低声音提醒。"
+  },
+  {
+   "id": "npc.tail.close",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太近了！往后点儿！",
+   "instruct": "紧张地压低声音提醒。"
+  },
+  {
+   "id": "npc.tail.close",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太近了！往后点儿！",
+   "instruct": "紧张地压低声音提醒。"
+  },
+  {
+   "id": "npc.tail.close",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太近了！往后点儿！",
+   "instruct": "紧张地压低声音提醒。"
+  },
+  {
+   "id": "npc.tail.close",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太近了！往后点儿！",
+   "instruct": "紧张地压低声音提醒。"
+  },
+  {
+   "id": "npc.tail.done",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我就知道！……行了，停这儿吧，钱给你。",
+   "instruct": "咬牙切齿，然后松一口气。"
+  },
+  {
+   "id": "npc.tail.done",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我就知道！……行了，停这儿吧，钱给你。",
+   "instruct": "咬牙切齿，然后松一口气。"
+  },
+  {
+   "id": "npc.tail.done",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我就知道！……行了，停这儿吧，钱给你。",
+   "instruct": "咬牙切齿，然后松一口气。"
+  },
+  {
+   "id": "npc.tail.done",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我就知道！……行了，停这儿吧，钱给你。",
+   "instruct": "咬牙切齿，然后松一口气。"
+  },
+  {
+   "id": "npc.tail.done",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我就知道！……行了，停这儿吧，钱给你。",
+   "instruct": "咬牙切齿，然后松一口气。"
+  },
+  {
+   "id": "npc.tail.done",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我就知道！……行了，停这儿吧，钱给你。",
+   "instruct": "咬牙切齿，然后松一口气。"
+  },
+  {
+   "id": "npc.tail.far",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要跟丢了！快！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "npc.tail.far",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要跟丢了！快！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "npc.tail.far",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要跟丢了！快！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "npc.tail.far",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要跟丢了！快！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "npc.tail.far",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要跟丢了！快！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "npc.tail.far",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "要跟丢了！快！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "npc.tail.spotted",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他发现我们了！",
+   "instruct": "惊慌。"
+  },
+  {
+   "id": "npc.tail.spotted",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他发现我们了！",
+   "instruct": "惊慌。"
+  },
+  {
+   "id": "npc.tail.spotted",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他发现我们了！",
+   "instruct": "惊慌。"
+  },
+  {
+   "id": "npc.tail.spotted",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他发现我们了！",
+   "instruct": "惊慌。"
+  },
+  {
+   "id": "npc.tail.spotted",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他发现我们了！",
+   "instruct": "惊慌。"
+  },
+  {
+   "id": "npc.tail.spotted",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他发现我们了！",
+   "instruct": "惊慌。"
+  },
+  {
+   "id": "npc.tail.wave",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "出租！出租！",
+   "instruct": "大声拦车。"
+  },
+  {
+   "id": "npc.tail.wave",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "出租！出租！",
+   "instruct": "大声拦车。"
+  },
+  {
+   "id": "npc.tail.wave",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "出租！出租！",
+   "instruct": "大声拦车。"
+  },
+  {
+   "id": "npc.tail.wave",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "出租！出租！",
+   "instruct": "大声拦车。"
+  },
+  {
+   "id": "npc.tail.wave",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "出租！出租！",
+   "instruct": "大声拦车。"
+  },
+  {
+   "id": "npc.tail.wave",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "出租！出租！",
+   "instruct": "大声拦车。"
+  },
+  {
+   "id": "npc.thief.angry",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你也是一伙的！我报警！",
+   "instruct": "气愤地指责。"
+  },
+  {
+   "id": "npc.thief.angry",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你也是一伙的！我报警！",
+   "instruct": "气愤地指责。"
+  },
+  {
+   "id": "npc.thief.angry",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你也是一伙的！我报警！",
+   "instruct": "气愤地指责。"
+  },
+  {
+   "id": "npc.thief.angry",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你也是一伙的！我报警！",
+   "instruct": "气愤地指责。"
+  },
+  {
+   "id": "npc.thief.angry",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你也是一伙的！我报警！",
+   "instruct": "气愤地指责。"
+  },
+  {
+   "id": "npc.thief.angry",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你也是一伙的！我报警！",
+   "instruct": "气愤地指责。"
+  },
+  {
+   "id": "npc.thief.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "包在你手里了。",
+   "instruct": "平静地说。"
+  },
+  {
+   "id": "npc.thief.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "包在你手里了。",
+   "instruct": "平静地说。"
+  },
+  {
+   "id": "npc.thief.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "包在你手里了。",
+   "instruct": "平静地说。"
+  },
+  {
+   "id": "npc.thief.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "包在你手里了。",
+   "instruct": "平静地说。"
+  },
+  {
+   "id": "npc.thief.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "包在你手里了。",
+   "instruct": "平静地说。"
+  },
+  {
+   "id": "npc.thief.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "包在你手里了。",
+   "instruct": "平静地说。"
+  },
+  {
+   "id": "npc.thief.cry1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "抓小偷！抓小偷啊！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "抓小偷！抓小偷啊！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "抓小偷！抓小偷啊！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "抓小偷！抓小偷啊！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "抓小偷！抓小偷啊！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "抓小偷！抓小偷啊！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的包！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的包！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的包！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的包！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的包！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.cry2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的包！",
+   "instruct": "惊慌地大喊。"
+  },
+  {
+   "id": "npc.thief.down",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……包给你！给你！",
+   "instruct": "求饶，慌忙。"
+  },
+  {
+   "id": "npc.thief.down",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……包给你！给你！",
+   "instruct": "求饶，慌忙。"
+  },
+  {
+   "id": "npc.thief.down",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……包给你！给你！",
+   "instruct": "求饶，慌忙。"
+  },
+  {
+   "id": "npc.thief.down",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……包给你！给你！",
+   "instruct": "求饶，慌忙。"
+  },
+  {
+   "id": "npc.thief.down",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……包给你！给你！",
+   "instruct": "求饶，慌忙。"
+  },
+  {
+   "id": "npc.thief.down",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟……包给你！给你！",
+   "instruct": "求饶，慌忙。"
+  },
+  {
+   "id": "npc.thief.taunt",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "追不上我吧！",
+   "instruct": "边跑边得意地挑衅。"
+  },
+  {
+   "id": "npc.thief.taunt",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "追不上我吧！",
+   "instruct": "边跑边得意地挑衅。"
+  },
+  {
+   "id": "npc.thief.taunt",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "追不上我吧！",
+   "instruct": "边跑边得意地挑衅。"
+  },
+  {
+   "id": "npc.thief.taunt",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "追不上我吧！",
+   "instruct": "边跑边得意地挑衅。"
+  },
+  {
+   "id": "npc.thief.taunt",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "追不上我吧！",
+   "instruct": "边跑边得意地挑衅。"
+  },
+  {
+   "id": "npc.thief.taunt",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "追不上我吧！",
+   "instruct": "边跑边得意地挑衅。"
+  },
+  {
+   "id": "npc.thief.thanks1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢您了！好人一生平安！",
+   "instruct": "感激涕零。"
+  },
+  {
+   "id": "npc.thief.thanks1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢您了！好人一生平安！",
+   "instruct": "感激涕零。"
+  },
+  {
+   "id": "npc.thief.thanks1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢您了！好人一生平安！",
+   "instruct": "感激涕零。"
+  },
+  {
+   "id": "npc.thief.thanks1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢您了！好人一生平安！",
+   "instruct": "感激涕零。"
+  },
+  {
+   "id": "npc.thief.thanks1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢您了！好人一生平安！",
+   "instruct": "感激涕零。"
+  },
+  {
+   "id": "npc.thief.thanks1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢您了！好人一生平安！",
+   "instruct": "感激涕零。"
+  },
+  {
+   "id": "npc.thief.thanks2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这点钱您拿着，买包烟抽。",
+   "instruct": "诚恳地塞钱。"
+  },
+  {
+   "id": "npc.thief.thanks2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这点钱您拿着，买包烟抽。",
+   "instruct": "诚恳地塞钱。"
+  },
+  {
+   "id": "npc.thief.thanks2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这点钱您拿着，买包烟抽。",
+   "instruct": "诚恳地塞钱。"
+  },
+  {
+   "id": "npc.thief.thanks2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这点钱您拿着，买包烟抽。",
+   "instruct": "诚恳地塞钱。"
+  },
+  {
+   "id": "npc.thief.thanks2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这点钱您拿着，买包烟抽。",
+   "instruct": "诚恳地塞钱。"
+  },
+  {
+   "id": "npc.thief.thanks2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这点钱您拿着，买包烟抽。",
+   "instruct": "诚恳地塞钱。"
+  },
+  {
+   "id": "pax.chatty.air",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这老腰哎！",
+   "instruct": "吓一跳，捂着腰。"
+  },
+  {
+   "id": "pax.chatty.air",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这老腰哎！",
+   "instruct": "吓一跳，捂着腰。"
+  },
+  {
+   "id": "pax.chatty.air",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这老腰哎！",
+   "instruct": "吓一跳，捂着腰。"
+  },
+  {
+   "id": "pax.chatty.air",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这老腰哎！",
+   "instruct": "吓一跳，捂着腰。"
+  },
+  {
+   "id": "pax.chatty.air",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这老腰哎！",
+   "instruct": "吓一跳，捂着腰。"
+  },
+  {
+   "id": "pax.chatty.air",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我这老腰哎！",
+   "instruct": "吓一跳，捂着腰。"
+  },
+  {
+   "id": "pax.chatty.arrive",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞！跟你聊得真痛快！",
+   "instruct": "心满意足。"
+  },
+  {
+   "id": "pax.chatty.arrive",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞！跟你聊得真痛快！",
+   "instruct": "心满意足。"
+  },
+  {
+   "id": "pax.chatty.arrive",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞！跟你聊得真痛快！",
+   "instruct": "心满意足。"
+  },
+  {
+   "id": "pax.chatty.arrive",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞！跟你聊得真痛快！",
+   "instruct": "心满意足。"
+  },
+  {
+   "id": "pax.chatty.arrive",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞！跟你聊得真痛快！",
+   "instruct": "心满意足。"
+  },
+  {
+   "id": "pax.chatty.arrive",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "得嘞！跟你聊得真痛快！",
+   "instruct": "心满意足。"
+  },
+  {
+   "id": "pax.chatty.board",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走着！小伙子，开车几年啦？",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.board",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走着！小伙子，开车几年啦？",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.board",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走着！小伙子，开车几年啦？",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.board",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走着！小伙子，开车几年啦？",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.board",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走着！小伙子，开车几年啦？",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.board",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走着！小伙子，开车几年啦？",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.crash",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，车有保险。",
+   "instruct": "摆摆手，满不在乎。"
+  },
+  {
+   "id": "pax.chatty.crash",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，车有保险。",
+   "instruct": "摆摆手，满不在乎。"
+  },
+  {
+   "id": "pax.chatty.crash",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，车有保险。",
+   "instruct": "摆摆手，满不在乎。"
+  },
+  {
+   "id": "pax.chatty.crash",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，车有保险。",
+   "instruct": "摆摆手，满不在乎。"
+  },
+  {
+   "id": "pax.chatty.crash",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，车有保险。",
+   "instruct": "摆摆手，满不在乎。"
+  },
+  {
+   "id": "pax.chatty.crash",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿没事儿，车有保险。",
+   "instruct": "摆摆手，满不在乎。"
+  },
+  {
+   "id": "pax.chatty.drift",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "年轻人，悠着点儿！",
+   "instruct": "笑着嗔怪。"
+  },
+  {
+   "id": "pax.chatty.drift",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "年轻人，悠着点儿！",
+   "instruct": "笑着嗔怪。"
+  },
+  {
+   "id": "pax.chatty.drift",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "年轻人，悠着点儿！",
+   "instruct": "笑着嗔怪。"
+  },
+  {
+   "id": "pax.chatty.drift",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "年轻人，悠着点儿！",
+   "instruct": "笑着嗔怪。"
+  },
+  {
+   "id": "pax.chatty.drift",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "年轻人，悠着点儿！",
+   "instruct": "笑着嗔怪。"
+  },
+  {
+   "id": "pax.chatty.drift",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "年轻人，悠着点儿！",
+   "instruct": "笑着嗔怪。"
+  },
+  {
+   "id": "pax.chatty.idle1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "现在这北京啊，堵车比吃饭还准时。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "现在这北京啊，堵车比吃饭还准时。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "现在这北京啊，堵车比吃饭还准时。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "现在这北京啊，堵车比吃饭还准时。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "现在这北京啊，堵车比吃饭还准时。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "现在这北京啊，堵车比吃饭还准时。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我年轻时候开过面的，黄色的那种，十块钱随便跑。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我年轻时候开过面的，黄色的那种，十块钱随便跑。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我年轻时候开过面的，黄色的那种，十块钱随便跑。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我年轻时候开过面的，黄色的那种，十块钱随便跑。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我年轻时候开过面的，黄色的那种，十块钱随便跑。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我年轻时候开过面的，黄色的那种，十块钱随便跑。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你吃了吗？到了地方我请你吃卤煮。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你吃了吗？到了地方我请你吃卤煮。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你吃了吗？到了地方我请你吃卤煮。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你吃了吗？到了地方我请你吃卤煮。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你吃了吗？到了地方我请你吃卤煮。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.idle3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你吃了吗？到了地方我请你吃卤煮。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "瞧见没，那儿！我小时候常来这儿。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "瞧见没，那儿！我小时候常来这儿。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "瞧见没，那儿！我小时候常来这儿。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "瞧见没，那儿！我小时候常来这儿。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "瞧见没，那儿！我小时候常来这儿。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "瞧见没，那儿！我小时候常来这儿。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这一片儿啊，当年可不是这样。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这一片儿啊，当年可不是这样。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这一片儿啊，当年可不是这样。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这一片儿啊，当年可不是这样。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这一片儿啊，当年可不是这样。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这一片儿啊，当年可不是这样。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了，给你讲讲……算了，你看路。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了，给你讲讲……算了，你看路。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了，给你讲讲……算了，你看路。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了，给你讲讲……算了，你看路。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了，给你讲讲……算了，你看路。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.lm3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了，给你讲讲……算了，你看路。",
+   "instruct": "话痨，慢悠悠地唠嗑。"
+  },
+  {
+   "id": "pax.chatty.near",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这手艺，跟当年开面的的一样！",
+   "instruct": "惊叹，然后夸奖。"
+  },
+  {
+   "id": "pax.chatty.near",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这手艺，跟当年开面的的一样！",
+   "instruct": "惊叹，然后夸奖。"
+  },
+  {
+   "id": "pax.chatty.near",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这手艺，跟当年开面的的一样！",
+   "instruct": "惊叹，然后夸奖。"
+  },
+  {
+   "id": "pax.chatty.near",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这手艺，跟当年开面的的一样！",
+   "instruct": "惊叹，然后夸奖。"
+  },
+  {
+   "id": "pax.chatty.near",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这手艺，跟当年开面的的一样！",
+   "instruct": "惊叹，然后夸奖。"
+  },
+  {
+   "id": "pax.chatty.near",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这手艺，跟当年开面的的一样！",
+   "instruct": "惊叹，然后夸奖。"
+  },
+  {
+   "id": "pax.chatty.redlight",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯也闯啊？现在的年轻人……",
+   "instruct": "摇头数落。"
+  },
+  {
+   "id": "pax.chatty.redlight",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯也闯啊？现在的年轻人……",
+   "instruct": "摇头数落。"
+  },
+  {
+   "id": "pax.chatty.redlight",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯也闯啊？现在的年轻人……",
+   "instruct": "摇头数落。"
+  },
+  {
+   "id": "pax.chatty.redlight",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯也闯啊？现在的年轻人……",
+   "instruct": "摇头数落。"
+  },
+  {
+   "id": "pax.chatty.redlight",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯也闯啊？现在的年轻人……",
+   "instruct": "摇头数落。"
+  },
+  {
+   "id": "pax.chatty.redlight",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯也闯啊？现在的年轻人……",
+   "instruct": "摇头数落。"
+  },
+  {
+   "id": "pax.drunk.air",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝——",
+   "instruct": "打嗝。"
+  },
+  {
+   "id": "pax.drunk.air",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝——",
+   "instruct": "打嗝。"
+  },
+  {
+   "id": "pax.drunk.air",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝——",
+   "instruct": "打嗝。"
+  },
+  {
+   "id": "pax.drunk.air",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝——",
+   "instruct": "打嗝。"
+  },
+  {
+   "id": "pax.drunk.air",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝——",
+   "instruct": "打嗝。"
+  },
+  {
+   "id": "pax.drunk.air",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嗝——",
+   "instruct": "打嗝。"
+  },
+  {
+   "id": "pax.drunk.arrive",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不用找了！",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.arrive",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不用找了！",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.arrive",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不用找了！",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.arrive",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不用找了！",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.arrive",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不用找了！",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.arrive",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不用找了！",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.board",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "去……去那个……我没喝多……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.board",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "去……去那个……我没喝多……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.board",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "去……去那个……我没喝多……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.board",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "去……去那个……我没喝多……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.board",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "去……去那个……我没喝多……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.board",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "去……去那个……我没喝多……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.crash",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "咣！哈哈哈！",
+   "instruct": "醉醺醺地傻笑。"
+  },
+  {
+   "id": "pax.drunk.crash",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "咣！哈哈哈！",
+   "instruct": "醉醺醺地傻笑。"
+  },
+  {
+   "id": "pax.drunk.crash",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "咣！哈哈哈！",
+   "instruct": "醉醺醺地傻笑。"
+  },
+  {
+   "id": "pax.drunk.crash",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "咣！哈哈哈！",
+   "instruct": "醉醺醺地傻笑。"
+  },
+  {
+   "id": "pax.drunk.crash",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "咣！哈哈哈！",
+   "instruct": "醉醺醺地傻笑。"
+  },
+  {
+   "id": "pax.drunk.crash",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "咣！哈哈哈！",
+   "instruct": "醉醺醺地傻笑。"
+  },
+  {
+   "id": "pax.drunk.drift",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "转……转起来了……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.drift",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "转……转起来了……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.drift",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "转……转起来了……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.drift",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "转……转起来了……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.drift",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "转……转起来了……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.drift",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "转……转起来了……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……你就是我亲兄弟……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……你就是我亲兄弟……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……你就是我亲兄弟……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……你就是我亲兄弟……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……你就是我亲兄弟……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……你就是我亲兄弟……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我给你唱一个……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我给你唱一个……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我给你唱一个……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我给你唱一个……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我给你唱一个……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.idle2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我给你唱一个……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.near",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哇——再来一个！",
+   "instruct": "醉醺醺地起哄。"
+  },
+  {
+   "id": "pax.drunk.near",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哇——再来一个！",
+   "instruct": "醉醺醺地起哄。"
+  },
+  {
+   "id": "pax.drunk.near",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哇——再来一个！",
+   "instruct": "醉醺醺地起哄。"
+  },
+  {
+   "id": "pax.drunk.near",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哇——再来一个！",
+   "instruct": "醉醺醺地起哄。"
+  },
+  {
+   "id": "pax.drunk.near",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哇——再来一个！",
+   "instruct": "醉醺醺地起哄。"
+  },
+  {
+   "id": "pax.drunk.near",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哇——再来一个！",
+   "instruct": "醉醺醺地起哄。"
+  },
+  {
+   "id": "pax.drunk.redlight",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯……红灯是啥？",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.redlight",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯……红灯是啥？",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.redlight",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯……红灯是啥？",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.redlight",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯……红灯是啥？",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.redlight",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯……红灯是啥？",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.redlight",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯……红灯是啥？",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.vomit",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕——",
+   "instruct": "呕吐。"
+  },
+  {
+   "id": "pax.drunk.vomit",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕——",
+   "instruct": "呕吐。"
+  },
+  {
+   "id": "pax.drunk.vomit",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕——",
+   "instruct": "呕吐。"
+  },
+  {
+   "id": "pax.drunk.vomit",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕——",
+   "instruct": "呕吐。"
+  },
+  {
+   "id": "pax.drunk.vomit",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕——",
+   "instruct": "呕吐。"
+  },
+  {
+   "id": "pax.drunk.vomit",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕——",
+   "instruct": "呕吐。"
+  },
+  {
+   "id": "pax.drunk.warn",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我有点儿……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.warn",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我有点儿……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.warn",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我有点儿……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.warn",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我有点儿……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.warn",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我有点儿……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.drunk.warn",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我有点儿……",
+   "instruct": "醉醺醺，口齿不清，大舌头。"
+  },
+  {
+   "id": "pax.mystery.arrive",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你没见过我。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.arrive",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你没见过我。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.arrive",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你没见过我。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.arrive",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你没见过我。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.arrive",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你没见过我。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.arrive",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你没见过我。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.board",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别问。往前开。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.board",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别问。往前开。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.board",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别问。往前开。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.board",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别问。往前开。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.board",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别问。往前开。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.board",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别问。往前开。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.crash",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别把车毁了。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.crash",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别把车毁了。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.crash",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别把车毁了。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.crash",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别把车毁了。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.crash",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别把车毁了。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.crash",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别把车毁了。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.drift",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好手。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.drift",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好手。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.drift",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好手。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.drift",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好手。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.drift",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好手。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.drift",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好手。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.lost",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干净了。走吧。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.lost",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干净了。走吧。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.lost",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干净了。走吧。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.lost",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干净了。走吧。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.lost",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干净了。走吧。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.lost",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干净了。走吧。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.near",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……稳住。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.near",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……稳住。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.near",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……稳住。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.near",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……稳住。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.near",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……稳住。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.near",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……稳住。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.redlight",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不错。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.redlight",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不错。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.redlight",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不错。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.redlight",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不错。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.redlight",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不错。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.redlight",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不错。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.wanted",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有尾巴。甩掉他们。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.wanted",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有尾巴。甩掉他们。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.wanted",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有尾巴。甩掉他们。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.wanted",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有尾巴。甩掉他们。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.wanted",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有尾巴。甩掉他们。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.mystery.wanted",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有尾巴。甩掉他们。",
+   "instruct": "冷淡低沉，惜字如金。"
+  },
+  {
+   "id": "pax.normal.air",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的妈呀！",
+   "instruct": "吓得尖叫。"
+  },
+  {
+   "id": "pax.normal.air",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的妈呀！",
+   "instruct": "吓得尖叫。"
+  },
+  {
+   "id": "pax.normal.air",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的妈呀！",
+   "instruct": "吓得尖叫。"
+  },
+  {
+   "id": "pax.normal.air",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的妈呀！",
+   "instruct": "吓得尖叫。"
+  },
+  {
+   "id": "pax.normal.air",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的妈呀！",
+   "instruct": "吓得尖叫。"
+  },
+  {
+   "id": "pax.normal.air",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的妈呀！",
+   "instruct": "吓得尖叫。"
+  },
+  {
+   "id": "pax.normal.arrive",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？谢谢师傅。",
+   "instruct": "客气地道谢。"
+  },
+  {
+   "id": "pax.normal.arrive",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？谢谢师傅。",
+   "instruct": "客气地道谢。"
+  },
+  {
+   "id": "pax.normal.arrive",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？谢谢师傅。",
+   "instruct": "客气地道谢。"
+  },
+  {
+   "id": "pax.normal.arrive",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？谢谢师傅。",
+   "instruct": "客气地道谢。"
+  },
+  {
+   "id": "pax.normal.arrive",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？谢谢师傅。",
+   "instruct": "客气地道谢。"
+  },
+  {
+   "id": "pax.normal.arrive",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？谢谢师傅。",
+   "instruct": "客气地道谢。"
+  },
+  {
+   "id": "pax.normal.board1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，麻烦您，去这个地方。",
+   "instruct": "普通乘客上车报地方。"
+  },
+  {
+   "id": "pax.normal.board1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，麻烦您，去这个地方。",
+   "instruct": "普通乘客上车报地方。"
+  },
+  {
+   "id": "pax.normal.board1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，麻烦您，去这个地方。",
+   "instruct": "普通乘客上车报地方。"
+  },
+  {
+   "id": "pax.normal.board1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，麻烦您，去这个地方。",
+   "instruct": "普通乘客上车报地方。"
+  },
+  {
+   "id": "pax.normal.board1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，麻烦您，去这个地方。",
+   "instruct": "普通乘客上车报地方。"
+  },
+  {
+   "id": "pax.normal.board1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，麻烦您，去这个地方。",
+   "instruct": "普通乘客上车报地方。"
+  },
+  {
+   "id": "pax.normal.board2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，赶时间，快点儿！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "pax.normal.board2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，赶时间，快点儿！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "pax.normal.board2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，赶时间，快点儿！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "pax.normal.board2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，赶时间，快点儿！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "pax.normal.board2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，赶时间，快点儿！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "pax.normal.board2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，赶时间，快点儿！",
+   "instruct": "着急地催。"
+  },
+  {
+   "id": "pax.normal.board3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不着急，您开稳当点儿。",
+   "instruct": "客气地叮嘱。"
+  },
+  {
+   "id": "pax.normal.board3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不着急，您开稳当点儿。",
+   "instruct": "客气地叮嘱。"
+  },
+  {
+   "id": "pax.normal.board3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不着急，您开稳当点儿。",
+   "instruct": "客气地叮嘱。"
+  },
+  {
+   "id": "pax.normal.board3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不着急，您开稳当点儿。",
+   "instruct": "客气地叮嘱。"
+  },
+  {
+   "id": "pax.normal.board3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不着急，您开稳当点儿。",
+   "instruct": "客气地叮嘱。"
+  },
+  {
+   "id": "pax.normal.board3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "不着急，您开稳当点儿。",
+   "instruct": "客气地叮嘱。"
+  },
+  {
+   "id": "pax.normal.crash",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您慢点儿开！",
+   "instruct": "吓了一跳，埋怨。"
+  },
+  {
+   "id": "pax.normal.crash",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您慢点儿开！",
+   "instruct": "吓了一跳，埋怨。"
+  },
+  {
+   "id": "pax.normal.crash",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您慢点儿开！",
+   "instruct": "吓了一跳，埋怨。"
+  },
+  {
+   "id": "pax.normal.crash",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您慢点儿开！",
+   "instruct": "吓了一跳，埋怨。"
+  },
+  {
+   "id": "pax.normal.crash",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您慢点儿开！",
+   "instruct": "吓了一跳，埋怨。"
+  },
+  {
+   "id": "pax.normal.crash",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅您慢点儿开！",
+   "instruct": "吓了一跳，埋怨。"
+  },
+  {
+   "id": "pax.normal.drift",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这漂的！",
+   "instruct": "惊叹。"
+  },
+  {
+   "id": "pax.normal.drift",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这漂的！",
+   "instruct": "惊叹。"
+  },
+  {
+   "id": "pax.normal.drift",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这漂的！",
+   "instruct": "惊叹。"
+  },
+  {
+   "id": "pax.normal.drift",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这漂的！",
+   "instruct": "惊叹。"
+  },
+  {
+   "id": "pax.normal.drift",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这漂的！",
+   "instruct": "惊叹。"
+  },
+  {
+   "id": "pax.normal.drift",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "嚯！这漂的！",
+   "instruct": "惊叹。"
+  },
+  {
+   "id": "pax.normal.near",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟我去！",
+   "instruct": "惊呼。"
+  },
+  {
+   "id": "pax.normal.near",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟我去！",
+   "instruct": "惊呼。"
+  },
+  {
+   "id": "pax.normal.near",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟我去！",
+   "instruct": "惊呼。"
+  },
+  {
+   "id": "pax.normal.near",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟我去！",
+   "instruct": "惊呼。"
+  },
+  {
+   "id": "pax.normal.near",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟我去！",
+   "instruct": "惊呼。"
+  },
+  {
+   "id": "pax.normal.near",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟我去！",
+   "instruct": "惊呼。"
+  },
+  {
+   "id": "pax.normal.redlight",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯！红灯啊！",
+   "instruct": "紧张地喊。"
+  },
+  {
+   "id": "pax.normal.redlight",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯！红灯啊！",
+   "instruct": "紧张地喊。"
+  },
+  {
+   "id": "pax.normal.redlight",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯！红灯啊！",
+   "instruct": "紧张地喊。"
+  },
+  {
+   "id": "pax.normal.redlight",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯！红灯啊！",
+   "instruct": "紧张地喊。"
+  },
+  {
+   "id": "pax.normal.redlight",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯！红灯啊！",
+   "instruct": "紧张地喊。"
+  },
+  {
+   "id": "pax.normal.redlight",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "红灯！红灯啊！",
+   "instruct": "紧张地喊。"
+  },
+  {
+   "id": "pax.queasy.air",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕……",
+   "instruct": "要吐了，干呕。"
+  },
+  {
+   "id": "pax.queasy.air",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕……",
+   "instruct": "要吐了，干呕。"
+  },
+  {
+   "id": "pax.queasy.air",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕……",
+   "instruct": "要吐了，干呕。"
+  },
+  {
+   "id": "pax.queasy.air",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕……",
+   "instruct": "要吐了，干呕。"
+  },
+  {
+   "id": "pax.queasy.air",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕……",
+   "instruct": "要吐了，干呕。"
+  },
+  {
+   "id": "pax.queasy.air",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "呕……",
+   "instruct": "要吐了，干呕。"
+  },
+  {
+   "id": "pax.queasy.arrive",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可算到了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.arrive",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可算到了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.arrive",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可算到了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.arrive",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可算到了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.arrive",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可算到了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.arrive",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可算到了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.board",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我晕车，您开稳点儿。",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.board",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我晕车，您开稳点儿。",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.board",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我晕车，您开稳点儿。",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.board",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我晕车，您开稳点儿。",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.board",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我晕车，您开稳点儿。",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.board",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅……我晕车，您开稳点儿。",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.calm",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么开就挺好，谢谢您。",
+   "instruct": "缓过来了，真心道谢。"
+  },
+  {
+   "id": "pax.queasy.calm",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么开就挺好，谢谢您。",
+   "instruct": "缓过来了，真心道谢。"
+  },
+  {
+   "id": "pax.queasy.calm",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么开就挺好，谢谢您。",
+   "instruct": "缓过来了，真心道谢。"
+  },
+  {
+   "id": "pax.queasy.calm",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么开就挺好，谢谢您。",
+   "instruct": "缓过来了，真心道谢。"
+  },
+  {
+   "id": "pax.queasy.calm",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么开就挺好，谢谢您。",
+   "instruct": "缓过来了，真心道谢。"
+  },
+  {
+   "id": "pax.queasy.calm",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么开就挺好，谢谢您。",
+   "instruct": "缓过来了，真心道谢。"
+  },
+  {
+   "id": "pax.queasy.crash",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我要吐了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.crash",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我要吐了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.crash",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我要吐了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.crash",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我要吐了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.crash",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我要吐了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.crash",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我要吐了……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.drift",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别……别甩啊……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.drift",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别……别甩啊……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.drift",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别……别甩啊……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.drift",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别……别甩啊……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.drift",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别……别甩啊……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.drift",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别……别甩啊……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.near",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀妈呀……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.near",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀妈呀……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.near",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀妈呀……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.near",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀妈呀……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.near",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀妈呀……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.near",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀妈呀……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.redlight",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿，慢点儿开……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.redlight",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿，慢点儿开……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.redlight",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿，慢点儿开……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.redlight",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿，慢点儿开……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.redlight",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿，慢点儿开……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.queasy.redlight",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿，慢点儿开……",
+   "instruct": "晕车难受，有气无力。"
+  },
+  {
+   "id": "pax.rush.air",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "飞过去也行！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.air",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "飞过去也行！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.air",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "飞过去也行！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.air",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "飞过去也行！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.air",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "飞过去也行！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.air",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "飞过去也行！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.arrive",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赶上了！师傅您是神仙！",
+   "instruct": "如释重负，狂喜。"
+  },
+  {
+   "id": "pax.rush.arrive",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赶上了！师傅您是神仙！",
+   "instruct": "如释重负，狂喜。"
+  },
+  {
+   "id": "pax.rush.arrive",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赶上了！师傅您是神仙！",
+   "instruct": "如释重负，狂喜。"
+  },
+  {
+   "id": "pax.rush.arrive",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赶上了！师傅您是神仙！",
+   "instruct": "如释重负，狂喜。"
+  },
+  {
+   "id": "pax.rush.arrive",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赶上了！师傅您是神仙！",
+   "instruct": "如释重负，狂喜。"
+  },
+  {
+   "id": "pax.rush.arrive",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "赶上了！师傅您是神仙！",
+   "instruct": "如释重负，狂喜。"
+  },
+  {
+   "id": "pax.rush.board",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，去火车站！火车还有二十分钟就开了！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.board",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，去火车站！火车还有二十分钟就开了！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.board",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，去火车站！火车还有二十分钟就开了！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.board",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，去火车站！火车还有二十分钟就开了！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.board",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，去火车站！火车还有二十分钟就开了！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.board",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，去火车站！火车还有二十分钟就开了！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.crash",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "车没事吧？没事就接着开！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.crash",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "车没事吧？没事就接着开！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.crash",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "车没事吧？没事就接着开！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.crash",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "车没事吧？没事就接着开！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.crash",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "车没事吧？没事就接着开！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.crash",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "车没事吧？没事就接着开！",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.drift",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！别停！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.drift",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！别停！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.drift",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！别停！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.drift",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！别停！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.drift",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！别停！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.drift",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！别停！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.near",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好！就这么开！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.near",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好！就这么开！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.near",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好！就这么开！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.near",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好！就这么开！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.near",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好！就这么开！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.near",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "好！就这么开！",
+   "instruct": "兴奋地叫好。"
+  },
+  {
+   "id": "pax.rush.redlight",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "闯得好！",
+   "instruct": "激动地叫好。"
+  },
+  {
+   "id": "pax.rush.redlight",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "闯得好！",
+   "instruct": "激动地叫好。"
+  },
+  {
+   "id": "pax.rush.redlight",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "闯得好！",
+   "instruct": "激动地叫好。"
+  },
+  {
+   "id": "pax.rush.redlight",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "闯得好！",
+   "instruct": "激动地叫好。"
+  },
+  {
+   "id": "pax.rush.redlight",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "闯得好！",
+   "instruct": "激动地叫好。"
+  },
+  {
+   "id": "pax.rush.redlight",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "闯得好！",
+   "instruct": "激动地叫好。"
+  },
+  {
+   "id": "pax.rush.slow1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，能再快点儿吗？",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.slow1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，能再快点儿吗？",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.slow1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，能再快点儿吗？",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.slow1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，能再快点儿吗？",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.slow1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，能再快点儿吗？",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.slow1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，能再快点儿吗？",
+   "instruct": "焦急，语速快。"
+  },
+  {
+   "id": "pax.rush.slow2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来不及了来不及了……",
+   "instruct": "急得直跺脚，嘟囔。"
+  },
+  {
+   "id": "pax.rush.slow2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来不及了来不及了……",
+   "instruct": "急得直跺脚，嘟囔。"
+  },
+  {
+   "id": "pax.rush.slow2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来不及了来不及了……",
+   "instruct": "急得直跺脚，嘟囔。"
+  },
+  {
+   "id": "pax.rush.slow2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来不及了来不及了……",
+   "instruct": "急得直跺脚，嘟囔。"
+  },
+  {
+   "id": "pax.rush.slow2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来不及了来不及了……",
+   "instruct": "急得直跺脚，嘟囔。"
+  },
+  {
+   "id": "pax.rush.slow2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来不及了来不及了……",
+   "instruct": "急得直跺脚，嘟囔。"
+  },
+  {
+   "id": "pax.streamer.air",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "起飞了家人们！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.air",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "起飞了家人们！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.air",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "起飞了家人们！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.air",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "起飞了家人们！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.air",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "起飞了家人们！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.air",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "起飞了家人们！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.arrive",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅太给力了！家人们点个关注！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.arrive",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅太给力了！家人们点个关注！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.arrive",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅太给力了！家人们点个关注！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.arrive",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅太给力了！家人们点个关注！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.arrive",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅太给力了！家人们点个关注！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.arrive",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅太给力了！家人们点个关注！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.board",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们，今天坐个出租车出发啦！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.board",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们，今天坐个出租车出发啦！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.board",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们，今天坐个出租车出发啦！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.board",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们，今天坐个出租车出发啦！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.board",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们，今天坐个出租车出发啦！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.board",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们，今天坐个出租车出发啦！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.crash",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这段剪掉剪掉！",
+   "instruct": "慌张地对着镜头。"
+  },
+  {
+   "id": "pax.streamer.crash",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这段剪掉剪掉！",
+   "instruct": "慌张地对着镜头。"
+  },
+  {
+   "id": "pax.streamer.crash",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这段剪掉剪掉！",
+   "instruct": "慌张地对着镜头。"
+  },
+  {
+   "id": "pax.streamer.crash",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这段剪掉剪掉！",
+   "instruct": "慌张地对着镜头。"
+  },
+  {
+   "id": "pax.streamer.crash",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这段剪掉剪掉！",
+   "instruct": "慌张地对着镜头。"
+  },
+  {
+   "id": "pax.streamer.crash",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这段剪掉剪掉！",
+   "instruct": "慌张地对着镜头。"
+  },
+  {
+   "id": "pax.streamer.drift",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂移！快刷礼物！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.drift",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂移！快刷礼物！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.drift",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂移！快刷礼物！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.drift",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂移！快刷礼物！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.drift",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂移！快刷礼物！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.drift",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂移！快刷礼物！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.near",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们看见没！擦着过去的！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.near",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们看见没！擦着过去的！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.near",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们看见没！擦着过去的！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.near",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们看见没！擦着过去的！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.near",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们看见没！擦着过去的！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.near",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "家人们看见没！擦着过去的！",
+   "instruct": "对着手机直播，兴奋夸张。"
+  },
+  {
+   "id": "pax.streamer.redlight",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这个不能播……",
+   "instruct": "心虚，小声。"
+  },
+  {
+   "id": "pax.streamer.redlight",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这个不能播……",
+   "instruct": "心虚，小声。"
+  },
+  {
+   "id": "pax.streamer.redlight",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这个不能播……",
+   "instruct": "心虚，小声。"
+  },
+  {
+   "id": "pax.streamer.redlight",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这个不能播……",
+   "instruct": "心虚，小声。"
+  },
+  {
+   "id": "pax.streamer.redlight",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这个不能播……",
+   "instruct": "心虚，小声。"
+  },
+  {
+   "id": "pax.streamer.redlight",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这个不能播……",
+   "instruct": "心虚，小声。"
+  },
+  {
+   "id": "shout.call",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我报警了！",
+   "instruct": "对着电话大声喊。"
+  },
+  {
+   "id": "shout.call",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我报警了！",
+   "instruct": "对着电话大声喊。"
+  },
+  {
+   "id": "shout.call",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我报警了！",
+   "instruct": "对着电话大声喊。"
+  },
+  {
+   "id": "shout.call",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我报警了！",
+   "instruct": "对着电话大声喊。"
+  },
+  {
+   "id": "shout.call",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我报警了！",
+   "instruct": "对着电话大声喊。"
+  },
+  {
+   "id": "shout.call",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我报警了！",
+   "instruct": "对着电话大声喊。"
+  },
+  {
+   "id": "shout.hit1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "疯了吧你！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "疯了吧你！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "疯了吧你！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "疯了吧你！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "疯了吧你！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "疯了吧你！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞人啦！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞人啦！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞人啦！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞人啦！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞人啦！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.hit3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞人啦！",
+   "instruct": "被撞，疼得大叫。"
+  },
+  {
+   "id": "shout.scare1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "看着点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "看着点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "看着点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "看着点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "看着点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "看着点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "慢点儿！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找死啊！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找死啊！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找死啊！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找死啊！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找死啊！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.scare3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找死啊！",
+   "instruct": "受惊后大声骂。"
+  },
+  {
+   "id": "shout.shove1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干嘛呢！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干嘛呢！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干嘛呢！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干嘛呢！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干嘛呢！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干嘛呢！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有病啊？",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有病啊？",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有病啊？",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有病啊？",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有病啊？",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "有病啊？",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别碰我！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别碰我！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别碰我！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别碰我！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别碰我！",
+   "instruct": "被推了一把，不满地喊。"
+  },
+  {
+   "id": "shout.shove3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别碰我！",
+   "instruct": "被推了一把，不满地喊。"
+  }
+ ]
+}

@@ -2,22 +2,26 @@ import { STRINGS, type Lang, type TKey } from '../core/I18n';
 import type { VoiceSpec } from '../character/Voice';
 
 /**
- * Recorded lines (2026-10-05, 「说话不自然，一听就是机器人说的」): every NPC line and shout is recorded
- * offline with Microsoft's neural voices (scripts/voice/render.py) in six voices - a young man, a man, an
- * old man, the same for women - into `public/voice/zh/<class>/<key>.mp3` (~5 KB a line), fetched the first
- * time someone says it. A line arrives as its text, so the zh table is read backwards (a line with a
- * parameter by its template: 「去{place}」 matches 「去北京站」; its recording says it generically). The
- * speaker's VoiceSpec picks the class (`fem`, `age`) and, through the playback rate, a few per cent of
- * pitch of their own. Lines with no recording (English, HUD text) return false and go to Speech/Babble.
+ * Recorded lines: every NPC line and shout, recorded offline - with Microsoft's neural voices from 2026-10-05,
+ * with Bailian CosyVoice since 2026-10-06 (「把对话框里的台词也换成 CosyVoice」: assets/voice/dialogue.json,
+ * scripts/voice/dialogue.mts, tools/voice-gen, scripts/voice/dialogue-pack.mjs) - into
+ * `public/voice/zh/<voice>/<key>.mp3` (~8 KB a line), fetched the first time someone says it. Six voices by
+ * sex and age (`classes`), a foreigner's, and each contact's own for their own lines (`characters`; `only`
+ * lists the keys said by particular voices). A line arrives as its text, so the zh table is read backwards
+ * (a line with a parameter by its template: 「去{place}」 matches 「去北京站」; its recording says it
+ * generically). The speaker's VoiceSpec picks the voice (`character`, else `fem`, `age`) and, through the
+ * playback rate, a few per cent of pitch of their own (not for a contact: theirs is theirs). Lines with no
+ * recording (English, HUD text) return false and go to Speech/Babble.
  */
-type Cls = 'my' | 'mm' | 'mo' | 'fy' | 'fm' | 'fo' | 'xm';
-interface Manifest { v: number; zh?: { classes: Cls[]; keys: string[]; only?: Record<string, Cls[]> } }
+type Cls = string;
+interface Manifest { v: number; zh?: { classes: Cls[]; characters?: Cls[]; keys: string[]; only?: Record<string, Cls[]> } }
 
 /** Is a recorded dialogue line playing (or on its way)? dialogue/ holds the box open for it. */
 let lineBusyUntil = 0;
 export function lineTalking(): boolean { return performance.now() < lineBusyUntil; }
 
-const TYPICAL: Record<Cls, number> = { my: 120, mm: 108, mo: 100, fy: 215, fm: 200, fo: 185, xm: 112 };
+/** The pitch a voice class is typically spoken at: a speaker's own pitch moves the playback rate round it. */
+const TYPICAL: Record<string, number> = { my: 120, mm: 108, mo: 100, fy: 215, fm: 200, fo: 185 };
 
 export class VoiceClips {
   private manifest: Manifest | null = null;
@@ -57,7 +61,7 @@ export class VoiceClips {
 
   private classOf(key: string, v: VoiceSpec): Cls {
     const only = this.manifest?.zh?.only?.[key];
-    if (only?.length) return only[0];
+    if (only?.length) return v.character && only.includes(v.character) ? v.character : only[0];
     const fem = (v.fem ?? (v.pitch > 160 ? 1 : 0)) > 0.5, age = v.age ?? 0.4;
     const band = age > 0.7 ? 'o' : age < 0.33 ? 'y' : 'm';
     return `${fem ? 'f' : 'm'}${band}` as Cls;
@@ -84,7 +88,7 @@ export class VoiceClips {
     if (!key) return false;
     const cls = this.classOf(key, v);
     // A few per cent of their own pitch (and pace) round the recorded voice's.
-    const rate = Math.max(0.94, Math.min(1.06, Math.pow(v.pitch / TYPICAL[cls], 0.35)));
+    const rate = TYPICAL[cls] ? Math.max(0.94, Math.min(1.06, Math.pow(v.pitch / TYPICAL[cls], 0.35))) : 1;
     const asked = performance.now(), seq = line ? ++this.lineSeq : 0;
     if (line) { this.stopLine(c); lineBusyUntil = asked + 2500; }
     else if (this.shouts >= 3) return true;

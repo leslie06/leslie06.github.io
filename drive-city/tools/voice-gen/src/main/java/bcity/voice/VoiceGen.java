@@ -58,14 +58,22 @@ public final class VoiceGen {
   private static final RateLimiter LIMIT = new RateLimiter(160);
   private static final int PARALLEL = 6;
 
-  private final Path root, linesFile, rawDir, designDir;
+  private final Path root, linesFile, rawDir, designDir, pageFile;
   private final JsonObject doc;
 
-  private VoiceGen(Path root) throws IOException {
+  /**
+   * `lines` is a table in lines.json's shape (default assets/voice/lines.json). Its recordings go to raw/ for
+   * lines.json and {name}-raw/ for any other ({name}-preview.html likewise); the design previews share design/.
+   */
+  private VoiceGen(Path root, Path lines) throws IOException {
     this.root = root;
-    this.linesFile = root.resolve("assets/voice/lines.json");
-    this.rawDir = root.resolve("assets/voice/raw");
-    this.designDir = root.resolve("assets/voice/design");
+    this.linesFile = lines != null ? lines.toAbsolutePath() : root.resolve("assets/voice/lines.json");
+    String base = linesFile.getFileName().toString().replaceFirst("\\.json$", "");
+    Path dir = linesFile.getParent();
+    boolean main = base.equals("lines");
+    this.rawDir = dir.resolve(main ? "raw" : base + "-raw");
+    this.designDir = dir.resolve("design");
+    this.pageFile = dir.resolve(main ? "preview.html" : base + "-preview.html");
     this.doc = JsonParser.parseString(Files.readString(linesFile)).getAsJsonObject();
   }
 
@@ -73,25 +81,26 @@ public final class VoiceGen {
     String cmd = args.length > 0 ? args[0] : "help";
     Set<String> only = new LinkedHashSet<>();
     boolean dry = false;
-    Path root = null;
+    Path root = null, lines = null;
     for (int i = 1; i < args.length; i++) {
       switch (args[i]) {
         case "--archetypes" -> { for (String a : args[++i].split(",")) if (!a.isBlank()) only.add(a.trim()); }
         case "--dry-run" -> dry = true;
         case "--root" -> root = Path.of(args[++i]);
+        case "--lines" -> lines = Path.of(args[++i]);
         default -> { System.err.println("unknown option " + args[i]); System.exit(2); }
       }
     }
     if (root == null) root = findRoot();
     String ws = System.getenv("DASHSCOPE_WS_URL");
     if (ws != null && !ws.isBlank()) Constants.baseWebsocketApiUrl = ws;
-    VoiceGen g = new VoiceGen(root);
+    VoiceGen g = new VoiceGen(root, lines);
     int failed = switch (cmd) {
       case "design" -> g.design(only);
       case "synth" -> g.synth(only, dry);
       case "page" -> { g.page(); yield 0; }
       default -> {
-        System.out.println("usage: voice-gen design|synth|page [--archetypes uncle,driver] [--dry-run] [--root dir]");
+        System.out.println("usage: voice-gen design|synth|page [--lines file.json] [--archetypes uncle,driver] [--dry-run] [--root dir]");
         yield 0;
       }
     };
@@ -298,7 +307,7 @@ public final class VoiceGen {
         </style></head><body><main><h1>NPC 语音试听</h1>
         """);
     h.append("<p class=\"mut\">模型 ").append(esc(tts().get("model").getAsString()))
-        .append(" · 每句 = 原型 style + 本句 instruct · 版本号 = seed · 文件在 assets/voice/raw/</p>\n");
+        .append(" · 每句 = 原型 style + 本句 instruct · 版本号 = seed · 文件在 ").append(esc(root.relativize(rawDir).toString())).append("/</p>\n");
     for (var e : archs.entrySet()) {
       String arch = e.getKey();
       JsonObject a = e.getValue();
@@ -330,7 +339,7 @@ public final class VoiceGen {
           h.append("<div class=\"row\"><b>音色 ").append(vi + 1).append("</b>");
           for (int n = 1; n <= variants; n++) {
             String f = id + "_" + voices.get(vi) + "_" + n + ".mp3";
-            if (Files.exists(rawDir.resolve(f))) h.append("<span class=\"clip\"><span>#").append(n).append("</span><audio controls preload=\"none\" src=\"raw/").append(esc(f)).append("\"></audio></span>");
+            if (Files.exists(rawDir.resolve(f))) h.append("<span class=\"clip\"><span>#").append(n).append("</span><audio controls preload=\"none\" src=\"").append(rawDir.getFileName()).append('/').append(esc(f)).append("\"></audio></span>");
             else h.append("<span class=\"miss\">#").append(n).append(" 未生成</span>");
           }
           h.append("</div>");
@@ -344,7 +353,7 @@ public final class VoiceGen {
         document.addEventListener('play', (e) => { for (const a of document.querySelectorAll('audio')) if (a !== e.target) a.pause(); }, true);
         </script></body></html>
         """);
-    Path out = root.resolve("assets/voice/preview.html");
+    Path out = pageFile;
     Files.writeString(out, h);
     System.out.println("wrote " + out);
   }
