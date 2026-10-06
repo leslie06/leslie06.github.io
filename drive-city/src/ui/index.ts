@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
-import type { CameraApi, VehicleApi, WorldApi } from '../game/Contracts';
+import type { CameraApi, VehicleApi, VoiceApi, WorldApi } from '../game/Contracts';
 import type { AudioApi } from '../audio';
 import type { FxApi } from '../fx';
 import { onLangChange, t } from '../core/I18n';
@@ -87,6 +87,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     start() {
       boards?.hide();
       engine.get<AudioApi>('audio')?.unlock();
+      engine.get<VoiceApi>('voices')?.unlock();   // in the same click: three's audio shares the context
       const veh = v();
       if (api.state === 'title') {
         veh.autopilot = null;

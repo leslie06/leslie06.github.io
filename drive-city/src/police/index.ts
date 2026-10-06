@@ -272,7 +272,8 @@ export async function install(engine: Engine): Promise<void> {
     // dial, and `people:report` arrives a few seconds later unless they are scared off first).
     if (!witnessed) { if (kind === 'hit_person' || kind === 'carjack') engine.get<PeopleApi>('people')?.witness(x, z); return; }
     const before = level();
-    heat = Math.min(5.99, heat + HEAT[kind] * (level() === 0 ? 1 : 0.5));
+    // A witness's call (people:report, voice/'s police_call played out) is a whole star at any level.
+    heat = Math.min(5.99, heat + HEAT[kind] * (level() === 0 || kind === 'report' ? 1 : 0.5));
     if (level() > 0) { lastX = x; lastZ = z; seen = true; evade = 0; known = Math.max(known, KNOWN_AFTER_SIGHT); }
     if (level() > before) levelUp(level());
   };

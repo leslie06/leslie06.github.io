@@ -327,7 +327,8 @@ export async function install(engine: Engine): Promise<void> {
     if (!n.rider) return;
     n.rider = null; n.driver = null; n.parked = true;
     const c = n.car;
-    engine.get<PeopleApi>('people')?.spawnFleeing(c.pos.x + c.left.x * 1.2, c.pos.z + c.left.z * 1.2);
+    // A scooter rider thrown off speaks as a courier (voice/): most of them are delivery riders.
+    engine.get<PeopleApi>('people')?.spawnFleeing(c.pos.x + c.left.x * 1.2, c.pos.z + c.left.z * 1.2, { voice: 'courier', say: 'hit' });
   };
 
   // The player hit a car: its driver leans on the horn (the player's impact reading is the reliable
@@ -335,7 +336,7 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('vehicle:impact', ({ point }) => {
     for (const n of pool) {
       if (!n.active || n.parked || n.hornT > 0 || n.rider) continue;
-      if (Math.hypot(n.car.pos.x - point[0], n.car.pos.z - point[2]) < 5) { n.hornT = 3 + rnd() * 3; engine.events.emit('traffic:horn', { x: n.car.pos.x, z: n.car.pos.z }); break; }
+      if (Math.hypot(n.car.pos.x - point[0], n.car.pos.z - point[2]) < 5) { n.hornT = 3 + rnd() * 3; engine.events.emit('traffic:horn', { x: n.car.pos.x, z: n.car.pos.z, car: n.car }); break; }
     }
   });
 
@@ -538,7 +539,7 @@ export async function install(engine: Engine): Promise<void> {
         if (n.hornT <= 0 && !n.parked) {
           const pv = player();
           const pd = pv ? Math.hypot(pv.car.pos.x - n.car.pos.x, pv.car.pos.z - n.car.pos.z) : 99;
-          if (n.driver!.stuck > 1.8 && pd < 14) { n.hornT = 3 + rnd() * 3; engine.events.emit('traffic:horn', { x: n.car.pos.x, z: n.car.pos.z }); }
+          if (n.driver!.stuck > 1.8 && pd < 14) { n.hornT = 3 + rnd() * 3; engine.events.emit('traffic:horn', { x: n.car.pos.x, z: n.car.pos.z, car: n.car }); }
         }
         n.flipped = n.car.up.y < 0.5 ? n.flipped + dt : 0;
         const inView = d < 1 || ((n.car.pos.x - cam.x) * camDir.x + (n.car.pos.z - cam.z) * camDir.z) / d > 0.2;

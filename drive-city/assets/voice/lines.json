@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "_note": "NPC 语音台词表（第一批）。每句的合成指令 = archetypes[原型].style + 本句 instruct（对要求固定格式的音色，则只用 emotion 字段）。archetypes[].voices 先留空，需从 tts.voiceListUrl 的 cosyvoice-v3.5-plus 音色列表里按 voiceHint 挑选填入，不同模型的音色不能混用。文本里用省略号制造停顿，用儿化音和语气词保持京味儿。",
+
+  "tts": {
+    "provider": "aliyun-bailian",
+    "model": "cosyvoice-v3.5-plus",
+    "format": "mp3",
+    "sampleRate": 24000,
+    "variantsDefault": 3,
+    "languageHints": ["zh"],
+    "voiceListUrl": "https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list",
+    "emotions": ["neutral", "fearful", "angry", "sad", "surprised", "happy", "disgusted"]
+  },
+
+  "playback": {
+    "_note": "游戏内播放参数。每个 NPC 实例在原型的 rateRange 里取一个固定速率，播放时再叠加 rateJitter 的随机。",
+    "rateJitter": 0.05,
+    "refDistance": 4,
+    "maxDistance": 45,
+    "rolloffFactor": 1.5,
+    "maxConcurrentSpeakers": 3,
+    "noRepeatLastVariants": 2
+  },
+
+  "triggers": {
+    "near_miss":   { "desc": "车从身边擦过",             "priority": 2, "cooldownSec": 4 },
+    "bumped":      { "desc": "被玩家或车轻撞、推搡",     "priority": 2, "cooldownSec": 3 },
+    "hit":         { "desc": "被车撞倒",                 "priority": 4, "cooldownSec": 0 },
+    "aimed":       { "desc": "被武器瞄准",               "priority": 3, "cooldownSec": 5 },
+    "gunshot":     { "desc": "附近有枪声或爆炸",         "priority": 3, "cooldownSec": 6 },
+    "car_stolen":  { "desc": "自己的车被抢（司机/车主）", "priority": 4, "cooldownSec": 0 },
+    "honk":        { "desc": "司机被挡路、被别车",       "priority": 1, "cooldownSec": 6 },
+    "police_call": { "desc": "报警，播完触发通缉加星",   "priority": 3, "cooldownSec": 0 },
+    "greet":       { "desc": "玩家走近或慢速路过",       "priority": 0, "cooldownSec": 10 },
+    "idle":        { "desc": "无事时自言自语",           "priority": 0, "cooldownSec": 15 }
+  },
+
+  "archetypes": {
+    "uncle": {
+      "name": "遛弯大爷",
+      "voiceHint": "60 岁上下男声，沙哑、慢悠悠，选 2 个",
+      "voices": ["cosyvoice-v3.5-plus-vd-uncle1-1529faae13d7483988cfce86f543fa72", "cosyvoice-v3.5-plus-vd-uncle2-7d7d2c1188ac4bd29c86ab6dc885cf42"],
+      "voiceDesign": [
+        { "prompt": "老年男性，65 岁左右，北京本地口音，儿化音重。音色沙哑、偏低，中气略弱，语速缓慢，句尾爱拖长音，说话慢条斯理，带点倚老卖老的教训口吻。", "previewText": "吃了吗您呐？这天儿，热得邪乎。" },
+        { "prompt": "老年男性，60 岁左右，北京胡同口音，嗓音粗粝浑厚、带烟嗓，音调偏低，语速偏慢，说话爽朗嗓门大，急了容易破音。", "previewText": "嘿！长没长眼呐！这天儿，热得邪乎。" }
+      ],
+      "style": "北京老大爷，京腔儿化音重，说话慢悠悠，带点儿倚老卖老。",
+      "rateRange": [0.85, 0.95]
+    },
+    "auntie": {
+      "name": "广场舞大妈",
+      "voiceHint": "50 到 60 岁女声，嗓门大，选 2 个",
+      "voices": ["cosyvoice-v3.5-plus-vd-auntie1-a8e2edd6ec3941d8a1b99bb63520414f", "cosyvoice-v3.5-plus-vd-auntie2-2637c74340c54073bcac350b91ef4056"],
+      "voiceDesign": [
+        { "prompt": "中老年女性，55 岁左右，北京口音，嗓门大、音调偏高，声音洪亮略尖，语速快，热情爱咋呼，说话一惊一乍。", "previewText": "哟，遛弯儿呢？一会儿跳完舞，去买俩西红柿。" },
+        { "prompt": "中年女性，50 岁左右，北京口音，中音略沙哑，嗓门亮，语速偏快，泼辣爽利，说话像连珠炮。", "previewText": "哎你这人怎么走路的！这音响声儿怎么这么小。" }
+      ],
+      "style": "北京大妈，嗓门大、语速快、爱咋呼。",
+      "rateRange": [1.0, 1.1]
+    },
+    "courier": {
+      "name": "外卖小哥",
+      "voiceHint": "20 到 30 岁男声，年轻有活力，选 2 个",
+      "voices": ["cosyvoice-v3.5-plus-vd-courier1-6f2feb60f4c5425c9f2888d4265458ba", "cosyvoice-v3.5-plus-vd-courier2-041f9f4a913d4f2b97b32eff9675f3c8"],
+      "voiceDesign": [
+        { "prompt": "青年男性，22 岁左右，音色清亮偏高，语速很快，气息急促，充满活力，普通话略带外地口音。", "previewText": "哥们儿让让！我这单要超时了！别挡道儿别挡道儿！" },
+        { "prompt": "青年男性，28 岁左右，中音略沙哑，语速快，说话干脆利落，带点疲惫但有冲劲。", "previewText": "还有三单，加油加油。系统你倒是给我派个顺路的啊。" }
+      ],
+      "style": "外卖骑手，永远在赶时间，说话又急又快。",
+      "rateRange": [1.1, 1.2]
+    },
+    "office": {
+      "name": "CBD 上班族",
+      "voiceHint": "25 到 35 岁，男女声各选 1 个",
+      "voices": ["cosyvoice-v3.5-plus-vd-office1-b9c125161f0347cb8c4c9264d164e77d", "cosyvoice-v3.5-plus-vd-office2-d81e46cada904d888ac68f539647af44"],
+      "voiceDesign": [
+        { "prompt": "青年男性，30 岁左右，标准普通话，中低音，声音平淡、略显疲惫，语速中等，语气冷淡，透着不耐烦。", "previewText": "看着点儿行吗？我赶时间。今晚又得加班……" },
+        { "prompt": "青年女性，28 岁左右，标准普通话，中音，声音清冷干练，语速中等偏快，语气冷淡、略带不耐烦。", "previewText": "今晚又得加班……这破会开到几点啊。" }
+      ],
+      "style": "写字楼白领，说话冷淡、有气无力、不耐烦。",
+      "rateRange": [0.95, 1.05]
+    },
+    "tourist": {
+      "name": "游客",
+      "voiceHint": "外地游客，普通话标准，男女声各选 1 个",
+      "voices": ["cosyvoice-v3.5-plus-vd-tourist1-399631640b4c425985345da3fb1a02d8", "cosyvoice-v3.5-plus-vd-tourist2-9549b55dd75a403fad9a96742e4c1ee7"],
+      "voiceDesign": [
+        { "prompt": "青年男性，30 岁左右，标准普通话，音色明亮，语调起伏大，兴奋又好奇，语速中等。", "previewText": "师傅，请问去三里屯怎么走？这桥叫什么桥来着？" },
+        { "prompt": "青年女性，25 岁左右，标准普通话，音色清甜明亮，语调上扬，兴奋又好奇，语速中等偏快。", "previewText": "来来来，往这边看，笑一个！我的天，北京真大！" }
+      ],
+      "style": "来北京旅游的外地人，普通话标准，兴奋又好奇。",
+      "rateRange": [1.0, 1.05]
+    },
+    "guard": {
+      "name": "保安",
+      "voiceHint": "30 到 45 岁男声，粗声粗气，选 2 个",
+      "voices": ["cosyvoice-v3.5-plus-vd-guard1-66cf1eec9f354cdb954fa57b4036fc14", "cosyvoice-v3.5-plus-vd-guard2-490b8dbb1e71429188ea29c822fcf616"],
+      "voiceDesign": [
+        { "prompt": "中年男性，40 岁左右，音色粗厚、低沉有力，嗓门大，说话一板一眼、公事公办，略带官腔，语速中等。", "previewText": "干什么的！出示一下证件！外来车辆登记一下啊。" },
+        { "prompt": "中年男性，35 岁左右，粗声粗气，中低音略沙哑，普通话带外地口音，嗓门大但底气不太足。", "previewText": "您好，您找哪位？外来车辆登记一下啊，这儿不让停。" }
+      ],
+      "style": "小区保安，公事公办的腔调，色厉内荏。",
+      "rateRange": [0.95, 1.05]
+    },
+    "driver": {
+      "name": "司机 / 车主",
+      "voiceHint": "35 到 50 岁男声，火气大，选 2 个",
+      "voices": ["cosyvoice-v3.5-plus-vd-driver1-fb7c7041902248cc801935372d3bc393", "cosyvoice-v3.5-plus-vd-driver2-d4add8d5982947d499a3a3688c770d72"],
+      "voiceDesign": [
+        { "prompt": "中年男性，45 岁左右，北京口音很重、儿化音多，音色粗哑、中低音，嗓门大，语速偏快，火气大，爱唠叨。", "previewText": "会不会开车啊！这路堵的，到地方得天黑。" },
+        { "prompt": "中年男性，40 岁左右，北京口音，音色洪亮略尖、中音，语速快，嘴碎，说话总带着不耐烦的火气。", "previewText": "嘿！加塞儿是吧？倒是走啊！后面排长队了！" }
+      ],
+      "style": "北京出租车司机，京腔，火气大，爱唠叨。",
+      "rateRange": [1.0, 1.1]
+    }
+  },
+
+  "lines": [
+    { "id": "uncle_near_miss_01", "archetype": "uncle", "trigger": "near_miss", "emotion": "angry", "text": "哎哟喂！您这是奔命去啊？", "instruct": "愤怒地大声呵斥。" },
+    { "id": "uncle_near_miss_02", "archetype": "uncle", "trigger": "near_miss", "emotion": "angry", "text": "嘿！长没长眼呐！", "instruct": "气得嗓门都劈了。" },
+    { "id": "uncle_bumped_01", "archetype": "uncle", "trigger": "bumped", "emotion": "angry", "text": "干嘛呢干嘛呢，没瞧见这儿有人呐？", "instruct": "不满地质问。" },
+    { "id": "uncle_hit_01", "archetype": "uncle", "trigger": "hit", "emotion": "sad", "text": "哎哟……我的老腰……", "instruct": "痛苦地呻吟，气若游丝。", "variants": 4 },
+    { "id": "uncle_aimed_01", "archetype": "uncle", "trigger": "aimed", "emotion": "fearful", "text": "别别别，有话好好说，我这把老骨头经不起折腾……", "instruct": "害怕，声音发颤。" },
+    { "id": "uncle_gunshot_01", "archetype": "uncle", "trigger": "gunshot", "emotion": "fearful", "text": "这是放炮还是怎么着？快走快走！", "instruct": "慌张地催促。" },
+    { "id": "uncle_idle_01", "archetype": "uncle", "trigger": "idle", "emotion": "neutral", "text": "这天儿，热得邪乎。", "instruct": "慢悠悠地自言自语。" },
+    { "id": "uncle_idle_02", "archetype": "uncle", "trigger": "idle", "emotion": "disgusted", "text": "现在这年轻人，开车跟不要命似的。", "instruct": "嘀嘀咕咕地抱怨。" },
+    { "id": "uncle_greet_01", "archetype": "uncle", "trigger": "greet", "emotion": "happy", "text": "吃了吗您呐？", "instruct": "热情地打招呼。" },
+    { "id": "uncle_police_01", "archetype": "uncle", "trigger": "police_call", "emotion": "angry", "text": "喂，一一零吗？四环这儿有人开车撞人！", "instruct": "对着电话气愤地喊。" },
+
+    { "id": "auntie_near_miss_01", "archetype": "auntie", "trigger": "near_miss", "emotion": "surprised", "text": "哎哟我的妈呀！吓死我了！", "instruct": "受惊后尖叫。" },
+    { "id": "auntie_near_miss_02", "archetype": "auntie", "trigger": "near_miss", "emotion": "angry", "text": "你有病啊！差点儿撞着我！", "instruct": "跳着脚骂。" },
+    { "id": "auntie_bumped_01", "archetype": "auntie", "trigger": "bumped", "emotion": "angry", "text": "哎你这人怎么走路的！", "instruct": "大声埋怨。" },
+    { "id": "auntie_hit_01", "archetype": "auntie", "trigger": "hit", "emotion": "sad", "text": "哎哟……我的腿……来人呐……", "instruct": "痛苦地呼救，声音虚弱。", "variants": 4 },
+    { "id": "auntie_aimed_01", "archetype": "auntie", "trigger": "aimed", "emotion": "fearful", "text": "别开枪别开枪！我什么都没看见！", "instruct": "吓得语无伦次。" },
+    { "id": "auntie_gunshot_01", "archetype": "auntie", "trigger": "gunshot", "emotion": "fearful", "text": "枪响了！快跑啊！", "instruct": "惊慌地大喊。" },
+    { "id": "auntie_idle_01", "archetype": "auntie", "trigger": "idle", "emotion": "happy", "text": "一会儿跳完舞，去买俩西红柿。", "instruct": "心情不错地念叨。" },
+    { "id": "auntie_idle_02", "archetype": "auntie", "trigger": "idle", "emotion": "neutral", "text": "这音响声儿怎么这么小。", "instruct": "嘟囔。" },
+    { "id": "auntie_greet_01", "archetype": "auntie", "trigger": "greet", "emotion": "happy", "text": "哟，遛弯儿呢？", "instruct": "热络地搭话。" },
+    { "id": "auntie_police_01", "archetype": "auntie", "trigger": "police_call", "emotion": "angry", "text": "警察同志！这儿有个疯子开车乱撞！", "instruct": "对着电话激动地喊。" },
+
+    { "id": "courier_near_miss_01", "archetype": "courier", "trigger": "near_miss", "emotion": "surprised", "text": "哥们儿让让！我这单要超时了！", "instruct": "急匆匆地喊。" },
+    { "id": "courier_near_miss_02", "archetype": "courier", "trigger": "near_miss", "emotion": "neutral", "text": "别挡道儿别挡道儿！", "instruct": "语速飞快。" },
+    { "id": "courier_bumped_01", "archetype": "courier", "trigger": "bumped", "emotion": "angry", "text": "哎哟我车！我的餐！", "instruct": "心疼又着急。" },
+    { "id": "courier_hit_01", "archetype": "courier", "trigger": "hit", "emotion": "sad", "text": "我的……我的订单……", "instruct": "虚弱地呻吟。", "variants": 4 },
+    { "id": "courier_aimed_01", "archetype": "courier", "trigger": "aimed", "emotion": "fearful", "text": "大哥大哥，餐你拿走，别伤人！", "instruct": "紧张地求饶。" },
+    { "id": "courier_gunshot_01", "archetype": "courier", "trigger": "gunshot", "emotion": "fearful", "text": "不干了不干了，这单不送了！", "instruct": "边跑边喊。" },
+    { "id": "courier_idle_01", "archetype": "courier", "trigger": "idle", "emotion": "neutral", "text": "系统你倒是给我派个顺路的啊。", "instruct": "无奈地嘟囔。" },
+    { "id": "courier_idle_02", "archetype": "courier", "trigger": "idle", "emotion": "neutral", "text": "还有三单，加油加油。", "instruct": "给自己打气。" },
+    { "id": "courier_police_01", "archetype": "courier", "trigger": "police_call", "emotion": "surprised", "text": "喂警察吗？四环辅路有人开车撞人，车牌我没看清！", "instruct": "气喘吁吁地报警。" },
+
+    { "id": "office_near_miss_01", "archetype": "office", "trigger": "near_miss", "emotion": "surprised", "text": "我去……差点儿。", "instruct": "惊魂未定，低声。" },
+    { "id": "office_near_miss_02", "archetype": "office", "trigger": "near_miss", "emotion": "angry", "text": "有病吧你！", "instruct": "冲着车尾骂。" },
+    { "id": "office_bumped_01", "archetype": "office", "trigger": "bumped", "emotion": "angry", "text": "看着点儿行吗？我赶时间。", "instruct": "不耐烦。" },
+    { "id": "office_hit_01", "archetype": "office", "trigger": "hit", "emotion": "sad", "text": "我的……电脑……", "instruct": "虚弱地呻吟。", "variants": 4 },
+    { "id": "office_aimed_01", "archetype": "office", "trigger": "aimed", "emotion": "fearful", "text": "别别别，手机钱包都给你，别伤我。", "instruct": "害怕地求饶。" },
+    { "id": "office_gunshot_01", "archetype": "office", "trigger": "gunshot", "emotion": "fearful", "text": "什么声音？快撤快撤！", "instruct": "慌张。" },
+    { "id": "office_idle_01", "archetype": "office", "trigger": "idle", "emotion": "sad", "text": "今晚又得加班……", "instruct": "有气无力地叹气。" },
+    { "id": "office_idle_02", "archetype": "office", "trigger": "idle", "emotion": "disgusted", "text": "这破会开到几点啊。", "instruct": "烦躁地抱怨。" },
+    { "id": "office_police_01", "archetype": "office", "trigger": "police_call", "emotion": "fearful", "text": "一一零吗？朝阳区这边有人持枪！", "instruct": "压低声音紧张地报警。" },
+
+    { "id": "tourist_near_miss_01", "archetype": "tourist", "trigger": "near_miss", "emotion": "surprised", "text": "我的天！北京开车都这样吗？", "instruct": "震惊。" },
+    { "id": "tourist_bumped_01", "archetype": "tourist", "trigger": "bumped", "emotion": "surprised", "text": "哎呀对不起对不起……咦，是你撞的我啊！", "instruct": "先道歉，后反应过来，语气转变。" },
+    { "id": "tourist_hit_01", "archetype": "tourist", "trigger": "hit", "emotion": "sad", "text": "我……我还没去故宫呢……", "instruct": "虚弱地呻吟。", "variants": 4 },
+    { "id": "tourist_aimed_01", "archetype": "tourist", "trigger": "aimed", "emotion": "fearful", "text": "别！我是来旅游的！", "instruct": "害怕地喊。" },
+    { "id": "tourist_gunshot_01", "archetype": "tourist", "trigger": "gunshot", "emotion": "surprised", "text": "是不是拍电影啊？……不对，快跑！", "instruct": "从好奇到惊慌。" },
+    { "id": "tourist_idle_01", "archetype": "tourist", "trigger": "idle", "emotion": "neutral", "text": "这桥叫什么桥来着？", "instruct": "好奇地自问。" },
+    { "id": "tourist_idle_02", "archetype": "tourist", "trigger": "idle", "emotion": "happy", "text": "来来来，往这边看，笑一个！", "instruct": "兴奋地招呼同伴拍照。" },
+    { "id": "tourist_greet_01", "archetype": "tourist", "trigger": "greet", "emotion": "happy", "text": "师傅，请问去三里屯怎么走？", "instruct": "礼貌地问路。" },
+
+    { "id": "guard_near_miss_01", "archetype": "guard", "trigger": "near_miss", "emotion": "angry", "text": "哎！哎！这儿不让开这么快！", "instruct": "吹完哨子大声制止。" },
+    { "id": "guard_bumped_01", "archetype": "guard", "trigger": "bumped", "emotion": "angry", "text": "干什么的！出示一下证件！", "instruct": "公事公办地呵斥。" },
+    { "id": "guard_hit_01", "archetype": "guard", "trigger": "hit", "emotion": "sad", "text": "哎哟……队长……我不行了……", "instruct": "痛苦地呻吟。", "variants": 4 },
+    { "id": "guard_aimed_01", "archetype": "guard", "trigger": "aimed", "emotion": "fearful", "text": "兄弟，我就一看门儿的，别冲动……", "instruct": "强装镇定但声音发抖。" },
+    { "id": "guard_gunshot_01", "archetype": "guard", "trigger": "gunshot", "emotion": "fearful", "text": "都别过来！都别过来！", "instruct": "色厉内荏地大喊。" },
+    { "id": "guard_idle_01", "archetype": "guard", "trigger": "idle", "emotion": "neutral", "text": "这班站到几点啊。", "instruct": "无聊地嘟囔。" },
+    { "id": "guard_idle_02", "archetype": "guard", "trigger": "idle", "emotion": "neutral", "text": "外来车辆登记一下啊。", "instruct": "例行公事的腔调。" },
+    { "id": "guard_greet_01", "archetype": "guard", "trigger": "greet", "emotion": "neutral", "text": "您好，您找哪位？", "instruct": "客气但带着审视。" },
+    { "id": "guard_police_01", "archetype": "guard", "trigger": "police_call", "emotion": "angry", "text": "喂，派出所吗？这儿有人闹事，开车撞人！", "instruct": "对着对讲机大声报告。" },
+
+    { "id": "driver_honk_01", "archetype": "driver", "trigger": "honk", "emotion": "angry", "text": "会不会开车啊！", "instruct": "摇下车窗骂。" },
+    { "id": "driver_honk_02", "archetype": "driver", "trigger": "honk", "emotion": "angry", "text": "倒是走啊！后面排长队了！", "instruct": "不耐烦地催。" },
+    { "id": "driver_near_miss_01", "archetype": "driver", "trigger": "near_miss", "emotion": "angry", "text": "嘿！加塞儿是吧？", "instruct": "火冒三丈。" },
+    { "id": "driver_car_stolen_01", "archetype": "driver", "trigger": "car_stolen", "emotion": "angry", "text": "我车！站住！我车！", "instruct": "边追边喊，气急败坏。" },
+    { "id": "driver_car_stolen_02", "archetype": "driver", "trigger": "car_stolen", "emotion": "angry", "text": "哎哎哎，那是我的车！警察！警察！", "instruct": "扯着嗓子喊。" },
+    { "id": "driver_car_stolen_03", "archetype": "driver", "trigger": "car_stolen", "emotion": "sad", "text": "完了完了……这月车贷还没还呢……", "instruct": "追不上了，绝望地喘气。" },
+    { "id": "driver_idle_01", "archetype": "driver", "trigger": "idle", "emotion": "neutral", "text": "这路堵的，到地方得天黑。", "instruct": "唠叨。" },
+    { "id": "driver_police_01", "archetype": "driver", "trigger": "police_call", "emotion": "angry", "text": "喂，交警吗？有人抢车！往东去了！", "instruct": "气喘吁吁地报警。" }
+  ]
+}

@@ -159,6 +159,10 @@ const EN = {
   'settings.q.high': 'High',
 
   'diag.title': 'DIAGNOSTICS (F9)',
+  'diag.voice.title': 'NPC VOICES (F9)', 'diag.voice.who': 'Speaker', 'diag.voice.trigger': 'Trigger event', 'diag.voice.play': 'Play',
+  'diag.voice.nearest': 'nearest passer-by', 'diag.voice.speakers': 'talking', 'diag.voice.loaded': 'loaded',
+  'diag.voice.locked': 'audio not unlocked yet: press Start', 'diag.voice.nobody': 'nobody within 40 m',
+  'diag.voice.dropped': 'not said (cooldown, outranked, or still loading - try again)',
   'diag.crashed': 'Previous session ended abnormally',
   'err.context': 'The graphics driver dropped the page (GPU reset or out of memory). Reload to keep driving.',
   'nav.arrived': 'Arrived at the waypoint',
@@ -540,6 +544,10 @@ const ZH: Record<TKey, string> = {
   'settings.q.high': '高',
 
   'diag.title': '诊断（F9）',
+  'diag.voice.title': 'NPC 语音（F9）', 'diag.voice.who': '说话人', 'diag.voice.trigger': '触发事件', 'diag.voice.play': '播放',
+  'diag.voice.nearest': '最近的路人', 'diag.voice.speakers': '正在说话', 'diag.voice.loaded': '已加载',
+  'diag.voice.locked': '音频还没解锁：先点开始游戏', 'diag.voice.nobody': '40 米内没有路人',
+  'diag.voice.dropped': '没说（冷却中、被更高优先级压住，或音频还在加载，再点一次）',
   'diag.crashed': '上次会话异常结束',
   'err.context': '显卡驱动丢掉了页面（GPU 重置或显存不足），刷新后继续。',
   'nav.arrived': '已到达标记点',

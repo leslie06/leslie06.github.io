@@ -3,7 +3,7 @@ import { t } from '../core/I18n';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
-import type { Actor, PeopleApi, PlayerApi, RenderApi, VehicleApi, WantedApi } from '../game/Contracts';
+import type { Actor, NpcVoice, PeopleApi, PlayerApi, RenderApi, VehicleApi, VoiceApi, VoiceArchetype, VoiceTrigger, WantedApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import type { Link } from '../traffic/LaneGraph';
 import type { Vehicle } from '../vehicle/Vehicle';
@@ -60,6 +60,8 @@ interface Ped {
   gest: Action | null; gestT: number; gestFor: number;
   /** Turned to face this way while chatting (NaN: no). */
   faceYaw: number;
+  /** The archetype they speak as when it is not the one their look gives (a carjacked driver, a rider). */
+  voiceArch: VoiceArchetype | null;
 }
 
 /** What a scripted person is told to do (people/ moves it in `stepPed`). */
@@ -131,14 +133,14 @@ export async function install(engine: Engine): Promise<void> {
     pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0,
     yaw: 0, want: 0, pace: 1.3, cur: 1.3, moved: 0,
     gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false,
-    actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN,
+    actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN, voiceArch: null,
   }));
   // Actor slots after the passers-by: a scripted person always gets one (and passers-by thin out).
   const actorSlots: Ped[] = Array.from({ length: q.has('nopeople') ? 0 : ACTORS }, () => ({ on: false, mode: 'script' as Mode, t: 0, hold: 0, fear: 0,
     link: 0, s: 0, side: 1, frac: 0.5, fracT: 0.5, dir: 1, cross: false, road: false, c0x: 0, c0z: 0, c1x: 0, c1z: 0, cl: 1, ct: 0,
     waitJ: -1, waitPhase: 0, backLink: 0, backS: 0, backDir: 1, backSide: 1,
     pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0, yaw: 0, want: 0, pace: 1.3, cur: 0, moved: 0,
-    gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false, actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN }));
+    gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false, actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN, voiceArch: null }));
   const all: Ped[] = [...actorSlots, ...peds];
   let actorsOn = 0;
   let active = 0, spawnT = 0, frame = 0;
@@ -244,8 +246,8 @@ export async function install(engine: Engine): Promise<void> {
   /** Run from a threat at (fx, fz): along the pavement away from it (or on across the road). */
   const scare = (p: Ped, fx: number, fz: number, secs: number, byPlayer = false) => {
     if (p.actor) return;   // a scripted person does what its owner says
-    // Scared mid-call: the call is dropped (no report).
-    if (p.mode === 'call') { p.mode = 'walk'; p.t = 0; }
+    // Scared mid-call: the call is dropped (no report), the line with it.
+    if (p.mode === 'call') { p.mode = 'walk'; p.t = 0; voiceOfPed(p)?.stop(); }
     if (!calm(p)) return;
     if (byPlayer && rnd() < 0.35) shout(p, 'scare');
     // Waiting at the kerb they are already on the crossing's line, so fleeing used to mean
@@ -263,12 +265,30 @@ export async function install(engine: Engine): Promise<void> {
 
   /** A line over someone's head, rate-limited so a crowd does not wallpaper the screen. */
   let shoutT = 0;
-  const shout = (p: Ped, kind: 'hit' | 'shove' | 'scare' | 'call') => {
+  const SHOUT_TRIGGER: Record<'hit' | 'shove' | 'scare' | 'call', VoiceTrigger> = { hit: 'hit', shove: 'bumped', scare: 'near_miss', call: 'police_call' };
+  const shout = (p: Ped, kind: 'hit' | 'shove' | 'scare' | 'call', onDone?: (completed: boolean) => void): boolean => {
     // A scare is background chatter and waits its turn; being hit is always said.
-    if (shoutT > 0 && kind === 'scare') return;
+    if (shoutT > 0 && kind === 'scare') return false;
     shoutT = kind === 'scare' ? 0.9 : 0.25;
+    // A recorded bark in their archetype's voice (voice/) when there is one; else the old line and voice.
+    if (bark2(p, SHOUT_TRIGGER[kind], onDone)) return true;
     const text = kind === 'call' ? t('shout.call') : t(`shout.${kind}${1 + Math.floor(rnd() * 3)}` as 'shout.hit1');
     speak(p, text, 2.2);
+    return false;
+  };
+  /** Their voice (voice/): passers-by only, the archetype from their look unless they were given one. */
+  const voiceOfPed = (p: Ped): NpcVoice | null => {
+    const vs = engine.get<VoiceApi>('voices');
+    if (!vs?.ready || p.actor) return null;
+    const arch = p.voiceArch ?? vs.archetypeFor(p.look, p.seed, p.pos.x, p.pos.z);
+    return vs.npc(p, arch, p.pos, { sex: (p.look.fem ?? 0) > 0.5 ? 'f' : 'm', seed: p.seed });
+  };
+  /** A recorded line for this event, with its text in a bubble over them. True when it is said. */
+  const bark2 = (p: Ped, trigger: VoiceTrigger, onDone?: (completed: boolean) => void): boolean => {
+    const text = voiceOfPed(p)?.say(trigger, onDone);
+    if (!text) return false;
+    engine.events.emit('people:shout', { x: p.pos.x, z: p.pos.z, text, follow: p.pos, secs: Math.min(3.5, 1.2 + text.length * 0.12) });
+    return true;
   };
   /** A line over their head that follows them, in their own voice. */
   const speak = (p: Ped, text: string, secs: number, name?: string) => {
@@ -296,8 +316,13 @@ export async function install(engine: Engine): Promise<void> {
   const startCall = (p: Ped, x: number, z: number) => {
     p.mode = 'call'; p.t = 0; p.hold = 3.5 + rnd() * 1.5; p.willCall = false; p.cross = false;
     p.want = Math.atan2(x - p.pos.x, z - p.pos.z);
-    shout(p, 'call');
+    // Said out loud (voice/): the report goes in when the line ends - played out, or drowned by a louder
+    // speaker while they are still on the phone; knocked or scared off it first, no report. The timer stays
+    // as a backstop (and is the whole call when nothing is said).
+    const seed = p.seed;
+    if (shout(p, 'call', () => { if (p.on && p.mode === 'call' && p.seed === seed) endCall(p); })) p.hold = 15;
   };
+  const endCall = (p: Ped) => { p.mode = 'walk'; p.t = 0; engine.events.emit('people:report', { x: p.pos.x, z: p.pos.z }); };
 
   const knock = (p: Ped, vx: number, vz: number, byPlayer: boolean, quiet = false) => {
     const speed = Math.hypot(vx, vz);
@@ -362,7 +387,7 @@ export async function install(engine: Engine): Promise<void> {
       p.on = true; p.mode = 'walk'; p.t = 0; p.fear = 0; p.cross = false; p.road = false;
       p.pace = 1.05 + rnd() * 0.55; p.cur = p.pace; p.moved = p.pace;
       place(p); p.prev.copy(p.pos); p.yaw = p.want;
-      const nl = randomLook(rnd); p.look = nl; p.seed = rnd();
+      const nl = randomLook(rnd); p.look = nl; p.seed = rnd(); p.voiceArch = null;
       active++;
       return;
     }
@@ -514,6 +539,7 @@ export async function install(engine: Engine): Promise<void> {
 
   /** Someone near (x, z) calls out: the nearest calm passer-by within r, with a gesture. */
   let barkT = 0;
+  let greetT = 0, idleT = 10;
   const bark = (x: number, z: number, r: number, key: string, act: Action, faceX = NaN, faceZ = NaN): boolean => {
     if (barkT > 0) return false;
     let best: Ped | null = null, bd = r;
@@ -572,7 +598,7 @@ export async function install(engine: Engine): Promise<void> {
       // (p.t already counts up above: counting it here too halved every call.) Standing still on
       // the phone: `moved` kept the walking speed it was picked at, and the legs walked on the spot.
       p.cur = 0; p.moved = 0;
-      if (p.t > p.hold) { p.mode = 'walk'; p.t = 0; engine.events.emit('people:report', { x: p.pos.x, z: p.pos.z }); }
+      if (p.t > p.hold) endCall(p);
       return;
     }
     if (p.mode === 'flee') {
@@ -647,7 +673,7 @@ export async function install(engine: Engine): Promise<void> {
       knock(best, dirX * 4.6, dirZ * 4.6, true);
       return true;
     },
-    spawnFleeing(x, z) {
+    spawnFleeing(x, z, opts) {
       let p = peds.find((q) => !q.on);
       if (p) active++;
       else {
@@ -660,6 +686,18 @@ export async function install(engine: Engine): Promise<void> {
       p.on = true; p.mode = 'getup'; p.t = 0; p.cross = false; p.fear = 0;
       p.pos.set(x, GROUND, z); p.prev.copy(p.pos); p.vel.set(0, 0, 0); p.vy = 0;
       p.look = randomLook(rnd); p.seed = rnd(); p.pace = 1.2 + rnd() * 0.4; p.frac = p.fracT = 0.5;
+      p.voiceArch = opts?.voice ?? null;
+      if (opts?.voice && p.look.fem && opts.voice !== 'office' && opts.voice !== 'tourist' && opts.voice !== 'auntie') p.look.fem = 0;   // a man's voice: a man
+      if (opts?.say) bark2(p, opts.say);
+    },
+    voiceNear(x, z, r) {
+      let best: Ped | null = null, bd = r;
+      for (const p of peds) { if (!p.on || p.actor) continue; const d = Math.hypot(p.pos.x - x, p.pos.z - z); if (d < bd) { bd = d; best = p; } }
+      if (!best) return null;
+      const v = voiceOfPed(best);
+      if (v) { const b = best; return { get archetype() { return v.archetype; }, get rate() { return v.rate; }, get speaking() { return v.speaking; }, stop: () => v.stop(),
+        say: (tr, done) => { const text = v.say(tr, done); if (text) engine.events.emit('people:shout', { x: b.pos.x, z: b.pos.z, text, follow: b.pos, secs: 3 }); return text; } }; }
+      return null;
     },
     fixedUpdate(dt) {
       if (!cap) return;
@@ -728,6 +766,23 @@ export async function install(engine: Engine): Promise<void> {
       }
       // Wanted and in plain sight: whoever is near points the player out.
       const wanted = engine.get<WantedApi>('wanted');
+      // Recorded barks (voice/): a hello to the player walking up or creeping past in the car, and now and then
+      // someone near the camera talking to themselves. Each speaker's own cooldowns and the speaker cap apply.
+      greetT -= dt; idleT -= dt;
+      if (greetT <= 0) {
+        greetT = 1;
+        const P = foot ? foot.pos : v.occupied && pc.speed < 3 ? pc.pos : null;
+        if (P) {
+          let best: Ped | null = null, bd = foot ? 3.5 : 6;
+          for (const p of peds) { if (!p.on || !(p.mode === 'walk' || p.mode === 'wait') || p.cross) continue; const d = Math.hypot(p.pos.x - P.x, p.pos.z - P.z); if (d < bd) { bd = d; best = p; } }
+          if (best && rnd() < 0.45 && bark2(best, 'greet')) gesture(best, 'wave', 1.6);
+        }
+      }
+      if (idleT <= 0) {
+        idleT = 7 + rnd() * 8;
+        const near = peds.filter((p) => p.on && (p.mode === 'walk' || p.mode === 'wait') && Math.hypot(p.pos.x - cam.x, p.pos.z - cam.z) < 25);
+        if (near.length) bark2(near[Math.floor(rnd() * near.length)], 'idle');
+      }
       if (wanted && wanted.level > 0 && wanted.seen && barkT <= 0 && frame % 30 === 0) {
         const P = foot?.pos ?? pc.pos;
         if (foot || pc.speed < 6) bark(P.x, P.z, 20, `npc.bark.wanted${1 + Math.floor(rnd() * 2)}`, 'point', P.x, P.z);

@@ -151,7 +151,8 @@ export async function install(engine: Engine): Promise<void> {
       tr!.parkCar(prev.car, prev.look);
       carjacked = !taken.parked;
       // The driver ends up on the road by the door, gets up and runs.
-      if (carjacked) engine.get<PeopleApi>('people')?.spawnFleeing(target.pos.x + target.left.x * 1.6 - target.fwd.x * 0.8, target.pos.z + target.left.z * 1.6 - target.fwd.z * 0.8);
+      // ...shouting after their car (voice/'s driver archetype).
+      if (carjacked) engine.get<PeopleApi>('people')?.spawnFleeing(target.pos.x + target.left.x * 1.6 - target.fwd.x * 0.8, target.pos.z + target.left.z * 1.6 - target.fwd.z * 0.8, { voice: 'driver', say: 'car_stolen' });
     }
     const d = Math.hypot(v.car.pos.x - foot.pos.x, v.car.pos.z - foot.pos.z);
     entering = { t: 0, dur: Math.max(0.25, Math.min(0.9, (d - 1) / 3.2)), carjacked };

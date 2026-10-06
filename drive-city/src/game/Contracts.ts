@@ -14,6 +14,8 @@ import type { Props } from '../world/Props';
 import type { Action } from '../character/Animator';
 import type { Look } from '../character/Body';
 import type { VoiceSpec } from '../character/Voice';
+import type { Trigger as VoiceTrigger, Archetype as VoiceArchetype } from '../voice/Director';
+export type { VoiceTrigger, VoiceArchetype };
 
 export interface DriftState {
   active: boolean;
@@ -270,8 +272,13 @@ export interface PeopleApi extends System {
   witness(x: number, z: number): void;
   /** Pedestrians on the carriageway right now (crossing or running): drivers brake for them. */
   inRoad(): readonly { x: number; z: number }[];
-  /** Someone thrown out of their car at (x, z): gets up and runs for the pavement. */
-  spawnFleeing(x: number, z: number): void;
+  /**
+   * Someone thrown out of their car at (x, z): gets up and runs for the pavement. `voice` gives them that
+   * archetype's voice (a carjacked driver, a delivery rider) and `say` a line straight away (voice/).
+   */
+  spawnFleeing(x: number, z: number, opts?: { voice?: VoiceArchetype; say?: VoiceTrigger }): void;
+  /** The voice of the passer-by nearest (x, z) within `r` (voice/; the debug panel's test speaker). */
+  voiceNear?(x: number, z: number, r: number): NpcVoice | null;
   /** Shove whoever is within reach in front of (x, z) along (dirX, dirZ). True if someone went over. */
   shove(x: number, z: number, dirX: number, dirZ: number): boolean;
   /**
@@ -437,3 +444,35 @@ export interface LandmarkDef {
   load?(env: EnvUniforms): Promise<LandmarkModel>;
 }
 
+
+/** One person's voice (voice/): their archetype, a fixed voice and speaking rate, and their cooldowns. */
+export interface NpcVoice {
+  readonly archetype: VoiceArchetype;
+  /** Their speaking rate (inside the archetype's rateRange; each line adds a little jitter). */
+  readonly rate: number;
+  /** Talking now. */
+  readonly speaking: boolean;
+  /**
+   * Say a line for this event: its text (for a speech bubble), or null when nothing is said (no recording,
+   * the audio not loaded yet or muted, too far from the listener, the cooldown, outranked). `onDone` is
+   * called once for a line that was said: true when it played to its end, false when it was cut off.
+   */
+  say(trigger: VoiceTrigger, onDone?: (completed: boolean) => void): string | null;
+  /** Stop talking (knocked down, scared off the phone). */
+  stop(): void;
+}
+
+/** The NPC barks recorded with CosyVoice (voice/, system `voices`). */
+export interface VoiceApi extends System {
+  /** sprite.json is in and the audio unlocked. */
+  readonly ready: boolean;
+  /** Must be called inside the start button's click, after the audio system's unlock. */
+  unlock(): void;
+  /**
+   * The voice of whoever `key` is (a passer-by, a car), at `pos` (read while they talk, so it follows them).
+   * The same key and seed give the same voice; a new seed (the slot reused by someone else) a new one.
+   */
+  npc(key: object, archetype: VoiceArchetype, pos: { readonly x: number; readonly y: number; readonly z: number }, opts?: { sex?: 'm' | 'f'; seed?: number }): NpcVoice;
+  /** The archetype a passer-by of this look at (x, z) speaks as. */
+  archetypeFor(look: { fem?: number; age?: number; cap?: unknown }, seed: number, x: number, z: number): VoiceArchetype;
+}

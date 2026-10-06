@@ -17,6 +17,10 @@ export interface AudioApi extends System {
   setMuted(m: boolean): void;
   /** The car radio (Radio.ts), once the context exists. */
   radio: Radio | null;
+  /** The context, once unlocked (voice/ plays its positional audio in it). */
+  readonly context: AudioContext | null;
+  /** The master bus (mute applies), once unlocked. */
+  readonly output: AudioNode | null;
 }
 
 /**
@@ -346,6 +350,8 @@ export async function install(engine: Engine): Promise<void> {
     get muted() { return muted; },
     set muted(m: boolean) { api.setMuted(m); },
     get radio() { return radio; },
+    get context() { return ctx; },
+    get output() { return ctx ? master : null; },
     setMuted(m) {
       muted = m;
       if (m) { speech.stop(); clips.stop(ctx); }
