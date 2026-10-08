@@ -57,6 +57,8 @@ export async function install(engine: Engine): Promise<void> {
 
   function build(c: AudioContext): void {
     master = c.createGain(); master.gain.value = muted ? 0 : 0.8; master.connect(c.destination);
+    // Keep driving sounds below voices and music, including at full throttle.
+    const drivingGain = c.createGain(); drivingGain.gain.value = 0.5; drivingGain.connect(master);
     noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -75,35 +77,35 @@ export async function install(engine: Engine): Promise<void> {
     o3 = c.createOscillator(); o3.type = 'sawtooth'; o3.detune.value = 8;
     const g1 = c.createGain(); g1.gain.value = 0.55; const g2 = c.createGain(); g2.gain.value = 0.35; const g3 = c.createGain(); g3.gain.value = 0.2;
     o1.connect(g1).connect(mix); o2.connect(g2).connect(mix); o3.connect(g3).connect(mix);
-    mix.connect(shaper).connect(engineFilter).connect(engineGain).connect(master);
+    mix.connect(shaper).connect(engineFilter).connect(engineGain).connect(drivingGain);
     for (const o of [o1, o2, o3]) o.start();
     intakeFilter = c.createBiquadFilter(); intakeFilter.type = 'bandpass'; intakeFilter.Q.value = 2.5;
     intakeGain = c.createGain(); intakeGain.gain.value = 0;
-    noise(c).connect(intakeFilter).connect(intakeGain).connect(master);
+    noise(c).connect(intakeFilter).connect(intakeGain).connect(drivingGain);
 
     // Tyres.
     tyreFilter = c.createBiquadFilter(); tyreFilter.type = 'bandpass'; tyreFilter.frequency.value = 1100; tyreFilter.Q.value = 1.4;
     tyreGain = c.createGain(); tyreGain.gain.value = 0;
-    noise(c).connect(tyreFilter).connect(tyreGain).connect(master);
+    noise(c).connect(tyreFilter).connect(tyreGain).connect(drivingGain);
     squealGain = c.createGain(); squealGain.gain.value = 0;
     s1 = c.createOscillator(); s1.type = 'triangle'; s1.frequency.value = 820;
     s2 = c.createOscillator(); s2.type = 'triangle'; s2.frequency.value = 1090;
     const lfo = c.createOscillator(); lfo.frequency.value = 7; const lfoG = c.createGain(); lfoG.gain.value = 18;
     lfo.connect(lfoG); lfoG.connect(s1.frequency); lfoG.connect(s2.frequency);
-    s1.connect(squealGain); s2.connect(squealGain); squealGain.connect(master);
+    s1.connect(squealGain); s2.connect(squealGain); squealGain.connect(drivingGain);
     for (const o of [s1, s2, lfo]) o.start();
 
     // Wind.
     const wf = c.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 520;
     windGain = c.createGain(); windGain.gain.value = 0;
-    noise(c).connect(wf).connect(windGain).connect(master);
+    noise(c).connect(wf).connect(windGain).connect(drivingGain);
     // Nitro: a gas hiss (band-passed noise) with a low roar under it, while it burns.
     const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 1500; nf.Q.value = 0.6;
     const nl = c.createBiquadFilter(); nl.type = 'lowpass'; nl.frequency.value = 180;
     nitroGain = c.createGain(); nitroGain.gain.value = 0;
     noise(c).connect(nf).connect(nitroGain);
     noise(c).connect(nl).connect(nitroGain);
-    nitroGain.connect(master);
+    nitroGain.connect(drivingGain);
 
     // Horn: the flat two-tone of a Chinese saloon.
     hornGain = c.createGain(); hornGain.gain.value = 0;
