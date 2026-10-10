@@ -238,6 +238,7 @@ export async function install(engine: Engine): Promise<void> {
     el.style.cssText = 'position:fixed;left:8px;top:200px;z-index:9999;padding:8px 10px;background:rgba(6,8,12,.86);color:#dfe6f2;' +
       'font:12px/1.5 ui-monospace,Menlo,monospace;border-left:2px solid #f3b50f;display:grid;gap:5px;min-width:250px';
     el.hidden = !new URLSearchParams(location.search).has('diag');
+    el.style.display = el.hidden ? 'none' : 'grid';
     for (const ev of ['pointerdown', 'mousedown', 'keydown'] as const) el.addEventListener(ev, (e) => e.stopPropagation());
     const title = document.createElement('div');
     const who = document.createElement('select'), what = document.createElement('select'), go = document.createElement('button');
@@ -295,7 +296,10 @@ export async function install(engine: Engine): Promise<void> {
     what.addEventListener('change', fire);
     return {
       update() {
-        if (engine.input.state.diagPressed) el.hidden = !el.hidden;
+        if (engine.input.state.diagPressed) {
+          el.hidden = !el.hidden;
+          el.style.display = el.hidden ? 'none' : 'grid';
+        }
         if (el.hidden) return;
         fill();
         const loaded = (api.debug.loaded as string[]).join(',') || '-';

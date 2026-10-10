@@ -1,6 +1,6 @@
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
-import type { NavApi, PlayerApi, VehicleApi } from '../game/Contracts';
+import type { NavApi, ParkApi, PlayerApi, VehicleApi } from '../game/Contracts';
 import type { UiApi } from '.';
 import { C, F, css, el } from './theme';
 
@@ -35,6 +35,9 @@ const SHEET = `
 .touch button.gas{width:82px;height:82px;background:rgba(243,181,15,.24);border-color:rgba(243,181,15,.6)}
 .touch button.brake{background:rgba(226,64,47,.2);border-color:rgba(226,64,47,.5)}
 .touch button.nitro{background:rgba(80,170,255,.2);border-color:rgba(120,190,255,.55)}
+.touch button.interact{white-space:pre-line;background:rgba(243,181,15,.24);border-color:${C.yellow};line-height:1.4}
+.touch button.action{position:absolute;left:50%;bottom:25vh;transform:translateX(-50%);width:auto;height:auto;min-height:48px;max-width:80vw;
+  padding:10px 16px;border-radius:8px;background:${C.inkGlass};border-color:${C.yellow};font-size:15px;line-height:1.3}
 .touch button:active,.touch button.down{background:rgba(243,181,15,.45);border-color:${C.yellow}}
 .touch .top{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:10px}
 .touch .top button{width:48px;height:48px;font-size:12px}
@@ -45,6 +48,9 @@ const SHEET = `
 body.dc-touch .hud .speedo{left:50%;right:auto;top:auto;bottom:calc(4px + env(safe-area-inset-bottom,0px));
   transform:translateX(-50%) scale(.62);transform-origin:bottom center}
 body.dc-touch .hud .hint{display:none}
+body.dc-touch .hud .prompt{display:none}
+/* Dialogue choices must receive taps above the full-screen touch surface. */
+body.dc-touch .hud{z-index:25}
 /* Top-left on a phone too, but below the pause and map buttons (12 + 48 + 10 px). Overriding the
    variables rather than the width keeps --mm-h, which the HUD stacks against, correct. */
 body.dc-touch{--mm-w:min(40vw,190px);--mm-left:calc(10px + env(safe-area-inset-left,0px));--mm-top:calc(70px + env(safe-area-inset-top,0px))}
@@ -62,6 +68,7 @@ body.dc-touch .hud .street{bottom:calc(182px + env(safe-area-inset-bottom,0px))}
   body.dc-touch .hud .street{bottom:calc(256px + env(safe-area-inset-bottom,0px))}
   body.dc-touch .hud .toast{bottom:40vh}
   body.dc-touch .hud .prompt{bottom:33vh}
+  .touch button.action{bottom:33vh}
 }
 body.dc-touch .hud .objective{top:calc(10px + env(safe-area-inset-top,0px));font-size:13px;max-width:52vw}
 `;
@@ -80,6 +87,8 @@ export class TouchControls implements System {
   private btns: Btn[] = [];
   private spacer!: HTMLDivElement;
   private nitroBtn!: HTMLButtonElement;
+  private interactBtn: HTMLButtonElement;
+  private actionBtn: HTMLButtonElement;
   /** The car has a nitro bottle: the button shows only then (an empty cell otherwise). */
   private n2o = false;
   private pointers = new Map<number, { kind: 'stick' | 'look'; x: number; y: number }>();
@@ -114,7 +123,9 @@ export class TouchControls implements System {
     // Row 1: camera / get in or out / shove or jump.
     this.button(pads, 'drive', t('touch.cam'), (down) => { if (down) this.state.cameraPressed = true; });
     this.button(pads, 'foot', t('touch.jump'), (down) => { if (down) this.state.jumpPressed = true; });
-    this.button(pads, 'both', t('touch.door'), (down) => { if (down) this.state.enterPressed = true; });
+    const interact = (down: boolean) => { if (down) this.state.enterPressed = true; };
+    this.button(pads, 'both', '', interact, false, 'interact');
+    this.interactBtn = this.btns[this.btns.length - 1].el;
     this.button(pads, 'drive', t('touch.hand'), (down) => { this.state.handbrake = down; }, true);
     this.button(pads, 'foot', t('touch.push'), (down) => { if (down) this.state.punchPressed = true; });
     // Row 2: brake / run / throttle.
@@ -126,6 +137,9 @@ export class TouchControls implements System {
     const spacer = this.spacer = el('div', undefined, pads);
     spacer.style.width = '64px';
     this.button(pads, 'both', t('touch.gas'), (down) => { this.state.forward = down ? 1 : 0; }, true, 'gas');
+    this.button(this.root, 'both', '', interact, false, 'action');
+    this.actionBtn = this.btns[this.btns.length - 1].el;
+    this.actionBtn.hidden = true;
 
     this.driving = engine.get<PlayerApi>('player')?.mode !== 'onfoot';
     this.syncMode();
@@ -218,7 +232,8 @@ export class TouchControls implements System {
       this.root.hidden = !show;
       if (!show) this.release();
     }
-    const driving = this.engine.get<PlayerApi>('player')?.mode !== 'onfoot';
+    const player = this.engine.get<PlayerApi>('player');
+    const driving = player?.mode !== 'onfoot';
     if (driving !== this.driving) {
       this.driving = driving;
       this.syncMode();
@@ -226,5 +241,19 @@ export class TouchControls implements System {
     }
     const n2o = (this.engine.get<VehicleApi>('vehicle')?.car.tune.nitro ?? 0) > 0;
     if (n2o !== this.n2o) { this.n2o = n2o; this.syncMode(); if (!n2o) this.state.nitro = false; }
+    const park = this.engine.get<ParkApi>('park');
+    const prompt = park?.prompt === 'board' ? t('hud.ride') : park?.prompt === 'exit' ? t('hud.rideOff') : player?.prompt;
+    const label = prompt === t('npc.talk') ? t('touch.talk') : !park?.prompt && driving ? t('touch.exit')
+      : player?.nearCar ? t('touch.enter') : t('touch.interact');
+    const text = `F\n${label}`;
+    if (this.interactBtn.textContent !== text) {
+      this.interactBtn.textContent = text;
+      this.interactBtn.setAttribute('aria-label', label);
+    }
+    this.actionBtn.hidden = !prompt;
+    if (prompt) {
+      const action = t('touch.use', { action: prompt.replace(/^F\s+/, '') });
+      if (this.actionBtn.textContent !== action) this.actionBtn.textContent = action;
+    }
   }
 }

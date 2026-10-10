@@ -15,6 +15,9 @@ import { L } from './lang';
 css(`
 .navmap{position:fixed;inset:0;z-index:40;background:#0b0e10;font-family:${F.ui};color:${C.paper};user-select:none;overflow:hidden;cursor:crosshair}
 .navmap[hidden]{display:none}
+.navmap .close{position:absolute;right:calc(max(16px,3vw) + env(safe-area-inset-right,0px));top:calc(max(12px,3.2vh) + env(safe-area-inset-top,0px));
+  min-width:88px;min-height:48px;padding:10px 16px;border:1px solid ${C.line};border-radius:8px;background:${C.inkGlass};color:${C.paper};font:700 15px/1 ${F.ui};cursor:pointer;touch-action:manipulation}
+.navmap .close:hover,.navmap .close:focus-visible{border-color:${C.yellow};outline:2px solid ${C.yellow};outline-offset:2px}
 .navmap.drag{cursor:grabbing}
 .navmap>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .navmap .vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 75% 70% at 50% 50%,rgba(0,0,0,0) 60%,rgba(0,0,0,.5) 100%)}
@@ -22,7 +25,7 @@ css(`
 .navmap .tag{font:700 12px/1 ${F.num};letter-spacing:.32em;color:${C.yellow}}
 .navmap h1{margin:10px 0 0;font:900 34px/1 ${F.ui};letter-spacing:.05em}
 .navmap .place{margin-top:12px;height:18px;font:700 15px/18px ${F.ui};letter-spacing:.06em;color:${C.paper};opacity:.8}
-.navmap .side{position:absolute;right:max(28px,3vw);top:max(24px,3.2vh);display:grid;gap:12px;width:236px;pointer-events:none}
+.navmap .side{position:absolute;right:max(28px,3vw);top:calc(max(12px,3.2vh) + env(safe-area-inset-top,0px) + 60px);display:grid;gap:12px;width:236px;pointer-events:none}
 .navmap .card{padding:14px 16px;border-radius:10px;background:${C.inkGlass};border:1px solid ${C.line};backdrop-filter:blur(8px)}
 .navmap .card h2{margin:0 0 10px;font:800 11px/1 ${F.num};letter-spacing:.24em;color:${C.yellow}}
 .navmap .dest[hidden]{display:none}
@@ -39,6 +42,8 @@ css(`
 .navmap .scale i{display:block;height:6px;margin-bottom:6px;border:2px solid ${C.paper};border-top:0;box-shadow:0 1px 4px rgba(0,0,0,.5)}
 .navmap .attr{position:absolute;right:max(28px,3vw);bottom:max(24px,3vh);text-align:right;font:500 11px/1.5 ${F.ui};color:${C.muted};pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.8)}
 @media (max-width: 900px){.navmap .side .legend{display:none}.navmap .keys{gap:12px;font-size:12px}}
+body.dc-touch .navmap .keys{display:none}
+body.dc-touch .navmap .side{width:min(236px,45vw)}
 `);
 
 // North-up palette: a little brighter than the radar, since nothing else competes with it here.
@@ -81,6 +86,7 @@ export class MapScreen implements System {
   private head: HTMLDivElement;
   private side: HTMLDivElement;
   private attr: HTMLDivElement;
+  private closeButton: HTMLButtonElement;
   /** Screen boxes of the DOM panels, kept free of map labels (refreshed twice a second). */
   private reserved: number[] = [];
   private reservedT = 0;
@@ -151,6 +157,7 @@ export class MapScreen implements System {
     this.placeEl = el('div', 'place', head);
     const side = this.side = el('div', 'side', root);
     this.dest = el('div', 'card dest', side);
+    this.dest.hidden = true;
     this.destTag = el('h2', '', this.dest);
     this.destD = el('div', 'd', this.dest);
     this.destS = el('div', 's', this.dest);
@@ -183,6 +190,12 @@ export class MapScreen implements System {
     this.keysMouse = keyRow([[['@map.key.click'], 'map.set'], [['@map.key.rclick'], 'map.clear'], [['@map.key.drag', 'WASD'], 'map.pan'], [['@map.key.wheel', 'Q', 'E'], 'map.zoom'], [['Tab', 'Esc'], 'map.close']]);
     this.keysPad = keyRow([[['A'], 'map.set'], [['LS'], 'map.pan'], [['LT', 'RT'], 'map.zoom'], [['B'], 'map.close']]);
     this.keysPad.hidden = true;
+    this.closeButton = el('button', 'close', root);
+    this.closeButton.type = 'button';
+    this.closeButton.append('× ', L('map.close'));
+    // Keep taps on the button out of the map's drag and waypoint handlers.
+    for (const event of ['pointerdown', 'pointerup', 'pointermove'] as const) this.closeButton.addEventListener(event, (e) => e.stopPropagation());
+    this.closeButton.addEventListener('click', () => this.close());
     this.bindInput();
     window.addEventListener('resize', () => { if (this.open_) { this.fit(); this.drawn.version = -1; } });
   }
@@ -409,7 +422,7 @@ export class MapScreen implements System {
     if (now - this.reservedT > 500) {
       this.reservedT = now;
       const r: number[] = [];
-      for (const e of [this.head, this.side, this.keysMouse.hidden ? this.keysPad : this.keysMouse, this.scaleEl, this.attr]) {
+      for (const e of [this.head, this.side, this.closeButton, this.keysMouse.hidden ? this.keysPad : this.keysMouse, this.scaleEl, this.attr]) {
         const b = e.getBoundingClientRect();
         if (b.width) r.push(Math.round(b.left - 8), Math.round(b.top - 6), Math.round(b.right + 8), Math.round(b.bottom + 6));
       }

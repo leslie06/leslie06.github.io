@@ -29,7 +29,8 @@ body.dc-touch .hud .dlg .av{width:34px;height:34px;font-size:15px}
 body.dc-touch .hud .dlg .who{font-size:11px;margin:0 0 2px}
 body.dc-touch .hud .dlg .txt{font-size:13px;line-height:1.35}
 body.dc-touch .hud .dlg .opts{flex-direction:column;gap:5px;margin-top:6px}
-body.dc-touch .hud .dlg .opts button{padding:8px 10px;font-size:13px;text-align:left}
+body.dc-touch .hud .dlg .opts button{min-height:44px;padding:8px 10px;font-size:13px;text-align:left}
+@media (orientation:portrait){body.dc-touch .hud .dlg{top:24vh;width:min(360px,80vw)}}
 `);
 
 interface Item {
