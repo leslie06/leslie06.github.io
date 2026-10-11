@@ -54,6 +54,8 @@ const SUN_GAIN = curve([[-2, 2.6], [3, 2.8], [8, 2.4], [15, 1.8], [30, 1.25], [6
 /** Image-based ambient (scene.environmentIntensity). Well above physical after sunset: the eye (and GTA) keeps a dusk street readable. */
 const ENV_GAIN = curve([[-40, 3.0], [-8, 3.2], [-3, 2.6], [0, 2.0], [8, 1.45], [20, 1.4], [62, 1.35]]);
 /** Beijing aerosol optical depth: hazier with the low sun (the evening inversion), clearer at noon. */
+/** `?haze=1.6`: scale the aerosol optical depth (a hazier or a clearer Beijing day; 1 the default, ~0.14-0.22 by sun). */
+const HAZE = typeof location === 'undefined' ? 1 : Math.max(0, Number(new URLSearchParams(location.search).get('haze') ?? 1) || 1);
 const AOD = curve([[-40, 0.2], [-4, 0.2], [5, 0.22], [20, 0.18], [40, 0.14], [62, 0.13]]);
 
 const g = (sat: number, con: number, lift: number, sh: [number, number, number], hi: [number, number, number], bal: number, str: number): GradeParams =>
@@ -163,7 +165,7 @@ export class TimeOfDay {
     // --- atmosphere ---
     const a = L.atmo;
     a.sunDir.copy(L.sunDir); a.moonDir.copy(L.moonDir);
-    a.aod = AOD(el) + 0.5 * oc;
+    a.aod = AOD(el) * HAZE + 0.5 * oc;
     a.mieG = lerp(0.76, 0.7, oc);
     // Isotropic multiple-scattering term, in phase-function units (1/4pi = 0.08 is isotropic).
     a.ms = lerp(0.06, 0.14, oc);

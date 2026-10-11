@@ -10,6 +10,9 @@ import type { Vehicle } from '../vehicle/Vehicle';
 import { Gait, jointMatrices, type Action } from '../character/Animator';
 import { randomLook, type Look } from '../character/Body';
 import { CROWD_CAP } from '../character/Crowd';
+import { loadCity } from '../city/Data';
+import { SHOP_STRIDE } from '../city/Buildings';
+import type { CityStreamer } from '../city/Streamer';
 import { voiceOf, type VoiceSpec } from '../character/Voice';
 import { installWalkers } from './Walkers';
 
@@ -22,9 +25,16 @@ const MAX_CROSS = 26;
  * 的数量」): 34 on high left whole blocks empty. They are cheap - the people system took 0.09 ms a
  * frame at 34 and 0.15 ms at 80 (`.scratch/pedcost.mjs`), and the crowd draws in the same 8 calls -
  * so the bound is the look: a hundred inside 100 m reads as a demonstration, not a street. The
- * crowd texture (CROWD_CAP, less the player and a fare) is the hard limit; `?peds=N` overrides.
+ * crowd texture (CROWD_CAP, less the player and a fare) is the hard limit; `?peds=N` overrides. Raised again
+ * on 2026-10-11 with HOT_SHARE (below): at the spawn low had one person within 60 m.
  */
-const PED_CAP = { low: 24, medium: 44, high: 70 } as const;
+const PED_CAP = { low: 36, medium: 60, high: 90 } as const;
+/**
+ * The share of new passers-by put on a pavement near somewhere people go (an open shop, a bus stop, a subway
+ * entrance: `hot`), not anywhere along any pavement (2026-10-11: the caps went 24/44/70 -> 36/60/90 and the crowd
+ * 40/80/120 -> 56/100/140; spread evenly the extra people still left the shops' fronts as empty as a ring road's).
+ */
+const HOT_SHARE = 0.55;
 /** A pedestrian steps off the kerb only when nothing would reach the crossing within this long. */
 const GAP = 4.5;
 /** Spawn and despawn distances from the camera: people further than ~100 m are a few pixels tall. */
@@ -373,13 +383,24 @@ export async function install(engine: Engine): Promise<void> {
     const ids = g.near(cam.x, cam.z, SPAWN_R);
     if (!ids.length) return;
     for (let attempt = 0; attempt < 8; attempt++) {
-      const l = g.links[ids[Math.floor(rnd() * ids.length)]];
+      // near somewhere people go: the pavement of a road beside it, a few metres either way
+      const h = hot.length && rnd() < HOT_SHARE ? Math.floor(rnd() * hot.length / 2) * 2 : -1;
+      const near = h >= 0 ? g.near(hot[h], hot[h + 1], 24) : ids;
+      if (!near.length) continue;
+      const l = g.links[near[Math.floor(rnd() * near.length)]];
       const w = walkW(l);
       if (!w || l.len < 8 || (l.rev >= 0 && l.rev < l.id)) continue;
-      if (rnd() > w / 4.5) continue;   // busier on the big roads
+      if (h < 0 && rnd() > w / 4.5) continue;   // busier on the big roads
       const sp = spanOf(l);
       p.link = l.id; p.s = sp.a + rnd() * (sp.b - sp.a);
       p.side = l.oneway ? -1 : rnd() < 0.5 ? 1 : -1; p.dir = rnd() < 0.5 ? 1 : -1;
+      if (h >= 0) {
+        const pr = g.project(l, hot[h], hot[h + 1], l.len / 2);
+        if (pr.d > 30) continue;
+        p.s = Math.max(sp.a, Math.min(sp.b, pr.s + (rnd() - 0.5) * 16));
+        g.at(l, p.s, 0, at);
+        if (!l.oneway) p.side = (hot[h] - at.x) * at.dz - (hot[h + 1] - at.z) * at.dx > 0 ? 1 : -1;   // the side it is on (left of travel is (dz, -dx))
+      }
       p.frac = p.fracT = 0.3 + rnd() * 0.6;
       g.at(l, p.s, offOf(l, p), at);
       const dx = at.x - cam.x, dz = at.z - cam.z, d = Math.hypot(dx, dz);
@@ -395,6 +416,24 @@ export async function install(engine: Engine): Promise<void> {
     }
   };
   const despawn = (p: Ped) => { p.on = false; active--; };
+  /** Where people go near the camera: [x, z, ...] of open shops, bus shelters and subway entrances, every 2 s. */
+  let hot: number[] = [], hotT = 0, kiosks: number[][] = [];
+  void loadCity<{ e: number[][] }>('entrances.json').then((e) => { kiosks = e.e; }).catch(() => {});
+  const refreshHot = () => {
+    const streamer = (engine.get('world') as unknown as { streamer?: CityStreamer } | undefined)?.streamer, cam = engine.camera.position;
+    const out: number[] = [];
+    if (streamer) {
+      const sh = streamer.sheltersNear(cam.x, cam.z, SPAWN_R);
+      for (let i = 0; i < sh.length; i += 2) out.push(sh[i], sh[i + 1], sh[i], sh[i + 1]);   // a stop counts twice
+      for (const list of streamer.shops.values()) for (let i = 0; i < list.length; i += SHOP_STRIDE) {
+        if (list[i + 7] & 1 || list[i + 6] < 0) continue;
+        const dx = list[i] - cam.x, dz = list[i + 1] - cam.z;
+        if (dx * dx + dz * dz < SPAWN_R * SPAWN_R) out.push(list[i], list[i + 1]);
+      }
+    }
+    for (const e of kiosks) if (Math.hypot(e[0] - cam.x, e[1] - cam.z) < SPAWN_R) out.push(e[0], e[1], e[0], e[1], e[0], e[1]);   // a subway entrance thrice
+    hot = out;
+  };
 
   /** Cars near the camera, gathered once a step: x, z, vx, vz, speed. */
   const threats = new Float32Array(96 * 5);
@@ -706,6 +745,8 @@ export async function install(engine: Engine): Promise<void> {
       frame++;
       shoutT = Math.max(0, shoutT - dt); barkT -= dt;
       spawnT -= dt;
+      hotT -= dt;
+      if (hotT <= 0) { hotT = 2; refreshHot(); }
       if (spawnT <= 0) { spawnT = 0.05; if (active < cap - actorsOn) trySpawn(active < cap * 0.35); }
       const v = vehicle(), pc = v.car;
       const horn = v.occupied && v.inputEnabled && engine.input.state.horn;

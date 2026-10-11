@@ -5,7 +5,7 @@ import { crowdGeometries } from './BodyMesh';
 import { crowdDepthMaterials, patchCrowdMaterial, ROW_TEXELS, type CrowdUniforms } from './CrowdShader';
 
 /** Characters drawn per quality tier, the player included. */
-export const CROWD_CAP = { low: 40, medium: 80, high: 120 } as const;
+export const CROWD_CAP = { low: 56, medium: 100, high: 140 } as const;
 /** Beyond this distance (m, with 2 m hysteresis) people use the far LOD (~690 instead of ~2,470 triangles). */
 export const LOD_DISTANCE = 22;
 
