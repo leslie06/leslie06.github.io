@@ -2,9 +2,13 @@ import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import type { AudioApi } from '../audio';
 import type { NpcVoice, PeopleApi, VoiceApi, WorldApi } from '../game/Contracts';
-import { lang, t } from '../core/I18n';
+import { lang, onLangChange, t, type Lang } from '../core/I18n';
 import { ARCHETYPES, Director, TRIGGERS, type Archetype, type Line, type Output, type Speaker, type Sprite, type Trigger } from './Director';
 import spriteUrl from '../../assets/voice/dist/sprite.json?url';
+import spriteEnUrl from '../../assets/voice/dist/sprite.en.json?url';
+
+/** The sprite list per language (the English one since 2026-10-07: the same voices, recorded in English). */
+const SPRITES: Record<Lang, string> = { zh: spriteUrl, en: spriteEnUrl };
 
 /** The archetypes' sprites, by file name (Vite hashes and emits them; fetched when first needed). */
 const MP3: Record<string, string> = Object.fromEntries(Object.entries(
@@ -22,7 +26,9 @@ const PREFETCH_AFTER = 15;
 const TOURIST_RADIUS = 160;
 
 interface Slot { audio: THREE.PositionalAudio; line: Line | null; pos: { x: number; y: number; z: number } | null; until: number }
-interface Entry { speaker: Speaker; seed: number; voice: NpcVoice; pos: { readonly x: number; readonly y: number; readonly z: number } }
+interface Entry { speaker: Speaker; seed: number; lang: Lang; voice: NpcVoice; pos: { readonly x: number; readonly y: number; readonly z: number } }
+/** One language's barks: its sprite list, its rules (cooldowns and history are per language) and its audio. */
+interface LangSet { lang: Lang; sprite: Sprite; director: Director; buffers: Map<string, AudioBuffer | Promise<AudioBuffer | null>> }
 
 /**
  * VoiceManager (2026-10-06): the NPC barks recorded with CosyVoice, one mp3 sprite per archetype
@@ -35,25 +41,36 @@ interface Entry { speaker: Speaker; seed: number; voice: NpcVoice; pos: { readon
  * delivery rider speak through spawnFleeing. F9 shows a test panel (pick an archetype and an event).
  */
 export async function install(engine: Engine): Promise<void> {
-  let sprite: Sprite | null = null;
-  let director: Director | null = null;
   let listener: THREE.AudioListener | null = null;
   const slots: Slot[] = [];
-  const buffers = new Map<string, AudioBuffer | Promise<AudioBuffer | null>>();
+  const sets = new Map<Lang, LangSet>();
+  const asked = new Set<Lang>();
   const entries = new WeakMap<object, Entry>();
-  let unlocked = false, startedAt = -1, prefetched = false;
+  let unlocked = false, startedAt = -1;
+  let prefetched: Lang | null = null;
   const audio = () => engine.get<AudioApi>('audio');
   const clock = () => performance.now() / 1000;
 
-  void fetch(spriteUrl).then((r) => (r.ok ? r.json() : null)).then((s: Sprite | null) => {
-    if (!s) return;
-    sprite = s;
-    director = new Director(s, output);
-  }).catch(() => { /* no barks: people/ falls back to its shouts */ });
+  /** The current language's barks, fetching its list the first time (null until it is in). */
+  const current = (): LangSet | null => {
+    const l = lang(), got = sets.get(l);
+    if (got || asked.has(l)) return got ?? null;
+    asked.add(l);
+    void fetch(SPRITES[l]).then((r) => (r.ok ? r.json() : null)).then((s: Sprite | null) => {
+      if (!s) return;
+      const set: LangSet = { lang: l, sprite: s, director: null as unknown as Director, buffers: new Map() };
+      set.director = new Director(s, outputFor(set));
+      sets.set(l, set);
+    }).catch(() => { asked.delete(l); /* no barks: people/ falls back to its shouts */ });
+    return null;
+  };
+  current();
+  const anySprite = () => sets.get('zh')?.sprite ?? sets.get('en')?.sprite ?? null;
 
   const ctxOf = () => audio()?.context ?? null;
-  const load = (arch: Archetype): AudioBuffer | null => {
-    const a = sprite?.archetypes[arch], c = ctxOf();
+  const load = (set: LangSet, arch: Archetype): AudioBuffer | null => {
+    const { buffers } = set;
+    const a = set.sprite.archetypes[arch], c = ctxOf();
     if (!a || !c) return null;
     const b = buffers.get(arch);
     if (b instanceof AudioBuffer) return b;
@@ -67,13 +84,13 @@ export async function install(engine: Engine): Promise<void> {
     return null;
   };
 
-  const output: Output = {
+  const outputFor = (set: LangSet): Output => ({
     ready(arch) {
       if (!unlocked || audio()?.muted || engine.paused) return false;
-      return load(arch) !== null;
+      return load(set, arch) !== null;
     },
     play(line) {
-      const buf = load(line.speaker.archetype);
+      const buf = load(set, line.speaker.archetype);
       if (!buf || !listener) return;
       const now = clock();
       // A free voice; else one fading out; else the oldest.
@@ -94,7 +111,7 @@ export async function install(engine: Engine): Promise<void> {
       const src = a.source as AudioBufferSourceNode | null;
       if (src) src.onended = () => {
         a.onEnded();
-        if (slot.line === line) { slot.line = null; director?.ended(line); }
+        if (slot.line === line) { slot.line = null; set.director.ended(line); }
       };
     },
     stop(line) {
@@ -107,7 +124,7 @@ export async function install(engine: Engine): Promise<void> {
       a.stop(0.15);
       slot.until = clock() + 0.2;
     },
-  };
+  });
 
   /** Which entry a speaker belongs to (for its position). */
   const speakerPos = new WeakMap<Speaker, Entry>();
@@ -118,7 +135,7 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   const heard = (pos: { x: number; z: number }) => {
-    const cam = engine.camera.position, max = sprite?.playback.maxDistance ?? 45;
+    const cam = engine.camera.position, max = anySprite()?.playback.maxDistance ?? 45;
     return Math.hypot(pos.x - cam.x, pos.z - cam.z) <= max;
   };
 
@@ -127,12 +144,13 @@ export async function install(engine: Engine): Promise<void> {
     get rate() { return e.speaker.rate; },
     get speaking() { return !!e.speaker.line && !e.speaker.line.cut; },
     say(trigger, onDone) {
-      if (!director || !heard(e.pos)) return null;
-      director.now = clock();
-      const line = director.say(e.speaker, trigger, onDone);
+      const set = sets.get(e.lang);
+      if (!set || e.lang !== lang() || !heard(e.pos)) return null;
+      set.director.now = clock();
+      const line = set.director.say(e.speaker, trigger, onDone);
       return line ? line.clip.text : null;
     },
-    stop() { director?.silence(e.speaker); },
+    stop() { sets.get(e.lang)?.director.silence(e.speaker); },
   });
 
   // Landmarks' centres, for the tourists.
@@ -152,7 +170,7 @@ export async function install(engine: Engine): Promise<void> {
 
   const api: VoiceApi & { debug: Record<string, unknown> } = {
     name: 'voices',
-    get ready() { return unlocked && !!director; },
+    get ready() { return unlocked && !!current(); },
     unlock() {
       if (unlocked) return;
       const c = ctxOf(), out = audio()?.output;
@@ -166,9 +184,10 @@ export async function install(engine: Engine): Promise<void> {
       for (let i = 0; i < POOL; i++) {
         const a = new THREE.PositionalAudio(listener);
         a.setDistanceModel('inverse');
-        a.setRefDistance(sprite?.playback.refDistance ?? 4);
-        a.setRolloffFactor(sprite?.playback.rolloffFactor ?? 1.5);
-        a.setMaxDistance(sprite?.playback.maxDistance ?? 45);
+        const pb = anySprite()?.playback;
+        a.setRefDistance(pb?.refDistance ?? 4);
+        a.setRolloffFactor(pb?.rolloffFactor ?? 1.5);
+        a.setMaxDistance(pb?.maxDistance ?? 45);
         a.panner.panningModel = 'HRTF';
         a.name = 'voice';
         engine.scene.add(a);
@@ -178,14 +197,16 @@ export async function install(engine: Engine): Promise<void> {
     },
     npc(key, archetype, pos, opts) {
       const seed = opts?.seed ?? 0;
+      const set = current(), l = lang();
       let e = entries.get(key);
-      if (!e || e.seed !== seed || e.speaker.archetype !== archetype || !director) {
-        if (e && director) director.silence(e.speaker);
-        const speaker: Speaker = director?.speaker(archetype, opts?.sex ?? null, seed)
+      // A new person in the slot, or the language changed: a new speaker (the same seed gives the same voice and rate).
+      if (!e || e.seed !== seed || e.speaker.archetype !== archetype || e.lang !== l || !sets.has(e.lang)) {
+        if (e) sets.get(e.lang)?.director.silence(e.speaker);
+        const speaker: Speaker = set?.director.speaker(archetype, opts?.sex ?? null, seed)
           ?? { archetype, voiceIndex: 0, rate: 1, said: new Map(), line: null };
-        const ne: Entry = { speaker, seed, pos, voice: null as unknown as NpcVoice };
+        const ne: Entry = { speaker, seed, lang: l, pos, voice: null as unknown as NpcVoice };
         ne.voice = makeVoice(ne);
-        if (director) { entries.set(key, ne); speakerPos.set(speaker, ne); }
+        if (set) { entries.set(key, ne); speakerPos.set(speaker, ne); }
         e = ne;
       }
       e.pos = pos;
@@ -202,23 +223,26 @@ export async function install(engine: Engine): Promise<void> {
     },
     update() {
       panel.update();
-      if (!unlocked || !director) return;
-      if (startedAt >= 0 && !prefetched && clock() - startedAt > PREFETCH_AFTER) {
-        prefetched = true;
-        for (const a of ARCHETYPES) load(a);
+      const set = current();
+      if (!unlocked || !set) return;
+      if (startedAt >= 0 && prefetched !== set.lang && clock() - startedAt > PREFETCH_AFTER) {
+        prefetched = set.lang;   // (again after a change of language)
+        for (const a of ARCHETYPES) load(set, a);
       }
       for (const s of slots) if (s.line) place(s);
     },
     debug: {
       get slots() { return slots.map((s) => (s.line ? `${s.line.clip.id}#${s.line.clip.variant} x${s.line.rate.toFixed(2)}` : '-')); },
-      get speakers() { return director?.speakers ?? 0; },
-      get loaded() { return [...buffers.entries()].filter(([, b]) => b instanceof AudioBuffer).map(([k]) => k); },
-      load,
+      get speakers() { return current()?.director.speakers ?? 0; },
+      get loaded() { const set = current(); return set ? [...set.buffers.entries()].filter(([, b]) => b instanceof AudioBuffer).map(([k]) => k) : []; },
+      load: (arch: Archetype) => { const set = current(); return set ? load(set, arch) : null; },
     },
   };
 
   engine.events.on('game:start', () => { if (startedAt < 0) startedAt = clock(); });
-  engine.events.on('game:pause', ({ paused }) => { if (paused) director?.silenceAll(); });
+  engine.events.on('game:pause', ({ paused }) => { if (paused) for (const set of sets.values()) set.director.silenceAll(); });
+  // A change of language: what was being said in the other one stops; its barks load (current() fetches them).
+  onLangChange(() => { for (const set of sets.values()) set.director.silenceAll(); current(); });
 
   // A driver held up or hit leans on the horn, and now and then shouts out of the window too.
   const hornKeys = new WeakMap<object, number>();
@@ -251,6 +275,7 @@ export async function install(engine: Engine): Promise<void> {
     document.body.appendChild(el);
     let builtFor = '';
     const fill = () => {
+      const sprite = current()?.sprite;
       const key = `${lang()}|${!!sprite}`;
       if (builtFor === key) return;
       builtFor = key;
@@ -290,7 +315,7 @@ export async function install(engine: Engine): Promise<void> {
         engine.events.emit('people:report', { x: p.x, z: p.z });
       } : undefined);
       last = text ? `${v.archetype}: ${text}` : t('diag.voice.dropped');
-      if (!text) load(v.archetype);
+      if (!text) (api.debug.load as (a: Archetype) => unknown)(v.archetype);
     };
     go.addEventListener('click', fire);
     what.addEventListener('change', fire);
@@ -303,7 +328,8 @@ export async function install(engine: Engine): Promise<void> {
         if (el.hidden) return;
         fill();
         const loaded = (api.debug.loaded as string[]).join(',') || '-';
-        status.textContent = `${t('diag.voice.speakers')} ${director?.speakers ?? 0}/${sprite?.playback.maxConcurrentSpeakers ?? 3}  ${t('diag.voice.loaded')} ${loaded}\n${last}`;
+        const set = current();
+        status.textContent = `${t('diag.voice.speakers')} ${set?.director.speakers ?? 0}/${set?.sprite.playback.maxConcurrentSpeakers ?? 3}  ${t('diag.voice.loaded')} ${loaded}\n${last}`;
       },
     };
   })();

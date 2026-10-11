@@ -6,7 +6,9 @@
 // of an archetype are laid end to end with a gap of
 // silence between them as 16-bit PCM and encoded once - so every start and end in sprite.json is exact to the
 // sample. MP3, not Opus: iOS Safari's Opus support is poor.
-//   node scripts/voice/sprite.mjs [--lufs -16] [--tp -1.5] [--kbps 48] [--gap 0.3]
+//   node scripts/voice/sprite.mjs [--lang en] [--lufs -16] [--tp -1.5] [--kbps 48] [--gap 0.3]
+// --lang en packs the English recordings (assets/voice/raw-en, voice-gen --lang en) into <archetype>.en.mp3 and
+// sprite.en.json beside the Chinese ones, the clips' text from textEn.
 // Processed clips are cached in .cache/voice/norm (by the raw file's size, time and the settings), so a
 // re-run after adding clips only processes the new ones.
 import fs from 'node:fs';
@@ -15,7 +17,9 @@ import { eachParallel, LUFS, normalise, RATE, root, run, TP } from './norm.mjs';
 
 const LRA = 11;
 const VOICE = path.join(root, 'assets/voice');
-const RAW = path.join(VOICE, 'raw'), DIST = path.join(VOICE, 'dist'), CACHE = path.join(root, '.cache/voice/norm');
+const li = process.argv.indexOf('--lang'), LANG = li > 0 ? process.argv[li + 1] : 'zh', SFX = LANG === 'zh' ? '' : `.${LANG}`;
+const RAW = path.join(VOICE, LANG === 'zh' ? 'raw' : `raw-${LANG}`), DIST = path.join(VOICE, 'dist'), CACHE = path.join(root, '.cache/voice/norm');
+const textOf = (l) => (LANG === 'zh' ? l.text : l[`text${LANG[0].toUpperCase()}${LANG.slice(1)}`]);
 const arg = (name, def) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? Number(process.argv[i + 1]) : def; };
 const KBPS = arg('kbps', 48), GAP = arg('gap', 0.3);
 
@@ -30,7 +34,7 @@ for (const l of lines.lines) {
   voices.forEach((voice, vi) => {
     for (let n = 1; n <= (l.variants ?? variantsDefault); n++) {
       const file = path.join(RAW, `${l.id}_${voice}_${n}.mp3`);
-      if (fs.existsSync(file)) clips.push({ id: l.id, archetype: l.archetype, trigger: l.trigger, emotion: l.emotion, text: l.text, voice, voiceIndex: vi, variant: n, file });
+      if (fs.existsSync(file)) clips.push({ id: l.id, archetype: l.archetype, trigger: l.trigger, emotion: l.emotion, text: textOf(l), voice, voiceIndex: vi, variant: n, file });
       else missing.push(path.basename(file));
     }
   });
@@ -74,7 +78,7 @@ for (const arch of Object.keys(lines.archetypes)) {
   }
   const raw = path.join(CACHE, `${arch}.pcm`);
   fs.writeFileSync(raw, Buffer.concat(parts));
-  const file = `${arch}.mp3`;
+  const file = `${arch}${SFX}.mp3`;
   await run('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-f', 's16le', '-ar', String(RATE), '-ac', '1', '-i', raw, '-c:a', 'libmp3lame', '-b:a', `${KBPS}k`, '-write_xing', '1', path.join(DIST, file)]);
   fs.rmSync(raw);
   const A = lines.archetypes[arch];
@@ -82,5 +86,5 @@ for (const arch of Object.keys(lines.archetypes)) {
   sprite.archetypes[arch] = { name: A.name, rateRange: A.rateRange, voiceSex, file, duration: +(at / RATE).toFixed(4), clips: entries };
   console.log(`${arch}: ${entries.length} clips, ${(at / RATE).toFixed(1)} s, ${(fs.statSync(path.join(DIST, file)).size / 1024).toFixed(0)} KB`);
 }
-fs.writeFileSync(path.join(DIST, 'sprite.json'), JSON.stringify(sprite, null, 1) + '\n');
-console.log(`wrote ${path.relative(root, DIST)}/sprite.json (${clips.length} clips)`);
+fs.writeFileSync(path.join(DIST, `sprite${SFX}.json`), JSON.stringify(sprite, null, 1) + '\n');
+console.log(`wrote ${path.relative(root, DIST)}/sprite${SFX}.json (${clips.length} clips)`);

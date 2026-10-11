@@ -5,7 +5,8 @@ import type { VoiceSpec } from '../character/Voice';
  * Recorded lines: every NPC line and shout, recorded offline - with Microsoft's neural voices from 2026-10-05,
  * with Bailian CosyVoice since 2026-10-06 (「把对话框里的台词也换成 CosyVoice」: assets/voice/dialogue.json,
  * scripts/voice/dialogue.mts, tools/voice-gen, scripts/voice/dialogue-pack.mjs) - into
- * `public/voice/zh/<voice>/<key>.mp3` (~8 KB a line), fetched the first time someone says it. Six voices by
+ * `public/voice/<lang>/<voice>/<key>.mp3` (~8 KB a line; zh, and en since 2026-10-07 in the same voices), fetched
+ * the first time someone says it. Six voices by
  * sex and age (`classes`), a foreigner's, and each contact's own for their own lines (`characters`; `only`
  * lists the keys said by particular voices). A line arrives as its text, so the zh table is read backwards
  * (a line with a parameter by its template: 「去{place}」 matches 「去北京站」; its recording says it
@@ -14,7 +15,11 @@ import type { VoiceSpec } from '../character/Voice';
  * recording (English, HUD text) return false and go to Speech/Babble.
  */
 type Cls = string;
-interface Manifest { v: number; zh?: { classes: Cls[]; characters?: Cls[]; keys: string[]; only?: Record<string, Cls[]> } }
+interface Section { classes: Cls[]; characters?: Cls[]; keys: string[]; only?: Record<string, Cls[]> }
+/** A section per language (zh, and en since 2026-10-07: 「补录英文版」, recorded with the same voices). */
+type Manifest = { v: number } & Partial<Record<Lang, Section>>;
+/** A language's lines read backwards: text -> key, and the templated ones as patterns. */
+interface Lookup { exact: Map<string, string>; patterns: { re: RegExp; key: string }[] }
 
 /** Is a recorded dialogue line playing (or on its way)? dialogue/ holds the box open for it. */
 let lineBusyUntil = 0;
@@ -26,8 +31,7 @@ const TYPICAL: Record<string, number> = { my: 120, mm: 108, mo: 100, fy: 215, fm
 export class VoiceClips {
   private manifest: Manifest | null = null;
   private loading: Promise<void> | null = null;
-  private exact = new Map<string, string>();
-  private patterns: { re: RegExp; key: string }[] = [];
+  private lookups = new Map<Lang, Lookup>();
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private line: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private lineSeq = 0;
@@ -39,28 +43,35 @@ export class VoiceClips {
   prepare(): void {
     if (this.loading) return;
     this.loading = fetch(`${this.base}manifest.json`).then((r) => (r.ok ? r.json() : null)).then((m: Manifest | null) => {
-      if (!m?.zh) return;
+      if (!m) return;
       this.manifest = m;
-      const zh = STRINGS.zh as Record<string, string>;
-      for (const key of m.zh.keys) {
-        const s = zh[key as TKey];
-        if (!s) continue;
-        if (!s.includes('{')) { this.exact.set(s, key); continue; }
-        const re = s.split(/\{\w+\}/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.+?');
-        this.patterns.push({ re: new RegExp(`^${re}$`), key });
+      for (const lang of ['zh', 'en'] as Lang[]) {
+        const sec = m[lang];
+        if (!sec) continue;
+        const table = STRINGS[lang] as Record<string, string>, look: Lookup = { exact: new Map(), patterns: [] };
+        for (const key of sec.keys) {
+          const s = table[key as TKey];
+          if (!s) continue;
+          if (!s.includes('{')) { look.exact.set(s, key); continue; }
+          const re = s.split(/\{\w+\}/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.+?');
+          look.patterns.push({ re: new RegExp(`^${re}$`), key });
+        }
+        this.lookups.set(lang, look);
       }
     }).catch(() => { this.loading = null; });
   }
 
-  private keyOf(text: string): string | null {
-    const k = this.exact.get(text);
+  private keyOf(lang: Lang, text: string): string | null {
+    const look = this.lookups.get(lang);
+    if (!look) return null;
+    const k = look.exact.get(text);
     if (k) return k;
-    for (const p of this.patterns) if (p.re.test(text)) return p.key;
+    for (const p of look.patterns) if (p.re.test(text)) return p.key;
     return null;
   }
 
-  private classOf(key: string, v: VoiceSpec): Cls {
-    const only = this.manifest?.zh?.only?.[key];
+  private classOf(lang: Lang, key: string, v: VoiceSpec): Cls {
+    const only = this.manifest?.[lang]?.only?.[key];
     if (only?.length) return v.character && only.includes(v.character) ? v.character : only[0];
     const fem = (v.fem ?? (v.pitch > 160 ? 1 : 0)) > 0.5, age = v.age ?? 0.4;
     const band = age > 0.7 ? 'o' : age < 0.33 ? 'y' : 'm';
@@ -83,17 +94,17 @@ export class VoiceClips {
    * over whatever else is going on (three at most). Returns false when there is no recording for it.
    */
   play(c: AudioContext, out: AudioNode, text: string, v: VoiceSpec, lang: Lang, volume: number, pan: number, line: boolean): boolean {
-    if (lang !== 'zh' || !this.manifest) return false;
-    const key = this.keyOf(text);
+    if (!this.manifest) return false;
+    const key = this.keyOf(lang, text);
     if (!key) return false;
-    const cls = this.classOf(key, v);
+    const cls = this.classOf(lang, key, v);
     // A few per cent of their own pitch (and pace) round the recorded voice's.
     const rate = TYPICAL[cls] ? Math.max(0.94, Math.min(1.06, Math.pow(v.pitch / TYPICAL[cls], 0.35))) : 1;
     const asked = performance.now(), seq = line ? ++this.lineSeq : 0;
     if (line) { this.stopLine(c); lineBusyUntil = asked + 2500; }
     else if (this.shouts >= 3) return true;
     else this.shouts++;
-    void this.load(c, `${this.base}zh/${cls}/${key}.mp3`).then((buf) => {
+    void this.load(c, `${this.base}${lang}/${cls}/${key}.mp3`).then((buf) => {
       const late = performance.now() - asked;
       if (!line) this.shouts--;
       // A shout heard a second late is about something else by then; a line only while it is the box's.

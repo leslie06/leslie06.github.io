@@ -11,3 +11,5 @@ __pycache__/
 data/*.pbf
 data/*.zip
 data/*.tif
+# the NPC barks' packed sprites are source for the build (src/voice imports them), not build output
+!/assets/voice/dist/

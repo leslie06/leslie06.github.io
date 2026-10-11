@@ -32,6 +32,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,24 +60,31 @@ public final class VoiceGen {
       "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization");
   /** 180 a minute is the model's limit: keep a margin for retries and anything else on the key. */
   private static final RateLimiter LIMIT = new RateLimiter(160);
-  private static final int PARALLEL = 6;
+  private static final int PARALLEL = Integer.parseInt(env("VOICEGEN_PARALLEL", "6"));
+  private static final Duration CALL_TIMEOUT = Duration.ofSeconds(60);
+  private static final ExecutorService CALLS = Executors.newCachedThreadPool(r -> { Thread t = new Thread(r, "tts-call"); t.setDaemon(true); return t; });
 
   private final Path root, linesFile, rawDir, designDir, pageFile;
   private final JsonObject doc;
+  /** "zh" (the default: text, instruct, style) or "en" (textEn, instructEn, styleEn; recordings in *-en). */
+  private final String lang;
+  private final String sfx;
 
   /**
    * `lines` is a table in lines.json's shape (default assets/voice/lines.json). Its recordings go to raw/ for
    * lines.json and {name}-raw/ for any other ({name}-preview.html likewise); the design previews share design/.
    */
-  private VoiceGen(Path root, Path lines) throws IOException {
+  private VoiceGen(Path root, Path lines, String lang) throws IOException {
     this.root = root;
+    this.lang = lang;
+    this.sfx = lang.equals("zh") ? "" : "-" + lang;
     this.linesFile = lines != null ? lines.toAbsolutePath() : root.resolve("assets/voice/lines.json");
     String base = linesFile.getFileName().toString().replaceFirst("\\.json$", "");
     Path dir = linesFile.getParent();
     boolean main = base.equals("lines");
-    this.rawDir = dir.resolve(main ? "raw" : base + "-raw");
+    this.rawDir = dir.resolve((main ? "raw" : base + "-raw") + sfx);
     this.designDir = dir.resolve("design");
-    this.pageFile = dir.resolve(main ? "preview.html" : base + "-preview.html");
+    this.pageFile = dir.resolve((main ? "preview" : base + "-preview") + sfx + ".html");
     this.doc = JsonParser.parseString(Files.readString(linesFile)).getAsJsonObject();
   }
 
@@ -82,25 +93,27 @@ public final class VoiceGen {
     Set<String> only = new LinkedHashSet<>();
     boolean dry = false;
     Path root = null, lines = null;
+    String lang = "zh";
     for (int i = 1; i < args.length; i++) {
       switch (args[i]) {
         case "--archetypes" -> { for (String a : args[++i].split(",")) if (!a.isBlank()) only.add(a.trim()); }
         case "--dry-run" -> dry = true;
         case "--root" -> root = Path.of(args[++i]);
         case "--lines" -> lines = Path.of(args[++i]);
+        case "--lang" -> lang = args[++i];
         default -> { System.err.println("unknown option " + args[i]); System.exit(2); }
       }
     }
     if (root == null) root = findRoot();
     String ws = System.getenv("DASHSCOPE_WS_URL");
     if (ws != null && !ws.isBlank()) Constants.baseWebsocketApiUrl = ws;
-    VoiceGen g = new VoiceGen(root, lines);
+    VoiceGen g = new VoiceGen(root, lines, lang);
     int failed = switch (cmd) {
       case "design" -> g.design(only);
       case "synth" -> g.synth(only, dry);
       case "page" -> { g.page(); yield 0; }
       default -> {
-        System.out.println("usage: voice-gen design|synth|page [--lines file.json] [--archetypes uncle,driver] [--dry-run] [--root dir]");
+        System.out.println("usage: voice-gen design|synth|page [--lines file.json] [--lang zh|en] [--archetypes uncle,driver] [--dry-run] [--root dir]");
         yield 0;
       }
     };
@@ -198,7 +211,7 @@ public final class VoiceGen {
     JsonObject tts = tts();
     String model = tts.get("model").getAsString();
     int variantsDefault = tts.get("variantsDefault").getAsInt();
-    List<String> hints = strings(tts.getAsJsonArray("languageHints"));
+    List<String> hints = lang.equals("zh") ? strings(tts.getAsJsonArray("languageHints")) : List.of(lang);
     Map<String, JsonObject> archs = archetypes();
     List<Job> jobs = new ArrayList<>();
     int skipped = 0;
@@ -211,12 +224,14 @@ public final class VoiceGen {
       List<String> voices = strings(a.getAsJsonArray("voices"));
       if (voices.isEmpty()) { noVoices.add(arch); continue; }
       int variants = l.has("variants") ? l.get("variants").getAsInt() : variantsDefault;
-      String instruction = a.get("style").getAsString() + l.get("instruct").getAsString();
+      String text = field(l, "text"), style = field(a, "style"), instruct = field(l, "instruct");
+      if (text == null || style == null || instruct == null) continue;   // not written in this language
+      String instruction = lang.equals("zh") ? style + instruct : style + " " + instruct;
       for (String voice : voices) {
         for (int n = 1; n <= variants; n++) {
           Path out = rawDir.resolve(l.get("id").getAsString() + "_" + voice + "_" + n + ".mp3");
           if (Files.isRegularFile(out) && Files.size(out) > 0) { skipped++; continue; }
-          jobs.add(new Job(l.get("id").getAsString(), arch, voice, n, l.get("text").getAsString(), instruction, out));
+          jobs.add(new Job(l.get("id").getAsString(), arch, voice, n, text, instruction, out));
         }
       }
     }
@@ -227,6 +242,7 @@ public final class VoiceGen {
     String key = apiKey();
     Files.createDirectories(rawDir);
     AtomicInteger done = new AtomicInteger(), failed = new AtomicInteger();
+    java.util.concurrent.atomic.AtomicReference<String> fatal = new java.util.concurrent.atomic.AtomicReference<>();
     Semaphore slots = new Semaphore(PARALLEL);
     try (ExecutorService ex = Executors.newVirtualThreadPerTaskExecutor()) {
       List<Future<?>> fs = new ArrayList<>();
@@ -234,11 +250,14 @@ public final class VoiceGen {
         fs.add(ex.submit(() -> {
           slots.acquireUninterruptibly();
           try {
+            if (fatal.get() != null) return null;   // the account cannot synthesise: the rest are not tried
             byte[] audio = synthesizeWithRetry(key, model, hints, j);
             Path part = j.out.resolveSibling(j.out.getFileName() + ".part");
             Files.write(part, audio);
             Files.move(part, j.out, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             System.out.printf("[%d/%d] %s (%d KB)%n", done.incrementAndGet(), jobs.size(), j.out.getFileName(), audio.length / 1024);
+          } catch (AccountError e) {
+            if (fatal.compareAndSet(null, e.getMessage())) System.err.println("STOPPED: " + e.getMessage());
           } catch (Exception e) {
             failed.incrementAndGet();
             System.err.printf("FAILED %s: %s%n", j.out.getFileName(), e.getMessage());
@@ -250,8 +269,9 @@ public final class VoiceGen {
       }
       for (Future<?> f : fs) f.get();
     }
-    System.out.printf("done: %d made, %d failed%n", done.get(), failed.get());
-    return failed.get();
+    System.out.printf("done: %d made, %d failed%s%n", done.get(), failed.get(),
+        fatal.get() != null ? ", stopped (" + (jobs.size() - done.get() - failed.get()) + " left for the next run): " + fatal.get() : "");
+    return failed.get() + (fatal.get() != null ? 1 : 0);
   }
 
   private static byte[] synthesizeWithRetry(String key, String model, List<String> hints, Job j) throws Exception {
@@ -268,19 +288,30 @@ public final class VoiceGen {
           .build();
       SpeechSynthesizer s = new SpeechSynthesizer(p, null);   // a new one for every call (the SDK's rule)
       try {
-        ByteBuffer audio = s.call(j.text);
+        // The SDK's call() has no timeout of its own: a WebSocket the service never finishes held all six
+        // workers for good (2026-10-07, at 173 of 997). Give up on it after CALL_TIMEOUT and try again.
+        ByteBuffer audio = CompletableFuture.supplyAsync(() -> s.call(j.text), CALLS).get(CALL_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
         if (audio != null && audio.remaining() > 0) {
           byte[] b = new byte[audio.remaining()];
           audio.get(b);
           return b;
         }
         last = new IOException("empty audio");
+      } catch (TimeoutException e) {
+        last = new IOException("no answer in " + CALL_TIMEOUT.toSeconds() + " s");
+      } catch (ExecutionException e) {
+        last = e.getCause() instanceof Exception x ? x : e;
       } catch (Exception e) {
         last = e;
       } finally {
         try { s.getDuplexApi().close(1000, "bye"); } catch (Exception ignored) { /* already closed */ }
       }
       String m = String.valueOf(last.getMessage());
+      // Nothing a retry can fix: the account is in arrears, the key is wrong or has no access.
+      if (m.contains("Arrearage") || m.contains("InvalidApiKey") || m.contains("AccessDenied")) {
+        throw new AccountError(m.contains("Arrearage") ? "the Bailian account is in arrears (Arrearage): top it up, then run again"
+            : "the API key was refused: " + m);
+      }
       boolean throttled = m.contains("Throttl") || m.contains("429") || m.contains("RateQuota") || m.contains("limit");
       Thread.sleep((throttled ? 8000L : 2000L) * (attempt + 1));
     }
@@ -318,7 +349,7 @@ public final class VoiceGen {
       for (JsonObject l : lines) for (String v : voices) if (Files.exists(rawDir.resolve(l.get("id").getAsString() + "_" + v + "_1.mp3"))) any = true;
       if (!any) continue;
       h.append("<h2>").append(esc(a.get("name").getAsString())).append(" <span class=\"mut\">").append(esc(arch)).append("</span></h2>\n");
-      h.append("<p class=\"mut\">").append(esc(a.get("style").getAsString())).append("</p>\n");
+      h.append("<p class=\"mut\">").append(esc(String.valueOf(field(a, "style")))).append("</p>\n");
       JsonArray prompts = a.has("voiceDesign") ? a.getAsJsonArray("voiceDesign") : new JsonArray();
       for (int i = 0; i < voices.size(); i++) {
         Path pv = designDir.resolve(arch + "_" + (i + 1) + ".wav");
@@ -332,9 +363,10 @@ public final class VoiceGen {
       for (JsonObject l : lines) {
         String id = l.get("id").getAsString();
         int variants = l.has("variants") ? l.get("variants").getAsInt() : variantsDefault;
-        h.append("<div class=\"line\"><div class=\"txt\">").append(esc(l.get("text").getAsString())).append("</div>")
+        if (field(l, "text") == null) continue;
+        h.append("<div class=\"line\"><div class=\"txt\">").append(esc(field(l, "text"))).append("</div>")
             .append("<div class=\"mut\">").append(esc(id)).append(" · ").append(esc(l.get("trigger").getAsString()))
-            .append(" · ").append(esc(l.get("emotion").getAsString())).append(" · ").append(esc(l.get("instruct").getAsString())).append("</div>");
+            .append(" · ").append(esc(l.get("emotion").getAsString())).append(" · ").append(esc(String.valueOf(field(l, "instruct")))).append("</div>");
         for (int vi = 0; vi < voices.size(); vi++) {
           h.append("<div class=\"row\"><b>音色 ").append(vi + 1).append("</b>");
           for (int n = 1; n <= variants; n++) {
@@ -361,6 +393,12 @@ public final class VoiceGen {
   // ---------------------------------------------------------------- helpers
 
   private JsonObject tts() { return doc.getAsJsonObject("tts"); }
+
+  /** A field in this run's language: `text` or `textEn`; null when the line has none in it. */
+  private String field(JsonObject o, String name) {
+    String k = lang.equals("zh") ? name : name + Character.toUpperCase(lang.charAt(0)) + lang.substring(1);
+    return o.has(k) && !o.get(k).isJsonNull() ? o.get(k).getAsString() : null;
+  }
 
   private Map<String, JsonObject> archetypes() {
     Map<String, JsonObject> m = new LinkedHashMap<>();
@@ -403,6 +441,11 @@ public final class VoiceGen {
     System.err.println("assets/voice/lines.json not found here or above; pass --root");
     System.exit(2);
     return null;
+  }
+
+  /** The account cannot synthesise anything (arrears, a bad key): the run stops instead of retrying every line. */
+  static final class AccountError extends Exception {
+    AccountError(String m) { super(m); }
   }
 
   /** Requests spaced evenly under a per-minute cap, shared by every thread. */

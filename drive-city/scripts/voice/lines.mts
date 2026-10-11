@@ -34,13 +34,37 @@ const SPOKEN: Record<string, string> = {
   'npc.foreigner.wow': 'Wow！那是什么？Amazing！',
 };
 
+/** The same in English (the subtitle keeps the name there too). */
+const SPOKEN_EN: Record<string, string> = {
+  'pax.normal.board1': 'This address, please.',
+  'pax.normal.board2': 'Over there, and step on it!',
+  'pax.normal.board3': 'No rush, take it easy.',
+  'pax.rush.board': 'The station! My train leaves in twenty minutes!',
+  'pax.queasy.board': 'I get carsick... please drive gently.',
+  'pax.chatty.board': 'Off we go! So how long have you been driving, young man?',
+  'pax.chatty.lm1': 'See that? I used to come here as a boy.',
+  'pax.chatty.lm2': 'This area looked nothing like this back then.',
+  'pax.chatty.lm3': 'Let me tell you about... never mind, watch the road.',
+  'pax.streamer.board': 'Hey fam, taking a cab today!',
+  'pax.drunk.board': 'Take me to... uh... I am not drunk...',
+  'pax.mystery.board': "Don't ask. Drive.",
+  'pax.mystery.lost': "We're clean. Go.",
+  'life.chess.hint': "They say there's something worth seeing round here. Go and have a look?",
+  'npc.daijia.ask': "Had a few... drive my car home and I'll pay you. Deal?",
+  'npc.foreigner.ask': 'Excuse me, could you take me to this place?',
+  'npc.foreigner.wow': 'Wow! What is that? Amazing!',
+  // Not a parameter, a recording: 「BANG! Hahaha!」 in the drunk delivery failed in one voice (InternalError.Algo).
+  'pax.drunk.crash': 'Bang! Ha ha ha!',
+};
+
 const keys = new Set<string>([...Object.keys(NPC_ZH), ...Object.keys(STRINGS.zh).filter((k) => k.startsWith('shout.'))]);
-const out: { key: string; text: string }[] = [];
+const out: { key: string; text: string; textEn: string }[] = [];
 for (const key of [...keys].sort()) {
   const s = STRINGS.zh[key as TKey];
   if (!s || HUD.test(key) || SHOWN.test(key) || TOAST.test(s)) continue;
   if (!/[\p{L}\p{N}]/u.test(s)) continue;   // 「……」: nothing to say
-  if (/\{/.test(s)) { if (SPOKEN[key]) out.push({ key, text: SPOKEN[key] }); continue; }
-  out.push({ key, text: s });
+  const en = STRINGS.en[key as TKey];
+  if (/\{/.test(s)) { if (SPOKEN[key]) out.push({ key, text: SPOKEN[key], textEn: SPOKEN_EN[key] }); continue; }
+  out.push({ key, text: s, textEn: SPOKEN_EN[key] ?? en });
 }
 process.stdout.write(JSON.stringify(out, null, 1) + '\n');

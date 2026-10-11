@@ -18,7 +18,7 @@ import { execFileSync } from 'node:child_process';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
 const OUT = path.join(root, 'assets/voice/dialogue.json');
 const barks = JSON.parse(fs.readFileSync(path.join(root, 'assets/voice/lines.json'), 'utf8'));
-const lines: { key: string; text: string }[] = JSON.parse(execFileSync('npx', ['tsx', path.join(root, 'scripts/voice/lines.mts')], { cwd: root, encoding: 'utf8' }));
+const lines: { key: string; text: string; textEn: string }[] = JSON.parse(execFileSync('npx', ['tsx', path.join(root, 'scripts/voice/lines.mts')], { cwd: root, encoding: 'utf8' }));
 const old = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : null;
 
 /** A bark voice reused: archetype and which of its voices. */
@@ -27,21 +27,21 @@ const design = (prompt: string, previewText: string) => ({ voice: null as string
 
 const GENERAL = ['my', 'mm', 'mo', 'fy', 'fm', 'fo'];
 const CHARACTERS = ['laok', 'xiaoyu', 'daliu', 'wang', 'laozhang', 'liujie', 'feilong'];
-const VOICES: Record<string, { name: string; style: string; v: ReturnType<typeof reuse> | ReturnType<typeof design> }> = {
-  my: { name: '青年男', style: '二十多岁的北京小伙子，说话自然、口语化。', v: reuse('tourist', 0) },
-  mm: { name: '中年男', style: '四十来岁的北京爷们儿，京腔，说话直来直去。', v: reuse('driver', 0) },
-  mo: { name: '老年男', style: '七十岁左右的北京老大爷，京腔儿化音重，说话慢悠悠。', v: reuse('uncle', 0) },
-  fy: { name: '青年女', style: '二十多岁的年轻姑娘，普通话，说话自然、口语化。', v: reuse('tourist', 1) },
-  fm: { name: '中年女', style: '四十来岁的北京大姐，京腔，说话爽快。', v: design('中年女性，40 岁左右，北京口音，中音，音色明亮温和，语速中等，说话爽快利落、有亲和力。', '来啦？今儿吃点儿什么？这雨下的，出门忘带伞了。') },
-  fo: { name: '老年女', style: '六十多岁的北京大妈，嗓门大，说话热络。', v: reuse('auntie', 0) },
-  xm: { name: '外国游客', style: '来北京旅游的外国小伙子，中文不太流利，带明显的外国口音，英文部分是美式英语。', v: design('青年男性，25 岁左右，母语是英语的外国人，说中文发音生硬、声调不准，带明显的美式英语口音，语气热情友好、充满好奇。', 'Excuse me，请问，您能带我去天安门吗？Thank you so much！') },
-  laok: { name: '老K', style: '老K，六十岁上下的北京老江湖，做中间人生意，京腔，说话慢条斯理、不怒自威。', v: design('老年男性，60 岁左右，北京口音，音色低沉沙哑、有磁性，语速缓慢，说话沉稳，带江湖气。', '小子，来了？坐。这北京城啊，钱都在路上跑。') },
-  xiaoyu: { name: '小雨', style: '小雨，二十出头的技术宅姑娘，说话快、机灵、带点儿调皮。', v: design('青年女性，22 岁左右，音色清亮偏甜，语速偏快，说话机灵俏皮，标准普通话。', '哟，你怎么来了？我这正刷机呢，等会儿。') },
-  daliu: { name: '大刘', style: '大刘，四十多岁的修车师傅、老司机，京腔，憨厚爽快，爱吹当年。', v: design('中年男性，45 岁左右，北京口音，音色浑厚略粗，嗓门大，说话憨厚爽朗，语速中等。', '来啦！车怎么样？齐活儿！车给你弄好了。') },
-  wang: { name: '王队', style: '王队，五十岁的老刑警队长，声音沉稳威严，说话简短，略带警告。', v: design('中年男性，50 岁左右，音色低沉有力，吐字清晰，语速偏慢，严肃威严，带命令口吻。', '又是你。别给我惹事儿。我盯着你呢，好好开车。') },
-  laozhang: { name: '老张', style: '老张，七十岁的老出租车司机，京腔儿化音重，慢悠悠，和蔼爱唠叨。', v: design('老年男性，70 岁左右，北京口音很重，儿化音多，音色温和略沙哑，语速缓慢，和蔼爱唠叨。', '小伙子，跑出租啦？开出租就两条：嘴要甜，车要稳。') },
-  liujie: { name: '刘姐', style: '刘姐，四十多岁摆煎饼摊的大姐，京腔，热情麻利。', v: design('中年女性，45 岁左右，北京口音，嗓门亮，音色明快，语速偏快，热情麻利。', '来啦？今儿吃点儿什么？加个蛋不？薄脆给你多放点儿。') },
-  feilong: { name: '小飞龙', style: '小飞龙，十九岁的飙车小子，嚣张、语速快、爱挑衅。', v: design('青年男性，19 岁左右，音色清亮偏高，语速很快，语气嚣张、爱挑衅，带点儿痞气。', '哟，开出租的也敢来找我？三环上我叫小飞龙。') },
+const VOICES: Record<string, { name: string; style: string; styleEn?: string; v: ReturnType<typeof reuse> | ReturnType<typeof design> }> = {
+  my: { name: '青年男', style: '二十多岁的北京小伙子，说话自然、口语化。', styleEn: "A Beijing guy in his twenties, talking naturally and casually.", v: reuse('tourist', 0) },
+  mm: { name: '中年男', style: '四十来岁的北京爷们儿，京腔，说话直来直去。', styleEn: "A Beijing man in his forties, blunt and down to earth.", v: reuse('driver', 0) },
+  mo: { name: '老年男', style: '七十岁左右的北京老大爷，京腔儿化音重，说话慢悠悠。', styleEn: "An old Beijing man around seventy, speaking slowly and leisurely.", v: reuse('uncle', 0) },
+  fy: { name: '青年女', style: '二十多岁的年轻姑娘，普通话，说话自然、口语化。', styleEn: "A young woman in her twenties, talking naturally and casually.", v: reuse('tourist', 1) },
+  fm: { name: '中年女', style: '四十来岁的北京大姐，京腔，说话爽快。', styleEn: "A Beijing woman in her forties, brisk and straightforward.", v: design('中年女性，40 岁左右，北京口音，中音，音色明亮温和，语速中等，说话爽快利落、有亲和力。', '来啦？今儿吃点儿什么？这雨下的，出门忘带伞了。') },
+  fo: { name: '老年女', style: '六十多岁的北京大妈，嗓门大，说话热络。', styleEn: "A Beijing auntie in her sixties, loud and friendly.", v: reuse('auntie', 0) },
+  xm: { name: '外国游客', style: '来北京旅游的外国小伙子，中文不太流利，带明显的外国口音，英文部分是美式英语。', styleEn: "A young American tourist in Beijing, speaking his native American English, friendly and curious.", v: design('青年男性，25 岁左右，母语是英语的外国人，说中文发音生硬、声调不准，带明显的美式英语口音，语气热情友好、充满好奇。', 'Excuse me，请问，您能带我去天安门吗？Thank you so much！') },
+  laok: { name: '老K', style: '老K，六十岁上下的北京老江湖，做中间人生意，京腔，说话慢条斯理、不怒自威。', styleEn: "Old K, a Beijing fixer around sixty, unhurried, quietly menacing.", v: design('老年男性，60 岁左右，北京口音，音色低沉沙哑、有磁性，语速缓慢，说话沉稳，带江湖气。', '小子，来了？坐。这北京城啊，钱都在路上跑。') },
+  xiaoyu: { name: '小雨', style: '小雨，二十出头的技术宅姑娘，说话快、机灵、带点儿调皮。', styleEn: "Xiaoyu, a techie girl in her early twenties, quick, clever and a little cheeky.", v: design('青年女性，22 岁左右，音色清亮偏甜，语速偏快，说话机灵俏皮，标准普通话。', '哟，你怎么来了？我这正刷机呢，等会儿。') },
+  daliu: { name: '大刘', style: '大刘，四十多岁的修车师傅、老司机，京腔，憨厚爽快，爱吹当年。', styleEn: "Big Liu, a mechanic and veteran driver in his forties, hearty and plain-spoken, loves to brag about the old days.", v: design('中年男性，45 岁左右，北京口音，音色浑厚略粗，嗓门大，说话憨厚爽朗，语速中等。', '来啦！车怎么样？齐活儿！车给你弄好了。') },
+  wang: { name: '王队', style: '王队，五十岁的老刑警队长，声音沉稳威严，说话简短，略带警告。', styleEn: "Captain Wang, a veteran police captain of fifty, calm, stern, few words, a hint of warning.", v: design('中年男性，50 岁左右，音色低沉有力，吐字清晰，语速偏慢，严肃威严，带命令口吻。', '又是你。别给我惹事儿。我盯着你呢，好好开车。') },
+  laozhang: { name: '老张', style: '老张，七十岁的老出租车司机，京腔儿化音重，慢悠悠，和蔼爱唠叨。', styleEn: "Old Zhang, a cab driver of seventy, slow, kindly and chatty.", v: design('老年男性，70 岁左右，北京口音很重，儿化音多，音色温和略沙哑，语速缓慢，和蔼爱唠叨。', '小伙子，跑出租啦？开出租就两条：嘴要甜，车要稳。') },
+  liujie: { name: '刘姐', style: '刘姐，四十多岁摆煎饼摊的大姐，京腔，热情麻利。', styleEn: "Sister Liu, a jianbing stall owner in her forties, warm and brisk.", v: design('中年女性，45 岁左右，北京口音，嗓门亮，音色明快，语速偏快，热情麻利。', '来啦？今儿吃点儿什么？加个蛋不？薄脆给你多放点儿。') },
+  feilong: { name: '小飞龙', style: '小飞龙，十九岁的飙车小子，嚣张、语速快、爱挑衅。', styleEn: "Little Dragon, a nineteen-year-old street racer, cocky, fast-talking and provocative.", v: design('青年男性，19 岁左右，音色清亮偏高，语速很快，语气嚣张、爱挑衅，带点儿痞气。', '哟，开出租的也敢来找我？三环上我叫小飞龙。') },
 };
 
 /** How each line is said: by key, else by the longest matching prefix. */
@@ -90,12 +90,53 @@ const INSTRUCT: Record<string, string> = {
   // shouts
   'shout.call': '对着电话大声喊。', 'shout.hit': '被撞，疼得大叫。', 'shout.scare': '受惊后大声骂。', 'shout.shove': '被推了一把，不满地喊。',
 };
-const instructOf = (key: string) => {
-  if (INSTRUCT[key]) return INSTRUCT[key];
+/** The same deliveries for the English recordings (CosyVoice takes them better in the text's own language). */
+const INSTRUCT_EN: Record<string, string> = {
+  'con.laok.greet': 'Unhurried greeting, a streetwise edge.', 'con.laok.chat1': 'Musing, meaningfully.', 'con.laok.chat2': 'Earnest advice.',
+  'con.xiaoyu.greet': 'A little surprised, busy with her hands, casual.', 'con.xiaoyu.chat1': 'Smugly, half whispering.', 'con.xiaoyu.chat2': 'Breezy promise.',
+  'con.daliu.greet': 'Loud, warm greeting.', 'con.daliu.chat1': 'Bragging about the old days.', 'con.daliu.chat2': 'Serious advice.', 'con.daliu.repaired': 'Brisk and a bit proud.',
+  'con.wang.greet': 'Cold, with a warning.', 'con.wang.chat1': 'A stern warning.', 'con.wang.chat2': 'Low voice, a reminder.',
+  'con.laozhang.greet': 'Kindly greeting.', 'con.laozhang.chat1': 'Passing on experience, slowly.', 'con.laozhang.chat2': 'Chuckling, sharing his wisdom.',
+  'con.liujie.greet': 'Warmly welcoming a customer.', 'con.liujie.chat1': 'Proud, a little mysterious.', 'con.liujie.free': 'Generously pressing it into your hands.',
+  'con.feilong.greet': 'Sneering challenge.', 'con.feilong.chat1': 'Cocky bragging.', 'con.feilong.duelOn': 'Excited, accepting the challenge.', 'con.feilong.lost': 'Mocking laughter.',
+  'con.feilong.noCar': 'Scornful.', 'con.feilong.pink': 'Grudgingly conceding, then wholehearted.', 'con.feilong.won': 'Sore loser, defiant.',
+  'con.noTask': 'Casual.',
+  'event.blackShout': 'Leaning out of a car window, touting for fares.',
+  'life.bbq.buy': 'Calling back cheerfully.', 'life.bbq.toast': 'Raising a glass, hearty.', 'life.busker.thanks': 'Happy thanks.', 'life.chess.none': "Without looking up, impatient.",
+  'life.dance.bad': 'Kind reassurance.', 'life.dance.good': 'Happy praise.', 'life.dance.join': 'Warm invitation.', 'life.dance.scatter1': 'Startled, complaining loudly.', 'life.dance.scatter2': 'Still shaken, hand on her chest.',
+  'life.jianbing.buy': 'Brisk and friendly.', 'life.police.stop': 'After a whistle, a loud order to stop.', 'life.taichi.join': 'Slow, calm guidance.',
+  'life.tour.ask': 'Polite request.', 'life.tour.guide': 'Calling out through a little megaphone.', 'life.tour.thanks': 'Happy thanks.',
+  'npc.bark.praise': 'Cheering excitedly.', 'npc.bark.wanted': 'Pointing and shouting.',
+  'npc.chat.day1': 'Idle small talk.', 'npc.chat.day2': 'Helpful and proud.', 'npc.chat.day3': 'Grumbling.', 'npc.chat.day4': 'Letting you in on a secret.', 'npc.chat.day5': 'A friendly warning.', 'npc.chat.day6': 'Politely making way.',
+  'npc.chat.morning': 'Warm greeting.', 'npc.chat.night': 'A little surprised.', 'npc.chat.rain': 'Resigned complaint.', 'npc.chat.wanted': 'Nervous, stammering.',
+  'npc.courier.ask': 'Wincing in pain, urgent and pleading.', 'npc.courier.thanks': 'Relieved, then hurrying you.',
+  'npc.daijia.wave': 'Drunk, waving and calling out.', 'npc.daijia.bump': 'Crying out, worried about his car.', 'npc.daijia.done': 'Drunk, mumbled thanks.', 'npc.daijia.ride1': 'Drunk mumbling.', 'npc.daijia.ride2': 'Drunk, starting to ramble.', 'npc.daijia.ride3': 'Hiccupping, groggy.',
+  'npc.foreigner.ask': 'Polite, a little nervous.', 'npc.foreigner.done': 'Very grateful and warm.', 'npc.foreigner.wave': 'Waving and calling out.', 'npc.foreigner.wow': 'Amazed, very excited.',
+  'npc.preg.ask': 'Frantic shouting.', 'npc.preg.wave': 'Flagging down a cab in a panic.', 'npc.preg.air': 'Shocked and angry.', 'npc.preg.bump1': 'Moaning in pain.', 'npc.preg.bump2': 'Nervously pleading.',
+  'npc.preg.done': 'Overjoyed and grateful.', 'npc.preg.late': 'Panting in pain.', 'npc.preg.ride1': 'Breathing deeply in rhythm.', 'npc.preg.ride2': 'Anxious question.', 'npc.preg.ride3': 'Scared, voice shaking.', 'npc.preg.ride4': 'Forcing calm, reassuring.',
+  'npc.rage.ask': 'Aggressive demand.', 'npc.rage.down': 'Holding his face, bitter.', 'npc.rage.film': 'Furious threat.', 'npc.rage.left': 'Roaring after the car.',
+  'npc.rage.out1': 'Raging.', 'npc.rage.out2': 'Banging on the window, roaring.', 'npc.rage.out3': 'Heartbroken and furious.', 'npc.rage.paid': 'Still angry, lecturing.', 'npc.rage.punch': 'Vicious.',
+  'npc.scam.cam1': 'Unhurried, a little smug.', 'npc.scam.cam2': 'Awkwardly backpedalling.', 'npc.scam.demand': 'Bullying, loud.', 'npc.scam.fall1': 'Wailing theatrically.', 'npc.scam.fall2': 'Howling theatrically.',
+  'npc.scam.hit': 'Actually hit this time, shocked and hurting.', 'npc.scam.paid': 'Smug, all smiles.', 'npc.scam.paidShort': 'Muttering that it is not enough.', 'npc.scam.report': 'Throwing a tantrum.',
+  'npc.tail.ask': 'Low voice, tense and urgent.', 'npc.tail.close': 'Tense, hushed warning.', 'npc.tail.done': 'Through gritted teeth, then relieved.', 'npc.tail.far': 'Anxious, hurrying.', 'npc.tail.spotted': 'Alarmed.', 'npc.tail.wave': 'Hailing a cab loudly.',
+  'npc.thief.angry': 'Angry accusation.', 'npc.thief.ask': 'Calm.', 'npc.thief.cry': 'Panicked shouting.', 'npc.thief.down': 'Begging, flustered.', 'npc.thief.taunt': 'Taunting smugly while running.',
+  'npc.thief.thanks1': 'Overwhelmed with gratitude.', 'npc.thief.thanks2': 'Sincerely pressing money on you.',
+  'pax.normal.board': 'An ordinary passenger giving the address.', 'pax.normal.board2': 'In a hurry.', 'pax.normal.board3': 'Polite request.', 'pax.normal.air': 'Screaming in fright.', 'pax.normal.arrive': 'Polite thanks.',
+  'pax.normal.crash': 'Startled, complaining.', 'pax.normal.drift': 'Impressed.', 'pax.normal.near': 'Exclaiming.', 'pax.normal.redlight': 'Nervous shout.',
+  'pax.rush': 'Anxious, talking fast.', 'pax.rush.arrive': 'Hugely relieved, overjoyed.', 'pax.rush.near': 'Excited cheering.', 'pax.rush.drift': 'Excited cheering.', 'pax.rush.redlight': 'Thrilled cheering.', 'pax.rush.slow2': 'Fretting, muttering.',
+  'pax.queasy': 'Carsick and miserable, weak.', 'pax.queasy.calm': 'Recovered, sincere thanks.', 'pax.queasy.air': 'About to throw up, retching.',
+  'pax.chatty': 'A talkative old man, chatting leisurely.', 'pax.chatty.air': 'Startled, clutching his back.', 'pax.chatty.near': 'Amazed, then praising.', 'pax.chatty.drift': 'Laughing, scolding gently.', 'pax.chatty.redlight': 'Shaking his head, lecturing.', 'pax.chatty.arrive': 'Contented.', 'pax.chatty.crash': 'Waving it off, unbothered.',
+  'pax.streamer': 'Livestreaming to her phone, excited and over the top.', 'pax.streamer.crash': 'Flustered, talking to the camera.', 'pax.streamer.redlight': 'Guilty, quietly.',
+  'pax.drunk': 'Very drunk, slurring.', 'pax.drunk.vomit': 'Vomiting.', 'pax.drunk.air': 'Hiccup.', 'pax.drunk.crash': 'Drunk giggling.', 'pax.drunk.near': 'Drunk, egging you on.',
+  'pax.mystery': 'Cold and low, few words.',
+  'shout.call': 'Shouting into a phone.', 'shout.hit': 'Hit, crying out in pain.', 'shout.scare': 'Startled, swearing loudly.', 'shout.shove': 'Shoved, complaining.',
+};
+const instructOf = (key: string, table = INSTRUCT) => {
+  if (table[key]) return table[key];
   let best = '';
-  for (const k of Object.keys(INSTRUCT)) if (key.startsWith(k) && k.length > best.length) best = k;
+  for (const k of Object.keys(table)) if (key.startsWith(k) && k.length > best.length) best = k;
   if (!best) throw new Error(`no delivery for ${key}`);
-  return INSTRUCT[best];
+  return table[best];
 };
 
 /** Who says a line: one contact (and the foreigner) in their own voice; everything else in the six. */
@@ -116,6 +157,7 @@ for (const [id, v] of Object.entries(VOICES)) {
     voices: kept?.length ? kept : v.v.voice ? [v.v.voice] : [],
     voiceDesign: [v.v.design],
     style: v.style,
+    styleEn: v.styleEn,
     rateRange: [1, 1],
   };
 }
@@ -124,7 +166,7 @@ const out = {
   _note: '对话框和路人台词（由 scripts/voice/dialogue.mts 生成，别手改：改台词改 core/i18n，改语气改脚本里的 INSTRUCT）。每句 × 说它的音色各录 1 个版本。',
   tts: { ...barks.tts, variantsDefault: 1 },
   archetypes,
-  lines: lines.flatMap((l) => voicesOf(l.key).map((v) => ({ id: l.key, archetype: v, trigger: 'dialogue', emotion: 'neutral', text: l.text, instruct: instructOf(l.key) }))),
+  lines: lines.flatMap((l) => voicesOf(l.key).map((v) => ({ id: l.key, archetype: v, trigger: 'dialogue', emotion: 'neutral', text: l.text, instruct: instructOf(l.key), textEn: l.textEn, instructEn: instructOf(l.key, INSTRUCT_EN) }))),
 };
 fs.writeFileSync(OUT, JSON.stringify(out, null, 1) + '\n');
 console.log(`${lines.length} lines, ${out.lines.length} recordings, ${Object.keys(VOICES).length} voices -> ${path.relative(root, OUT)}`);
