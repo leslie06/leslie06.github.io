@@ -4,8 +4,8 @@ import { statsEndpoint } from './Leaderboard';
 /**
  * How many are playing (2026-10-11, 「添加在线玩家人数」): the site's stats service counts the sessions whose page
  * sent its heartbeat (the stats snippet in index.html, every 15 s) within the last 45 s, and the devices that
- * played today (`stats/worker.js` `GET /online`). Asked every 30 s while the title or pause screen is up (and once
- * at the start), never while driving; the menu shows it (`onChange`). Off where the leaderboards are (a dev server,
+ * played today (`stats/worker.js` `GET /online`). Asked at the start, then every 30 s while the title or pause screen
+ * is up and every minute while playing; the menu shows it (`onChange`) and the radar reads `online` (ui/Minimap.ts). Off where the leaderboards are (a dev server,
  * shot mode), and silent when the service cannot be reached.
  */
 export interface PresenceApi extends System {
@@ -41,8 +41,9 @@ export function install(engine: Engine): PresenceApi | null {
       // wall-clock time: the engine hands systems dt = 0 while paused
       const ui = engine.get<System & { state: string }>('ui');
       const menu = ui?.state === 'title' || ui?.state === 'paused';
-      if (!menu || document.visibilityState !== 'visible' || busy || performance.now() < next) return;
-      next = performance.now() + EVERY * 1000;
+      if (document.visibilityState !== 'visible' || busy || performance.now() < next) return;
+      // every 30 s with a menu up, every minute while playing (the radar shows it too)
+      next = performance.now() + (menu ? EVERY : EVERY * 2) * 1000;
       void ask();
     },
   };

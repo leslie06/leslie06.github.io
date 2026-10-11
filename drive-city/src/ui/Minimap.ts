@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
-import { lang, t, type TKey } from '../core/I18n';
+import { lang, onLangChange, t, type TKey } from '../core/I18n';
 import type { PlayerApi, VehicleApi } from '../game/Contracts';
 import type { NavSystem } from '../nav';
+import type { PresenceApi } from '../online/Presence';
 import { TIERS, type AreaCell, type RoadCell } from '../nav/MapData';
 import type { TurnKind } from '../nav/Turns';
 import { BLIP_COLOR, INK, drawBlip, drawEdgeArrow, drawPlayer, screenAngle, type MarkKind } from '../nav/Draw';
@@ -26,6 +27,13 @@ css(`
 .minimap .turn .a b{font:800 15px/1 ${F.num};font-variant-numeric:tabular-nums;color:${C.yellow};margin-right:6px}
 .minimap .turn .r{font:600 11px/1 ${F.ui};color:${C.muted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .minimap .turn .r:empty{display:none}
+.minimap .online{position:absolute;left:calc(100% + 8px);top:2px;display:flex;align-items:center;gap:6px;padding:4px 9px 4px 8px;border-radius:999px;background:rgba(15,18,20,.72);
+  box-shadow:inset 0 0 0 1px rgba(244,241,232,.14);font:700 12px/1 ${F.ui};color:${C.paper};white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.minimap .online::before{content:"";width:7px;height:7px;border-radius:50%;background:#3ccf6e;box-shadow:0 0 6px #3ccf6e}
+.minimap .online b{font:800 13px/1 ${F.num};font-variant-numeric:tabular-nums}
+.minimap .online[hidden]{display:none}
+.dc-touch .minimap .online{font-size:10px;padding:3px 7px 3px 6px;left:calc(100% + 5px)}
+.dc-touch .minimap .online b{font-size:11px}
 .minimap .bar .l{font:700 11px/1 ${F.ui};letter-spacing:.14em;color:${C.muted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
 `);
 
@@ -98,6 +106,8 @@ export class Minimap implements System {
   private readonly roads: RoadCell[] = [];
   private readonly areas: AreaCell[] = [];
   private readonly labels = new Labeller(LABELS);
+  private onlineEl!: HTMLElement;
+  private onlineN: number | null = null;
 
   constructor(private engine: Engine, private host: HTMLElement) {
     this.root = el('div', 'minimap');
@@ -113,6 +123,10 @@ export class Minimap implements System {
     this.turnR = el('span', 'r', col);
     this.turnEl.hidden = true;
     this.ctx = this.canvas.getContext('2d')!;
+    // How many are playing (online/Presence.ts), beside the radar's top edge.
+    this.onlineEl = el('div', 'online', this.root);
+    this.onlineEl.hidden = true;
+    onLangChange(() => { this.onlineN = -1; });   // drawn again in the new language
     this.bar = el('div', 'bar', this.root);
     this.barD = el('span', 'd', this.bar);
     this.barL = el('span', 'l', this.bar);
@@ -130,6 +144,12 @@ export class Minimap implements System {
   private get nav(): NavSystem | undefined { return this.engine.get<NavSystem>('nav'); }
 
   update(dt: number): void {
+    const pr = this.engine.get<PresenceApi>('presence'), n = pr?.online ?? null;
+    if (n !== this.onlineN) {
+      this.onlineN = n;
+      this.onlineEl.hidden = n === null;
+      if (n !== null) this.onlineEl.innerHTML = t('online.radar', { n: `<b>${n}</b>` });
+    }
     const nav = this.nav;
     if (!nav || this.host.hidden || nav.mapOpen) return;
     // Zoom: metres of map height on screen, opening up with speed.
