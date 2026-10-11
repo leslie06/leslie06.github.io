@@ -57,8 +57,9 @@ export async function install(engine: Engine): Promise<void> {
 
   function build(c: AudioContext): void {
     master = c.createGain(); master.gain.value = muted ? 0 : 0.8; master.connect(c.destination);
-    // Keep driving sounds below voices and music, including at full throttle.
-    const drivingGain = c.createGain(); drivingGain.gain.value = 0.5; drivingGain.connect(master);
+    // Keep driving sounds below voices and music, including at full throttle: engine, intake, tyres, wind and nitro.
+    // 0.5 on 2026-10-08, still too loud (「开车声音太大」, 2026-10-11): 0.25, another -6 dB.
+    const drivingGain = c.createGain(); drivingGain.gain.value = 0.25; drivingGain.connect(master);
     noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
