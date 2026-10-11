@@ -106,6 +106,8 @@ export async function install(engine: Engine): Promise<void> {
   const nav = () => engine.get<NavApi>('nav');
 
   engine.events.on('game:start', () => {
+    // The first open-world adventure is the default opening; the old getaway is still opt-in.
+    if (q !== '1' && engine.get<{ name: string; available: boolean }>('adventure')?.available) return;
     if (q === '0' || (shotMode && q !== '1')) return;
     if (q !== '1' && (done() || engine.get<GarageApi>('garage')?.profile)) return;
     void begin();

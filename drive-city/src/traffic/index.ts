@@ -42,6 +42,8 @@ interface Npc {
 }
 
 export interface TrafficApi extends TrafficCars {
+  /** Cars simulated by a persistent event rather than the distance-limited traffic pool. */
+  addExternalCars(provider: { cars(): Vehicle[]; canTake(car: Vehicle): boolean; take(car: Vehicle): CarLook | null; park(car: Vehicle): boolean }): void;
   readonly graph: LaneGraph;
   readonly signals: Signals;
   /** Active traffic cars (physics objects). */
@@ -126,6 +128,7 @@ export async function install(engine: Engine): Promise<void> {
   const rng = new Rng(4242);
   const rnd = () => rng.next();
   const pool: Npc[] = [];
+  const externalCars: Parameters<TrafficApi['addExternalCars']>[0][] = [];
   // Cars the pool let go of (a parked car took their slot), reused before building new ones:
   // removing Rapier bodies would free collider handles that stale tags could then point at.
   const spares = new Map<BodyType, Vehicle[]>();
@@ -393,7 +396,8 @@ export async function install(engine: Engine): Promise<void> {
     name: 'traffic',
     graph: g, signals: sig, lineStats, riderCap: RIDERS,
     get time() { return t; },
-    cars: () => pool.filter((n) => n.active).map((n) => n.car),
+    addExternalCars: (provider) => { externalCars.push(provider); },
+    cars: () => [...pool.filter((n) => n.active).map((n) => n.car), ...externalCars.flatMap((p) => p.cars())],
     nearestCar(x, z, r) {
       let best: Vehicle | null = null, bd = r;
       for (const n of pool) {
@@ -401,9 +405,15 @@ export async function install(engine: Engine): Promise<void> {
         const d = Math.hypot(n.car.pos.x - x, n.car.pos.z - z);
         if (d < bd) { bd = d; best = n.car; }
       }
+      for (const provider of externalCars) for (const car of provider.cars()) {
+        if (!provider.canTake(car)) continue;
+        const d = Math.hypot(car.pos.x - x, car.pos.z - z);
+        if (d < bd) { bd = d; best = car; }
+      }
       return best;
     },
     takeCar(car) {
+      for (const provider of externalCars) { const look = provider.take(car); if (look) return look; }
       const i = pool.findIndex((n) => n.active && n.car === car);
       if (i < 0) return null;
       const n = pool[i];
@@ -466,6 +476,7 @@ export async function install(engine: Engine): Promise<void> {
       return car;
     },
     parkCar(car, look) {
+      if (externalCars.some((provider) => provider.park(car))) return;
       const parked = pool.filter((n) => n.parked && !n.bike);
       if (parked.length >= MAX_PARKED) despawn(parked[0]);
       const body = look.body ?? bodyOfSpec(car.spec);

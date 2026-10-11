@@ -21,18 +21,20 @@ export const LANGS: readonly Lang[] = ['zh', 'en'];
 export const LANG_NAME: Record<Lang, string> = { zh: '中文', en: 'EN' };
 
 import { NPC_EN, NPC_ZH } from './i18n/npc';
+import { ADVENTURE_EN, ADVENTURE_ZH } from './i18n/adventure';
 
 const STORE_KEY = 'drivecity.lang.v1';
 
 const EN = {
   ...NPC_EN,
+  ...ADVENTURE_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
-  'title.start': 'START DRIVING',
+  'title.start': 'ENTER THE CITY',
   'title.resume': 'RESUME',
   'title.loading': 'LOADING',
-  'title.note': 'Drive a taxi and pick up fares. Get out anywhere, take any car, and keep the police off your back.',
+  'title.note': 'Explore the streets, follow clues and choose your approach. Open Nearby on your phone to find an adventure; get out to investigate and meet people.',
   'title.controls': 'CONTROLS',
 
   'ctl.drive': 'Accelerate / brake · reverse',
@@ -328,7 +330,7 @@ const EN = {
   'stunt.shortcut': "HUTONG",
   'stunt.takedown': "COP TAKEDOWN",
   'shortcut.found': "Hutong shortcut found · {i}/{of} · +¥{n} (saves {km} km)",
-  'ctl.phone': "Phone: text messages",
+  'ctl.phone': "Phone: nearby adventures / messages",
   'touch.phone': "💬",
   'lb.title': "LEADERBOARDS",
   'lb.you': "Your name",
@@ -416,13 +418,14 @@ export type TParams = Record<string, string | number>;
 
 const ZH: Record<TKey, string> = {
   ...NPC_ZH,
+  ...ADVENTURE_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',
-  'title.start': '开始驾驶',
+  'title.start': '进入城市',
   'title.resume': '继续',
   'title.loading': '加载中',
-  'title.note': '开着出租车拉活儿。随时下车、随手抢车，别让警察盯上你。',
+  'title.note': '探索街头，查找线索，自己选择办法。打开手机里的「附近」找冒险，下车调查、与人交涉。',
   'title.controls': '操作',
 
   'ctl.drive': '油门 / 刹车 · 倒车',
@@ -718,7 +721,7 @@ const ZH: Record<TKey, string> = {
   'stunt.shortcut': "穿胡同",
   'stunt.takedown': "撞毁警车",
   'shortcut.found': "发现胡同捷径 · {i}/{of} · +¥{n}（省了 {km} 公里）",
-  'ctl.phone': "手机：看短信",
+  'ctl.phone': "手机：附近冒险 / 短信",
   'touch.phone': "💬",
   'lb.title': "排行榜",
   'lb.you': "你的名字",

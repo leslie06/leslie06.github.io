@@ -7,7 +7,7 @@ import type { Crowd } from '../character/Crowd';
 import type { System } from '../core/Engine';
 import type { Vehicle } from '../vehicle/Vehicle';
 import type { VehicleControls } from '../vehicle/ControlFilter';
-import type { CarModel } from '../vehicle/CarModel';
+import type { CarModel, Livery } from '../vehicle/CarModel';
 import type { BodyType } from '../vehicle/Bodies';
 import type { PathPilot, PilotOptions } from '../vehicle/Autopilot';
 import type { Props } from '../world/Props';
@@ -32,7 +32,10 @@ export interface DriftState {
 }
 
 /** A car's paint: golden top + company colour for taxis, one colour for private cars. */
-export interface CarLook { upper: THREE.Color; lower: THREE.Color; taxi: boolean; /** Was standing parked (not driven by anyone) when taken. */ parked?: boolean; /** Which body the car is; the player's model is rebuilt when it changes. */ body?: BodyType }
+export interface CarLook { upper: THREE.Color; lower: THREE.Color; taxi: boolean; parked?: boolean; body?: BodyType; /** Special vehicles keep their identity when taken or left parked. */ livery?: Livery }
+
+/** Persistent street adventure; other mission systems yield while its encounter runs. */
+export interface AdventureApi extends System { readonly active: boolean; readonly available: boolean; openNearby(): void; }
 
 export interface VehicleApi extends System {
   /** The player's current car (drawn with the full model). Changes when the player takes another. */

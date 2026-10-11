@@ -250,6 +250,7 @@ export async function install(engine: Engine): Promise<void> {
       skipInside: () => { if (heist === 'go' || heist === 'inside') heistOut(); },
     },
     fixedUpdate(dt) {
+      if (engine.get<{ name: string; active: boolean }>('adventure')?.active) return;
       clock += dt;
       // The outbox: texts arrive on their own clock, with a ding.
       for (let i = 0; i < outbox.length; i++) {
@@ -330,7 +331,7 @@ export async function install(engine: Engine): Promise<void> {
     },
     update(dt) {
       const ch = chapter(), ui = engine.get<{ name: string; state: string }>('ui')?.state;
-      if (engine.input.state.phonePressed) phone.toggle();
+      if (engine.input.state.phonePressed && !engine.get('adventure')) phone.toggle();
       phone.clock = () => {
         const h = engine.get<RenderApi>('render')?.timeOfDay ?? 12;
         return `${Math.floor(h)}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
@@ -346,7 +347,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       phone.setTask(who ? sender(who) : null, text);
       taskNow = who && text ? { who, text } : null;
-      phone.update(dt, ui === 'playing');
+      phone.update(dt, ui === 'playing' && (!engine.get<{ name: string; active: boolean }>('adventure')?.active || phone.open));
       // Scouting: a ring at each place still to photograph.
       if (ch === 'scout' && phase === 'task') spots().forEach((s, i) => { if (visited[i]) markers[i].hide(); else markers[i].show(s.x, s.z, '#5ac8fa'); });
       for (const m of markers) m.update(dt);

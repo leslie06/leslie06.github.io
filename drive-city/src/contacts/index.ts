@@ -29,6 +29,9 @@ const PERKS: Partial<Record<ContactId, [number, TKey][]>> = {
 const NEAR = 240;
 
 export interface ContactsApi extends System {
+  appearance(id: ContactId): Look;
+  reserve(id: ContactId, reserved: boolean): void;
+  addFriendship(id: ContactId, points: number): void;
   /** Hearts 0..5. */
   hearts(id: ContactId): number;
   /** The perk of `id` that comes at `n` hearts is on. */
@@ -138,6 +141,7 @@ export async function install(engine: Engine): Promise<void> {
     }
     return { d, x, z, yaw, actor: null, chatted: false, looks: d.look(rnd), bodies: [], k: k ? { link: k.link, s: k.s, side: k.side } : null, settled: false };
   });
+  const reserved = new Set<ContactId>();
 
   // Their voice carries who they are: their lines are recorded in their own voice (audio/VoiceClips.ts).
   const speakerOf = (h: Here): Speaker => ({ name: `${t(h.d.name)} ${heartText(heartsOf(h.d.id))}`, color: h.d.color, look: h.looks, voice: h.actor ? { ...h.actor.voice, character: h.d.id } : undefined, at: h.actor?.pos ?? null });
@@ -196,6 +200,17 @@ export async function install(engine: Engine): Promise<void> {
   const blips: Blip[] = [];
   const api: ContactsApi = {
     name: 'contacts',
+    appearance: (id) => here.find((h) => h.d.id === id)!.looks,
+    reserve(id, on) {
+      if (on) {
+        reserved.add(id);
+        const h = here.find((h) => h.d.id === id)!;
+        h.actor?.release('vanish'); h.actor = null;
+        for (const b of h.bodies) bodies.remove(b);
+        h.bodies = [];
+      } else reserved.delete(id);
+    },
+    addFriendship: add,
     hearts: heartsOf,
     perk: (id, n) => heartsOf(id) >= n,
     get discount() { return heartsOf('daliu') >= 4 ? 0.2 : 0; },
@@ -211,6 +226,7 @@ export async function install(engine: Engine): Promise<void> {
     fixedUpdate(dt) {
       const cam = engine.camera.position;
       for (const h of here) {
+        if (reserved.has(h.d.id)) continue;
         const d = Math.hypot(h.x - cam.x, h.z - cam.z);
         if (show && d < NEAR && !h.actor?.alive) {
           // Their spot clear of the street trees and posts (their colliders are in by now) - room for a table
@@ -267,6 +283,7 @@ export async function install(engine: Engine): Promise<void> {
       props.begin();
       const f = pl.foot;
       for (const h of here) {
+        if (reserved.has(h.d.id)) continue;
         const a = h.actor;
         if (!a?.alive) continue;
         h.d.props.forEach(([k, ox, oz, yaw], i) => {
@@ -285,7 +302,7 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('vehicle:reset', () => { duel = 0; });
   engine.get<NavApi>('nav')?.addBlips(() => {
     blips.length = 0;
-    if (show) for (const h of here) blips.push({ kind: 'contact', x: h.x, z: h.z, label: t('con.mapLabel', { name: t(h.d.name), role: t(`con.role.${h.d.id}` as TKey) }), color: h.d.color });
+    if (show) for (const h of here) if (!reserved.has(h.d.id)) blips.push({ kind: 'contact', x: h.x, z: h.z, label: t('con.mapLabel', { name: t(h.d.name), role: t(`con.role.${h.d.id}` as TKey) }), color: h.d.color });
     return blips;
   });
   engine.add(api);

@@ -339,6 +339,7 @@ export async function install(engine: Engine): Promise<void> {
       },
     },
     fixedUpdate(dt) {
+      if (engine.get<{ name: string; active: boolean }>('adventure')?.active) return;
       const v = vehicle(), car = v.car;
       careT -= dt; scaredT -= dt; summaryT -= dt;
       if (lateT > 0 && (lateT -= dt) <= 0 && lateToast) { toast(lateToast); lateToast = ''; }

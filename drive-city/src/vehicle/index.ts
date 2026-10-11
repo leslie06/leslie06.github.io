@@ -117,17 +117,17 @@ export async function install(engine: Engine): Promise<void> {
     power: 1,
     slowMo: 1,
     swapCar(next, nextLook) {
-      const prev = { car, look: { upper: look.upper.clone(), lower: look.lower.clone(), taxi: look.taxi, body: bodyType } };
+      const prev = { car, look: { upper: look.upper.clone(), lower: look.lower.clone(), taxi: look.taxi, body: bodyType, livery: look.livery } };
       car.onShift = undefined;
       car = next;
       car.onShift = onShift;
       look.upper.copy(nextLook.upper); look.lower.copy(nextLook.lower); look.taxi = nextLook.taxi;
       // Another kind of vehicle (a bus, a van): the full-detail model is rebuilt for that body.
       const type = nextLook.body ?? bodyOfSpec(next.spec);
-      if (type !== bodyType) {
+      if (type !== bodyType || nextLook.livery !== look.livery) {
         const old = model;
         engine.scene.remove(old.root);
-        model = buildCar(next.spec, defaultLivery(type), type);
+        model = buildCar(next.spec, nextLook.livery ?? defaultLivery(type), type);
         bodyType = type;
         engine.scene.add(model.root);
         attachBeams();
@@ -135,6 +135,7 @@ export async function install(engine: Engine): Promise<void> {
         old.dispose();
       }
       look.body = type;
+      look.livery = nextLook.livery;
       model.setPaint(look.upper, look.lower, look.taxi);
       filter.reset();
       prevPos.copy(car.pos); curPos.copy(car.pos); prevQuat.copy(car.quat); curQuat.copy(car.quat);

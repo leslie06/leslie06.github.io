@@ -700,7 +700,7 @@ export async function install(engine: Engine): Promise<void> {
       return null;
     },
     fixedUpdate(dt) {
-      if (!cap) return;
+      // Scripted actors still move when ambient pedestrians are disabled (peds=0).
       frame++;
       shoutT = Math.max(0, shoutT - dt); barkT -= dt;
       spawnT -= dt;
@@ -792,7 +792,7 @@ export async function install(engine: Engine): Promise<void> {
       for (const c of cops) carHits(c, false);
     },
     update(dt, alpha) {
-      if (!cap) return;
+      // Render scripted actors independently of the ambient crowd limit.
       const cam = engine.camera.position;
       engine.camera.getWorldDirection(camDir);
       const crowd = pl.crowd;

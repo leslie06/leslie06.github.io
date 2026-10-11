@@ -7,8 +7,9 @@ import type { Vehicle } from '../vehicle/Vehicle';
 
 export interface DamageApi extends System {
   /** The player's current car, 0 (engine dead) .. 100. */
-  health(): number;
-  repair(): void;
+  health(car?: Vehicle): number;
+  repair(car?: Vehicle): void;
+  setHealth(car: Vehicle, health: number): void;
 }
 
 /**
@@ -49,8 +50,9 @@ export async function install(engine: Engine): Promise<void> {
 
   const api: DamageApi = {
     name: 'damage',
-    health: () => get(veh().car),
-    repair: () => { hp.set(veh().car, 100); },
+    health: (car = veh().car) => get(car),
+    repair: (car = veh().car) => { hp.set(car, 100); },
+    setHealth: (car, health) => { hp.set(car, Math.max(0, Math.min(100, health))); },
     fixedUpdate(dt) {
       clock += dt;
       const v = veh(), car = v.car, h = get(car);

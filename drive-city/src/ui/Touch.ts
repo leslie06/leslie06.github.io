@@ -117,7 +117,7 @@ export class TouchControls implements System {
     this.button(top, 'both', t('touch.pause'), (down) => { if (down) this.state.pausePressed = true; });
     this.button(top, 'both', t('touch.map'), (down) => { if (down) this.state.mapPressed = true; });
     this.button(top, 'drive', t('touch.radio'), (down) => { if (down) this.state.radioPressed = true; });
-    this.button(top, 'both', t('touch.phone'), (down) => { if (down) this.state.phonePressed = true; });
+    this.button(top, 'both', t(engine.get('adventure') ? 'adv.short' : 'touch.phone'), (down) => { if (down) this.state.phonePressed = true; });
 
     const pads = el('div', 'pads', this.root);
     // Row 1: camera / get in or out / shove or jump.

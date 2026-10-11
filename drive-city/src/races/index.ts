@@ -172,6 +172,7 @@ export async function install(engine: Engine): Promise<void> {
     get active() { return stage === 'countdown' || stage === 'racing'; },
     debug: { start, state: () => ({ stage, next, checkpoints: cps, place }) },
     fixedUpdate(dt) {
+      if (engine.get<{ name: string; active: boolean }>('adventure')?.active) return;
       const v = veh(), car = v.car;
       hintCd -= dt;
       if (stage === 'idle') {
