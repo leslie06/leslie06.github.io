@@ -12,6 +12,7 @@ import { Menu, type MenuState } from './Menu';
 import { Minimap } from './Minimap';
 import { MapScreen } from './MapScreen';
 import { Boards } from './Boards';
+import { FeedbackPanel } from './Feedback';
 import { journalOf } from '../npc/Journal';
 
 export interface UiApi extends System {
@@ -44,6 +45,9 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   // The leaderboards, where there are any (the city).
   const boards = engine.get('leaderboard') ? new Boards(engine, container) : null;
   if (boards) menu.onBoards = () => boards.show();
+  // Players' feedback (online/Feedback.ts), from the title and the pause screen.
+  const feedback = engine.get('feedback') ? new FeedbackPanel(engine, container) : null;
+  if (feedback) menu.onFeedback = () => feedback.show();
   engine.add(hud);
   // Radar and full-screen map (city only; before `api` so the map's Esc/Tab handling runs first).
   // `dc-radar` tells the HUD that the top-left corner is taken (the yard has no nav, no radar).

@@ -63,6 +63,9 @@ export class Menu {
   /** The 排行榜 button; unset (the yard), the button stays hidden. */
   onBoards: (() => void) | null = null;
   private boardsBtn: HTMLButtonElement;
+  /** The 意见反馈 button (title and pause); unset, it stays hidden. */
+  onFeedback: (() => void) | null = null;
+  private feedbackBtn: HTMLButtonElement;
 
   constructor(private engine: Engine, container: HTMLElement) {
     const root = this.root = el('div', 'menu', container);
@@ -84,6 +87,10 @@ export class Menu {
     const boards = this.boardsBtn = el('button', 'ghost', row);
     boards.appendChild(L('lb.title'));
     boards.addEventListener('click', () => this.onBoards?.());
+    const fb = this.feedbackBtn = el('button', 'ghost', row);
+    fb.id = 'feedback';
+    fb.appendChild(L('fb.button'));
+    fb.addEventListener('click', () => this.onFeedback?.());
     const opts = el('div', 'row', left);
     const langSeg = el('div', 'seg', opts);
     for (const l of LANGS) {
@@ -122,6 +129,7 @@ export class Menu {
   set(state: MenuState): void {
     this.root.hidden = state === 'playing' || state === 'overlay';
     this.boardsBtn.hidden = !this.onBoards;
+    this.feedbackBtn.hidden = !this.onFeedback;
     const paused = state === 'paused';
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');
     this.pauseHint.hidden = !paused;

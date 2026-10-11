@@ -38,3 +38,27 @@ CREATE TABLE IF NOT EXISTS lb (
   PRIMARY KEY (game, board, pid)
 );
 CREATE INDEX IF NOT EXISTS lb_rank ON lb (game, board, score);
+
+-- 玩家反馈（2026-10-11 起，b城追车在用）：游戏里的「反馈」面板交上来的意见。
+-- 不存完整 IP：ip_masked 打码到网段（连地域表看省份），ip_hash 每天换盐，只用来限流和去重。
+CREATE TABLE IF NOT EXISTS fb (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  game      TEXT    NOT NULL,
+  day       TEXT    NOT NULL,             -- 北京时间日期
+  ts        INTEGER NOT NULL,
+  kind      TEXT    NOT NULL,             -- bug / idea / praise / other
+  text      TEXT    NOT NULL,             -- 玩家写的内容，最多 2000 字
+  contact   TEXT    NOT NULL DEFAULT '',  -- 选填的联系方式
+  ctx       TEXT    NOT NULL DEFAULT '',  -- 游戏附带的情况（JSON：版本、画质、设备、位置、道路、时间……）
+  pid       TEXT    NOT NULL DEFAULT '',  -- 和排行榜同一个随机玩家号，看同一个人提过几次
+  ip_hash   TEXT    NOT NULL DEFAULT '',
+  ip_masked TEXT    NOT NULL DEFAULT '',
+  state     TEXT    NOT NULL DEFAULT 'new', -- new / read / done
+  has_shot  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS fb_ts ON fb (game, ts);
+-- 截图单独一张表（JPEG 的 data URL，最多 ~400 KB），列表查询不用把它们拖出来。
+CREATE TABLE IF NOT EXISTS fb_shot (
+  id   INTEGER PRIMARY KEY,
+  data TEXT    NOT NULL
+);

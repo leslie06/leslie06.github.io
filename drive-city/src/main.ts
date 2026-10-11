@@ -41,6 +41,7 @@ import * as dialogue from './dialogue';
 import * as story from './story';
 import * as adventure from './adventure';
 import * as leaderboard from './online/Leaderboard';
+import * as feedback from './online/Feedback';
 import * as underground from './underground';
 import * as park from './park';
 import { registerParkPoses } from './park/Poses';
@@ -91,6 +92,7 @@ async function boot() {
   await fx.install(engine);
   await audio.install(engine);
   if (worldName === 'city') await voices.install(engine);
+  feedback.install(engine);
   await ui.install(engine, container);
   if (worldName === 'city') { registerCityPoses(); registerTrafficPoses(); registerPeoplePoses(); registerCharacterPoses(); registerNavPoses(); registerPolicePoses(); registerVehiclePoses(); registerMissionPoses(); registerRacePoses(); registerParkPoses(); registerHomePoses(); registerTitlePose(); } else registerPoses();
   engine.resize();

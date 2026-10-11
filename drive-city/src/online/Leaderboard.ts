@@ -47,11 +47,18 @@ const KEY = { pid: 'drivecity.pid', name: 'drivecity.name', best: 'drivecity.lb.
 const read = <T>(k: string, fb: T): T => { try { const v = localStorage.getItem(k); return v === null ? fb : JSON.parse(v) as T; } catch { return fb; } };
 const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
 
-export function install(engine: Engine): void {
+/**
+ * The site's stats service and whether to talk to it (the leaderboards and the feedback panel, online/Feedback.ts):
+ * the published game does, a dev server and shot mode do not unless `?lb=<base url>`; `?lb=0` turns it off anywhere.
+ */
+export function statsEndpoint(): { base: string; enabled: boolean } {
   const q = new URLSearchParams(location.search).get('lb');
   const local = /^(localhost|127\.|192\.168\.|10\.|\[::1\])/.test(location.hostname);
-  const base = q && q !== '0' ? q.replace(/\/$/, '') : DEFAULT_BASE;
-  const enabled = q === '0' ? false : !!q || (!shotMode && !local);
+  return { base: q && q !== '0' ? q.replace(/\/$/, '') : DEFAULT_BASE, enabled: q === '0' ? false : !!q || (!shotMode && !local) };
+}
+
+export function install(engine: Engine): void {
+  const { base, enabled } = statsEndpoint();
 
   let pid = read<string>(KEY.pid, '');
   if (!/^[a-z0-9]{8,32}$/i.test(pid)) { pid = (Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 24); write(KEY.pid, pid); }

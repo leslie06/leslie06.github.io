@@ -134,5 +134,34 @@ for (let i = 0; i < 7; i++) if ((await post({ g: 'bcity', b: 'combo', p: 'flood'
 ok('同一设备一天最多开 5 个新号', limited === 2, `(${limited} 次被挡)`);
 ok('库里没有完整 IP（排行榜）', !JSON.stringify(db.prepare('SELECT * FROM lb').all()).includes('8.8.8.8'));
 
+// —— 反馈
+const fb = async (body, ip = '5.6.7.8') => {
+  const r = await worker.fetch(new Request('https://s/fb', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'text/plain', 'user-agent': 'fb-ua', 'cf-connecting-ip': ip } }), env);
+  return { status: r.status, body: await r.json().catch(() => null) };
+};
+const admin = (path, init) => worker.fetch(new Request('https://s' + path + (path.includes('?') ? '&' : '?') + 'k=secret', init), env);
+const shot = 'data:image/jpeg;base64,' + btoa('fake-jpeg-bytes');
+const f1 = await fb({ g: 'bcity', k: 'bug', t: '  车开到国贸桥卡住了\n动不了  ', c: 'wx: abc', x: { v: 'abc123', q: 'low', pos: [4524, 190], road: '建国门外大街' }, s: shot, p: 'player1' });
+ok('反馈收下，回编号', f1.status === 200 && f1.body.ok && f1.body.id > 0, JSON.stringify(f1.body));
+ok('正文去掉首尾空白、保留换行', db.prepare('SELECT text FROM fb WHERE id = ?').get(f1.body.id).text === '车开到国贸桥卡住了\n动不了');
+ok('截图单独存', db.prepare('SELECT data FROM fb_shot WHERE id = ?').get(f1.body.id)?.data === shot);
+ok('十分钟内一字不差的重复只收一条', (await fb({ g: 'bcity', k: 'bug', t: '车开到国贸桥卡住了\n动不了', p: 'player1' })).body.dup === true && db.prepare('SELECT COUNT(*) AS c FROM fb').get().c === 1);
+ok('空的不收', (await fb({ g: 'bcity', k: 'idea', t: '   ' })).status === 400);
+ok('类型不对不收', (await fb({ g: 'bcity', k: 'hack', t: 'x' })).status === 400);
+ok('别的网址的截图不收', (await fb({ g: 'bcity', k: 'idea', t: '加个地图', s: 'data:image/png;base64,AAA' })).status === 200 && db.prepare('SELECT has_shot FROM fb ORDER BY id DESC LIMIT 1').get().has_shot === 0);
+ok('超长正文截到 2000 字', (await fb({ g: 'bcity', k: 'other', t: '长'.repeat(5000) })).status === 200 && db.prepare('SELECT length(text) AS n FROM fb ORDER BY id DESC LIMIT 1').get().n === 2000);
+let fbLimited = 0;
+for (let i = 0; i < 24; i++) if ((await fb({ g: 'bcity', k: 'idea', t: '建议 ' + i }, '9.9.9.9')).status === 429) fbLimited++;
+ok('同一设备一天最多 20 条', fbLimited === 4, `(${fbLimited} 次被挡)`);
+ok('库里没有完整 IP（反馈）', !JSON.stringify(db.prepare('SELECT * FROM fb').all()).includes('5.6.7.8'));
+ok('没密钥看不了反馈', (await worker.fetch(new Request('https://s/fb/list'), env)).status === 401);
+const list = await (await admin('/fb/list')).json();
+ok('列表最新在上、带计数', list.items.length > 20 && list.items[list.items.length - 1].id === f1.body.id && list.counts.new > 20);
+const img = await admin('/fb/shot?id=' + f1.body.id);
+ok('截图按 JPEG 回出来', img.status === 200 && img.headers.get('content-type') === 'image/jpeg' && new TextDecoder().decode(await img.arrayBuffer()) === 'fake-jpeg-bytes');
+await admin('/fb/state?id=' + f1.body.id + '&s=done', { method: 'POST' });
+ok('标为已处理', (await (await admin('/fb/list?state=done')).json()).items.map((r) => r.id).join() === String(f1.body.id));
+ok('反馈页要密钥才出', (await worker.fetch(new Request('https://s/fb'), env)).status === 401 && (await admin('/fb')).status === 200);
+
 console.log(failed ? `\n${failed} 条没过` : '\n全过');
 process.exit(failed ? 1 : 0);

@@ -3,6 +3,8 @@
 //   POST /e            游戏里的打点上报（匿名，无 Cookie）
 //   POST /lb           排行榜交成绩（text/plain 的 JSON，不触发跨域预检），回名次
 //   GET  /lb?g=&b=&p=  排行榜前十 + 这个玩家自己的名次
+//   POST /fb           玩家反馈（text/plain 的 JSON：类型、正文、联系方式、游戏情况、截图）
+//   GET  /fb?k=密钥    反馈列表（/fb/list 取数，/fb/shot?id= 截图，POST /fb/state?id=&s= 标状态）
 //   GET  /?k=密钥      看板
 //   GET  /api?k=密钥   看板取数
 //
@@ -198,6 +200,59 @@ async function submit(request, env) {
   return json({ ok: true, best, rank: r?.rank ?? 0, score: r?.score ?? score, total: total?.c ?? 0, name });
 }
 
+// ---------------------------------------------------------------- 反馈
+// 游戏里的「反馈」面板交上来的意见：类型、正文、选填的联系方式、游戏附带的情况（版本、画质、设备、
+// 在城里哪儿）、可选的一张画面截图。text/plain 的 JSON，和排行榜一样不触发跨域预检。
+// 同一台设备一天最多 FB_PER_DAY 条；十分钟内一字不差的重复（连点两下）只收一条。
+export const FB_KINDS = new Set(['bug', 'idea', 'praise', 'other']);
+const FB_PER_DAY = 20, FB_TEXT = 2000, FB_SHOT = 450000;
+const FBSQL = {
+  put: `INSERT INTO fb (game, day, ts, kind, text, contact, ctx, pid, ip_hash, ip_masked, has_shot)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+  shot: 'INSERT INTO fb_shot (id, data) VALUES (?, ?)',
+  today: 'SELECT COUNT(*) AS c FROM fb WHERE day = ? AND ip_hash = ?',
+  dup: 'SELECT id FROM fb WHERE ip_hash = ? AND text = ? AND ts > ? LIMIT 1',
+  list: `SELECT f.id, f.game, f.ts, f.kind, f.text, f.contact, f.ctx, f.pid, f.state, f.has_shot,
+           g.province, g.city, (SELECT COUNT(*) FROM fb o WHERE o.pid = f.pid AND f.pid <> '') AS by_pid
+         FROM fb f LEFT JOIN geo g ON g.prefix = f.ip_masked
+         WHERE (? = '' OR f.game = ?) AND (? = '' OR f.state = ?) ORDER BY f.ts DESC, f.id DESC LIMIT ?`,
+  counts: `SELECT state, COUNT(*) AS c FROM fb GROUP BY state`,
+  getShot: 'SELECT data FROM fb_shot WHERE id = ?',
+  setState: 'UPDATE fb SET state = ? WHERE id = ?',
+};
+/** Text a player typed: control characters out (newlines kept), trimmed, capped. */
+export const cleanText = (t, max) => String(t ?? '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, '').trim().slice(0, max);
+
+async function feedback(request, env) {
+  let b;
+  try { b = JSON.parse(await request.text()); } catch { return json({ error: 'json' }, 400); }
+  if (!GAMES.has(b?.g) || !FB_KINDS.has(b?.k)) return json({ error: 'kind' }, 400);
+  const text = cleanText(b.t, FB_TEXT);
+  if (!text) return json({ error: 'empty' }, 400);
+  const contact = cleanText(b.c, 80).replace(/\n/g, ' ');
+  let ctx = '';
+  try { ctx = b.x && typeof b.x === 'object' ? JSON.stringify(b.x).slice(0, 3000) : ''; } catch { }
+  const shot = typeof b.s === 'string' && b.s.startsWith('data:image/jpeg;base64,') && b.s.length <= FB_SHOT ? b.s : '';
+  const now = Date.now(), day = cnDay(now);
+  const ip = request.headers.get('cf-connecting-ip') ?? '', ua = request.headers.get('user-agent') ?? '';
+  const ipHash = await hash(ip, ua, day, env.SALT ?? 'salt');
+  const dup = await env.DB.prepare(FBSQL.dup).bind(ipHash, text, now - 600e3).first();
+  if (dup) return json({ ok: true, id: dup.id, dup: true });
+  const n = await env.DB.prepare(FBSQL.today).bind(day, ipHash).first();
+  if ((n?.c ?? 0) >= FB_PER_DAY) return json({ error: 'busy' }, 429);
+  const row = await env.DB.prepare(FBSQL.put).bind(b.g, day, now, b.k, text, contact, ctx, cleanPid(b.p) ?? '', ipHash, maskIp(ip), shot ? 1 : 0).first();
+  if (shot && row?.id) await env.DB.prepare(FBSQL.shot).bind(row.id, shot).run();
+  return json({ ok: true, id: row?.id ?? 0 });
+}
+
+async function feedbackList(env, url) {
+  const game = url.searchParams.get('g') ?? '', state = url.searchParams.get('state') ?? '';
+  const limit = Math.min(Math.max(+url.searchParams.get('n') || 200, 1), 1000);
+  const rows = await env.DB.prepare(FBSQL.list).bind(game, game, state, state, limit).all();
+  const counts = await env.DB.prepare(FBSQL.counts).all();
+  return json({ items: rows.results, counts: Object.fromEntries(counts.results.map((r) => [r.state, r.c])) });
+}
+
 async function api(env, days) {
   const since = daysAgo(days);
   const [summary, median, daily, regions, recent] = await Promise.all([
@@ -231,6 +286,9 @@ export default {
         return new Response(null, { status: 405, headers: CORS });
       } catch (e) { console.error('lb', e); return json({ error: 'server' }, 500); }
     }
+    if (url.pathname === '/fb' && request.method === 'POST') {
+      try { return await feedback(request, env); } catch (e) { console.error('fb', e); return json({ error: 'server' }, 500); }
+    }
     if (url.pathname === '/health') return new Response('ok');
     // 自助排查：手机上打开这个地址，一眼看出这台设备是从哪个国家的出口连过来的
     if (url.pathname === '/me') {
@@ -253,6 +311,25 @@ export default {
       if (!ok) return new Response('unauthorized', { status: 401 });
       const days = Math.min(Math.max(+url.searchParams.get('days') || 14, 1), 365);
       return json(await api(env, days));
+    }
+    // 反馈：看（需要密钥）、取截图、标已读 / 已处理
+    if (url.pathname === '/fb' || url.pathname.startsWith('/fb/')) {
+      if (!ok) return new Response('unauthorized', { status: 401 });
+      if (url.pathname === '/fb') return new Response(FBPAGE, { headers: { 'content-type': 'text/html;charset=utf-8', 'cache-control': 'no-store' } });
+      if (url.pathname === '/fb/list') return await feedbackList(env, url);
+      if (url.pathname === '/fb/shot') {
+        const r = await env.DB.prepare(FBSQL.getShot).bind(+url.searchParams.get('id') || 0).first();
+        if (!r) return new Response('not found', { status: 404 });
+        const bin = Uint8Array.from(atob(r.data.slice(r.data.indexOf(',') + 1)), (c) => c.charCodeAt(0));
+        return new Response(bin, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400' } });
+      }
+      if (url.pathname === '/fb/state' && request.method === 'POST') {
+        const st = url.searchParams.get('s');
+        if (!['new', 'read', 'done'].includes(st)) return json({ error: 'state' }, 400);
+        await env.DB.prepare(FBSQL.setState).bind(st, +url.searchParams.get('id') || 0).run();
+        return json({ ok: true });
+      }
+      return new Response('not found', { status: 404 });
     }
     if (url.pathname === '/') return new Response(DASH, { headers: { 'content-type': 'text/html;charset=utf-8' } });
     return new Response('not found', { status: 404 });
@@ -285,6 +362,7 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
   .wrap{overflow-x:auto;}
 </style></head><body>
 <h1>玩了多少</h1>
+<div class="sub"><a id="fblink" style="color:var(--accent)" href="/fb">玩家反馈 →</a></div>
 <div class="sub" id="range">LOADING…</div>
 <div class="bar" id="days">
   <button data-d="7">最近 7 天</button><button data-d="14" aria-pressed="true">14 天</button>
@@ -311,6 +389,7 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 IP 只存到网段（最后一段抹成 x），完整地址不落库；省份是拿网段查一次归属地缓存下来的，同一网段不会重复查。</p>
 <script>
 const key = new URLSearchParams(location.search).get('k') || '';
+document.getElementById('fblink').href = '/fb?k=' + encodeURIComponent(key);
 const fmt = (s) => s >= 60 ? Math.floor(s / 60) + '分' + String(s % 60).padStart(2, '0') + '秒' : s + '秒';
 const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '–';
 function spark(days, vals) {
@@ -363,4 +442,88 @@ document.getElementById('days').addEventListener('click', e => {
   load(b.dataset.d);
 });
 load(14);
+</script></body></html>`;
+
+// 反馈列表：/fb?k=密钥。最新的在上面，按游戏 / 状态筛；点截图看大图；「已读」「已处理」写回库。
+const FBPAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>玩家反馈</title>
+<style>
+  :root{--bg:#07090f;--panel:#121622;--line:rgba(123,131,159,.2);--text:#e6e8f0;--muted:#8d94ae;--dim:#535a72;--accent:#f5a33a;
+    --mono:"Courier New",Menlo,Consolas,monospace;--ui:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 var(--ui);padding:clamp(16px,4vw,40px);}
+  h1{margin:0 0 4px;font-size:22px;letter-spacing:3px;}
+  .sub{color:var(--muted);font:11px/1.8 var(--mono);letter-spacing:1px;margin-bottom:16px;}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  button{font:12px var(--ui);color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer;}
+  button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#0b0d14;font-weight:700;}
+  .item{display:grid;grid-template-columns:1fr auto;gap:14px;padding:14px 16px;margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  .item.done{opacity:.5}
+  .meta{font:11px/1.8 var(--mono);color:var(--muted);letter-spacing:.5px}
+  .kind{display:inline-block;padding:1px 8px;border-radius:999px;font:700 11px/1.7 var(--ui);margin-right:8px;color:#0b0d14}
+  .k-bug{background:#ff6b5a}.k-idea{background:#5ab0ff}.k-praise{background:#62d39a}.k-other{background:#b8bdd0}
+  .new .kind::after{content:" 新";}
+  .text{white-space:pre-wrap;word-break:break-word;font-size:15px;margin:6px 0}
+  .ctx{font:11px/1.7 var(--mono);color:var(--dim);word-break:break-all}
+  .contact{color:var(--accent);font-size:13px}
+  img{width:220px;max-width:36vw;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;display:block}
+  .acts{display:flex;gap:6px;margin-top:8px}
+  .empty{padding:40px 0;color:var(--muted);text-align:center}
+  @media (max-width:640px){.item{grid-template-columns:1fr}img{max-width:100%;width:100%}}
+</style></head><body>
+<h1>玩家反馈</h1>
+<div class="sub" id="sum">LOADING…</div>
+<div class="bar" id="states"><button data-s="" aria-pressed="true">全部</button><button data-s="new">未读</button><button data-s="read">已读</button><button data-s="done">已处理</button></div>
+<div id="list"></div>
+<div class="empty" id="empty" hidden>还没有反馈。</div>
+<script>
+const key = new URLSearchParams(location.search).get('k') || '';
+const KIND = { bug: '问题', idea: '建议', praise: '好评', other: '其他' };
+let state = '';
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const when = (ts) => new Date(ts + 8 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
+function ctxLine(c) {
+  try { c = JSON.parse(c || '{}'); } catch { return esc(c); }
+  const bits = [];
+  if (c.v) bits.push('版本 ' + c.v);
+  if (c.q) bits.push(c.q + (c.fps ? ' · ' + c.fps + ' fps' : ''));
+  if (c.dev) bits.push(c.dev);
+  if (c.w) bits.push(c.w + '×' + c.h + (c.touch ? ' 触屏' : ''));
+  if (c.lang) bits.push(c.lang);
+  if (c.road || c.pos) bits.push('在 ' + (c.road || '') + (c.pos ? ' (' + c.pos.join(', ') + ')' : ''));
+  if (c.mode) bits.push(c.mode === 'driving' ? '开车中' : c.mode === 'onfoot' ? '步行中' : c.mode);
+  if (c.tod !== undefined) bits.push('游戏时间 ' + c.tod);
+  if (c.stars) bits.push(c.stars + ' 星通缉');
+  if (c.play) bits.push('这次玩了 ' + (c.play < 90 ? c.play + ' 秒' : Math.round(c.play / 60) + ' 分钟'));
+  return esc(bits.join(' · '));
+}
+async function setState(id, s) {
+  await fetch('/fb/state?id=' + id + '&s=' + s + '&k=' + encodeURIComponent(key), { method: 'POST' });
+  load();
+}
+async function load() {
+  const r = await fetch('/fb/list?state=' + state + '&k=' + encodeURIComponent(key));
+  if (!r.ok) { document.getElementById('sum').textContent = key ? '密钥不对' : '网址后面要带 ?k=你的密钥'; return; }
+  const d = await r.json(), c = d.counts;
+  document.getElementById('sum').textContent = '未读 ' + (c.new || 0) + ' · 已读 ' + (c.read || 0) + ' · 已处理 ' + (c.done || 0);
+  const list = document.getElementById('list');
+  list.innerHTML = d.items.map((f) => '<div class="item ' + f.state + '"><div>' +
+    '<div class="meta"><span class="kind k-' + f.kind + '">' + (KIND[f.kind] || f.kind) + '</span>#' + f.id + ' · ' + when(f.ts) + ' · ' + esc(f.game) +
+      (f.province ? ' · ' + esc(f.province) + ' ' + esc(f.city || '') : '') + (f.by_pid > 1 ? ' · 这位玩家共提了 ' + f.by_pid + ' 条' : '') + '</div>' +
+    '<div class="text">' + esc(f.text) + '</div>' +
+    (f.contact ? '<div class="contact">联系方式：' + esc(f.contact) + '</div>' : '') +
+    '<div class="ctx">' + ctxLine(f.ctx) + '</div>' +
+    '<div class="acts">' + (f.state !== 'read' ? '<button onclick="setState(' + f.id + ',\\'read\\')">标为已读</button>' : '') +
+      (f.state !== 'done' ? '<button onclick="setState(' + f.id + ',\\'done\\')">已处理</button>' : '<button onclick="setState(' + f.id + ',\\'new\\')">重新打开</button>') + '</div>' +
+    '</div>' + (f.has_shot ? '<a href="/fb/shot?id=' + f.id + '&k=' + encodeURIComponent(key) + '" target="_blank"><img loading="lazy" src="/fb/shot?id=' + f.id + '&k=' + encodeURIComponent(key) + '"></a>' : '<div></div>') +
+    '</div>').join('');
+  document.getElementById('empty').hidden = d.items.length > 0;
+}
+document.getElementById('states').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state = b.dataset.s;
+  for (const x of document.querySelectorAll('#states button')) x.setAttribute('aria-pressed', String(x === b));
+  load();
+});
+load();
 </script></body></html>`;

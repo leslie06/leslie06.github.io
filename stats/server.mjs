@@ -65,8 +65,8 @@ async function resolveGeo() {
   geoBusy = true;
   try {
     const rows = db.prepare(
-      `SELECT DISTINCT e.ip_masked AS p FROM ev e LEFT JOIN geo g ON g.prefix = e.ip_masked
-       WHERE e.ip_masked <> '' AND g.prefix IS NULL LIMIT 20`).all();
+      `SELECT DISTINCT x.p FROM (SELECT ip_masked AS p FROM ev UNION SELECT ip_masked FROM fb) x LEFT JOIN geo g ON g.prefix = x.p
+       WHERE x.p <> '' AND g.prefix IS NULL LIMIT 20`).all();
     if (!rows.length) return;
     const put = db.prepare(`INSERT INTO geo (prefix, province, city, isp, ts) VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(prefix) DO UPDATE SET province=excluded.province, city=excluded.city, isp=excluded.isp`);
@@ -100,7 +100,9 @@ function geoHint(masked) {
 createServer(async (req, res) => {
   try {
     const chunks = [];
-    for await (const c of req) chunks.push(c);
+    let size = 0;
+    // 反馈带一张截图（~100-400 KB）；比这大的不是游戏发的
+    for await (const c of req) { size += c.length; if (size > 1 << 20) { res.writeHead(413); res.end(); return; } chunks.push(c); }
     // 反代过来的真实 IP：Caddy/nginx 会带 X-Forwarded-For
     const fwd = (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
     const request = new Request(`http://127.0.0.1:${port}${req.url}`, {
@@ -111,6 +113,7 @@ createServer(async (req, res) => {
     const out = await worker.fetch(request, env);
     res.writeHead(out.status, Object.fromEntries(out.headers));
     res.end(Buffer.from(await out.arrayBuffer()));
+    if (new URL(request.url).pathname === '/fb' && req.method === 'POST') geoHint(maskIp(request.headers.get('cf-connecting-ip') ?? ''));
     if (new URL(request.url).pathname === '/e') {
       geoHint(maskIp(request.headers.get('cf-connecting-ip') ?? ''));
       if (verbose) process.stdout.write('·');
