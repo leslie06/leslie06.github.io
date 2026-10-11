@@ -134,6 +134,17 @@ for (let i = 0; i < 7; i++) if ((await post({ g: 'bcity', b: 'combo', p: 'flood'
 ok('同一设备一天最多开 5 个新号', limited === 2, `(${limited} 次被挡)`);
 ok('库里没有完整 IP（排行榜）', !JSON.stringify(db.prepare('SELECT * FROM lb').all()).includes('8.8.8.8'));
 
+// —— 在线人数
+const online = async (g = 'bcity') => (await worker.fetch(new Request('https://s/online?g=' + g), env)).json();
+const onBefore = (await online()).online;
+await beat({ g: 'bcity', s: 'on1', a: 1 }); await beat({ g: 'bcity', s: 'on2', a: 1 }, { 'cf-connecting-ip': '7.7.7.7' }); await beat({ g: 'bcity', s: 'on1', a: 2 });
+const o = await online();
+ok('在线人数：两个会话（同一会话跳两次算一个）', o.online === onBefore + 2, JSON.stringify(o));
+ok('今天玩过的设备数', o.today >= 2);
+db.prepare("UPDATE ev SET seen = ? WHERE sid = 'on2'").run(Date.now() - 60e3);
+ok('一分钟没心跳就不算在线', (await online()).online === onBefore + 1);
+ok('不认识的游戏不给数', (await worker.fetch(new Request('https://s/online?g=hack'), env)).status === 400);
+
 // —— 反馈
 const fb = async (body, ip = '5.6.7.8') => {
   const r = await worker.fetch(new Request('https://s/fb', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'text/plain', 'user-agent': 'fb-ua', 'cf-connecting-ip': ip } }), env);

@@ -14,6 +14,9 @@ css(`
 .menu h1{margin:0;font:900 clamp(56px,9vw,112px)/.88 ${F.num};letter-spacing:-.035em}
 .menu .sub{font:600 17px/1.5 ${F.ui};color:${C.paper}}
 .menu .note{font:400 14px/1.6 ${F.ui};color:${C.muted};max-width:46ch}
+.menu .online{font:600 13px/1.4 ${F.ui};color:${C.muted};margin-top:10px}
+.menu .online::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#3ccf6e;box-shadow:0 0 6px #3ccf6e;margin-right:8px;vertical-align:1px}
+.menu .online[hidden]{display:none}
 .menu .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:8px}
 .menu button{font:inherit;cursor:pointer;border:0;border-radius:6px}
 .menu .go{padding:15px 30px;background:${C.yellow};color:${C.ink};font:800 18px/1 ${F.ui};letter-spacing:.12em;box-shadow:0 8px 28px rgba(243,181,15,.28)}
@@ -66,6 +69,9 @@ export class Menu {
   /** The 意见反馈 button (title and pause); unset, it stays hidden. */
   onFeedback: (() => void) | null = null;
   private feedbackBtn: HTMLButtonElement;
+  /** 当前在线 N 人 (online/Presence.ts), hidden until there is a reading. */
+  private onlineEl: HTMLElement;
+  private onlineN: [number, number] | null = null;
 
   constructor(private engine: Engine, container: HTMLElement) {
     const root = this.root = el('div', 'menu', container);
@@ -87,6 +93,8 @@ export class Menu {
     const boards = this.boardsBtn = el('button', 'ghost', row);
     boards.appendChild(L('lb.title'));
     boards.addEventListener('click', () => this.onBoards?.());
+    this.onlineEl = el('div', 'online', left);
+    this.onlineEl.hidden = true;
     const fb = this.feedbackBtn = el('button', 'ghost', row);
     fb.id = 'feedback';
     fb.appendChild(L('fb.button'));
@@ -98,7 +106,7 @@ export class Menu {
       b.textContent = LANG_NAME[l];
       b.addEventListener('click', () => setLang(l));
     }
-    onLangChange((l) => { [...langSeg.children].forEach((b, i) => b.classList.toggle('on', LANGS[i] === l)); });
+    onLangChange((l) => { [...langSeg.children].forEach((b, i) => b.classList.toggle('on', LANGS[i] === l)); if (this.onlineN) this.setOnline(...this.onlineN); });
     const qLabel = el('span', 'seglabel', opts); qLabel.appendChild(L('settings.quality'));
     const qSeg = el('div', 'seg', opts);
     for (const tier of ['low', 'medium', 'high'] as QualityTier[]) {
@@ -121,6 +129,13 @@ export class Menu {
     }
     const pad = el('div', 'pad', card); pad.appendChild(L('ctl.pad'));
     this.set('title');
+  }
+
+  /** How many are playing now and today (online/Presence.ts). */
+  setOnline(n: number, d: number): void {
+    this.onlineN = [n, d];
+    this.onlineEl.textContent = t('online.count', { n, d });
+    this.onlineEl.hidden = false;
   }
 
   /** The pause screen's progress lines (ramps, 兔儿爷, bests), or '' for none. */

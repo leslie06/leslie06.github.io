@@ -16,10 +16,12 @@ const db = new DatabaseSync(process.env.DB_FILE ?? join(HERE, '.dev.sqlite'));
 db.exec('PRAGMA journal_mode = WAL');
 db.exec(await readFile(join(HERE, 'schema.sql'), 'utf8'));
 // 老库升级：schema.sql 的 CREATE TABLE IF NOT EXISTS 不会给已有表加列
-for (const [col, decl] of [['ip_masked', "TEXT NOT NULL DEFAULT ''"]]) {
+for (const [col, decl] of [['ip_masked', "TEXT NOT NULL DEFAULT ''"], ['seen', 'INTEGER NOT NULL DEFAULT 0']]) {
   const has = db.prepare('PRAGMA table_info(ev)').all().some(c => c.name === col);
   if (!has) { db.exec(`ALTER TABLE ev ADD COLUMN ${col} ${decl}`); console.log(`已补上字段 ${col}`); }
 }
+// 在线人数按最近心跳数（字段补上以后才能建这个索引，所以不放 schema.sql）
+db.exec('CREATE INDEX IF NOT EXISTS ev_seen ON ev (game, seen)');
 
 // D1 的接口形状：prepare().bind().run() / .all()
 const DB = {
@@ -123,4 +125,4 @@ createServer(async (req, res) => {
     if (!res.headersSent) res.writeHead(500);
     res.end();
   }
-}).listen(port, '127.0.0.1', () => console.log(`统计服务在 127.0.0.1:${port}，看板 /?k=${env.DASH_KEY}`));
+}).listen(port, '127.0.0.1', () => console.log(`统计服务在 127.0.0.1:${port}，看板 /?k=密钥`));

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS ev (
   ip_hash    TEXT    NOT NULL DEFAULT '',
   ip_masked  TEXT    NOT NULL DEFAULT '',-- 最后一段抹掉，用来连地域表
   ts         INTEGER NOT NULL DEFAULT 0,-- 第一次上报的时间戳（毫秒）
+  seen       INTEGER NOT NULL DEFAULT 0,-- 最近一次心跳的时间戳（毫秒）：在线人数按它数（索引 ev_seen 由 server.mjs 补字段后再建）
   PRIMARY KEY (day, game, sid)
 );
 CREATE INDEX IF NOT EXISTS ev_day ON ev (day);

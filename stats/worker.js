@@ -3,6 +3,7 @@
 //   POST /e            游戏里的打点上报（匿名，无 Cookie）
 //   POST /lb           排行榜交成绩（text/plain 的 JSON，不触发跨域预检），回名次
 //   GET  /lb?g=&b=&p=  排行榜前十 + 这个玩家自己的名次
+//   GET  /online?g=    在线人数（最近 45 秒有心跳的会话）和今天玩过的设备数
 //   POST /fb           玩家反馈（text/plain 的 JSON：类型、正文、联系方式、游戏情况、截图）
 //   GET  /fb?k=密钥    反馈列表（/fb/list 取数，/fb/shot?id= 截图，POST /fb/state?id=&s= 标状态）
 //   GET  /?k=密钥      看板
@@ -12,13 +13,17 @@
 
 const GAMES = new Set(['index', 'bcity', 'pelican', 'kart', 'kart-new', 'roadRash', 'gun-fight', 'zombie', 'wuxia', 'contra', 'mario']);
 const REAL_PLAY = 60;      // 活跃满 60 秒才算「真玩了一局」
+const ONLINE_MS = 45000;   // 三次心跳没来就算下线
 const SITE = 'leslie06.github.io';
 
 export const SQL = {
   // 同一会话只占一行；心跳到达顺序不保证，所以取较大的 active
-  upsert: `INSERT INTO ev (day, game, sid, active, mobile, from_index, country, ip_hash, ip_masked, ts)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(day, game, sid) DO UPDATE SET active = max(ev.active, excluded.active)`,
+  upsert: `INSERT INTO ev (day, game, sid, active, mobile, from_index, country, ip_hash, ip_masked, ts, seen)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(day, game, sid) DO UPDATE SET active = max(ev.active, excluded.active), seen = max(ev.seen, excluded.seen)`,
+  // 在线：最近 ONLINE_MS 里有过心跳的会话（游戏开着的页面每 15 秒一跳，后台标签页被浏览器压到一分钟一跳，就掉出去了）
+  online: 'SELECT COUNT(*) AS c FROM ev WHERE game = ? AND seen > ?',
+  todayDevices: 'SELECT COUNT(DISTINCT ip_hash) AS c FROM ev WHERE game = ? AND day = ?',
   // Cloudflare 上能直接拿到地域，顺手写进缓存表；自建服务器由 server.mjs 的后台任务补
   geoPut: `INSERT INTO geo (prefix, province, city, isp, ts) VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(prefix) DO NOTHING`,
@@ -91,7 +96,7 @@ async function ingest(request, env) {
     const day = cnDay(), masked = maskIp(ip);
     await env.DB.prepare(SQL.upsert).bind(
       day, b.g, sid, active, width && width <= 820 ? 1 : 0, fromIndex,
-      request.cf?.country ?? 'XX', await hash(ip, ua, day, env.SALT ?? 'salt'), masked, Date.now(),
+      request.cf?.country ?? 'XX', await hash(ip, ua, day, env.SALT ?? 'salt'), masked, Date.now(), Date.now(),
     ).run();
     // Cloudflare 自带地域信息；自建服务器上这里没有，交给后台任务去查
     if (masked && request.cf?.region) {
@@ -288,6 +293,14 @@ export default {
     }
     if (url.pathname === '/fb' && request.method === 'POST') {
       try { return await feedback(request, env); } catch (e) { console.error('fb', e); return json({ error: 'server' }, 500); }
+    }
+    // 在线人数：最近 45 秒有心跳的会话数，和今天玩过的设备数（只给数字，谁都能看）
+    if (url.pathname === '/online') {
+      const g = url.searchParams.get('g');
+      if (!GAMES.has(g)) return json({ error: 'game' }, 400);
+      const now = Date.now();
+      const [on, td] = await Promise.all([env.DB.prepare(SQL.online).bind(g, now - ONLINE_MS).first(), env.DB.prepare(SQL.todayDevices).bind(g, cnDay(now)).first()]);
+      return json({ online: on?.c ?? 0, today: td?.c ?? 0 });
     }
     if (url.pathname === '/health') return new Response('ok');
     // 自助排查：手机上打开这个地址，一眼看出这台设备是从哪个国家的出口连过来的
