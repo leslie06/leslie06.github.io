@@ -11,6 +11,14 @@ import { simplifyIndex } from '../vehicle/KitLod';
 interface WheelSet { mesh: THREE.InstancedMesh; perCar: number; slots: { k: number; dx: number }[] }
 
 const _yFlip = new THREE.Matrix4().makeRotationY(Math.PI);
+/**
+ * A matrix into an instance buffer. `Matrix4.toArray` / `setMatrixAt` measured 30x slower than this loop in the game
+ * (0.4 us a call: it is polymorphic over everything three calls it with), and the kits write five a car a frame.
+ */
+function put16(a: Float32Array, o: number, m: THREE.Matrix4): void {
+  const e = m.elements;
+  for (let k = 0; k < 16; k++) a[o + k] = e[k];
+}
 
 /** How far past a car's own length a shadow can fall into view from outside it (low sun). */
 const SHADOW_REACH = 8;
@@ -57,6 +65,9 @@ export class CarKit {
   private kept = 0;
   private readonly cullR: number;
 
+  /** Whether a car of this kit at `pos` would be drawn this frame (to skip building a pose that `set` would cull). */
+  sees(pos: THREE.Vector3): boolean { return !view.on || view.frustum.intersectsSphere(view.sphere.set(pos, this.cullR)); }
+
   /** Once a frame, before any kit is written: cull against `camera` (null: draw every car). */
   static view(camera: THREE.Camera | null): void {
     view.on = !!camera;
@@ -66,7 +77,13 @@ export class CarKit {
     view.frustum.setFromProjectionMatrix(view.m);
   }
 
-  constructor(scene: THREE.Scene, readonly cap: number, livery: Livery = TAXI_LIVERY, readonly bodyType: BodyType = 'sedan') {
+  /**
+   * `far`: the distant version for parked cars (parking/): paint and wheels only, simplified much further, no
+   * shadows - two draw calls; a car past 60 m loses nothing that shows. With `lamps` it keeps its lamps and taxi
+   * parts too (the distant traffic, Ghosts.ts: a street at night is its headlights and brake lights).
+   */
+  constructor(scene: THREE.Scene, readonly cap: number, livery: Livery = TAXI_LIVERY, readonly bodyType: BodyType = 'sedan', opts: { far?: boolean; lamps?: boolean } = {}) {
+    const far = !!opts.far, withLamps = !far || !!opts.lamps;
     const spec = this.spec = SPEC_OF[bodyType];
     const parts = buildBody(bodyType, spec, bodyOptions(livery), 'low');
     const mats = kitMaterials(livery);
@@ -92,13 +109,13 @@ export class CarKit {
     this.cullR = Math.hypot(spec.chassis.reduce((a, c) => Math.max(a, Math.abs(c.at[2]) + c.half[2]), 0), 1.5) + SHADOW_REACH;
     const b = parts.body;
     const paint = b.build('paint');
-    const trim = b.build('trim');
-    for (const g of [paint, trim]) if (g) simplifyIndex(g, 0.2, 0.005);
+    const trim = far ? null : b.build('trim');
+    for (const g of [paint, trim]) if (g) simplifyIndex(g, far ? 0.06 : 0.2, far ? 0.03 : 0.005);
     if (paint) { paint.setAttribute('instUpper', this.upper); paint.setAttribute('instLower', this.lower); }
-    add(paint, mats.paint, true);
+    add(paint, mats.paint, !far);
     add(trim, mats.trim, true);
     // Lamps and the taxi-only parts in one mesh; taxi parts carry flag 2 in aux.y.
-    const lamp = b.build('lamp'), taxi = b.build('taxi');
+    const lamp = withLamps ? b.build('lamp') : null, taxi = withLamps ? b.build('taxi') : null;
     if (taxi) { const a = taxi.getAttribute('aux'); for (let i = 0; i < a.count; i++) a.setY(i, a.getY(i) + 2); }
     const lamps = lamp && taxi ? mergeGeometries([lamp, taxi]) : lamp ?? taxi;
     if (lamp && taxi) { lamp.dispose(); taxi.dispose(); }
@@ -107,7 +124,7 @@ export class CarKit {
     // Wheels: front and rear (twin rear tyres are two instances each side).
     this.hubs = spec.wheels.map((w) => new THREE.Vector3(spec.single ? 0 : w.x, 0, w.z));
     const wf = parts.wheel.build('trim')!, wr = parts.wheelRear?.build('trim') ?? null;
-    for (const g of [wf, wr]) if (g) simplifyIndex(g, 0.4, 0.01);
+    for (const g of [wf, wr]) if (g) simplifyIndex(g, far ? 0.15 : 0.4, far ? 0.03 : 0.01);
     // A two-wheeler: one wheel per axle at the centre.
     const rearSlots = spec.single ? [{ k: 2, dx: 0 }] : parts.dual > 0 ? [2, 3].flatMap((k) => [{ k, dx: parts.dual / 2 }, { k, dx: -parts.dual / 2 }]) : [{ k: 2, dx: 0 }, { k: 3, dx: 0 }];
     const front = spec.single ? [{ k: 0, dx: 0 }] : [{ k: 0, dx: 0 }, { k: 1, dx: 0 }];
@@ -115,7 +132,7 @@ export class CarKit {
     for (const [g, slots] of sets) {
       count(g, slots.length);
       const im = new THREE.InstancedMesh(g, mats.wheel, cap * slots.length);
-      im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true;
+      im.count = 0; im.frustumCulled = false; im.castShadow = !far; im.receiveShadow = true;
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       scene.add(im);
       this.wheels.push({ mesh: im, perCar: slots.length, slots });
@@ -134,13 +151,13 @@ export class CarKit {
     if (view.on && !view.frustum.intersectsSphere(view.sphere.set(pos, this.cullR))) return;
     const i = this.kept++;
     this._m.compose(pos, quat, this._s);
-    this._m.toArray(this.matrix.array, i * 16);
+    put16(this.matrix.array as Float32Array, i * 16, this._m);
     const u = this.upper.array as Float32Array, l = this.lower.array as Float32Array, f = this.flags.array as Float32Array;
     u[i * 4] = upper.r; u[i * 4 + 1] = upper.g; u[i * 4 + 2] = upper.b; u[i * 4 + 3] = paintMetal(upper);
     l[i * 4] = lower.r; l[i * 4 + 1] = lower.g; l[i * 4 + 2] = lower.b; l[i * 4 + 3] = paintMetal(lower);
     // Brake lamps: braking, or standing with the foot on the brake (not parked on the handbrake).
     const braking = car.brake > 0.05 || (car.speed < 0.5 && car.throttle < 0.05 && !car.handbrake);
-    f[i * 4] = taxi ? 1 : 0; f[i * 4 + 1] = braking ? 1 : 0; f[i * 4 + 2] = car.gear === -1 ? 1 : 0;
+    f[i * 4] = taxi ? 1 : 0; f[i * 4 + 1] = braking ? 1 : 0; f[i * 4 + 2] = car.gear === -1 ? 1 : 0; f[i * 4 + 3] = 0;
     for (const ws of this.wheels) {
       for (let s = 0; s < ws.slots.length; s++) {
         const { k, dx } = ws.slots[s];
@@ -152,10 +169,39 @@ export class CarKit {
         if (dx !== 0) this._l.multiply(this._w.makeTranslation(dx * side, 0, 0));
         if (side < 0) this._l.multiply(_yFlip);
         this._w.multiplyMatrices(this._m, this._l);
-        ws.mesh.setMatrixAt(i * ws.perCar + s, this._w);
+        put16(ws.mesh.instanceMatrix.array as Float32Array, (i * ws.perCar + s) * 16, this._w);
       }
     }
   }
+
+  /**
+   * A car with no Vehicle behind it: at rest on its springs (the hubs at the body's y = 0, as vehicle/Spec sets
+   * `mountY`), wheels straight. Parked (parking/): every lamp off; `lit`: a distant traffic car (Ghosts.ts), lamps
+   * as the kit's, brake lamps and taxi parts as given. Culled and packed like `set`.
+   */
+  setStill(pos: THREE.Vector3, quat: THREE.Quaternion, upper: THREE.Color, lower: THREE.Color, lit?: { taxi: boolean; brake: boolean }): void {
+    if (this.kept >= this.cap) return;
+    if (view.on && !view.frustum.intersectsSphere(view.sphere.set(pos, this.cullR))) return;
+    const i = this.kept++;
+    this._m.compose(pos, quat, this._s);
+    put16(this.matrix.array as Float32Array, i * 16, this._m);
+    const u = this.upper.array as Float32Array, l = this.lower.array as Float32Array, f = this.flags.array as Float32Array;
+    u[i * 4] = upper.r; u[i * 4 + 1] = upper.g; u[i * 4 + 2] = upper.b; u[i * 4 + 3] = paintMetal(upper);
+    l[i * 4] = lower.r; l[i * 4 + 1] = lower.g; l[i * 4 + 2] = lower.b; l[i * 4 + 3] = paintMetal(lower);
+    f[i * 4] = lit?.taxi ? 1 : 0; f[i * 4 + 1] = lit?.brake ? 1 : 0; f[i * 4 + 2] = 0; f[i * 4 + 3] = lit ? 0 : 1;
+    // Wheels at rest: each slot's matrix in the body frame is fixed (made once).
+    if (!this.still) this.still = this.wheels.map((ws) => ws.slots.map(({ k, dx }) => {
+      const m = new THREE.Matrix4().makeTranslation(this.hubs[k].x, 0, this.hubs[k].z), side = this.hubs[k].x > 0 ? 1 : -1;
+      if (dx !== 0) m.multiply(new THREE.Matrix4().makeTranslation(dx * side, 0, 0));
+      if (side < 0) m.multiply(_yFlip);
+      return m;
+    }));
+    for (let w = 0; w < this.wheels.length; w++) {
+      const ws = this.wheels[w], arr = ws.mesh.instanceMatrix.array as Float32Array;
+      for (let s = 0; s < ws.slots.length; s++) put16(arr, (i * ws.perCar + s) * 16, this._w.multiplyMatrices(this._m, this.still[w][s]));
+    }
+  }
+  private still: THREE.Matrix4[][] | null = null;
 
   /** Headlamps glow at night (all cars of the kit share the lamp levels). */
   setHeadlights(on: boolean): void {

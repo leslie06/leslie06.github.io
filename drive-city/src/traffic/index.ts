@@ -14,6 +14,7 @@ import { Signals, SignalHeads } from './Signals';
 import { CarKit } from './CarKit';
 import { readyKitLod } from '../vehicle/KitLod';
 import { AiDriver, lineStats, type Leader } from './AiDriver';
+import { GhostTraffic, type Handover } from './Ghosts';
 import { Gait, type Motion } from '../character/Animator';
 import { randomLook, SKELETON, J, type Look } from '../character/Body';
 import { SEAT } from '../vehicle/TwoWheelers';
@@ -41,9 +42,23 @@ interface Npc {
   held: boolean;
 }
 
+/** A car drawn by `addExternalDraw`. */
+export type ExternalPut = (body: BodyType, pos: THREE.Vector3, quat: THREE.Quaternion, car: Vehicle | null, upper: THREE.Color, lower: THREE.Color) => void;
+/** Cars another system simulates: the player can take them; `blocking` (optional) are the ones drivers must not run into. */
+export interface ExternalCars { cars(): Vehicle[]; canTake(car: Vehicle): boolean; take(car: Vehicle): CarLook | null; park(car: Vehicle): boolean; blocking?(): readonly Vehicle[] }
+/** Parked cars a traffic kit can draw on top of traffic's own (parking/ draws the near ones in traffic's kits). */
+export const PARKED_DRAW = 64;
+
 export interface TrafficApi extends TrafficCars {
   /** Cars simulated by a persistent event rather than the distance-limited traffic pool. */
-  addExternalCars(provider: { cars(): Vehicle[]; canTake(car: Vehicle): boolean; take(car: Vehicle): CarLook | null; park(car: Vehicle): boolean }): void;
+  addExternalCars(provider: ExternalCars): void;
+  /**
+   * Draw extra cars in traffic's kits each frame (parking/: the parked cars near the camera share the kits'
+   * draw calls): `draw` is called inside traffic's update, before the kits are committed, with `put` - a body,
+   * an interpolated pose, the Vehicle (null: a car at rest with its lamps off, `CarKit.setStill`) and its colours.
+   * Each body's kit holds `PARKED_DRAW` such cars on top of traffic's own.
+   */
+  addExternalDraw(draw: (put: ExternalPut, alpha: number) => void): void;
   readonly graph: LaneGraph;
   readonly signals: Signals;
   /** Active traffic cars (physics objects). */
@@ -64,7 +79,7 @@ export interface TrafficApi extends TrafficCars {
 }
 
 // Beijing traffic: white, black and silver dominate, then grey, dark blue, red, champagne.
-const PRIVATE = ['#f2f2ef', '#f2f2ef', '#161718', '#161718', '#b9bcbf', '#b9bcbf', '#6c7075', '#26344f', '#8c1d1d', '#c9b48f', '#3d4a3f'];
+export const PRIVATE = ['#f2f2ef', '#f2f2ef', '#161718', '#161718', '#b9bcbf', '#b9bcbf', '#6c7075', '#26344f', '#8c1d1d', '#c9b48f', '#3d4a3f'];
 // Taxi companies share the golden top and vary the lower colour.
 const TAXI_LOWER = ['#1f5e3c', '#1d49b5', '#6b1f22', '#4a2d6b', '#7a4a1e'];
 const TRUCK_CAB = ['#eceeed', '#e5e8e8', '#2f5aa8', '#8c1d1d'];
@@ -82,6 +97,8 @@ const DELIVERY = ['#f6c300', '#f6c300', '#f6c300', '#1b8ff0', '#1b8ff0'];
 const NO_RIDERS = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link']);
 /** Buses only spawn on these road classes. */
 const BUS_ROADS = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'busway']);
+/** The bodies parked along the kerbs (city/visual/Parking.ts `PARK_BODIES`): their kits get room for `PARKED_DRAW`. */
+const PARKED_BODIES = new Set<BodyType>(['sedan', 'suv', 'hatch', 'mpv']);
 
 /**
  * City traffic. A fixed pool of taxi-spec Vehicles (disabled when idle) is kept filled in a ring
@@ -122,13 +139,20 @@ export async function install(engine: Engine): Promise<void> {
   const kits = new Map<BodyType, CarKit>();
   const kitFor = (b: BodyType): CarKit => {
     let k = kits.get(b);
-    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2, defaultLivery(b), b); kits.set(b, k); }
+    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2 + (PARKED_BODIES.has(b) ? PARKED_DRAW : 0), defaultLivery(b), b); kits.set(b, k); }
     return k;
   };
   const rng = new Rng(4242);
   const rnd = () => rng.next();
   const pool: Npc[] = [];
-  const externalCars: Parameters<TrafficApi['addExternalCars']>[0][] = [];
+  const externalCars: ExternalCars[] = [];
+  const externalDraws: ((put: ExternalPut, alpha: number) => void)[] = [];
+  const putExternal: ExternalPut = (body, pos, quat, car, upper, lower) => {
+    const kit = kitFor(body), k = written.get(body) ?? 0;
+    if (k >= kit.cap) return;
+    if (car) kit.set(k, pos, quat, car, upper, lower, false); else kit.setStill(pos, quat, upper, lower);
+    written.set(body, k + 1);
+  };
   // Cars the pool let go of (a parked car took their slot), reused before building new ones:
   // removing Rapier bodies would free collider handles that stale tags could then point at.
   const spares = new Map<BodyType, Vehicle[]>();
@@ -198,6 +222,43 @@ export async function install(engine: Engine): Promise<void> {
     else { n.upper.set(PRIVATE[Math.floor(rnd() * PRIVATE.length)]); n.lower.copy(n.upper); }
   };
 
+  /**
+   * The distant traffic past the physics ring (Ghosts.ts): budget and reach by tier, `?ghosts=0` off. On low only
+   * saloons (taxis among them), SUVs and buses are drawn there (three kits); the bodies hand over as they are.
+   */
+  const ghostOn = max > 0 && new URLSearchParams(location.search).get('ghosts') !== '0';
+  const ghostPaint = (cls: string): { body: BodyType; upper: THREE.Color; lower: THREE.Color; taxi: boolean } => {
+    let body: BodyType = 'sedan', u = rnd();
+    for (const [b, share] of MIX) { if (u < share) { body = b; break; } u -= share; }
+    if ((body === 'bus' && !BUS_ROADS.has(cls)) || (body === 'truck' && cls === 'residential')) body = 'sedan';
+    const n = { body, upper: new THREE.Color(), lower: new THREE.Color(), taxi: false } as unknown as Npc;
+    paint(n);
+    return { body, upper: n.upper, lower: n.lower, taxi: n.taxi };
+  };
+  const adoptGhost = (h: Handover): boolean => {
+    if (driving() >= max) return false;
+    const n = pool.find((p) => !p.active && !p.parked && p.body === h.body);
+    if (!n) return false;
+    const l = g.links[h.link];
+    if (l.len - h.s < 3) return false;
+    g.at(l, h.s, g.laneOffset(l, h.lane), tmp);
+    if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 9)) return false;
+    const lift = deckAt(l, h.s, tmp.x, tmp.z);
+    if (Number.isNaN(lift)) return false;
+    n.car.body.setEnabled(true);
+    n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
+    n.car.setMoving(h.v);
+    n.driver = new AiDriver(g, sig, h.link, h.s, h.lane, rnd);
+    n.filter.reset();
+    n.upper.copy(h.upper); n.lower.copy(h.lower); n.taxi = h.taxi;
+    n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
+    n.active = true; n.flipped = 0;
+    return true;
+  };
+  const ghosts = ghostOn ? new GhostTraffic(engine.scene, g, sig, rnd,
+    tier === 'low' ? 140 : tier === 'medium' ? 260 : 420, tier === 'low' ? 450 : tier === 'medium' ? 600 : 750,
+    new Set<BodyType>(tier === 'low' ? ['sedan', 'suv', 'bus'] : ['sedan', 'suv', 'hatch', 'mpv', 'bus', 'truck']), ghostPaint, adoptGhost) : null;
+
   const spawn = () => {
     let n = pool.find((p) => !p.active && !p.parked && p.body !== 'ebike');
     if (!n) { if (driving() >= max) return; n = makeNpc(newCar('sedan'), 'sedan'); pool.push(n); }
@@ -250,8 +311,8 @@ export async function install(engine: Engine): Promise<void> {
       const l = g.links[id];
       if (l.len < 30 || !BIKE_ROADS.has(l.cls) || l.hmax > 0.3) continue;
       const s = 8 + rnd() * (l.len - 16);
-      // On the pavement, a metre in from the kerb on the right of travel, pointing along the road.
-      g.at(l, s, -(l.hw + 1.1), tmp);
+      // On the pavement, a metre in from the kerb on the right of travel (or from the parked cars up on it), pointing along the road.
+      g.at(l, s, -(l.hw + 1.1 + l.parkOut), tmp);
       const d = Math.hypot(tmp.x - cam.x, tmp.z - cam.z);
       if (d < 30 || d > 200) continue;
       if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 7)) continue;
@@ -296,7 +357,7 @@ export async function install(engine: Engine): Promise<void> {
       const l = g.links[id];
       if (l.len < 24 || NO_RIDERS.has(l.cls) || g.endsAfter(id)) continue;
       const s = 6 + rnd() * (l.len - 12);
-      g.at(l, s, -l.hw + 0.8, tmp);
+      g.at(l, s, -l.kerbR + 0.8, tmp);   // inside the cars parked along the kerb, where there are any
       const d = Math.hypot(tmp.x - cam.x, tmp.z - cam.z);
       if (d < 70 || d > 240) continue;
       if (d < 190 && ((tmp.x - cam.x) * camDir.x + (tmp.z - cam.z) * camDir.z) / d > 0.3) continue;
@@ -374,6 +435,16 @@ export async function install(engine: Engine): Promise<void> {
     const people = engine.get<PeopleApi>('people');
     if (people) for (const q of people.inRoad()) consider(q.x, 0.5, q.z, 0, 0, 0.6, 0.4);
     for (const c of engine.get<WantedApi>('wanted')?.policeCars() ?? []) consider(c.pos.x, c.pos.y, c.pos.z, c.vel.x, c.vel.z);
+    for (const p of externalCars) if (p.blocking) for (const c of p.blocking()) consider(c.pos.x, c.pos.y, c.pos.z, c.vel.x, c.vel.z, specLength(c.spec));
+    // The distant traffic on the same lane ahead (the band where both kinds drive, 220-330 m out).
+    const dr = n.driver;
+    if (ghosts && dr) {
+      const o = ghosts.leaderFor(dr.link, dr.s, dr.lane, dr.nextLink);
+      if (o && o.ds < 60) {
+        const gap = Math.max(0.5, o.ds - (o.len + selfLen) / 2 + 4.6);
+        if (!best || gap < (best as Leader).gap) best = { gap, speed: o.v };
+      }
+    }
     return best;
   };
 
@@ -392,11 +463,13 @@ export async function install(engine: Engine): Promise<void> {
     crowd.add(seatAt, Math.atan2(seatFwd.x, seatFwd.z), r.gait, r.look);
   };
 
-  const api: TrafficApi = {
+  const api: TrafficApi & { ghosts: GhostTraffic | null } = {
     name: 'traffic',
+    ghosts,
     graph: g, signals: sig, lineStats, riderCap: RIDERS,
     get time() { return t; },
     addExternalCars: (provider) => { externalCars.push(provider); },
+    addExternalDraw: (draw) => { externalDraws.push(draw); },
     cars: () => [...pool.filter((n) => n.active).map((n) => n.car), ...externalCars.flatMap((p) => p.cars())],
     nearestCar(x, z, r) {
       let best: Vehicle | null = null, bd = r;
@@ -509,7 +582,7 @@ export async function install(engine: Engine): Promise<void> {
           }
         }
       }
-      if (spawnT <= 0) { spawnT = 0.2; if (driving() < max) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < RIDERS) spawnRider(); }
+      if (spawnT <= 0) { spawnT = 0.2; if (driving() < max && !ghosts?.adoptWaiting(engine.camera.position)) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < RIDERS) spawnRider(); }
       // Buses look for a shelter ahead on their side once a second (at the kerb of the link they are on).
       busT -= dt;
       if (busT <= 0) {
@@ -557,7 +630,14 @@ export async function install(engine: Engine): Promise<void> {
         const dead = n.driver!.mode === 'lost' || n.flipped > 4 || n.driver!.stuck > 15 || n.car.pos.y < -5;
         // A getaway car is measured from the player, not the camera, and only lost when far gone.
         const pv = n.runner ? player() : null;
-        if (n.runner ? (pv ? Math.hypot(n.car.pos.x - pv.car.pos.x, n.car.pos.z - pv.car.pos.z) : d) > 900 : (d > 330 || (dead && (d > 90 || !inView)))) despawn(n);
+        if (n.runner ? (pv ? Math.hypot(n.car.pos.x - pv.car.pos.x, n.car.pos.z - pv.car.pos.z) : d) > 900 : (d > 330 || (dead && (d > 90 || !inView)))) {
+          // Driving away past the ring: it carries on as distant traffic.
+          if (ghosts && !dead && !n.runner && !n.rider && n.driver && n.body !== 'ebike') {
+            const dr = n.driver;
+            ghosts.take({ link: dr.link, s: dr.s, lane: dr.lane, v: Math.max(0, n.car.forwardSpeed), body: n.body, upper: n.upper, lower: n.lower, taxi: n.taxi });
+          }
+          despawn(n);
+        }
       }
     },
     update(_dt, alpha) {
@@ -573,6 +653,13 @@ export async function install(engine: Engine): Promise<void> {
         kit.set(k, renderPos, renderQuat, n.car, n.upper, n.lower, n.taxi);
         written.set(n.body, k + 1);
         if (n.rider) drawRider(n, _dt);
+      }
+      for (const draw of externalDraws) draw(putExternal, alpha);
+      if (ghosts) {
+        const ds = ghosts.drivers;
+        ds.length = 0;
+        for (const n of pool) if (n.active && n.driver && !n.parked) ds.push(n.driver.link, n.driver.s, n.driver.lane, Math.max(0, n.car.forwardSpeed), specLength(n.car.spec));
+        ghosts.update(_dt, t, engine.camera.position, camDir.set(0, 0, -1).applyQuaternion(engine.camera.quaternion), (engine.get<RenderApi>('render')?.night ?? 0) > 0.35, driving() < max);
       }
       const night = (engine.get<RenderApi>('render')?.night ?? 0) > 0.35;
       for (const [b, kit] of kits) { kit.commit(written.get(b) ?? 0); kit.setHeadlights(night); }

@@ -51,6 +51,14 @@ export function setLampState(a: LampArray, o: { head: boolean; brake?: boolean; 
 const _hsl = { h: 0, s: 0, l: 0 };
 /** Metalness a paint colour gets: silvers, greys, dark blues and champagne are metallic; white and taxi yellow solid. */
 export function paintMetal(c: THREE.Color): number {
+  // Every car's two tones every frame (the kits): the HSL conversion was most of a parked or distant car's cost.
+  const key = Math.round(c.r * 1023) * 1048576 + Math.round(c.g * 1023) * 1024 + Math.round(c.b * 1023);
+  let m = metalOf.get(key);
+  if (m === undefined) { m = metalFor(c); if (metalOf.size > 4096) metalOf.clear(); metalOf.set(key, m); }
+  return m;
+}
+const metalOf = new Map<number, number>();
+function metalFor(c: THREE.Color): number {
   c.getHSL(_hsl);
   if (_hsl.l > 0.8) return 0.05;
   if (_hsl.s < 0.18) return _hsl.l < 0.06 ? 0.35 : 0.65;
@@ -99,6 +107,7 @@ vAux = aux;
     if (k == 1) li = mix(uLamp[1], uLamp[2], instLamp.y);
     else if (k == 2) li = uLamp[2] * instLamp.y;
     else if (k == 3) li = uLamp[3] * instLamp.z;
+    li *= 1.0 - instLamp.w;   // a parked car: every lamp off
   #endif
   vLampI = li;
 }

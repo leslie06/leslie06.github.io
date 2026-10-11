@@ -3,11 +3,12 @@
  * Builds one city tile off the main thread: fetch + parse the JSON, then every geometry as plain
  * typed arrays (transferred, not copied). The main thread only wraps them in BufferGeometries.
  */
-import type { BuildingRec, TileData } from './Data';
+import type { BuildingRec, RoadPiece, TileData } from './Data';
 import { buildBuildings } from './Buildings';
 import { buildRoads } from './Roads';
 import { buildAreas } from './Areas';
 import { placeFurniture, type Furniture } from './visual/StreetFurniture';
+import { dropParked, placeParking } from './visual/Parking';
 import { clearStreet, inside, overlaps } from './Clear';
 import type * as THREE from 'three';
 
@@ -24,6 +25,8 @@ export interface TileResult {
   trees?: number[]; lamps?: number[]; signals?: number[]; stops?: number[];
   /** Street furniture instances (visual/StreetFurniture.ts). */
   furniture?: Furniture;
+  /** Shop units on the ground floors (Buildings.ts `shops`, `SHOP_STRIDE` numbers each). */
+  shops?: number[];
 }
 
 function pack(name: string, g: THREE.BufferGeometry | null, out: PackedGeometry[], transfer: Transferable[]): void {
@@ -38,8 +41,8 @@ function pack(name: string, g: THREE.BufferGeometry | null, out: PackedGeometry[
   out.push({ name, attrs, index });
 }
 
-self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][]; street?: number[][] }>) => {
-  const { key, url, footprints, clear = [], street: streetOnly = [] } = ev.data;
+self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][]; street?: number[][]; near?: RoadPiece[] }>) => {
+  const { key, url, footprints, clear = [], street: streetOnly = [], near = [] } = ev.data;
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -56,19 +59,23 @@ self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints:
       return clear.some((f) => overlaps(b.o, f)) || (learnt && footprints.some((f) => overlaps(b.o, f)));
     } : undefined;
     const geoms: PackedGeometry[] = [], transfer: Transferable[] = [];
-    const bm = buildBuildings(data.buildings, skip, data.roads);
+    // the roads next door too: a building is on the tile its middle is on, its street may be on the next one
+    const bm = buildBuildings(data.buildings, skip, near.length ? [...data.roads, ...near] : data.roads);
     pack('facade', bm.facade, geoms, transfer);
     pack('roofprops', bm.props, geoms, transfer);
     const deck: number[] = [], deckLamps: number[] = [];
     // tree pits under the street trees the clear zones leave standing
-    const street = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, streetOnly.length ? [...clear, ...streetOnly] : clear);
+    const zones = streetOnly.length ? [...clear, ...streetOnly] : clear;
+    const street = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, zones);
+    // Cars parked along the kerbs, clear of what the street keeps there and of the zones.
+    street.furniture.park = dropParked(placeParking(data.roads, data.crossings, data.stops, street.trees, street.lamps, street.furniture.bike, street.furniture.bin, data.ctx), zones);
     const rm = buildRoads(data.roads, data.crossings, deck, deckLamps, data.ctx, street.trees);
     for (const [k, g] of Object.entries(rm)) pack(k, g as THREE.BufferGeometry | null, geoms, transfer);
     for (const [k, g] of buildAreas(data.areas)) pack(`area:${k}`, g, geoms, transfer);
     transfer.push(bm.colVerts.buffer, bm.colIdx.buffer);
     // A footprint removes buildings; a landmark's clear zones remove what the street put in its way.
     const { trees, lamps, furniture } = street;
-    const msg: TileResult = { key, geoms, colVerts: bm.colVerts, colIdx: bm.colIdx, trees, lamps, signals: data.signals, stops: data.stops, furniture };
+    const msg: TileResult = { key, geoms, colVerts: bm.colVerts, colIdx: bm.colIdx, trees, lamps, signals: data.signals, stops: data.stops, furniture, shops: bm.shops };
     if (deckLamps.length) msg.deckLamps = deckLamps;
     if (deck.length) {
       msg.deckVerts = Float32Array.from(deck);

@@ -20,6 +20,7 @@ import { entranceZones, placeSubwayEntrances, type EntrancesFile } from './visua
 import type { Closure, GuideSign } from './Signs';
 import { SkylineLod } from './Skyline';
 import { CityStreamer, spawnTileWorkers } from './Streamer';
+import { ShopFronts } from './visual/ShopFronts';
 import { undergroundHoles } from '../underground/Layout';
 import { shortcutClear, stuntClear } from '../stunts/Structures';
 import { overlaps } from './Clear';
@@ -285,6 +286,7 @@ export async function install(engine: Engine): Promise<void> {
     sky.setDetailed(streamer.loadedKeys);
   };
   const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear, landmarkTrees);
+  streamer.setNetwork(network);
   streamer.streetClear = [...(footbridges ? footbridgeZones(footbridges) : []), ...(rail ? railZones(rail) : [])];
   // nothing stands in a trench: no tree, lamp, bin or building
   if (tunnels) clear.push(...trenchZones(tunnels));
@@ -292,6 +294,11 @@ export async function install(engine: Engine): Promise<void> {
   if (skyline) putSky(skyline);
   engine.add(streamer);
   engine.add(streamer.knocks);
+  // What stands in front of the shops near the camera (visual/ShopFronts.ts); `?shops=0` off. The pavement goods not on low.
+  if (new URLSearchParams(location.search).get('shops') !== '0') {
+    const tier = engine.quality.tier;
+    engine.add(new ShopFronts(engine.scene, streamer, env, tier === 'low' ? 70 : tier === 'medium' ? 100 : 130, tier !== 'low'));
+  }
   const routes = new Routes(network);
   // 此路不通 at the mouth of every dead-end branch (「我把车开到了故宫，发现进了死胡同，开不出去了」).
   placeDeadEndSigns(engine, network, findDeadEnds(network, { ...manifest.bounds, regions: manifest.regions }), env);

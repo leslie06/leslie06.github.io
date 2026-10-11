@@ -9,9 +9,10 @@ import { hash3, h01 } from './hash';
  *   shelter [x, y, z, yaw]         bus shelters, front (+z local) to the road
  *   bin     [x, y, z, yaw]         a pair of sorting bins
  *   bike    [x, y, z, yaw, brand]  shared bikes in rows, perpendicular to the curb
+ *   park    [x, z, heading, body, colour]  cars parked along the kerb (visual/Parking.ts; added by the tile worker)
  * `yaw` turns local +x onto the road direction.
  */
-export interface Furniture { rail: number[]; shelter: number[]; bin: number[]; bike: number[] }
+export interface Furniture { rail: number[]; shelter: number[]; bin: number[]; bike: number[]; park?: number[] }
 
 const RAIL = 3;
 const yawOf = (tx: number, tz: number) => Math.atan2(-tz, tx);

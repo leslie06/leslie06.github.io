@@ -58,6 +58,9 @@ export class AiDriver {
     this.fill();
   }
 
+  /** The link after this one (-1 where the road ends): the distant traffic looks there for the car in front. */
+  get nextLink(): number { return this.queue.length ? this.queue[0] : -1; }
+
   private fill(): void {
     // Stops short where the road ends: `next` has nothing to give, the queue stays short, and the
     // driver brakes for the end of the link as for a red light, then reports itself lost.
@@ -74,8 +77,8 @@ export class AiDriver {
     let l = this.g.links[this.link], s = this.s + ahead, i = 0;
     while (s > l.len && i < this.queue.length) { s -= l.len; l = this.g.links[this.queue[i++]]; }
     const lane = Math.min(this.lane, l.lanes - 1), off = this.g.laneOffset(l, lane);
-    // Pulled over: towards the right kerb, never past a car's half width inside it.
-    this.g.at(l, s, this.kerb > 0 ? -l.hw + this.kerb : Math.max(-l.hw + 1.3, off - this.shift), out);
+    // Pulled over: towards the right kerb (or the cars parked along it), never past a car's half width inside it.
+    this.g.at(l, s, this.kerb > 0 ? -l.kerbR + this.kerb : Math.min(off, Math.max(-l.kerbR + 1.3, off - this.shift)), out);
   }
 
   /**

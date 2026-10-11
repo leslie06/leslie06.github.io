@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
+import type { ParkingApi } from '../parking';
 import { lang, t, type TKey } from '../core/I18n';
 import { Rng } from '../core/Rng';
 import type { Actor, Blip, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RaceApi, Speaker, VehicleApi, WantedApi } from '../game/Contracts';
@@ -335,6 +336,7 @@ export async function install(engine: Engine): Promise<void> {
     while (s > l.len - 3) { const n = g.next(l.id, rnd); if (n < 0) return false; s -= l.len; l = g.links[n]; }
     if (!SIDEWALK[l.cls] || l.hmax > 0.3) return false;
     g.at(l, s, -(l.hw + 0.9), at);   // the kerb on the right of the player's lane
+    engine.get<ParkingApi>('parking')?.clearAround(at.x, at.z, 4, 120);   // no parked car between them and the road
     const man = people.spawnActor!(at.x, at.z, { look: looks.oldMan(), yaw: Math.atan2(-at.dz, at.dx) });
     if (!man) return false;
     man.fair = true; man.downFor = 60;
@@ -428,6 +430,7 @@ export async function install(engine: Engine): Promise<void> {
       const dx = at.x - c.pos.x, dz = at.z - c.pos.z, d = Math.hypot(dx, dz);
       if (d < 70 || d > 170 || (dx * c.fwd.x + dz * c.fwd.z) / d < 0.35) continue;
       const yaw = Math.atan2(-side * at.dz, side * at.dx);
+      engine.get<ParkingApi>('parking')?.clearAround(at.x, at.z, 4, 120);   // no parked car between them and the road
       const husband = people.spawnActor!(at.x, at.z, { look: looks.husband(), yaw });
       const wife = people.spawnActor!(at.x + at.dx * 0.9, at.z + at.dz * 0.9, { look: looks.wife(), yaw });
       if (!husband || !wife) { husband?.release('vanish'); wife?.release('vanish'); return false; }
@@ -651,6 +654,7 @@ export async function install(engine: Engine): Promise<void> {
       g.at(l, s, side * (l.hw + 0.9), at);
       const dx = at.x - P.x, dz = at.z - P.z, d = Math.hypot(dx, dz);
       if (d < min || d > max || (dx * f.x + dz * f.z) / d < 0.35) continue;
+      engine.get<ParkingApi>('parking')?.clearAround(at.x, at.z, 4, 120);   // no parked car between them and the road
       return { x: at.x, z: at.z, yaw: Math.atan2(-side * at.dz, side * at.dx), side, l, s };
     }
     return null;

@@ -1,4 +1,5 @@
 import type { Network } from '../city/Data';
+import { laneLayout, laneOffsetOf, parkingLine } from './Lanes';
 
 /** One direction of travel along a network edge. Lateral offsets are left-positive of travel. */
 export interface Link {
@@ -19,6 +20,13 @@ export interface Link {
   /** Carriageway height above the ground at each point (a deck or a ramp of an interchange), or null when flat; and its highest. */
   /** Heights per point (negative in an underpass) and the largest off the ground either way. */
   h: Float32Array | null; hmax: number;
+  /**
+   * Metres right of the centre line drivers keep inside when pulling over (a scooter's kerb, a car yielding to a
+   * siren): the kerb, or the edge of the cars parked along it (Lanes.ts `parkingLine`).
+   */
+  kerbR: number;
+  /** How far parked cars stand up on the pavement on the right of travel (0: none, or all in the road); walkers keep clear. */
+  parkOut: number;
 }
 
 const SPEED: Record<string, number> = {
@@ -56,13 +64,14 @@ export class LaneGraph {
         // 东四环中路's tunnels stopped the census's cars, 2026-10-04).
         const sunk = !!e.h && Math.min(...e.h) < -0.5;
         const ew = sunk ? Math.max(3, e.w - 1.2) : e.w;
-        const lanes = e.o ? (e.l || Math.max(1, Math.round(ew / 3.3))) : Math.max(1, e.l ? Math.round(e.l / 2) : Math.floor(ew / 2 / 3.1));
-        const laneW = (e.o ? ew : ew / 2) / lanes;
+        const { lanes, laneW } = laneLayout(ew, !!e.o, e.l);
+        const park = sunk ? null : parkingLine(e.c, e.w, !!e.o, e.l);
         const dir = (a: number, b: number) => { const dx = pts[b * 2] - pts[a * 2], dz = pts[b * 2 + 1] - pts[a * 2 + 1], L = Math.hypot(dx, dz) || 1; return [dx / L, dz / L]; };
         const [d0x, d0z] = dir(0, 1), [d1x, d1z] = dir(m - 2, m - 1);
         let h: Float32Array | null = null, hmax = 0;
         if (e.h) { h = new Float32Array(m); for (let k = 0; k < m; k++) { h[k] = e.h[fwd ? k : m - 1 - k]; hmax = Math.max(hmax, Math.abs(h[k])); } }
         return { h, hmax, id: this.links.length, from: fwd ? e.a : e.b, to: fwd ? e.b : e.a, pts, cum, len: cum[m - 1], cls: e.c, lanes, laneW, hw: ew / 2, oneway: !!e.o,
+          kerbR: park ? park.inner : ew / 2, parkOut: park ? Math.max(0, park.outer - ew / 2) : 0,
           speed: SPEED[e.c] ?? 8, rev: -1, name: e.n ?? '', d0x, d0z, d1x, d1z };
       };
       const f = make(true);
@@ -82,14 +91,9 @@ export class LaneGraph {
     }
   }
 
-  /**
-   * Metres left of the centre line of a lane's middle. A street with one lane each way keeps its traffic within
-   * 1.4 m of the line (oncoming cars still pass a metre apart): at half its width, 1.75-2 m out, the kerb lane of
-   * a narrow street ran against the house fronts the widths overstate (the drivability census, 2026-10-03).
-   */
+  /** Metres left of the centre line of a lane's middle (Lanes.ts `laneOffsetOf`). */
   laneOffset(l: Link, lane: number): number {
-    if (l.oneway) return l.hw - (lane + 0.5) * l.laneW;
-    return l.lanes === 1 ? -Math.min(0.5 * l.laneW, 1.4) : -(lane + 0.5) * l.laneW;
+    return laneOffsetOf(l.oneway, l.lanes, l.laneW, l.hw, lane);
   }
 
   /** Position and direction at arc length `s` along link `l`, `off` metres left of the centre line. */

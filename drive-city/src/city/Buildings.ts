@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { BuildingRec, RoadPiece } from './Data';
 import { FLAG_SHOP, FLAG_STREET, ST, TYPE_COLOURS, WALL_COLOURS, type Style } from './visual/styles';
-import { hashU, h01, rng } from './visual/hash';
+import { hash3, hashU, h01, rng } from './visual/hash';
+import { SIGN_COUNT } from './visual/ShopSigns';
 import ROOF_PROPS from './visual/roofprops.json';
 
 /** Per-building facade parameters (see the facade shader in Materials.ts). */
@@ -84,7 +85,16 @@ export interface BuildingMeshes {
   /** Wall triangles for a static trimesh collider (base at ground). */
   colVerts: Float32Array;
   colIdx: Uint32Array;
+  /**
+   * The shop units the facade shader draws, found the same way (its bays, unit width and hash), for the props in front
+   * of them (visual/ShopFronts.ts): [x, z, nx, nz, width, ground-floor height, sign (-1 none), flags, hash, room] per
+   * unit at the middle of its wall; flags 1 a closed shutter, 2 a hutong house, 4 the building rises above the shop;
+   * room: metres from the wall to the carriageway in front.
+   */
+  shops: number[];
 }
+/** Numbers per shop unit in `BuildingMeshes.shops`. */
+export const SHOP_STRIDE = 10;
 
 const ring = (flat: number[]): [number, number][] => { const r: [number, number][] = []; for (let i = 0; i < flat.length; i += 2) r.push([flat[i], flat[i + 1]]); return r; };
 const pick = <T>(a: T[], r: number): T => a[Math.min(a.length - 1, Math.floor(r * a.length))];
@@ -110,19 +120,22 @@ function facadeOf(b: BuildingRec, top: number, base: number, shops: boolean): Fa
     default: style = ST.STATION; fh = 5; bw = 4;
   }
   const housing = style === ST.SLAB || style === ST.BRICK || style === ST.TOWER;
-  const gh = base > 0.5 || H < 7 ? 0 : shops && style !== ST.GLASS && style !== ST.LOW ? 4.3 : housing ? fh : 0;
+  // Shops take the ground floor (the whole of a one-storey building, to just under its eaves).
+  const gh = base > 0.5 ? 0 : shops && style !== ST.GLASS ? (H >= 7 ? 4.3 : H > 2.7 ? Math.min(4.3, H - (style === ST.HUTONG ? 0.12 : 0.3)) : 0) : H < 7 ? 0 : housing ? fh : 0;
   const col = b.c ? C(b.c).lerp(C('#d8d4cb'), 0.3) : C(pick(b.t ? TYPE_COLOURS[b.t] : WALL_COLOURS[style], b.s)).offsetHSL(0, 0, (r2 - 0.5) * 0.04);
   return { style, fh, bw, gh, top, base, seed: hh & 0xffffff, col, ty: b.k === 'resid' ? b.t ?? 0 : 0 };
 }
 
 const CAR = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link', 'pedestrian', 'service']);
 const SHOPPY = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'pedestrian', 'living_street']);
+/** The streets a hutong house turns into a shop on (not the lanes behind). */
+const MAIN_STREET = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'pedestrian']);
 
 /** Distance from a wall midpoint to the nearest road in front of it (Infinity if none within maxD). */
-function roadInFront(roads: RoadPiece[], mx: number, mz: number, nx: number, nz: number, maxD: number, shoppy: boolean): number {
+function roadInFront(roads: RoadPiece[], mx: number, mz: number, nx: number, nz: number, maxD: number, shoppy: boolean, only?: Set<string>): number {
   let best = Infinity;
   for (const r of roads) {
-    if (!(shoppy ? SHOPPY : CAR).has(r.c)) continue;
+    if (!(only ?? (shoppy ? SHOPPY : CAR)).has(r.c)) continue;
     const p = r.p;
     for (let i = 0; i + 3 < p.length; i += 2) {
       const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3];
@@ -146,6 +159,7 @@ function roadInFront(roads: RoadPiece[], mx: number, mz: number, nx: number, nz:
  */
 export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => boolean, roads: RoadPiece[] = []): BuildingMeshes {
   const fb = new FacadeBucket(), pb = new PropBucket();
+  const shops: number[] = [];
   const cv: number[] = [], ci: number[] = [];
   const roofCol = new THREE.Color();
 
@@ -156,14 +170,24 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     const base = b.m;
     if (top - base < 0.5) continue;
     const rings = [ring(b.o), ...(b.hs ?? []).map(ring)];
-    // Which walls face a street: shops on housing/office ground floors, doors in hutongs.
-    const wantShops = (b.k === 'resid' || b.k === 'office') && base < 0.5 && top > 7;
-    const segFlags: number[][] = rings.map((r) => r.map((a, i) => {
+    // Which walls face a street: shops on housing/office ground floors, doors in hutongs. Since 2026-10-11 also on
+    // most low buildings (the one-storey shops along a street) and housing from 3.3 m, and on hutong houses fronting
+    // a main street (tertiary and up: 鼓楼东大街, not the lanes) - the ground floors of Beijing's streets are shops.
+    const sh = h01(hashU((b.i % 4294967296) >>> 0 ^ 0x2c1b3c6d));
+    const wantShops = base < 0.5 && top > 3.3 && ((b.k === 'resid' || b.k === 'office') && (top > 7 || sh < 0.6) || (b.k === 'low' && sh < 0.75));
+    const hutongShops = b.k === 'hutong' && base < 0.5 && top > 2.7 && sh < 0.65;
+    // and how far each wall is from the carriageway in front of it (the pavement a shop has for its props)
+    const segRoom: number[][] = rings.map((r) => r.map(() => 0));
+    const segFlags: number[][] = rings.map((r, ri) => r.map((a, i) => {
       const bq = r[(i + 1) % r.length], dx = bq[0] - a[0], dz = bq[1] - a[1], L = Math.hypot(dx, dz);
       if (L < 3 || (!wantShops && b.k !== 'hutong')) return 0;
       const nx = dz / L, nz = -dx / L, mx = (a[0] + bq[0]) / 2 + nx, mz = (a[1] + bq[1]) / 2 + nz;
+      // (a hutong house on a main street often stands back behind a wide pavement and a strip of green: 16 m)
+      const dm = hutongShops && L >= 4.5 ? roadInFront(roads, mx, mz, nx, nz, 16, true, MAIN_STREET) : Infinity;
+      if (Number.isFinite(dm)) { segRoom[ri][i] = dm + 1; return FLAG_SHOP | FLAG_STREET; }
       const d = roadInFront(roads, mx, mz, nx, nz, b.k === 'hutong' ? 9 : 26, b.k !== 'hutong');
       if (!Number.isFinite(d)) return 0;
+      segRoom[ri][i] = d + 1;
       return (wantShops && L >= 4.5 ? FLAG_SHOP : 0) | FLAG_STREET;
     }));
     const hasShops = segFlags.some((fl) => fl.some((f) => f & FLAG_SHOP));
@@ -187,6 +211,15 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
         const style = nb ? F.style : (F.style === ST.HUTONG || F.style === ST.WALL ? F.style : ST.BLANK);
         const bayW = nb ? L / nb : L;
         const fl = segFlags[ri][i];
+        // The shop units on it as the shader lays them out (Materials.ts: k bays a unit, counted from B, hash per unit).
+        if (fl & FLAG_SHOP && F.gh > 0 && nb && style !== ST.GLASS) {
+          const k = Math.max(1, Math.floor(4.8 / bayW + 0.5));
+          for (let si = 0; (si + 1) * k <= nb + 1e-6; si++) {
+            const hs = hash3(F.seed, si + 4096, 555), t = 1 - (si + 0.5) * k / nb;
+            shops.push(ax + dx * t, az + dz * t, nx, nz, 0.9 * k * bayW, F.gh, hs % 10 !== 0 ? (hs >>> 4) % SIGN_COUNT : -1,
+              ((hs >>> 9) % 8 === 5 ? 1 : 0) | (F.style === ST.HUTONG ? 2 : 0) | (top - F.gh > 2.5 ? 4 : 0), hs, segRoom[ri][i]);
+          }
+        }
         const N = [nx, 0, nz];
         // Seen from outside, a wall's right-hand end is always A: bays count from B so modules
         // (and shop signs) are not mirrored. A road through the building opens the wall below its
@@ -225,7 +258,7 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
       if (flatStyle && top - base > 6) clutter(rs, pb, fb, b, rings, top, F);
     }
   }
-  return { facade: fb.build(), props: pb.build(), colVerts: new Float32Array(cv), colIdx: new Uint32Array(ci) };
+  return { facade: fb.build(), props: pb.build(), colVerts: new Float32Array(cv), colIdx: new Uint32Array(ci), shops };
 }
 
 /** A road through a building: start, unit direction and length along it, half width, clearance. */

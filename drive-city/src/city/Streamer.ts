@@ -4,7 +4,7 @@ import type { Engine, System } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import type { EnvUniforms } from '../game/Contracts';
 import type { RenderSystem } from '../render/RenderSystem';
-import type { Manifest } from './Data';
+import type { Manifest, Network, RoadPiece } from './Data';
 import type { CityMaterials } from './Materials';
 import type { TileResult } from './tileWorker';
 import { TILE, tileOf } from './Geo';
@@ -143,6 +143,14 @@ export class CityStreamer implements System {
   private headsDirty = false;
   /** Each loaded tile's furniture as placed (the knock test reads it). */
   private furnRaw = new Map<string, Furniture>();
+  /**
+   * Told when a tile's colliders come (`park`: the cars parked along its kerbs, visual/Parking.ts records) and go
+   * (null): parking/ draws and simulates the parked cars of the tiles with colliders.
+   */
+  onParked: ((key: string, park: number[] | null) => void) | null = null;
+  /** Each loaded tile's shop units (Buildings.ts `shops`), and a count bumped when the set changes (visual/ShopFronts.ts). */
+  readonly shops = new Map<string, number[]>();
+  shopVer = 0;
   /** Bins, bikes and railings the car can knock flying (a System of its own: city/index adds it). */
   readonly knocks: StreetKnocks;
   private knockVer = 0;
@@ -304,6 +312,45 @@ export class CityStreamer implements System {
     }
   }
 
+  /** The drivable network, gridded by 64 m cells (`setNetwork`), and each edge as a road piece once asked for. */
+  private net: Network | null = null;
+  private netGrid = new Map<number, number[]>();
+  private netPieces = new Map<number, RoadPiece>();
+  /**
+   * Give the tiles the roads beyond their edges (2026-10-11): a building belongs to the tile its middle is on, and
+   * one facing a road the next tile holds had no street in front of it - no shop fronts on whole stretches of
+   * 恒惠西路. Each request carries the network's edges within 120 m of the tile (`near`).
+   */
+  setNetwork(net: Network): void {
+    this.net = net;
+    net.edges.forEach((e, i) => {
+      const seen = new Set<number>();
+      for (let k = 0; k < e.p.length; k += 2) {
+        const c = (Math.floor(e.p[k] / 64) + 4096) * 8192 + Math.floor(e.p[k + 1] / 64) + 4096;
+        if (seen.has(c)) continue;
+        seen.add(c);
+        const l = this.netGrid.get(c); if (l) l.push(i); else this.netGrid.set(c, [i]);
+      }
+    });
+  }
+  private roadsNear(x0: number, z0: number, x1: number, z1: number): RoadPiece[] {
+    if (!this.net) return [];
+    const ids = new Set<number>();
+    for (let cx = Math.floor(x0 / 64); cx <= Math.floor(x1 / 64); cx++) for (let cz = Math.floor(z0 / 64); cz <= Math.floor(z1 / 64); cz++)
+      for (const i of this.netGrid.get((cx + 4096) * 8192 + cz + 4096) ?? []) ids.add(i);
+    const out: RoadPiece[] = [];
+    for (const i of ids) {
+      let r = this.netPieces.get(i);
+      if (!r) {
+        const e = this.net.edges[i];
+        r = { c: e.c, w: e.w, o: e.o, l: e.l, br: 0, n: e.n, p: e.p, j: new Array(e.p.length / 2).fill(0), a: 0, b: 0, ...(e.h ? { h: e.h } : {}) };
+        this.netPieces.set(i, r);
+      }
+      out.push(r);
+    }
+    return out;
+  }
+
   private request(k: string, again = false): void {
     if ((this.tiles.has(k) && !again) || this.inflight.has(k)) return;
     const w = this.workers[this.rr++ % this.workers.length];
@@ -321,7 +368,8 @@ export class CityStreamer implements System {
       }
       return b[2] > x0 && b[0] < x1 && b[3] > z0 && b[1] < z1;
     };
-    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, location.href).href, footprints: this.footprints.filter(near), clear: this.clear.filter(near), street: this.streetClear.filter(near) });
+    const R = 120, roads = this.roadsNear(ix * T - R, iz * T - R, (ix + 1) * T + R, (iz + 1) * T + R);
+    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, location.href).href, footprints: this.footprints.filter(near), clear: this.clear.filter(near), street: this.streetClear.filter(near), near: roads });
   }
 
   private build(res: TileResult): void {
@@ -369,6 +417,7 @@ export class CityStreamer implements System {
     this.headsDirty = true;
     this.furnLists.set(res.key, this.furnMatrices(res.furniture));
     if (res.furniture) this.furnRaw.set(res.key, res.furniture);
+    this.shops.set(res.key, res.shops ?? []); this.shopVer++;
     if (hadBody) this.addBody(t);
     this.onDetailChange?.(this.loadedKeys);
   }
@@ -435,6 +484,13 @@ export class CityStreamer implements System {
     this.bikeFarPool.set(near.map((k) => F(k).bike), near.map((k) => F(k).bikeC), (x, z) => d2(x, z) >= bn2 && bike(x, z));
   }
 
+  /** The parked cars of every tile with colliders now (parking/ starts after the city's first tiles are in). */
+  parkedNow(): [string, number[]][] {
+    const out: [string, number[]][] = [];
+    for (const t of this.tiles.values()) if (t.body) out.push([t.key, this.furnRaw.get(t.key)?.park ?? []]);
+    return out;
+  }
+
   /** The furniture on the tile under (x, z) and its eight neighbours. */
   private furnitureNear(x: number, z: number): Furniture[] {
     const [ix, iz] = tileOf(x, z), out: Furniture[] = [];
@@ -483,6 +539,7 @@ export class CityStreamer implements System {
     this.headsDirty = true;
     this.furnLists.delete(t.key);
     this.furnRaw.delete(t.key);
+    this.shops.delete(t.key); this.shopVer++;
     this.onDetailChange?.(this.loadedKeys);
   }
 
@@ -521,6 +578,7 @@ export class CityStreamer implements System {
       }
     }
     t.body = body;
+    this.onParked?.(t.key, this.furnRaw.get(t.key)?.park ?? []);
   }
 
   private dropBody(t: Tile): void {
@@ -528,6 +586,7 @@ export class CityStreamer implements System {
     for (let i = 0; i < t.body.numColliders(); i++) this.engine.physics.untag(t.body.collider(i));
     this.engine.physics.world.removeRigidBody(t.body);
     t.body = null;
+    this.onParked?.(t.key, null);
   }
 
   update(): void {

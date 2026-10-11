@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../core/Rng';
 import { CJK } from '../../world/Textures';
+import { SIGN_COLS, SIGN_ROWS, shopSigns } from './ShopSigns';
 
 /**
  * Facade module atlas: 8x8 modules, each one bay x one floor of a Beijing building, drawn on two
@@ -397,44 +398,41 @@ export function facadeAtlas(size = 2048): { col: THREE.CanvasTexture; mat: THREE
   return out;
 }
 
-/** Shop names for the ground-floor signs: [text, background, lettering]. */
-export const SIGNS: [string, string, string][] = [
-  ['便利店', '#d8342a', '#ffffff'], ['超市', '#1f5fae', '#ffffff'], ['药店', '#1d8a4a', '#ffffff'], ['餐厅', '#b52a22', '#f6d36b'],
-  ['银行', '#1c3f7a', '#e8e8e8'], ['理发', '#2b2b2b', '#f2f2f2'], ['烟酒', '#9c1f1a', '#f6d36b'], ['水果', '#e2702a', '#ffffff'],
-  ['面馆', '#f2e6c8', '#a8261e'], ['饺子馆', '#c4291f', '#ffe9a8'], ['早点', '#e8b63a', '#7a1a12'], ['手机维修', '#1b1b1b', '#39c1e8'],
-  ['眼镜', '#ffffff', '#1f4f9a'], ['茶叶', '#305c3a', '#e9d9a0'], ['干洗店', '#2a78b8', '#ffffff'], ['快递', '#f1c21b', '#1b1b1b'],
-  ['书店', '#5a3a28', '#f2e4c4'], ['宾馆', '#7a1a2a', '#f6d36b'], ['火锅', '#c3121a', '#ffe070'], ['烤鸭店', '#8a1c14', '#f6d36b'],
-  ['包子铺', '#f4efe2', '#b42a20'], ['花店', '#e6a0b8', '#ffffff'], ['五金', '#3a4a5a', '#f2f2f2'], ['服装', '#2a2a2a', '#e8c86a'],
-  ['母婴', '#f0a8b8', '#ffffff'], ['咖啡', '#3b2a22', '#f2e2c8'], ['麻辣烫', '#d8261e', '#ffffff'], ['奶茶', '#f6e7d0', '#6a3a22'],
-  ['牛肉面', '#1a5a8a', '#ffffff'], ['洗车', '#1d6fb8', '#ffe070'], ['文具', '#e24a2a', '#ffffff'], ['24小时', '#1d8a4a', '#ffffff'],
-];
-
 let signTex: THREE.CanvasTexture | null = null;
-/** 2 columns x 16 rows of 512x64 shop signs (text on a coloured lightbox with a trim). */
+/**
+ * The shop signs (ShopSigns.ts) in `SIGN_COLS` x `SIGN_ROWS` cells of 384 x 72 (a sign is ~4.8 x 0.95 m: the old
+ * 512 x 64 cells stretched every name 1.6x tall): a lightbox in the trade's colours, the name fitted to it, a second
+ * line on some, a logo roundel, a framed edge or a colour block at the left by `style`.
+ */
 export function signAtlas(): THREE.CanvasTexture {
   if (signTex) return signTex;
-  const W = 1024, H = 1024, sw = 512, sh = 64;
+  const sw = 384, sh = 72, W = sw * SIGN_COLS, H = sh * SIGN_ROWS;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d')!;
-  const rng = new Rng(88);
-  SIGNS.forEach(([text, bg, fg], i) => {
-    const x = (i % 2) * sw, y = Math.floor(i / 2) * sh;
-    g.fillStyle = '#3a3a3a'; g.fillRect(x, y, sw, sh);
+  shopSigns().forEach(({ text, sub, bg, fg, style }, i) => {
+    const x = (i % SIGN_COLS) * sw, y = Math.floor(i / SIGN_COLS) * sh;
+    g.fillStyle = '#34363a'; g.fillRect(x, y, sw, sh);
     g.fillStyle = bg; g.fillRect(x + 3, y + 4, sw - 6, sh - 8);
+    let left = x + 14;
+    if (style === 1) { g.strokeStyle = fg; g.globalAlpha = 0.55; g.lineWidth = 2; g.strokeRect(x + 9, y + 9, sw - 18, sh - 18); g.globalAlpha = 1; }
+    if (style === 2) { g.fillStyle = fg; g.fillRect(x + 3, y + 4, 58, sh - 8); g.fillStyle = bg; g.font = `bold 40px ${CJK}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text[text.length - 1], x + 32, y + sh / 2 + 2); left = x + 66; }
+    else if (style === 0) { g.beginPath(); g.fillStyle = fg; g.arc(x + 34, y + sh / 2, 17, 0, Math.PI * 2); g.fill(); g.fillStyle = bg; g.beginPath(); g.arc(x + 34, y + sh / 2, 10, 0, Math.PI * 2); g.fill(); left = x + 58; }
     const grad = g.createLinearGradient(0, y, 0, y + sh);
-    grad.addColorStop(0, 'rgba(255,255,255,0.18)'); grad.addColorStop(0.5, 'rgba(255,255,255,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.15)');
+    grad.addColorStop(0, 'rgba(255,255,255,0.16)'); grad.addColorStop(0.5, 'rgba(255,255,255,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.14)');
     g.fillStyle = grad; g.fillRect(x + 3, y + 4, sw - 6, sh - 8);
-    g.fillStyle = fg;
-    g.font = `bold 40px ${CJK}`;
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    const tw = g.measureText(text).width;
-    const scale = Math.min(1, (sw - 150) / tw);
-    g.save(); g.translate(x + sw / 2 + (rng.next() < 0.5 ? 18 : 0), y + sh / 2 + 2); g.scale(scale * 1.15, 1);
-    g.fillText(text, 0, 0);
-    g.restore();
-    // a logo roundel or phone number stripe for variety
-    if (rng.next() < 0.6) { g.beginPath(); g.fillStyle = fg; g.arc(x + 42, y + sh / 2, 18, 0, Math.PI * 2); g.fill(); g.fillStyle = bg; g.beginPath(); g.arc(x + 42, y + sh / 2, 11, 0, Math.PI * 2); g.fill(); }
-    else { g.font = `bold 15px ${CJK}`; g.fillStyle = fg; g.textAlign = 'right'; g.fillText('营业中', x + sw - 16, y + sh / 2 + 1); }
+    // the name, fitted between `left` and the right edge, a little wider than tall as shop lettering is
+    const room = x + sw - 14 - left, cx = left + room / 2;
+    g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const big = sub ? 38 : 46;
+    g.font = `bold ${big}px ${CJK}`;
+    const tw = g.measureText(text).width, k = Math.min(1.25, room / tw);
+    g.save(); g.translate(cx, y + (sub ? sh * 0.4 : sh / 2 + 2)); g.scale(k, 1); g.fillText(text, 0, 0); g.restore();
+    if (sub) {
+      g.font = `${14}px ${CJK}`; g.globalAlpha = 0.9;
+      const sw2 = g.measureText(sub).width, k2 = Math.min(1, room / sw2);
+      g.save(); g.translate(cx, y + sh * 0.79); g.scale(k2, 1); g.fillText(sub, 0, 0); g.restore();
+      g.globalAlpha = 1;
+    }
   });
   signTex = new THREE.CanvasTexture(cv);
   signTex.colorSpace = THREE.SRGBColorSpace;

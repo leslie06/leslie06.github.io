@@ -3,6 +3,7 @@ import type { Engine } from '../core/Engine';
 import type { EnvUniforms } from '../game/Contracts';
 import { loadCity, loadNetwork, type AreaKind, type Manifest, type Network } from './Data';
 import { facadeAtlas, signAtlas } from './visual/FacadeAtlas';
+import { SIGN_COLS, SIGN_COUNT, SIGN_ROWS } from './visual/ShopSigns';
 import { GLSL_HASH } from './visual/hash';
 import { ST, GLASS_TINTS } from './visual/styles';
 
@@ -277,16 +278,19 @@ vec3 facEmis = vec3(0.0);
     float k = max(1.0, floor(4.8 / bayW + 0.5));
     float sc = bayC / k, si = floor(sc), sf = fract(sc);
     uint hs = cityHash3(seed, uint(int(si) + 4096), 555u);
-    float sTop = gh - 0.25, sBot = gh - 1.2;
+    // the sign band: 0.95 m under a 4.3 m ground floor, smaller under a low one (a hutong house's eaves at 3 m)
+    float sTop = gh - min(0.25, gh * 0.06), sBot = sTop - min(0.95, max(0.5, gh * 0.24));
     float qx = (sf - 0.05) / 0.9;
     vec2 sgx = vec2(dBay.x / k / 0.9, dY.x), sgy = vec2(dBay.y / k / 0.9, dY.y);
     if (qx > 0.0 && qx < 1.0) {
       if (y > sBot && y < sTop) {
         if (hs % 10u != 0u) {
-          uint idx = (hs >> 4) % 32u;
+          // ShopSigns.ts: the worker picks the same sign for the unit's props
+          uint idx = (hs >> 4) % ${SIGN_COUNT}u;
           vec2 q = vec2(clamp(qx, 0.004, 0.996), (y - sBot) / (sTop - sBot));
-          vec2 suv = vec2((float(idx % 2u) + q.x) / 2.0, 1.0 - (float(idx / 2u) + 1.0 - q.y) / 16.0);
-          vec4 sgn = textureGrad(tSigns, suv, vec2(sgx.x / 2.0, sgx.y / (sTop - sBot) / 16.0), vec2(sgy.x / 2.0, sgy.y / (sTop - sBot) / 16.0));
+          const float SC = ${SIGN_COLS}.0, SR = ${SIGN_ROWS}.0;
+          vec2 suv = vec2((float(idx % ${SIGN_COLS}u) + q.x) / SC, 1.0 - (float(idx / ${SIGN_COLS}u) + 1.0 - q.y) / SR);
+          vec4 sgn = textureGrad(tSigns, suv, vec2(sgx.x / SC, sgx.y / (sTop - sBot) / SR), vec2(sgy.x / SC, sgy.y / (sTop - sBot) / SR));
           col = sgn.rgb; cover = 1.0; facRough = 0.35;
           facEmis += sgn.rgb * uNight * 1.9;
         }

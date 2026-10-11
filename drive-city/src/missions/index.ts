@@ -11,6 +11,7 @@ import type { TrafficApi } from '../traffic';
 import { Gait } from '../character/Animator';
 import { randomLook, type Look } from '../character/Body';
 import { nearestKerb, SIDEWALK, type Kerb } from '../people/Pavement';
+import type { ParkingApi } from '../parking';
 import { Marker } from './Marker';
 import { Jobs } from './Jobs';
 import { pickAddress } from './Address';
@@ -194,6 +195,8 @@ export async function install(engine: Engine): Promise<void> {
       const kind: PaxKind = urgent ? 'rush' : pickPax(rnd, engine.get<RenderApi>('render')?.timeOfDay ?? 15, engine.get<{ name: string; specialPax: number }>('contacts')?.specialPax ?? 1);
       const h: Hailer = { id: ++hailerIds, pos: new THREE.Vector3(at.x, 0.045, at.z), yaw: Math.atan2(-side * at.dz, side * at.dx), look: paxLook(kind, rnd), gait: new Gait(), t: rnd() * 3, tier: tr0, marker: m, urgent, pax: kind, seed: rnd() };
       m.show(at.x, at.z, urgent ? URGENT_COLOR : TIERS[tr0].color, urgent ? 0.8 : 0.5);
+      // Room at the kerb to pull in: no parked car in front of them (they would stand in its bonnet too).
+      engine.get<ParkingApi>('parking')?.clearAround(at.x, at.z, 4, 120);
       hailers.push(h);
       return true;
     }

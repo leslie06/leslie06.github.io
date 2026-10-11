@@ -123,7 +123,9 @@ export async function install(engine: Engine): Promise<void> {
     span.a = a; span.b = b; span.ka = kerb[l.id * 2]; span.kb = kerb[l.id * 2 + 1];
     return span;
   };
-  const offOf = (l: Link, p: Ped) => p.side * (l.hw + p.frac * walkW(l));
+  /** How far in from the kerb someone walking at `frac` of the pavement is: clear of cars parked half up on it. */
+  const inFrom = (l: Link, frac: number, w: number) => Math.max(frac * w, l.parkOut ? l.parkOut + 0.4 : 0);
+  const offOf = (l: Link, p: Ped) => p.side * (l.hw + inFrom(l, p.frac, walkW(l)));
 
   const peds: Ped[] = Array.from({ length: cap }, () => ({
     on: false, mode: 'walk' as Mode, t: 0, hold: 0, fear: 0,
@@ -171,7 +173,7 @@ export async function install(engine: Engine): Promise<void> {
       const so = spanOf(o), s = dir > 0 ? so.a : so.b;
       for (let k = 0; k < (o.oneway ? 1 : 2); k++) {
         const side = o.oneway || k === 1 ? -1 : 1;
-        g.at(o, s, side * (o.hw + p.frac * w), at2);
+        g.at(o, s, side * (o.hw + inFrom(o, p.frac, w)), at2);
         const d = Math.hypot(at2.x - ex, at2.z - ez);
         if (d > MAX_CROSS) continue;
         // Walking on around the corner beats crossing, and a short crossing beats a long diagonal
@@ -227,7 +229,7 @@ export async function install(engine: Engine): Promise<void> {
         const lat = ((p.pos.x - cx) * vz - (p.pos.z - cz) * vx) / L;
         const side = l.oneway ? -1 : lat >= 0 ? 1 : -1;
         const s = l.cum[k - 1] + u * L;
-        g.at(l, s, side * (l.hw + p.frac * w), at2);
+        g.at(l, s, side * (l.hw + inFrom(l, p.frac, w)), at2);
         const d = Math.hypot(at2.x - p.pos.x, at2.z - p.pos.z);
         if (d < bd) { bd = d; bl = id; bs = s; bside = side; }
       }

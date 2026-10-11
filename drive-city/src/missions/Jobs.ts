@@ -4,6 +4,7 @@ import { t } from '../core/I18n';
 import type { Blip, NavApi, PlayerApi, VehicleApi, WorldApi } from '../game/Contracts';
 import { nearestKerb, type Kerb } from '../people/Pavement';
 import type { TrafficApi } from '../traffic';
+import type { ParkingApi } from '../parking';
 import type { Vehicle } from '../vehicle/Vehicle';
 import { Marker } from './Marker';
 import { pickAddress, type Stop } from './Address';
@@ -55,6 +56,7 @@ export class Jobs {
       const k = this.pickKerb(w.spawn.x, w.spawn.z, 120, 420, taken, 150, false) ?? (() => { const kb = nearestKerb(engine.get<TrafficApi>('traffic')!.graph, w.spawn.x, w.spawn.z, 300, 1.2); return kb ? { x: kb.x, z: kb.z, label: '' } : null; })();
       if (!k) continue;
       taken.push(k);
+      engine.get<ParkingApi>('parking')?.clearAround(k.x, k.z, 5, Infinity);   // the kerb in front of the post stays free
       const marker = new Marker(engine.scene);
       marker.show(k.x, k.z, COLOR[kind]);
       this.posts.push({ kind, x: k.x, z: k.z, marker, cooldown: 0 });
