@@ -3,7 +3,8 @@ import type { Engine, System } from '../core/Engine';
 import type { ParkingApi } from '../parking';
 import { lang, t, type TKey } from '../core/I18n';
 import { Rng } from '../core/Rng';
-import type { Actor, Blip, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RaceApi, Speaker, VehicleApi, WantedApi } from '../game/Contracts';
+import { CG, groups } from '../core/Physics';
+import type { Actor, Blip, CombatApi, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RaceApi, Speaker, VehicleApi, WantedApi } from '../game/Contracts';
 import type { GarageApi } from '../garage';
 import type { IntroApi } from '../intro';
 import type { NavSystem } from '../nav';
@@ -30,7 +31,7 @@ export const BAG_REWARD = 200, BAG_KEEP = 300, SCAM_ASK = 200, RAGE_ASK = 100;
 const THIEF_SPEED = 5.0;
 const DASHCAM_KEY = 'drivecity.dashcam';
 
-type Kind = 'thief' | 'scam' | 'pregnant' | 'rage' | 'courier' | 'daijia' | 'tail' | 'foreigner';
+type Kind = 'thief' | 'scam' | 'pregnant' | 'rage' | 'courier' | 'daijia' | 'tail' | 'foreigner' | 'gang';
 
 export interface NpcApi extends System {
   /** The encounter running now, or null. */
@@ -40,7 +41,7 @@ export interface NpcApi extends System {
   debug: { start(kind: Kind): boolean; wait(): number; state(): Record<string, unknown> };
 }
 
-const C = { victim: '#7fc8ff', thief: '#ff6b5a', scam: '#d9a441', rage: '#ff5a3c', husband: '#6fd18a', wife: '#ff8fb8', you: '#f3b50f' };
+const C = { gang: '#e0463a', victim: '#7fc8ff', thief: '#ff6b5a', scam: '#d9a441', rage: '#ff5a3c', husband: '#6fd18a', wife: '#ff8fb8', you: '#f3b50f' };
 
 /**
  * Street encounters (P1 of the NPC plan): people in the world who want something from the player,
@@ -183,6 +184,7 @@ export async function install(engine: Engine): Promise<void> {
 
   const end = (msg: string | null) => {
     if (msg) toast(msg);
+    if (active === 'gang' && G.brawl) { const b = G.brawl; G.brawl = null; b.end(); }
     for (const a of cast) if (a.alive) a.release('walk');
     cast = [];
     active = null; phase = '';
@@ -936,9 +938,45 @@ export async function install(engine: Engine): Promise<void> {
     }
   };
 
+  // ---------------------------------------------------------------- gang (黑豹帮找茬, combat/)
+
+  /**
+   * On foot: two or three Black Panther thugs come at the player from where they are looking, one has a word, and
+   * it is a fist fight (combat/). All down: ¥120 each. Getting 60 m away ends it; being wasted is the hospital's.
+   */
+  const G = { brawl: null as ReturnType<CombatApi['brawl']> | null, n: 0 };
+  const startGang = (): boolean => {
+    const cb = engine.get<CombatApi>('combat'), f = pl.foot;
+    if (!cb || pl.mode !== 'onfoot' || !f) return false;
+    // ahead if there is room, else to a side or behind: 10 m clear at chest height
+    const d = facing(), groupsW = groups(CG.PED, CG.WORLD);
+    let cx = NaN, cz = NaN;
+    for (const a of [0, 0.8, -0.8, 1.6, -1.6, Math.PI]) {
+      const dx = d.x * Math.cos(a) - d.z * Math.sin(a), dz = d.x * Math.sin(a) + d.z * Math.cos(a);
+      if (!engine.physics.raycast({ x: f.pos.x, y: f.pos.y + 1, z: f.pos.z }, { x: dx, y: 0, z: dz }, 12, groupsW, true)) { cx = f.pos.x + dx * 10; cz = f.pos.z + dz * 10; break; }
+    }
+    if (!Number.isFinite(cx)) return false;
+    const n = rnd() < 0.45 ? 3 : 2;
+    const b = cb.brawl(cx, cz, n);
+    if (!b.actors.length) return false;
+    G.brawl = b; G.n = b.actors.length;
+    active = 'gang'; clock = 0; setPhase('fight');
+    story(t('npc.gang.story'));
+    const lead = b.actors[0];
+    dlg()?.say(speaker(lead, 'npc.who.gang', C.gang), t(`npc.gang.taunt${1 + Math.floor(rnd() * 3)}` as TKey), { prio: 2 });
+    void b.done.then((r) => {
+      if (active !== 'gang' || G.brawl !== b) return;
+      G.brawl = null;
+      journal.meet('enc.gang');
+      if (r === 'won') { const m = 120 * G.n; pay(m); end(t('npc.gang.won', { n: m })); }
+      else end(r === 'fled' ? t('npc.gang.fled') : null);
+    });
+    return true;
+  };
+
   // ---------------------------------------------------------------- the director
 
-  const starters: Record<Exclude<Kind, 'rage'>, () => boolean> = { thief: startThief, scam: startScam, pregnant: startPregnant, courier: startCourier, daijia: startDaijia, tail: startTail, foreigner: startForeigner };
+  const starters: Record<Exclude<Kind, 'rage'>, () => boolean> = { thief: startThief, scam: startScam, pregnant: startPregnant, courier: startCourier, daijia: startDaijia, tail: startTail, foreigner: startForeigner, gang: startGang };
   const start = (kind: Kind): boolean => (kind === 'rage' ? startRage() : starters[kind]());
 
   engine.events.on('vehicle:reset', () => { if (active) { if (active === 'rage' && R.car) tr.hold?.(R.car, false); end(null); } });
@@ -964,7 +1002,7 @@ export async function install(engine: Engine): Promise<void> {
         if (wait > 0) return;
         const v = vehicle(), driving = pl.mode === 'driving';
         const nt = night(), taxi = v.look.taxi;
-        const kinds: Exclude<Kind, 'rage'>[] = !driving ? ['thief', 'courier', ...(nt ? ['daijia', 'daijia'] as const : [])]
+        const kinds: Exclude<Kind, 'rage'>[] = !driving ? ['thief', 'courier', 'gang', 'gang', ...(nt ? ['daijia', 'daijia'] as const : [])]
           : v.car.speed > 14 ? ['pregnant', 'courier', 'foreigner', ...(taxi ? ['tail'] as const : [])]
           : ['thief', 'scam', 'scam', 'pregnant', 'courier', 'foreigner', ...(taxi ? ['tail', 'tail'] as const : []), ...(nt ? ['daijia'] as const : [])];
         const first = pick(kinds);

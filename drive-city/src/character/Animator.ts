@@ -7,7 +7,18 @@ import { ANKLE_H, BALL, BIND_ROT, HEEL, J, JOINT_COUNT, LOOK_FLOATS, SHIN, SKELE
  * front and the pelvis `seat` metres up (the caller puts the root, the feet, on the ground).
  */
 export type Action = 'move' | 'air' | 'knocked' | 'down' | 'getup' | 'punch' | 'ride' | 'wave' | 'talk' | 'angry' | 'point' | 'cheer' | 'phone' | 'stagger' | 'sit'
-  | 'dance' | 'taichi' | 'sweep' | 'strum' | 'photo' | 'direct' | 'cook' | 'erhu' | 'drink' | 'chess';
+  | 'dance' | 'taichi' | 'sweep' | 'strum' | 'photo' | 'direct' | 'cook' | 'erhu' | 'drink' | 'chess'
+  | 'guard' | 'jab' | 'cross' | 'hook' | 'kick' | 'uppercut' | 'block' | 'flinch';
+/**
+ * Fist fights (combat/): each strike's moment of contact and its length, seconds. The procedural poses below and
+ * combat/'s hit timing both read these, so a punch lands when the fist is out.
+ */
+export const STRIKE = {
+  jab: { hit: 0.12, dur: 0.3 }, cross: { hit: 0.14, dur: 0.34 }, hook: { hit: 0.18, dur: 0.42 },
+  kick: { hit: 0.26, dur: 0.6 }, uppercut: { hit: 0.2, dur: 0.5 },
+} as const;
+export type StrikeAction = keyof typeof STRIKE;
+const FIGHT: ReadonlySet<Action> = new Set(['guard', 'jab', 'cross', 'hook', 'kick', 'uppercut', 'block', 'flinch']);
 /** The square dance's tempo (life/ and the music keep to it): beats a minute. */
 export const DANCE_BPM = 128;
 
@@ -175,6 +186,7 @@ export class Gait {
     else if (m.action === 'direct') { this.locomotion(0, dt); this.directArms(m.t); }
     else if (m.action === 'cook') { this.locomotion(0, dt); this.cookArms(m.t); }
     else if (m.action === 'erhu' || m.action === 'drink' || m.action === 'chess') { this.sit(m.t, m.seat ?? 0.36); this.seatedArms(m.action, m.t); }
+    else if (FIGHT.has(m.action)) this.fight(m.action, m.t, m.speed, dt);
     else this.locomotion(m.speed, dt);
     if (this.fade > 0) {
       const k = this.fade * this.fade * (3 - 2 * this.fade);
@@ -577,6 +589,62 @@ export class Gait {
     r[J.spine * 3 + 2] -= 0.08 * w; r[J.chest * 3 + 2] -= 0.06 * w; r[J.chest * 3] += 0.06;
     r[J.neck * 3 + 2] += 0.12 * h; r[J.head * 3 + 2] += 0.16 * h; r[J.head * 3] += 0.1;
     r[J.shoulderL * 3 + 2] += 0.22; r[J.shoulderR * 3 + 2] -= 0.22;
+  }
+
+  /**
+   * Fist fights: knees bent, fists up by the chin (the guard), shuffling at the speed given; a strike takes one arm
+   * (or the right leg) out to its contact time in `STRIKE` and back; `block` covers the face with both forearms;
+   * `flinch` snaps the head and chest back from a hit.
+   */
+  private fight(a: Action, t: number, speed: number, dt: number): void {
+    const r = this.rot;
+    // knees a little bent: near a straight leg each centimetre of drop is a lot of knee (7 cm read as a squat)
+    this.drop = 0.03;
+    this.locomotion(Math.min(speed, 2.2), dt);
+    const up = a === 'guard' ? sstep(0, 0.2, t) : 1;
+    // the guard: both fists by the chin, elbows in, chin down, the left shoulder a little ahead
+    this.arms(-0.85, 0.22, -2.15, -0.7, 0.28, -2.25, up);
+    r[J.chest * 3 + 1] += 0.18 * up; r[J.spine * 3] += 0.06 * up; r[J.head * 3] += 0.08 * up;
+    const ext = (k: StrikeAction) => { const s = STRIKE[k]; return sstep(0, s.hit, t) * (1 - sstep(s.hit + 0.05, s.dur, t)); };
+    if (a === 'jab') {
+      const o = ext('jab');
+      this.arms(-1.5, 0.12, -0.12, -0.7, 0.28, -2.25, o);
+      r[J.chest * 3 + 1] += 0.25 * o; r[J.spine * 3 + 1] += 0.1 * o; this.fwd += 0.04 * o;
+    } else if (a === 'cross') {
+      const o = ext('cross');
+      this.arms(-0.85, 0.22, -2.15, -1.5, -0.05, -0.1, o);
+      r[J.chest * 3 + 1] -= 0.55 * o; r[J.spine * 3 + 1] -= 0.12 * o; this.fwd += 0.06 * o;
+    } else if (a === 'hook') {
+      // the right elbow up level with the fist and swung across, the trunk turning through it
+      const o = ext('hook'), wind = sstep(0, 0.08, t) * (1 - sstep(0.08, STRIKE.hook.hit, t));
+      this.arms(-0.85, 0.22, -2.15, -1.25, 1.0, -1.6, Math.max(o, 0.6 * wind));
+      r[J.chest * 3 + 1] += 0.35 * wind - 0.6 * o; r[J.spine * 3 + 1] -= 0.15 * o; this.fwd += 0.05 * o;
+    } else if (a === 'uppercut') {
+      // dip, then drive up through the right fist
+      const s = STRIKE.uppercut, dip = sstep(0, 0.1, t) * (1 - sstep(0.1, s.hit, t)), o = ext('uppercut');
+      this.drop += 0.08 * dip - 0.05 * o;
+      this.arms(-0.85, 0.22, -2.15, mix(-0.4, -1.35, o), 0.15, mix(-1.7, -1.75, o), Math.max(o, dip));
+      r[J.chest * 3 + 1] -= 0.4 * o; r[J.chest * 3] -= 0.12 * o - 0.12 * dip; this.fwd += 0.05 * o;
+    } else if (a === 'kick') {
+      // a front kick with the right leg: the knee comes up, the foot snaps out at hip height, back down
+      const o = ext('kick'), knee = sstep(0, 0.12, t) * (1 - sstep(STRIKE.kick.hit + 0.12, STRIKE.kick.dur, t));
+      const pitch = r[0] - 0.22 * o;
+      r[0] = pitch;
+      this.setPelvis();
+      footR.x = -0.09; footR.y = ANKLE_H + 0.35 * knee + 0.32 * o; footR.z = 0.12 + 0.25 * knee + 0.42 * o; footR.pitch = -0.6 * o; footR.stance = 0;
+      this.solveLeg(-1, footR, pitch, r[2], r[1]);
+      r[J.chest * 3] += 0.12 * o; this.fwd -= 0.04 * o;
+      this.arms(-0.6, 0.5, -1.9, -0.4, 0.55, -1.6, o);
+    } else if (a === 'block') {
+      const k = sstep(0, 0.08, t);
+      this.arms(-1.55, 0.05, -2.45, -1.55, 0.05, -2.45, k);
+      r[J.head * 3] += 0.18 * k; r[J.chest * 3] += 0.1 * k; this.drop += 0.03 * k;
+    } else if (a === 'flinch') {
+      const k = sstep(0, 0.05, t) * (1 - sstep(0.12, 0.45, t)), w = Math.sin(this.seed * 13) > 0 ? 1 : -1;
+      r[J.head * 3] -= 0.22 * k; r[J.head * 3 + 1] += 0.3 * w * k; r[J.neck * 3] -= 0.08 * k;
+      r[J.chest * 3] -= 0.3 * k; r[J.chest * 3 + 1] += 0.2 * w * k; this.fwd -= 0.08 * k;
+      this.arms(-0.4, 0.5, -1.4, -0.4, 0.5, -1.4, k);
+    }
   }
 
   /** Sitting: pelvis on a seat `seat` m up, feet planted in front (IK), hands on the thighs. */

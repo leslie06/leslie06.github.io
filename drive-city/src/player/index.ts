@@ -4,7 +4,7 @@ import { J, SKELETON } from '../character/Body';
 import { SEAT, type TwoWheeler } from '../vehicle/TwoWheelers';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
-import type { HudApi, Interaction, MissionApi, ParkApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { CombatApi, HudApi, Interaction, MissionApi, ParkApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import { project } from '../city/Geo';
 import { t } from '../core/I18n';
@@ -205,6 +205,15 @@ export async function install(engine: Engine): Promise<void> {
     crowd,
     heroReady,
     getOut() { if (mode === 'driving') exitCar(); },
+    strike(action, secs, yaw, lunge, chainFrom) { return mode === 'onfoot' && !rideSeat && !entering && foot.play(action, secs, yaw, lunge, chainFrom); },
+    struck(fromX, fromZ, knock) {
+      if (mode !== 'onfoot' || rideSeat || foot.knock) return;
+      const dx = foot.pos.x - fromX, dz = foot.pos.z - fromZ, d = Math.hypot(dx, dz) || 1;
+      if (knock) { foot.move = null; foot.hit(tmp.set(dx / d * 3.2, 0, dz / d * 3.2)); return; }
+      // a flinch: turned to the hitter, rocked back half a metre
+      foot.move = { action: 'flinch', t: 0, secs: 0.4, yaw: Math.atan2(-dx, -dz), lunge: -0.45 };
+    },
+    get move() { return foot.move ? { action: foot.move.action, t: foot.move.t, secs: foot.move.secs } : null; },
     get health() { return health; },
     hurt,
     heal,
@@ -286,10 +295,14 @@ export async function install(engine: Engine): Promise<void> {
         const other = close && close.speed < 4 ? close : null;
         const mineD = Math.hypot(v.car.pos.x - foot.pos.x, v.car.pos.z - foot.pos.z);
         const target = mineD < REACH && (!other || mineD <= Math.hypot(other.pos.x - foot.pos.x, other.pos.z - foot.pos.z)) ? v.car : other;
-        // Mouse / E / gamepad B: shove whoever is in front.
-        if (v.inputEnabled && inp.punchPressed && !entering && foot.shove()) {
+        // Mouse / E / gamepad B: a strike when there is a fight (combat/), else shove whoever is in front.
+        const combat = engine.get<CombatApi>('combat');
+        if (v.inputEnabled && inp.punchPressed && !entering && !combat?.attack(false) && foot.shove()) {
           engine.get<PeopleApi>('people')?.shove(foot.pos.x, foot.pos.z, Math.sin(foot.yaw), Math.cos(foot.yaw));
         }
+        // Q / right mouse / LB: counter or block.
+        if (v.inputEnabled && inp.counterPressed && !entering) combat?.counter();
+        foot.guard = !!combat?.engaged;
         // A shared bike in a rack, when it is nearer than any car.
         const sb = engine.get<WorldApi>('world')?.sharedBike?.(foot.pos.x, foot.pos.z, BIKE_REACH) ?? null;
         const bike = sb && (!target || Math.hypot(sb.x - foot.pos.x, sb.z - foot.pos.z) < Math.hypot(target.pos.x - foot.pos.x, target.pos.z - foot.pos.z)) ? sb : null;

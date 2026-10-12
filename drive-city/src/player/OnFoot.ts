@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type RAPIER_NS from '@dimforge/rapier3d-compat';
 import { CG, groups, type Physics } from '../core/Physics';
-import { Gait } from '../character/Animator';
+import { Gait, type Action } from '../character/Animator';
 
 const HALF = 0.55, RADIUS = 0.28, FEET = HALF + RADIUS;
 
@@ -29,8 +29,13 @@ export class OnFoot {
   getupSecs = 0.9;
   /** Wasted: stays down. */
   dead = false;
-  /** Seconds left of the shove animation (also its cooldown). */
-  private punchT = 0;
+  /**
+   * A move being played (a shove, a strike, a flinch: combat/): its action, seconds into it and its length, the way
+   * it faces and how far it carries the body over its first 40% (stepping in to reach). Movement input waits.
+   */
+  move: { action: Action; t: number; secs: number; yaw: number; lunge: number } | null = null;
+  /** In a fight (combat/): standing and shuffling in the guard instead of walking. */
+  guard = false;
   private moveFilter = groups(CG.PED, CG.WORLD | CG.CAR | CG.PROP);
   private groundFilter = groups(CG.PED, CG.WORLD | CG.CAR | CG.PROP);
 
@@ -99,6 +104,13 @@ export class OnFoot {
         this.yaw += d * Math.min(1, dt * 12);
       }
       if (jump && this.grounded) { this.vy = 4.8; this.grounded = false; }
+      if (this.move) {
+        // mid-move: turned to its yaw, carried by its lunge (a flinch's is backwards), the stick ignored
+        const mv = this.move, a = Math.max(0.05, mv.secs * 0.4), k = mv.t < a ? mv.lunge / a : 0;
+        this.yaw = mv.yaw;
+        const sx = Math.sin(mv.yaw), sz = Math.cos(mv.yaw);
+        this.vel.x = sx * k; this.vel.z = sz * k;
+      }
       dx = this.vel.x * dt; dz = this.vel.z * dt;
     }
     this.vy -= 9.81 * dt;
@@ -128,21 +140,32 @@ export class OnFoot {
   }
 
   /** Start a shove. False when knocked down or still swinging. */
-  shove(): boolean {
-    if (this.knock || this.punchT > 0) return false;
-    this.punchT = 0.42;
+  shove(): boolean { return this.play('punch', 0.42, this.yaw, 0); }
+
+  /**
+   * Play a move (see `move`). Refused while down, or mid-move before `chainFrom` seconds into it (a combo's next
+   * strike may cut the last one short from there; Infinity: never).
+   */
+  play(action: Action, secs: number, yaw: number, lunge: number, chainFrom = Infinity): boolean {
+    if (this.knock || this.dead) return false;
+    if (this.move && this.move.t < Math.min(chainFrom, this.move.secs)) return false;
+    this.move = { action, t: 0, secs, yaw, lunge };
     return true;
   }
 
   /** Pose for this frame. */
   animate(dt: number): void {
     const speed = Math.hypot(this.vel.x, this.vel.z);
-    if (this.punchT > 0 && !this.knock) {
-      this.punchT = Math.max(0, this.punchT - dt);
-      this.gait.update({ speed, action: 'punch', t: 0.42 - this.punchT }, dt, 0.3);
+    if (this.move && this.knock) this.move = null;
+    if (this.move) {
+      const mv = this.move;
+      mv.t += dt;
+      this.gait.update({ speed: Math.min(speed, 1.2), action: mv.action, t: mv.t }, dt, 0.3);
+      if (mv.t >= mv.secs) this.move = null;
       return;
     }
     if (this.knock) this.gait.update({ speed: 0, action: this.knock.phase, t: this.knock.t }, dt, 0.3);
+    else if (this.guard && this.grounded && speed < 2.5) this.gait.update({ speed, action: 'guard', t: 1 }, dt, 0.3);
     else this.gait.update({ speed, action: this.grounded || this.airTime < 0.15 ? 'move' : 'air', t: this.airTime }, dt, 0.3);
   }
 }

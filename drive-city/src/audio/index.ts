@@ -330,6 +330,28 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('wanted:level', ({ up }) => stinger(up));
   engine.events.on('vehicle:impact', ({ strength }) => thump(Math.min(1, strength / 12)));
   engine.events.on('prop:hit', ({ kind, speed }) => knock(kind, speed));
+  // Fist fights (combat/): a body blow is a short low thump under a slap of noise; one on the forearms is drier and
+  // higher; a swing is a quick band of noise sweeping down. Quieter with distance from the camera.
+  const near = (x: number, z: number) => { const c = engine.camera.position; return Math.max(0.15, 1 - Math.hypot(x - c.x, z - c.z) / 40); };
+  engine.events.on('combat:hit', ({ x, z, power, blocked }) => {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime, k = near(x, z) * (0.55 + 0.45 * power), r = Math.random();
+    if (blocked) { burst(t, 1600 + r * 600, 1.4, 0.28 * k, 0.05); ring(t, 210 + r * 30, 0.16 * k, 0.09, 'triangle'); return; }
+    burst(t, 900 + r * 500, 0.9, 0.42 * k, 0.06 + 0.04 * power);
+    const c = ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(120 + 40 * r, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.14);
+    g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.5 * k, t + 0.008); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18 + 0.08 * power);
+    o.connect(g).connect(master); o.start(t); o.stop(t + 0.3);
+  });
+  engine.events.on('combat:swing', ({ x, z, heavy }) => {
+    if (!ctx || muted) return;
+    const c = ctx, t = c.currentTime, k = near(x, z), dur = heavy ? 0.22 : 0.13;
+    const src = c.createBufferSource(); src.buffer = noiseBuf;
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.6;
+    f.frequency.setValueAtTime(heavy ? 1400 : 2400, t); f.frequency.exponentialRampToValueAtTime(heavy ? 380 : 700, t + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.14 * k, t + dur * 0.4); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f).connect(g).connect(master); src.start(t, Math.random() * 1.5, dur + 0.02);
+  });
   // A 兔儿爷 found: a bright rising three-note chime.
   // A landmark checked in: a camera's shutter (two clicks, the mirror up and down) and a bright chime.
   engine.events.on('checkin', () => {

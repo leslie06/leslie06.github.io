@@ -78,6 +78,7 @@ interface Ped {
 interface ActorImpl extends Actor {
   p: Ped;
   pts: number[]; ptI: number; speed: number; faceTo: number; gesture: Action | null; gestureT: number; seat: number;
+  pup: { x: number; z: number; yaw: number; speed: number } | null;
   arrivedF: boolean; hitsN: number; aliveF: boolean; voiceS: VoiceSpec;
 }
 
@@ -480,6 +481,8 @@ export async function install(engine: Engine): Promise<void> {
   const stepActor = (p: Ped, dt: number) => {
     const a = p.actor!;
     a.gestureT += dt;
+    // moved by its owner (combat/): where it is told, facing as told at once
+    if (a.pup) { p.pos.x = a.pup.x; p.pos.z = a.pup.z; p.pos.y = GROUND; p.yaw = p.want = a.pup.yaw; p.cur = p.moved = a.pup.speed; return; }
     let moving = false;
     if (a.ptI * 2 < a.pts.length) {
       let step = a.speed * dt;
@@ -501,6 +504,8 @@ export async function install(engine: Engine): Promise<void> {
     pts: number[] = []; ptI = 0; speed = 0; faceTo = NaN; gesture: Action | null = null; gestureT = 0; seat = 0.46;
     arrivedF = true; hitsN = 0; aliveF = true; voiceS: VoiceSpec; fair = false; downFor = NaN;
     model: CharacterModel | null = null;
+    pup: { x: number; z: number; yaw: number; speed: number } | null = null;
+    puppet(q: { x: number; z: number; yaw: number; speed: number } | null) { this.pup = q ? { ...q } : null; }
     constructor(public p: Ped) { this.voiceS = voiceOf(p.look, p.seed); }
     get alive() { return this.aliveF; }
     get pos() { return this.p.pos; }

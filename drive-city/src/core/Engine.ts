@@ -40,6 +40,10 @@ export class Engine {
   frame = 0;
   paused = false;
   timeScale = 1;
+  /** performance.now() until which the world runs slowed (a crash, a punch landing): vehicle/ sets `timeScale` from it. */
+  hitStopUntil = 0;
+  /** Slow the world for `ms` of wall clock (the hit-stop of an impact; never in shot mode - the caller checks). */
+  hitStop(ms: number): void { this.hitStopUntil = Math.max(this.hitStopUntil, performance.now() + ms); }
   renderFrame: (dt: number) => void;
   private accumulator = 0;
   private raf = 0;

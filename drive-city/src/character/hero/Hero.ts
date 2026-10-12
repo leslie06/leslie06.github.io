@@ -56,14 +56,16 @@ const FINGERS = ['index', 'middle', 'ring', 'pinky'];
  */
 const BONE_SCALE: Record<string, number> = { clavicle_l: 0.88, clavicle_r: 0.88, Head: 1.06 };
 /** Finger curl per joint (rad): relaxed, and round a phone. */
-const CURL = { relaxed: [0.3, 0.45, 0.3], grip: [0.75, 1.0, 0.6] };
+const CURL = { relaxed: [0.3, 0.45, 0.3], grip: [0.75, 1.0, 0.6], fist: [1.35, 1.55, 1.15] };
+/** Gait actions drawn with both hands closed (combat/). */
+const FISTS: ReadonlySet<string> = new Set(['guard', 'jab', 'cross', 'hook', 'kick', 'uppercut', 'block']);
 
 interface Bone {
   obj: THREE.Bone;
   parent: number;
   joint: number;
   /** Rest local position and rotation (fingers: relaxed curl; `grip` is the phone hand's); `rq` the model's own rest. */
-  lp: THREE.Vector3; lq: THREE.Quaternion; grip: THREE.Quaternion | null; rq: THREE.Quaternion;
+  lp: THREE.Vector3; lq: THREE.Quaternion; grip: THREE.Quaternion | null; fist: THREE.Quaternion | null; rq: THREE.Quaternion;
   /** Bind position in model space. */
   pb: THREE.Vector3;
   /** Bind orientation in model space and its alignment onto the crowd's bind. */
@@ -198,7 +200,7 @@ export class Hero {
       const pi = b.parent && (b.parent as THREE.Bone).isBone ? this.byName.get(b.parent.name)! : -1;
       b.updateWorldMatrix(false, false);
       const qb = new THREE.Quaternion(), pb = new THREE.Vector3(); b.matrixWorld.decompose(pb, qb, _v2);
-      this.bones.push({ obj: b, parent: pi, joint: MAP[b.name] ?? -1, lp: b.position.clone(), lq: b.quaternion.clone(), grip: null, rq: b.quaternion.clone(), pb, qb, align: new THREE.Quaternion(), axis: new THREE.Vector3(0, 1, 0), len: 0, ps: 1 });
+      this.bones.push({ obj: b, parent: pi, joint: MAP[b.name] ?? -1, lp: b.position.clone(), lq: b.quaternion.clone(), grip: null, fist: null, rq: b.quaternion.clone(), pb, qb, align: new THREE.Quaternion(), axis: new THREE.Vector3(0, 1, 0), len: 0, ps: 1 });
     }
     const ws = this.bones.map(() => 1);
     this.bones.forEach((bn, i) => {
@@ -254,6 +256,7 @@ export class Hero {
         const rest = bn.lq.clone();
         bn.lq.copy(rest).multiply(_q.setFromAxisAngle(axisL, CURL.relaxed[k] * extra));
         if (s === 'r') bn.grip = rest.clone().multiply(_q.setFromAxisAngle(axisL, CURL.grip[k] * extra));
+        bn.fist = rest.clone().multiply(_q.setFromAxisAngle(axisL, CURL.fist[k] * extra * (f === 'thumb' ? 0.45 : 1)));
       }
     }
     this.Qw = this.bones.map(() => new THREE.Quaternion());
@@ -465,7 +468,7 @@ export class Hero {
     // Crowd positions in model units: character space / sm.
     const k = 1 / sm, kb = MODEL_HEIGHT / BASE_HEIGHT;
     const P = (j: number, out: THREE.Vector3) => out.set(W[j * 12 + 3] * k, W[j * 12 + 7] * k, W[j * 12 + 11] * k);
-    const grip = g.prop > 0.5;
+    const grip = g.prop > 0.5, fist = FISTS.has(g.act);
 
     const ikAim: (THREE.Vector3 | null)[] = [];
     const knee = new THREE.Vector3(), ankle = new THREE.Vector3();
@@ -475,7 +478,7 @@ export class Hero {
       const pp = bn.parent >= 0 ? this.Pw[bn.parent] : this.baseP;
       const Qt = this.Qw[i];
       if (bn.joint >= 0) Qt.copy(this.D[bn.joint]).multiply(bn.align).multiply(bn.qb);
-      else Qt.copy(pq).multiply(grip && bn.grip ? bn.grip : bn.lq);
+      else Qt.copy(pq).multiply(fist && bn.fist ? bn.fist : grip && bn.grip ? bn.grip : bn.lq);
       // Position: the pelvis moves as the crowd's does; everything else hangs off its parent.
       const Pw = this.Pw[i];
       if (bn.obj.name === 'pelvis') {

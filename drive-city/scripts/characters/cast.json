@@ -835,6 +835,277 @@
           }
         ]
       }
+    },
+    {
+      "id": "thug1",
+      "name": "黑豹打手（羽绒服）",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.58,
+        "muscle": 0.75,
+        "weight": 0.62,
+        "proportions": 0.5,
+        "height": 0.6,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "middleage_asian_male/middleage_asian_male.mhmat",
+      "hair": "short04/short04.mhclo",
+      "eyebrows": "eyebrow009/eyebrow009.mhclo",
+      "eyelashes": "eyelashes01/eyelashes01.mhclo",
+      "clothes": [
+        "male_casualsuit05/male_casualsuit05.mhclo",
+        "shoes03/shoes03.mhclo"
+      ],
+      "targets": {
+        "head-square": 0.5,
+        "chin-width-incr": 0.4,
+        "chin-bones-incr": 0.4,
+        "eyebrows-trans-down": 0.4,
+        "eyebrows-angle-down": 0.25,
+        "lr-eye-height2-decr": 0.3,
+        "nose-scale-horiz-incr": 0.3,
+        "nose-flaring-incr": 0.3,
+        "mouth-angles-down": 0.25,
+        "neck-scale-horiz-incr": 0.6
+      },
+      "look": {
+        "skin": {
+          "tint": "#e8cba5",
+          "amount": 0.6,
+          "sat": 0.85,
+          "bright": 0.85
+        },
+        "hair": "#0f0e0d",
+        "brows": "#120f0c",
+        "detail": 0.4,
+        "recolor": [
+          {
+            "mat": "casualsuit05",
+            "hue": [
+              70,
+              160
+            ],
+            "sat": [
+              0.03,
+              0.4
+            ],
+            "val": [
+              0.08,
+              0.6
+            ],
+            "to": "#141416"
+          },
+          {
+            "mat": "casualsuit05",
+            "hue": [
+              190,
+              230
+            ],
+            "sat": [
+              0.2,
+              1
+            ],
+            "to": "#17181c",
+            "contrast": 0.5
+          },
+          {
+            "mat": "casualsuit05",
+            "hue": [
+              -40,
+              20
+            ],
+            "sat": [
+              0.3,
+              1
+            ],
+            "to": "#2a2a2c"
+          }
+        ]
+      }
+    },
+    {
+      "id": "thug2",
+      "name": "黑豹打手（黑T）",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.52,
+        "muscle": 0.85,
+        "weight": 0.55,
+        "proportions": 0.5,
+        "height": 0.55,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "young_asian_male/young_asian_male.mhmat",
+      "hair": "short01/short01.mhclo",
+      "eyebrows": "eyebrow003/eyebrow003.mhclo",
+      "eyelashes": "eyelashes01/eyelashes01.mhclo",
+      "clothes": [
+        "male_casualsuit06/male_casualsuit06.mhclo",
+        "shoes02/shoes02.mhclo"
+      ],
+      "targets": {
+        "head-invertedtriangular": 0.3,
+        "chin-prominent-incr": 0.35,
+        "lr-cheek-bones-incr": 0.4,
+        "lr-cheek-volume-decr": 0.4,
+        "eyebrows-trans-down": 0.3,
+        "lr-eye-corner2-up": 0.2,
+        "lr-eye-height2-decr": 0.2,
+        "mouth-upperlip-volume-decr": 0.4,
+        "neck-scale-horiz-incr": 0.4
+      },
+      "look": {
+        "skin": {
+          "tint": "#ecd2b0",
+          "amount": 0.6,
+          "sat": 0.85,
+          "bright": 0.9
+        },
+        "hair": "#121110",
+        "brows": "#14110e",
+        "detail": 0.3,
+        "recolor": [
+          {
+            "mat": "casualsuit06",
+            "rects": [
+              [
+                0,
+                0,
+                1,
+                0.43
+              ]
+            ],
+            "to": "#151517",
+            "contrast": 0.35
+          },
+          {
+            "mat": "casualsuit06",
+            "rects": [
+              [
+                0,
+                0.43,
+                0.72,
+                1
+              ]
+            ],
+            "hue": [
+              180,
+              240
+            ],
+            "sat": [
+              0.1,
+              1
+            ],
+            "to": "#1c1e24",
+            "contrast": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "thug3",
+      "name": "黑豹打手（黑衬衫）",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.64,
+        "muscle": 0.6,
+        "weight": 0.72,
+        "proportions": 0.5,
+        "height": 0.58,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "middleage_asian_male/middleage_asian_male.mhmat",
+      "hair": "short02/short02.mhclo",
+      "eyebrows": "eyebrow008/eyebrow008.mhclo",
+      "eyelashes": "eyelashes01/eyelashes01.mhclo",
+      "clothes": [
+        "male_casualsuit01/male_casualsuit01.mhclo",
+        "shoes04/shoes04.mhclo"
+      ],
+      "targets": {
+        "head-fat-incr": 0.3,
+        "head-round": 0.3,
+        "chin-width-incr": 0.3,
+        "neck-double-incr": 0.25,
+        "eyebrows-trans-down": 0.3,
+        "lr-eye-height2-decr": 0.25,
+        "nose-scale-horiz-incr": 0.35,
+        "nose-volume-incr": 0.2,
+        "mouth-angles-down": 0.3
+      },
+      "look": {
+        "skin": {
+          "tint": "#e8cba5",
+          "amount": 0.6,
+          "sat": 0.85,
+          "bright": 0.82
+        },
+        "hair": "#100f0e",
+        "brows": "#120f0c",
+        "detail": 0.4,
+        "recolor": [
+          {
+            "mat": "casualsuit01",
+            "rects": [
+              [
+                0.355,
+                0,
+                0.735,
+                0.96
+              ]
+            ],
+            "hue": [
+              180,
+              250
+            ],
+            "sat": [
+              0.05,
+              1
+            ],
+            "to": "#191a1e",
+            "contrast": 0.6
+          },
+          {
+            "mat": "casualsuit01",
+            "except": [
+              [
+                0.355,
+                0,
+                0.735,
+                0.96
+              ]
+            ],
+            "hue": [
+              180,
+              250
+            ],
+            "sat": [
+              0.05,
+              1
+            ],
+            "to": "#121214",
+            "contrast": 0.6
+          }
+        ]
+      }
     }
   ]
 }

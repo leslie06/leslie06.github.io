@@ -12,6 +12,8 @@ export interface TouchInput {
   steer: number; forward: number; back: number; handbrake: boolean; sprint: boolean; analog: boolean;
   lookDX: number; lookDY: number;
   jumpPressed: boolean; enterPressed: boolean; punchPressed: boolean; mapPressed: boolean; cameraPressed: boolean; pausePressed: boolean;
+  /** Counter in a fight (combat/). Optional: probes hand over a TouchInput without it. */
+  counterPressed?: boolean;
   radioPressed: boolean;
   /** The phone: the last text messages. Optional: probes hand over a TouchInput without it. */
   phonePressed?: boolean;
@@ -37,8 +39,10 @@ export interface InputState {
   /** Camera orbit: mouse pixels (pointer locked) or right-stick deflection scaled to pixels. */
   /** Tab / D-pad up: the full-screen map. */
   mapPressed: boolean;
-  /** Left mouse button, E or gamepad B: shove the person in front (on foot). */
+  /** Left mouse button, E or gamepad B: shove the person in front, or strike in a fight (on foot). */
   punchPressed: boolean;
+  /** Q, right mouse button or gamepad LB: counter an enemy winding up, else block (on foot, combat/). */
+  counterPressed: boolean;
   lookDX: number; lookDY: number;
   cameraPressed: boolean;
   resetPressed: boolean;
@@ -67,6 +71,8 @@ export class Input {
   private dragging = false;
   /** A left click since the last poll (shove on foot). */
   private clicked = false;
+  /** A right click since the last poll (counter on foot). */
+  private rclicked = false;
   /** Touch screen: the browser also fires a synthetic mousedown per tap, which must not shove anyone. */
   private coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   locked = false;
@@ -93,6 +99,7 @@ export class Input {
     el.addEventListener('mousedown', (e) => {
       if (e.button === 0 || e.button === 2) this.dragging = true;
       if (e.button === 0 && !this.coarse) this.clicked = true;
+      if (e.button === 2 && !this.coarse) this.rclicked = true;
     });
     window.addEventListener('mouseup', () => { this.dragging = false; });
     window.addEventListener('mousemove', (e) => {
@@ -160,6 +167,8 @@ export class Input {
     s.diagPressed = p('F9');
     s.mapPressed = p('Tab');
     s.punchPressed = p('KeyE') || this.clicked;
+    s.counterPressed = p('KeyQ') || this.rclicked;
+    this.rclicked = false;
     s.choice = p('Digit1') || p('Numpad1') ? 1 : p('Digit2') || p('Numpad2') ? 2 : p('Digit3') || p('Numpad3') ? 3 : 0;
     this.clicked = false;
     this.pressed.clear();
@@ -184,6 +193,7 @@ export class Input {
     s.jumpPressed ||= c.jumpPressed; c.jumpPressed = false;
     s.enterPressed ||= c.enterPressed; c.enterPressed = false;
     s.punchPressed ||= c.punchPressed; c.punchPressed = false;
+    s.counterPressed ||= !!c.counterPressed; c.counterPressed = false;
     s.mapPressed ||= c.mapPressed; c.mapPressed = false;
     s.cameraPressed ||= c.cameraPressed; c.cameraPressed = false;
     s.radioPressed ||= c.radioPressed; c.radioPressed = false;
@@ -224,13 +234,14 @@ export class Input {
       s.pausePressed ||= edge(9);
       s.mapPressed ||= edge(12);
       s.punchPressed ||= edge(1);
+      s.counterPressed ||= edge(4);
       s.nitro ||= b(1) || b(4);
     }
     this.padPrev = pad.buttons.map((x) => x.pressed);
   }
 
   static empty(): InputState {
-    return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
+    return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, counterPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
       cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, phonePressed: false, diagPressed: false, nitro: false, choice: 0 };
   }
 }

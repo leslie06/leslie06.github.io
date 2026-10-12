@@ -37,6 +37,14 @@ export interface GameEvents {
   'people:report': { x: number; z: number };
   /** The player's car knocked a bin, a shared bike or a railing flying (city/Knock.ts). */
   'prop:hit': { kind: 'bin' | 'bike' | 'rail'; x: number; y: number; z: number; speed: number };
+  /** A blow landed in a fist fight (combat/): `power` 0..1, `blocked` taken on the forearms, `toPlayer` the player was hit. */
+  'combat:hit': { x: number; z: number; power: number; blocked: boolean; toPlayer: boolean };
+  /** A fist or foot swung (the whoosh), whether it lands or not. */
+  'combat:swing': { x: number; z: number; heavy: boolean };
+  /** A gang member down for good. */
+  'combat:ko': { x: number; z: number };
+  /** A counter: the player caught one winding up. */
+  'combat:counter': { x: number; z: number };
   /** A move that scores in the street combo (stunts/): a near miss, a drift, a jump... `points` before the multiplier. */
   'stunt:event': { kind: 'near' | 'drift' | 'air' | 'oncoming' | 'redlight' | 'smash' | 'evade' | 'shortcut' | 'takedown'; points: number };
   /** The combo ended: banked as `cash`, or `lost` in a crash (cash 0). */

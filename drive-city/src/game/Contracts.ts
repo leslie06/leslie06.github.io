@@ -163,6 +163,16 @@ export interface PlayerApi extends System {
   setPose?(a: Action | null, t?: number): void;
   /** The prompt the HUD shows (what F does now), or null. */
   readonly prompt?: string | null;
+  /**
+   * A fighting move on foot (combat/): play `action` for `secs`, turned to `yaw` and carried `lunge` metres along it
+   * over the first part (stepping in to reach). False when the player cannot (down, in a car, already mid-move and
+   * not yet able to chain: `chainFrom` seconds into a move it may be cut short).
+   */
+  strike?(action: Action, secs: number, yaw: number, lunge: number, chainFrom?: number): boolean;
+  /** Hit by a fist: a flinch that cuts any move short (`knock`: thrown down, as by a slow car). */
+  struck?(fromX: number, fromZ: number, knock: boolean): void;
+  /** Seconds into the move being played, and its action, or null. */
+  readonly move?: { action: Action; t: number; secs: number } | null;
 }
 
 export interface Interaction { x: number; z: number; r: number; label: string; use(): void }
@@ -221,6 +231,24 @@ export interface NavApi extends System {
 // --- Wanted level (police/) -----------------------------------------------------------------------
 
 export type Crime = 'hit_person' | 'carjack' | 'hit_police' | 'ram' | 'speeding' | 'report';
+/**
+ * Fist fights (combat/, 2026-10-12, 「徒步近战」): gang members who fight back, a combo of strikes, counters when one
+ * of them winds up. The player's attack and counter keys come here first while on foot.
+ */
+export interface CombatApi extends System {
+  /** Enemies standing within reach of a fight (the HUD, the touch counter button, player/'s attack routing). */
+  readonly engaged: boolean;
+  /** Attack pressed on foot (`heavy`: held and released). False when there is nobody to fight (player/ shoves instead). */
+  attack(heavy: boolean): boolean;
+  /** Counter pressed: counters an enemy winding up near the player, else a block. */
+  counter(): boolean;
+  /**
+   * `n` gang members round (x, z), coming for the player. Resolves the brawl: 'won' when all are down for good,
+   * 'lost' (the player wasted), 'fled' (the player more than 60 m off).
+   */
+  brawl(x: number, z: number, n: number, opts?: { tough?: number }): { done: Promise<'won' | 'lost' | 'fled'>; end(): void; readonly actors: readonly Actor[] };
+}
+
 export interface WantedApi extends System {
   /** 0..5 stars. */
   readonly level: number;
@@ -336,6 +364,12 @@ export interface Actor {
    * scripts/characters/cast.json), posed by the same gait; null: the crowd's.
    */
   model: CharacterModel | null;
+  /**
+   * Moved by its owner frame by frame (combat/: a fighter shuffling round the player): feet at (x, z) facing `yaw`,
+   * drawn moving at `speed`; people/ still knocks it over, and while it is down `puppet` is ignored. null hands the
+   * walking back to `goTo` / `follow`.
+   */
+  puppet?(p: { x: number; z: number; yaw: number; speed: number } | null): void;
 }
 /** Something that draws a person from a gait (character/hero/Hero.ts). */
 export interface CharacterModel {

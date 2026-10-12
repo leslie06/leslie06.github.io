@@ -97,7 +97,7 @@ export class TouchControls implements System {
   private state = {
     steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false, nitro: false,
     lookDX: 0, lookDY: 0,
-    jumpPressed: false, enterPressed: false, punchPressed: false, mapPressed: false, cameraPressed: false, pausePressed: false, radioPressed: false, phonePressed: false,
+    jumpPressed: false, enterPressed: false, punchPressed: false, counterPressed: false, mapPressed: false, cameraPressed: false, pausePressed: false, radioPressed: false, phonePressed: false,
   };
 
   constructor(private engine: Engine, container: HTMLElement) {
@@ -134,6 +134,8 @@ export class TouchControls implements System {
     // The middle of row 2: nitro while driving, an empty cell on foot so the throttle keeps its place.
     this.button(pads, 'drive', t('touch.nitro'), (down) => { this.state.nitro = down; }, true, 'nitro');
     this.nitroBtn = this.btns[this.btns.length - 1].el;
+    // on foot the middle cell is the counter (combat/: catch one winding up, else block)
+    this.button(pads, 'foot', t('touch.counter'), (down) => { if (down) this.state.counterPressed = true; });
     const spacer = this.spacer = el('div', undefined, pads);
     spacer.style.width = '64px';
     this.button(pads, 'both', t('touch.gas'), (down) => { this.state.forward = down ? 1 : 0; }, true, 'gas');
@@ -213,7 +215,7 @@ export class TouchControls implements System {
   private syncMode(): void {
     for (const b of this.btns) if (b.mode !== 'both') b.el.hidden = (b.mode === 'drive') !== this.driving;
     this.nitroBtn.hidden = !(this.driving && this.n2o);
-    this.spacer.hidden = this.driving && this.n2o;
+    this.spacer.hidden = !this.driving || this.n2o;
   }
 
   private release(): void {

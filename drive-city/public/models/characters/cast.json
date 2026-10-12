@@ -85,6 +85,15 @@
     },
     "baoge": {
       "file": "baoge.glb"
+    },
+    "thug1": {
+      "file": "thug1.glb"
+    },
+    "thug2": {
+      "file": "thug2.glb"
+    },
+    "thug3": {
+      "file": "thug3.glb"
     }
   }
 }
