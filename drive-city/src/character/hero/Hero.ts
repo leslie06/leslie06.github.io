@@ -97,14 +97,17 @@ function physical(src: THREE.MeshStandardMaterial, name: string, o: AuthoredOpts
   const p = new THREE.MeshPhysicalMaterial({ name: src.name, map: src.map, normalMap: src.normalMap, color: src.color.clone() });
   if (src.normalMap) p.normalScale.copy(src.normalScale);
   p.userData.wet = true;
-  if (card) { p.alphaTest = 0.5; p.side = THREE.DoubleSide; }
+  // hair cards cut at half (their soft fringe is a second, blended pass: `fringe`); brows and lashes lie on the skin,
+  // blended (cut, they were thin jagged strokes)
+  if (kind === 'hair') { p.alphaTest = 0.5; p.side = THREE.DoubleSide; }
+  if (kind === 'brow') { p.transparent = true; p.depthWrite = false; p.side = THREE.DoubleSide; }
   if (kind === 'skin') {
-    p.roughness = 0.5; p.specularIntensity = 0.5;
-    p.sheen = 0.45; p.sheenRoughness = 0.45; p.sheenColor.set('#ff9a7a');
+    p.roughness = 0.55; p.specularIntensity = 0.45;
+    p.sheen = 0.3; p.sheenRoughness = 0.5; p.sheenColor.set('#ffb08f');
   } else if (kind === 'hair') {
     if (o.hairColor) p.color.copy(o.hairColor);
     p.roughness = 0.5; p.specularIntensity = 0.7;
-    p.sheen = 0.7; p.sheenRoughness = 0.35; p.sheenColor.copy(p.color).lerp(new THREE.Color('#a49686'), 0.5);
+    p.sheen = 0.35; p.sheenRoughness = 0.4; p.sheenColor.copy(p.color).lerp(new THREE.Color('#a49686'), 0.3);
   } else if (kind === 'brow') {
     p.roughness = 0.8;
   } else if (kind === 'eye') {
@@ -117,6 +120,22 @@ function physical(src: THREE.MeshStandardMaterial, name: string, o: AuthoredOpts
   }
   src.dispose();
   return p;
+}
+
+/**
+ * The hair's soft edge: the same cards again, blended, after the cut pass and without writing depth. Where the cut
+ * pass drew, its depth hides this one (same surface, depth test 'less'); where it left a strand's thin end out, this
+ * draws it see-through, so the hairline and the tips fade instead of ending in a hard serrated line.
+ */
+function fringe(m: THREE.SkinnedMesh): THREE.SkinnedMesh {
+  const mat = (m.material as THREE.MeshPhysicalMaterial).clone();
+  mat.alphaTest = 0.02; mat.transparent = true; mat.depthWrite = false; mat.depthFunc = THREE.LessDepth;
+  const f = new THREE.SkinnedMesh(m.geometry, mat);
+  f.name = `${m.name} fringe`;
+  f.bind(m.skeleton, m.bindMatrix);
+  f.position.copy(m.position); f.quaternion.copy(m.quaternion); f.scale.copy(m.scale);
+  f.frustumCulled = false; f.castShadow = false; f.receiveShadow = true;
+  return f;
 }
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
@@ -244,8 +263,13 @@ export class Hero {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
         m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
-        if (!Array.isArray(m.material)) m.material = physical(m.material as THREE.MeshStandardMaterial, `${m.name} ${m.material.name}`, authored);
+        // names are "<id>.<asset>": the asset decides the kind ("feilong" contains "long", a hairstyle's name)
+        const asset = (n: string) => n.replace(/^[^.]*\./, '');
+        if (!Array.isArray(m.material)) m.material = physical(m.material as THREE.MeshStandardMaterial, `${asset(m.name)} ${asset(m.material.name)}`, authored);
       });
+      const hair: THREE.SkinnedMesh[] = [];
+      scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.material as THREE.Material).alphaTest >= 0.5) hair.push(m); });
+      for (const m of hair) m.parent!.add(fringe(m));
     } else {
     // Skin and hair in the look's colours, then the clothes.
       // The texture is a warm tan; this lightens it to the look's skin (relative to the player's own).

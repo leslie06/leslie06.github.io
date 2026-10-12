@@ -6,11 +6,11 @@
       "name": "陈野",
       "phenotype": {
         "gender": 1.0,
-        "age": 0.55,
-        "muscle": 0.7,
-        "weight": 0.48,
+        "age": 0.56,
+        "muscle": 0.65,
+        "weight": 0.42,
         "proportions": 0.65,
-        "height": 0.6,
+        "height": 0.62,
         "cupsize": 0.5,
         "firmness": 0.5,
         "race": {
@@ -20,37 +20,88 @@
         }
       },
       "skin": "middleage_asian_male/middleage_asian_male.mhmat",
-      "hair": "short02/short02.mhclo",
-      "eyebrows": "eyebrow010/eyebrow010.mhclo",
+      "hair": "short01/short01.mhclo",
+      "eyebrows": "eyebrow012/eyebrow012.mhclo",
       "clothes": [
         "male_casualsuit05/male_casualsuit05.mhclo",
         "shoes03/shoes03.mhclo"
       ],
       "targets": {
-        "head-square": 0.55,
-        "chin-width-incr": 0.35,
-        "chin-bones-incr": 0.3,
-        "chin-prominent-incr": 0.25,
-        "lr-cheek-bones-incr": 0.45,
-        "lr-cheek-volume-decr": 0.35,
-        "eyebrows-trans-down": 0.35,
+        "head-rectangular": 0.35,
+        "head-scale-horiz-decr": 0.12,
+        "chin-bones-incr": 0.45,
+        "chin-prominent-incr": 0.3,
+        "chin-height-incr": 0.15,
+        "chin-width-incr": 0.15,
+        "lr-cheek-bones-incr": 0.5,
+        "lr-cheek-volume-decr": 0.6,
+        "lr-cheek-inner-decr": 0.25,
         "forehead-temple-decr": 0.2,
+        "eyebrows-trans-down": 0.35,
+        "eyebrows-trans-forward": 0.3,
+        "lr-eye-height2-decr": 0.25,
+        "lr-eye-eyefold-down": 0.3,
+        "lr-eye-corner2-up": 0.15,
         "nose-scale-vert-incr": 0.2,
-        "nose-hump-incr": 0.15,
-        "lr-eye-height2-incr": 0.35,
-        "lr-eye-eyefold-up": 0.3,
-        "mouth-scale-horiz-incr": 0.12,
-        "mouth-angles-down": 0.1,
-        "neck-scale-horiz-incr": 0.35
-      }
+        "nose-hump-incr": 0.2,
+        "nose-point-width-decr": 0.2,
+        "mouth-upperlip-volume-decr": 0.3,
+        "mouth-lowerlip-volume-decr": 0.1,
+        "mouth-scale-horiz-incr": 0.1,
+        "mouth-angles-down": 0.12,
+        "neck-scale-horiz-incr": 0.3
+      },
+      "look": {
+        "skin": {
+          "tint": "#f2e2c8",
+          "amount": 0.5,
+          "sat": 0.85,
+          "bright": 0.92
+        },
+        "hair": "#191512",
+        "brows": "#1a1612",
+        "recolor": [
+          {
+            "mat": "casualsuit05",
+            "hue": [
+              70,
+              160
+            ],
+            "sat": [
+              0.03,
+              0.4
+            ],
+            "val": [
+              0.08,
+              0.6
+            ],
+            "to": "#25262a"
+          },
+          {
+            "mat": "casualsuit05",
+            "hue": [
+              190,
+              230
+            ],
+            "sat": [
+              0.2,
+              1
+            ],
+            "to": "#24314a",
+            "contrast": 0.6
+          }
+        ],
+        "detail": 0.35
+      },
+      "eyelashes": "eyelashes01/eyelashes01.mhclo"
     },
     {
       "id": "laok",
       "name": "老K",
       "phenotype": {
         "gender": 1.0,
-        "age": 0.78,
-        "muscle": 0.4,
+        "age": 0.85,
+        "muscle": 0.35,
         "weight": 0.62,
         "proportions": 0.5,
         "height": 0.45,
@@ -63,27 +114,726 @@
         }
       },
       "skin": "old_asian_male/old_asian_male.mhmat",
-      "hair": "short01/short01.mhclo",
-      "hairTint": [
-        0.55,
-        0.55,
-        0.55
-      ],
-      "eyebrows": "eyebrow002/eyebrow002.mhclo",
+      "hair": "short04/short04.mhclo",
+      "eyebrows": "eyebrow008/eyebrow008.mhclo",
       "clothes": [
         "male_elegantsuit01/male_elegantsuit01.mhclo",
         "shoes01/shoes01.mhclo"
       ],
       "targets": {
-        "head-fat-incr": 0.35,
-        "head-age-incr": 0.5,
-        "neck-double-incr": 0.35,
-        "lr-eye-bag-incr": 0.55,
-        "lr-eye-height2-incr": 0.2,
-        "mouth-angles-down": 0.35,
-        "eyebrows-angle-down": 0.25,
-        "nose-scale-horiz-incr": 0.2,
-        "lr-cheek-volume-incr": 0.25
+        "head-fat-incr": 0.3,
+        "head-age-incr": 0.7,
+        "head-square": 0.25,
+        "neck-double-incr": 0.4,
+        "lr-eye-bag-incr": 0.7,
+        "lr-eye-bag-height-incr": 0.3,
+        "lr-eye-eyefold-down": 0.4,
+        "lr-eye-corner2-down": 0.3,
+        "mouth-angles-down": 0.25,
+        "mouth-laugh-lines-out": 0.5,
+        "mouth-upperlip-volume-decr": 0.3,
+        "nose-scale-horiz-incr": 0.25,
+        "nose-volume-incr": 0.2,
+        "lr-cheek-volume-incr": 0.15,
+        "lr-cheek-trans-down": 0.3,
+        "chin-width-incr": 0.2,
+        "eyebrows-angle-up": 0.2,
+        "eyebrows-trans-down": 0.15
+      },
+      "look": {
+        "skin": {
+          "tint": "#f2e2c8",
+          "amount": 0.5,
+          "sat": 0.72,
+          "bright": 0.9
+        },
+        "hair": "#5d5a56",
+        "brows": "#2e2b28",
+        "recolor": [
+          {
+            "mat": "elegantsuit01",
+            "sat": [
+              0,
+              0.1
+            ],
+            "val": [
+              0.1,
+              0.5
+            ],
+            "to": "#3b3229"
+          },
+          {
+            "mat": "elegantsuit01",
+            "hue": [
+              200,
+              260
+            ],
+            "sat": [
+              0.15,
+              1
+            ],
+            "to": "#6a2a26"
+          },
+          {
+            "mat": "shoes01",
+            "sat": [
+              0.15,
+              1
+            ],
+            "to": "#3a2618",
+            "contrast": 0.8
+          }
+        ],
+        "detail": 0.35
+      },
+      "eyelashes": "eyelashes01/eyelashes01.mhclo"
+    },
+    {
+      "id": "xiaoyu",
+      "name": "小雨",
+      "phenotype": {
+        "gender": 0.0,
+        "age": 0.42,
+        "muscle": 0.45,
+        "weight": 0.4,
+        "proportions": 0.5,
+        "height": 0.42,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "young_asian_female/young_asian_female.mhmat",
+      "hair": "bob02/bob02.mhclo",
+      "eyebrows": "eyebrow006/eyebrow006.mhclo",
+      "eyelashes": "eyelashes02/eyelashes02.mhclo",
+      "clothes": [
+        "female_casualsuit01/female_casualsuit01.mhclo",
+        "shoes05/shoes05.mhclo"
+      ],
+      "targets": {
+        "head-oval": 0.3,
+        "chin-width-decr": 0.2,
+        "lr-cheek-volume-decr": 0.15,
+        "lr-eye-scale-incr": 0.15,
+        "lr-eye-epicanthus-in": 0.25,
+        "nose-scale-horiz-decr": 0.15,
+        "nose-point-width-decr": 0.2,
+        "mouth-scale-horiz-decr": 0.1
+      },
+      "look": {
+        "skin": {
+          "tint": "#f2e2c8",
+          "amount": 0.5,
+          "sat": 0.8,
+          "bright": 0.97
+        },
+        "hair": "#141210",
+        "brows": "#1e1915",
+        "lashAlpha": 0.85,
+        "detail": 0.25,
+        "recolor": [
+          {
+            "mat": "female_casualsuit01",
+            "rects": [
+              [
+                0,
+                0,
+                1,
+                0.42
+              ],
+              [
+                0.72,
+                0.55,
+                1,
+                0.85
+              ]
+            ],
+            "sat": [
+              0.12,
+              1
+            ],
+            "to": "#1f2d4d",
+            "contrast": 0.7
+          },
+          {
+            "mat": "female_casualsuit01",
+            "rects": [
+              [
+                0,
+                0.42,
+                0.72,
+                1
+              ]
+            ],
+            "hue": [
+              180,
+              240
+            ],
+            "sat": [
+              0.1,
+              1
+            ],
+            "to": "#1c1f28",
+            "contrast": 0.6
+          }
+        ]
+      }
+    },
+    {
+      "id": "daliu",
+      "name": "大刘",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.66,
+        "muscle": 0.8,
+        "weight": 0.66,
+        "proportions": 0.5,
+        "height": 0.6,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "middleage_asian_male/middleage_asian_male.mhmat",
+      "hair": "short01/short01.mhclo",
+      "eyebrows": "eyebrow009/eyebrow009.mhclo",
+      "eyelashes": "eyelashes01/eyelashes01.mhclo",
+      "clothes": [
+        "male_worksuit01/male_worksuit01.mhclo",
+        "shoes02/shoes02.mhclo"
+      ],
+      "targets": {
+        "head-square": 0.5,
+        "head-fat-incr": 0.2,
+        "chin-width-incr": 0.4,
+        "chin-bones-incr": 0.3,
+        "lr-cheek-volume-incr": 0.15,
+        "nose-scale-horiz-incr": 0.3,
+        "nose-flaring-incr": 0.3,
+        "mouth-scale-horiz-incr": 0.15,
+        "eyebrows-trans-down": 0.2,
+        "neck-scale-horiz-incr": 0.5
+      },
+      "look": {
+        "skin": {
+          "tint": "#e8cba5",
+          "amount": 0.6,
+          "sat": 0.85,
+          "bright": 0.82
+        },
+        "hair": "#16130f",
+        "brows": "#17130f",
+        "detail": 0.4,
+        "recolor": [
+          {
+            "mat": "worksuit01",
+            "hue": [
+              180,
+              250
+            ],
+            "sat": [
+              0.2,
+              1
+            ],
+            "to": "#243650",
+            "contrast": 0.7
+          }
+        ]
+      }
+    },
+    {
+      "id": "wang",
+      "name": "王队",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.7,
+        "muscle": 0.6,
+        "weight": 0.5,
+        "proportions": 0.5,
+        "height": 0.62,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "middleage_asian_male/middleage_asian_male.mhmat",
+      "hair": "short02/short02.mhclo",
+      "eyebrows": "eyebrow005/eyebrow005.mhclo",
+      "eyelashes": "eyelashes01/eyelashes01.mhclo",
+      "clothes": [
+        "male_casualsuit01/male_casualsuit01.mhclo",
+        "shoes04/shoes04.mhclo"
+      ],
+      "targets": {
+        "head-rectangular": 0.4,
+        "chin-prominent-incr": 0.2,
+        "chin-height-incr": 0.15,
+        "lr-cheek-bones-incr": 0.2,
+        "eyebrows-trans-down": 0.25,
+        "lr-eye-height2-decr": 0.15,
+        "nose-scale-vert-incr": 0.15,
+        "mouth-upperlip-volume-decr": 0.3,
+        "mouth-angles-down": 0.1,
+        "head-age-incr": 0.2
+      },
+      "look": {
+        "skin": {
+          "tint": "#f2e2c8",
+          "amount": 0.5,
+          "sat": 0.85,
+          "bright": 0.88
+        },
+        "hair": "#1b1815",
+        "brows": "#17130f",
+        "detail": 0.35,
+        "recolor": [
+          {
+            "mat": "casualsuit01",
+            "rects": [
+              [
+                0.355,
+                0,
+                0.735,
+                0.96
+              ]
+            ],
+            "hue": [
+              180,
+              250
+            ],
+            "sat": [
+              0.05,
+              1
+            ],
+            "to": "#1d2a44",
+            "contrast": 0.6
+          },
+          {
+            "mat": "casualsuit01",
+            "except": [
+              [
+                0.355,
+                0,
+                0.735,
+                0.96
+              ]
+            ],
+            "hue": [
+              180,
+              250
+            ],
+            "sat": [
+              0.05,
+              1
+            ],
+            "to": "#9fb7d9",
+            "contrast": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "laozhang",
+      "name": "老张",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.88,
+        "muscle": 0.35,
+        "weight": 0.38,
+        "proportions": 0.5,
+        "height": 0.5,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "old_asian_male/old_asian_male.mhmat",
+      "hair": "short01/short01.mhclo",
+      "eyebrows": "eyebrow002/eyebrow002.mhclo",
+      "eyelashes": "eyelashes01/eyelashes01.mhclo",
+      "clothes": [
+        "male_casualsuit05/male_casualsuit05.mhclo",
+        "shoes04/shoes04.mhclo"
+      ],
+      "targets": {
+        "head-age-incr": 0.8,
+        "head-fat-decr": 0.3,
+        "lr-cheek-volume-decr": 0.5,
+        "lr-cheek-bones-incr": 0.35,
+        "lr-eye-bag-incr": 0.5,
+        "lr-eye-eyefold-down": 0.3,
+        "mouth-laugh-lines-out": 0.6,
+        "mouth-angles-up": 0.15,
+        "nose-scale-vert-incr": 0.2,
+        "forehead-scale-vert-incr": 0.2,
+        "neck-scale-horiz-decr": 0.2
+      },
+      "look": {
+        "skin": {
+          "tint": "#f2e2c8",
+          "amount": 0.5,
+          "sat": 0.65,
+          "bright": 0.84
+        },
+        "hair": "#3c3a37",
+        "brows": "#2c2926",
+        "detail": 0.4,
+        "recolor": [
+          {
+            "mat": "casualsuit05",
+            "hue": [
+              70,
+              160
+            ],
+            "sat": [
+              0.03,
+              0.4
+            ],
+            "val": [
+              0.08,
+              0.6
+            ],
+            "to": "#3d4430"
+          },
+          {
+            "mat": "casualsuit05",
+            "hue": [
+              190,
+              230
+            ],
+            "sat": [
+              0.2,
+              1
+            ],
+            "to": "#2a2c2f",
+            "contrast": 0.5
+          },
+          {
+            "mat": "casualsuit05",
+            "hue": [
+              -40,
+              20
+            ],
+            "sat": [
+              0.3,
+              1
+            ],
+            "to": "#c9c6bd"
+          }
+        ]
+      }
+    },
+    {
+      "id": "liujie",
+      "name": "刘姐",
+      "phenotype": {
+        "gender": 0.0,
+        "age": 0.66,
+        "muscle": 0.4,
+        "weight": 0.62,
+        "proportions": 0.5,
+        "height": 0.42,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "middleage_asian_female/middleage_asian_female.mhmat",
+      "hair": "ponytail01/ponytail01.mhclo",
+      "eyebrows": "eyebrow001/eyebrow001.mhclo",
+      "eyelashes": "eyelashes02/eyelashes02.mhclo",
+      "clothes": [
+        "female_casualsuit01/female_casualsuit01.mhclo",
+        "shoes06/shoes06.mhclo"
+      ],
+      "targets": {
+        "head-round": 0.35,
+        "head-fat-incr": 0.2,
+        "lr-cheek-volume-incr": 0.3,
+        "mouth-angles-up": 0.2,
+        "mouth-laugh-lines-out": 0.3,
+        "lr-eye-bag-incr": 0.25,
+        "nose-scale-horiz-incr": 0.15
+      },
+      "look": {
+        "skin": {
+          "tint": "#ecd2b0",
+          "amount": 0.55,
+          "sat": 0.85,
+          "bright": 0.9
+        },
+        "hair": "#1a1613",
+        "brows": "#211b16",
+        "lashAlpha": 0.7,
+        "detail": 0.3,
+        "recolor": [
+          {
+            "mat": "female_casualsuit01",
+            "rects": [
+              [
+                0,
+                0,
+                1,
+                0.42
+              ],
+              [
+                0.72,
+                0.55,
+                1,
+                0.85
+              ]
+            ],
+            "sat": [
+              0.12,
+              1
+            ],
+            "to": "#eeede6",
+            "contrast": 0.4
+          },
+          {
+            "mat": "female_casualsuit01",
+            "rects": [
+              [
+                0,
+                0.42,
+                0.72,
+                1
+              ]
+            ],
+            "hue": [
+              180,
+              240
+            ],
+            "sat": [
+              0.1,
+              1
+            ],
+            "to": "#2a2c2f",
+            "contrast": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "feilong",
+      "name": "小飞龙",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.4,
+        "muscle": 0.5,
+        "weight": 0.35,
+        "proportions": 0.5,
+        "height": 0.55,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "young_asian_male/young_asian_male.mhmat",
+      "hair": "short03/short03.mhclo",
+      "eyebrows": "eyebrow011/eyebrow011.mhclo",
+      "eyelashes": "eyelashes01/eyelashes01.mhclo",
+      "clothes": [
+        "male_casualsuit04/male_casualsuit04.mhclo",
+        "shoes05/shoes05.mhclo"
+      ],
+      "targets": {
+        "head-invertedtriangular": 0.35,
+        "chin-width-decr": 0.25,
+        "chin-prominent-incr": 0.15,
+        "lr-cheek-volume-decr": 0.3,
+        "lr-eye-corner2-up": 0.25,
+        "lr-eye-height2-decr": 0.1,
+        "nose-scale-horiz-decr": 0.1,
+        "mouth-angles-up": 0.1,
+        "neck-scale-horiz-decr": 0.2
+      },
+      "look": {
+        "skin": {
+          "tint": "#f2e2c8",
+          "amount": 0.5,
+          "sat": 0.85,
+          "bright": 0.95
+        },
+        "hair": "#2e1d12",
+        "brows": "#1e1915",
+        "detail": 0.25,
+        "recolor": [
+          {
+            "mat": "casualsuit04",
+            "rects": [
+              [
+                0,
+                0,
+                1,
+                0.4
+              ]
+            ],
+            "hue": [
+              0,
+              40
+            ],
+            "sat": [
+              0.4,
+              1
+            ],
+            "to": "#181818"
+          },
+          {
+            "mat": "casualsuit04",
+            "rects": [
+              [
+                0,
+                0,
+                1,
+                0.4
+              ]
+            ],
+            "hue": [
+              180,
+              250
+            ],
+            "sat": [
+              0.12,
+              1
+            ],
+            "to": "#c4231c",
+            "contrast": 0.7
+          },
+          {
+            "mat": "casualsuit04",
+            "rects": [
+              [
+                0,
+                0.4,
+                0.8,
+                1
+              ]
+            ],
+            "hue": [
+              180,
+              240
+            ],
+            "sat": [
+              0.1,
+              1
+            ],
+            "to": "#141518",
+            "contrast": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "id": "baoge",
+      "name": "豹哥",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.68,
+        "muscle": 0.75,
+        "weight": 0.68,
+        "proportions": 0.5,
+        "height": 0.6,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "middleage_asian_male/middleage_asian_male.mhmat",
+      "hair": "short04/short04.mhclo",
+      "eyebrows": "eyebrow003/eyebrow003.mhclo",
+      "eyelashes": "eyelashes01/eyelashes01.mhclo",
+      "clothes": [
+        "male_elegantsuit01/male_elegantsuit01.mhclo",
+        "shoes03/shoes03.mhclo"
+      ],
+      "targets": {
+        "head-square": 0.45,
+        "chin-width-incr": 0.35,
+        "chin-bones-incr": 0.4,
+        "lr-cheek-bones-incr": 0.35,
+        "eyebrows-trans-down": 0.4,
+        "eyebrows-angle-down": 0.2,
+        "lr-eye-height2-decr": 0.3,
+        "lr-eye-eyefold-down": 0.25,
+        "nose-hump-incr": 0.3,
+        "nose-scale-horiz-incr": 0.15,
+        "mouth-upperlip-volume-decr": 0.4,
+        "mouth-angles-down": 0.2,
+        "neck-scale-horiz-incr": 0.5
+      },
+      "look": {
+        "skin": {
+          "tint": "#e8cba5",
+          "amount": 0.6,
+          "sat": 0.85,
+          "bright": 0.85
+        },
+        "hair": "#0f0e0d",
+        "brows": "#120f0c",
+        "detail": 0.4,
+        "recolor": [
+          {
+            "mat": "elegantsuit01",
+            "hue": [
+              200,
+              280
+            ],
+            "sat": [
+              0.06,
+              1
+            ],
+            "to": "#5a1416"
+          },
+          {
+            "mat": "elegantsuit01",
+            "sat": [
+              0,
+              0.1
+            ],
+            "val": [
+              0.1,
+              0.5
+            ],
+            "to": "#151517",
+            "contrast": 0.8
+          },
+          {
+            "mat": "elegantsuit01",
+            "sat": [
+              0,
+              0.12
+            ],
+            "val": [
+              0.6,
+              1.0
+            ],
+            "to": "#1e1e21",
+            "contrast": 0.6
+          }
+        ]
       }
     }
   ]

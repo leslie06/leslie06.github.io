@@ -29,6 +29,7 @@ HumanService = importlib.import_module(MOD + ".services.humanservice").HumanServ
 TargetService = importlib.import_module(MOD + ".services.targetservice").TargetService
 
 spec = next(c for c in json.load(open(a.cast))["cast"] if c["id"] == a.id)
+# `aoSamples` / `aoDistance` tune the occlusion bake below
 
 # empty scene
 for o in list(bpy.data.objects):
@@ -71,22 +72,7 @@ for o in bpy.data.objects:
                 o.shape_key_remove(k)
         o.shape_key_remove(o.data.shape_keys.key_blocks["__mix"])
 
-# hair colour override (a grey for 老K): tint the hair material's base colour
-tint = spec.get("hairTint")
-if tint:
-    for o in bpy.data.objects:
-        if o.type == "MESH" and (os.path.basename(spec.get("hair", "")).split(".")[0].lower() in o.name.lower() or "hair" in o.name.lower()):
-            for slot in o.material_slots:
-                m = slot.material
-                if m and m.use_nodes:
-                    for n in m.node_tree.nodes:
-                        if n.type == "BSDF_PRINCIPLED":
-                            n.inputs["Base Color"].default_value = (*tint, 1.0) if not n.inputs["Base Color"].is_linked else n.inputs["Base Color"].default_value
-                            if n.inputs["Base Color"].is_linked:
-                                mix = m.node_tree.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"; mix.blend_type = "MULTIPLY"; mix.inputs[0].default_value = 1.0
-                                src = n.inputs["Base Color"].links[0].from_socket
-                                m.node_tree.links.new(src, mix.inputs[6]); mix.inputs[7].default_value = (*tint, 1.0)
-                                m.node_tree.links.new(mix.outputs[2], n.inputs["Base Color"])
+# colours (skin tone, hair, brows, clothes) are applied to the textures by scripts/characters/pack.mjs from `look`
 
 if a.blend:
     bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(a.blend))
@@ -96,6 +82,31 @@ bpy.ops.object.select_all(action="SELECT")
 bpy.ops.export_scene.gltf(filepath=os.path.abspath(a.out), export_format="GLB", use_selection=False,
                           export_apply=True, export_morph=False, export_skins=True, export_animations=False,
                           export_yup=True, export_image_format="AUTO")
+# Ambient occlusion baked into the body's UV (Cycles), with the hair, brows, eyes and clothes in place: the eye
+# sockets, nostrils, ears, under the chin and the hairline darken as they do in life; MakeHuman's skins have none,
+# and the game's screen-space AO is too coarse for a face. pack.mjs multiplies it into the skin (<out>.ao.png).
+body = next(o for o in bpy.data.objects if o.type == "MESH" and o.name.lower().endswith(".body"))
+sc = bpy.context.scene
+sc.render.engine = "CYCLES"
+sc.cycles.samples = int(spec.get("aoSamples", 96))
+sc.cycles.device = "CPU"
+if sc.world is None:
+    sc.world = bpy.data.worlds.new("w")
+sc.world.light_settings.distance = float(spec.get("aoDistance", 0.12))
+img = bpy.data.images.new("ao", 1024, 1024, alpha=False, float_buffer=False)
+mat = body.active_material
+node = mat.node_tree.nodes.new("ShaderNodeTexImage")
+node.image = img
+mat.node_tree.nodes.active = node
+bpy.ops.object.select_all(action="DESELECT")
+body.select_set(True)
+bpy.context.view_layer.objects.active = body
+bpy.ops.object.bake(type="AO", margin=8, use_clear=True)
+img.filepath_raw = os.path.abspath(a.out[:-4] + ".ao.png")
+img.file_format = "PNG"
+img.save()
+print(f"[mpfb_char] ao -> {img.filepath_raw}")
+
 tris = 0
 for o in bpy.data.objects:
     if o.type == "MESH":
