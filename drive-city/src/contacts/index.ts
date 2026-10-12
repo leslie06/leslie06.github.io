@@ -38,6 +38,10 @@ export interface ContactsApi extends System {
   perk(id: ContactId, n: number): boolean;
   /** Garage price multiplier (大刘), bust fine multiplier (王队), the time the police take to lose you (小雨), fares (老张). */
   readonly discount: number; readonly fineScale: number; readonly evadeScale: number; readonly fareScale: number; readonly specialPax: number;
+  /** Where `id` keeps their spot (a table, a cart), facing the street: campaign/ starts a mission there. */
+  spot(id: ContactId): { x: number; z: number; yaw: number } | null;
+  /** `id` in person while the camera is near (a cutscene turns them to face someone), or null. */
+  actor(id: ContactId): Actor | null;
   debug: { add(id: ContactId, pts: number): void; where(): { id: ContactId; x: number; z: number; here: boolean }[]; reset(): void };
 }
 
@@ -218,6 +222,8 @@ export async function install(engine: Engine): Promise<void> {
     get evadeScale() { return heartsOf('xiaoyu') >= 4 ? 0.7 : 1; },
     get fareScale() { return heartsOf('laozhang') >= 2 ? 1.2 : 1; },
     get specialPax() { return heartsOf('laozhang') >= 4 ? 2 : 1; },
+    spot: (id) => { const h = here.find((q) => q.d.id === id); return h ? { x: h.x, z: h.z, yaw: h.yaw } : null; },
+    actor: (id) => { const h = here.find((q) => q.d.id === id); return h?.actor?.alive ? h.actor : null; },
     debug: {
       add: (id, n) => add(id, n),
       where: () => here.map((h) => ({ id: h.d.id, x: h.x, z: h.z, here: !!h.actor?.alive })),
