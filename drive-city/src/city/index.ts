@@ -1,3 +1,4 @@
+import { boot } from '../core/Boot';
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
@@ -177,21 +178,31 @@ export async function install(engine: Engine): Promise<void> {
   // extras below wait for it.
   let openGate = () => {};
   const bootDone = new Promise<void>((r) => { openGate = r; });
+  // the loading bar counts the files as they arrive, weighted by size (those left for later count nothing; the
+  // total is complete before any resolves: the array below is built synchronously)
+  let got = 0, total = 0;
+  const track = <T>(p: T | Promise<T>, w = 1): Promise<T> => {
+    if (p == null) return Promise.resolve(p);
+    total += w;
+    return Promise.resolve(p).finally(() => { got += w; boot.sub(got / total); });
+  };
+  boot.stage(0.55, 0.85, 'boot.city', 17);
   const [manifest, network, skyline, mats, defs, signs, entrances, footbridges, rail, tunnels] = await Promise.all([
-    loadCity<Manifest>('manifest.json'), loadNetwork(), DEFER_EXTRAS ? null : loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline),
-    createCityMaterials(engine, env, DEFER_EXTRAS ? bootDone : undefined), loadLandmarks(),
+    track(loadCity<Manifest>('manifest.json')), track(loadNetwork(), 6), track(DEFER_EXTRAS ? null : loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline)),
+    track(createCityMaterials(engine, env, DEFER_EXTRAS ? bootDone : undefined), 2), track(loadLandmarks()),
     // The guide signs (city/Signs.ts, placed by the build): optional, the city runs without them, and
     // after the boot (below) unless in shot mode.
-    DEFER_EXTRAS ? null : loadCity<{ signs: GuideSign[]; closures: Closure[] }>('signs.json').catch(() => null),
+    track(DEFER_EXTRAS ? null : loadCity<{ signs: GuideSign[]; closures: Closure[] }>('signs.json').catch(() => null)),
     // The subway entrances (scripts/city/entrances.mjs): optional too.
-    new URLSearchParams(location.search).get('subway') === '0' ? null : loadCity<EntrancesFile>('entrances.json').catch(() => null),
+    track(new URLSearchParams(location.search).get('subway') === '0' ? null : loadCity<EntrancesFile>('entrances.json').catch(() => null)),
     // The footbridges (scripts/city/footbridges.mjs): optional too.
-    new URLSearchParams(location.search).get('footbridges') === '0' ? null : loadCity<FootbridgesFile>('footbridges.json').catch(() => null),
+    track(new URLSearchParams(location.search).get('footbridges') === '0' ? null : loadCity<FootbridgesFile>('footbridges.json').catch(() => null)),
     // The railways above ground (scripts/city/railways.mjs): optional too.
-    DEFER_EXTRAS || !RAIL_ON ? null : loadCity<RailFileV2>('rail.json').catch(() => null),
+    track(DEFER_EXTRAS || !RAIL_ON ? null : loadCity<RailFileV2>('rail.json').catch(() => null)),
     // The underpasses' trenches and tunnels (build.mjs): without them the sunk roads would have no floor.
-    loadCity<TunnelsFile>('tunnels.json').catch(() => null),
+    track(loadCity<TunnelsFile>('tunnels.json').catch(() => null)),
   ]);
+  boot.stage(0.85, 0.86, 'boot.build', 1);
   const b = manifest.bounds;
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
 
@@ -316,7 +327,8 @@ export async function install(engine: Engine): Promise<void> {
 
   const sp = manifest.spawn;
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);
-  await streamer.preload(sp.x, sp.z);
+  boot.stage(0.86, 0.96, 'boot.tiles', 6);
+  await streamer.preload(sp.x, sp.z, (f) => boot.sub(f));
   openGate();
   // the far skyline right after the spawn's tiles (the title's view shows it)
   if (!skyline) void loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline).then(putSky, () => {});

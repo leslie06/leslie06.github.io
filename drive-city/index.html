@@ -10,14 +10,53 @@
   #app{position:fixed;inset:0}
   canvas{display:block;width:100%;height:100%}
   #loading{position:fixed;inset:0;display:grid;place-items:center;color:#f4f1e8;background:#0e1113;z-index:100}
-  #loading div{text-align:center}
+  #loading>div{text-align:center;width:min(280px,72vw)}
   #loading span{display:block;font:900 44px/1 system-ui,sans-serif;letter-spacing:-.03em}
   #loading b{display:block;margin-top:18px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.3em;color:rgba(244,241,232,.55)}
+  #loading i{display:block;height:4px;margin-top:22px;border-radius:2px;background:rgba(244,241,232,.12);overflow:hidden}
+  #loading i em{display:block;height:100%;width:0;background:#f3b50f;border-radius:2px}
+  #loading small{display:flex;justify-content:space-between;margin-top:10px;font:600 12px/1.2 system-ui,sans-serif;color:rgba(244,241,232,.6)}
+  #loading small u{text-decoration:none}
+  #loading small q{quotes:none;font-variant-numeric:tabular-nums;color:#f4f1e8}
 </style>
 </head>
 <body>
 <div id="app"></div>
-<div id="loading"><div><span>b城追车</span><b>LOADING</b></div></div>
+<div id="loading"><div><span>b城追车</span><b>LOADING</b><i><em></em></i><small><u></u><q>0%</q></small></div></div>
+<script>
+// Boot progress (src/main.ts reports its stages through window.__boot): drawn from the first byte, so it moves while
+// the program itself is still downloading. Each stage is a span of the bar [from, to]; inside it the bar creeps
+// towards `to` (never reaching it), or ahead of that where the stage reports its own fraction (the city's files and
+// the spawn's tiles do).
+(function () {
+  var el = document.getElementById('loading'), bar = el.querySelector('em'), pct = el.querySelector('q'), lab = el.querySelector('u');
+  var zh = true;
+  try { var q = new URLSearchParams(location.search).get('lang'), s = localStorage.getItem('drivecity.lang.v1'); var p = new URLSearchParams(location.search); zh = q ? q === 'zh' : p.has('shot') ? false : s ? s === 'zh' : /^zh/i.test(navigator.language || ''); } catch (e) { /* private mode */ }
+  var st = { from: 0, to: 0.27, f: -1, t0: performance.now(), tau: 7 }, shown = 0, last = performance.now();
+  lab.textContent = zh ? '下载程序' : 'Downloading the game';
+  el.querySelector('b').textContent = zh ? '加载中' : 'LOADING';
+  var log = [];
+  function frame(now) {
+    if (!el.isConnected) return;
+    var dt = Math.min(0.1, (now - last) / 1000); last = now;
+    var span = st.to - st.from, goal;
+    // the stage's own count, or the creep while a big file holds the count still, whichever is further
+    goal = st.from + span * Math.max(Math.min(1, st.f), 0.92 * (1 - Math.exp(-(now - st.t0) / 1000 / st.tau)));
+    if (goal > shown) shown += (goal - shown) * Math.min(1, dt * 6);
+    bar.style.width = (shown * 100).toFixed(1) + '%';
+    pct.textContent = Math.floor(shown * 100) + '%';
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  window.__boot = {
+    log: log,
+    /** A stage from `from` to `to` (0..1 of the bar), its label, how long it usually takes (s, for the creep). */
+    stage: function (from, to, label, secs) { st = { from: Math.max(from, shown), to: to, f: -1, t0: performance.now(), tau: (secs || 4) / 2 }; if (label) lab.textContent = label; log.push([label, Math.round(performance.now())]); },
+    /** The current stage's own progress, 0..1. */
+    sub: function (f) { st.f = Math.max(st.f, f); },
+  };
+})();
+</script>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -673,12 +673,13 @@ export class CityStreamer implements System {
    * Load everything around (x, z) now (spawn, shots): keeps pumping worker results until every
    * wanted tile is built, then adds colliders around the point.
    */
-  async preload(x: number, z: number): Promise<void> {
+  /** `progress` hears the fraction of the tiles in (the loading bar). */
+  async preload(x: number, z: number, progress?: (f: number) => void): Promise<void> {
     this.pin = { x, z };
-    try { await this.preloadAt(x, z); } finally { this.pin = null; }
+    try { await this.preloadAt(x, z, progress); } finally { this.pin = null; }
   }
 
-  private async preloadAt(x: number, z: number): Promise<void> {
+  private async preloadAt(x: number, z: number, progress?: (f: number) => void): Promise<void> {
     this.focus.set(x, 0, z);
     const cam = this.engine.camera.position;
     const saved = cam.clone();
@@ -689,6 +690,7 @@ export class CityStreamer implements System {
     while (want.some((k) => !this.tiles.has(k)) && performance.now() - t0 < 60000) {
       await new Promise((r) => setTimeout(r, 16));
       while (this.done.length) this.build(this.done.shift()!);
+      progress?.(want.filter((k) => this.tiles.has(k)).length / want.length);
     }
     const [fx, fz] = tileOf(x, z);
     for (const t of this.tiles.values()) if (Math.max(Math.abs(t.ix - fx), Math.abs(t.iz - fz)) <= this.physRadius && !t.body) this.addBody(t);

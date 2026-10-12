@@ -254,7 +254,7 @@ export async function install(engine: Engine): Promise<void> {
             }
           }
           h.actor = people.spawnActor!(h.x, h.z, { look: h.looks, yaw: h.yaw });
-          // the realistic cast (?cast=1): their own model, once loaded (kept for the next time they are out)
+          // the realistic cast (on unless ?cast=0): their own model, once loaded (kept for the next time they are out)
           if (h.actor && CAST_ON) {
             const actor = h.actor, id = h.d.id, look = h.looks;
             void hasModel(id).then((yes) => {

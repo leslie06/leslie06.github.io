@@ -9,10 +9,10 @@ import { Hero, type ClipActions } from './hero/Hero';
  * The realistic cast (2026-10-12, 「人物过于抽象」, docs/characters.md): characters built by MPFB from
  * scripts/characters/cast.json (scripts/blender/characters/mpfb_char.py, packed by scripts/characters/pack.mjs into
  * public/models/characters/). Which person has which model, and which animation clips they play for which action,
- * is data: public/models/characters/cast.json, fetched once. On with `?cast=1` while they are being tried (the
- * player as Chen Ye, the contacts that have a model).
+ * is data: public/models/characters/cast.json, fetched once. On by default since 2026-10-12 (the player as Chen Ye,
+ * the contacts that have a model); `?cast=0` gives the old player model and the crowd's bodies for A/B.
  */
-export const CAST_ON = typeof location !== 'undefined' && new URLSearchParams(location.search).get('cast') === '1';
+export const CAST_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('cast') !== '0';
 
 type ClipSpec = string | (ClipOpts & { file: string });
 interface Entry { file: string; hairColor?: string; clips?: Record<string, ClipSpec>; actions?: ClipActions }
@@ -32,7 +32,7 @@ const baked = new Map<string, Promise<Retargeted>>();
 export async function castModel(engine: Engine, id: string, look: Look): Promise<Hero> {
   const m = await load(), e = m.characters[id];
   if (!e) throw new Error(`cast: no model for ${id}`);
-  const h = await Hero.loadAuthored(`${BASE}${e.file}`, look, { hairColor: e.hairColor ? new THREE.Color(e.hairColor) : undefined });
+  const h = await Hero.loadAuthored(`${BASE}${e.file}`, look, { hairColor: e.hairColor ? new THREE.Color(e.hairColor) : undefined, lite: engine.quality.tier === 'low' });
   const clips = { ...m.clips, ...e.clips };
   const got: Record<string, Retargeted> = {};
   await Promise.all(Object.entries(clips).map(async ([name, spec]) => {

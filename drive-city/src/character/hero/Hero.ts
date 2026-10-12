@@ -31,7 +31,8 @@ const QUATERNIUS_HEIGHT = 1.81;
  * A finished character (scripts/blender/characters/mpfb_char.py: MPFB's `game_engine` rig, dressed, haired):
  * drawn as it is - no Outfit, no skin tint, no bone scales - with its hair tinted if asked.
  */
-export interface AuthoredOpts { hairColor?: THREE.Color }
+/** `lite` (the low tier): no soft hair fringe pass, the hair casts no shadow. */
+export interface AuthoredOpts { hairColor?: THREE.Color; lite?: boolean }
 
 /** Model bone -> crowd joint whose rotation it follows. */
 const MAP: Record<string, number> = {
@@ -262,14 +263,17 @@ export class Hero {
       scene.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
-        m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
         // names are "<id>.<asset>": the asset decides the kind ("feilong" contains "long", a hairstyle's name)
         const asset = (n: string) => n.replace(/^[^.]*\./, '');
+        // brows, lashes and eyes cast nothing visible; on the low tier the hair neither (body, clothes and shoes do:
+        // without a shadow a person floats)
+        const small = /eyebrow|eyelash|low-poly|high-poly/i.test(asset(m.name)), hairy = /short|bob|long|ponytail|braid|afro/i.test(asset(m.name));
+        m.castShadow = !small && !(authored.lite && hairy); m.receiveShadow = true; m.frustumCulled = false;
         if (!Array.isArray(m.material)) m.material = physical(m.material as THREE.MeshStandardMaterial, `${asset(m.name)} ${asset(m.material.name)}`, authored);
       });
       const hair: THREE.SkinnedMesh[] = [];
       scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.material as THREE.Material).alphaTest >= 0.5) hair.push(m); });
-      for (const m of hair) m.parent!.add(fringe(m));
+      if (!authored.lite) for (const m of hair) m.parent!.add(fringe(m));
     } else {
     // Skin and hair in the look's colours, then the clothes.
       // The texture is a warm tan; this lightens it to the look's skin (relative to the player's own).

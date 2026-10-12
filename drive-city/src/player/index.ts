@@ -49,11 +49,13 @@ export async function install(engine: Engine): Promise<void> {
   // The player's own model (character/hero), loaded in the background; until it arrives (or with
   // ?hero=0) the player is drawn by the crowd like everyone else.
   let hero: Hero | null = null;
+  const oldHero = () => Hero.load(`${import.meta.env.BASE_URL}models/hero/`, look)
+    .then((h) => { engine.get<RenderSystem>('render')?.prepare(h.root); engine.scene.add(h.root); hero = h; });
   const heroReady: Promise<void> = new URLSearchParams(location.search).get('hero') === '0' ? Promise.resolve()
-    // ?cast=1: Chen Ye, the realistic cast's model (character/Cast.ts)
+    // Chen Ye, the realistic cast's model (character/Cast.ts); the old placeholder with ?cast=0 or if his fails
     : (CAST_ON ? castModel(engine, 'chenye', look).then((h) => { hero = h; foot.getupSecs = h.getupSecs ?? 0.9; })
-      : Hero.load(`${import.meta.env.BASE_URL}models/hero/`, look)
-        .then((h) => { engine.get<RenderSystem>('render')?.prepare(h.root); engine.scene.add(h.root); hero = h; }))
+      .catch((e) => { console.warn('cast model failed to load; the old player model instead', e); return oldHero(); })
+      : oldHero())
     .catch((e) => console.warn('hero model failed to load; drawing the player with the crowd', e));
   let mode: 'driving' | 'onfoot' = 'driving';
   let health = 100, hurtT = 99, wastedT = -1;

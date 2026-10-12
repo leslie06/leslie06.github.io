@@ -1,5 +1,6 @@
 import { Engine } from './core/Engine';
 import { t } from './core/I18n';
+import { boot as bootBar } from './core/Boot';
 import { installShotMode, shotMode } from './debug/ShotMode';
 import { Diagnostics } from './debug/Diagnostics';
 import { registerPoses } from './debug/ShotPoses';
@@ -75,15 +76,18 @@ async function boot() {
     try { const b = (pick as (j: unknown) => string | undefined)(JSON.parse(localStorage.getItem(key) ?? 'null') ?? {}); if (b && b !== 'sedan' && ['hatch', 'suv', 'mpv', 'bus', 'truck'].includes(b)) saved.push(b as BodySource); } catch { /* no save */ }
   }
   const bodies = readyBodies(shotMode ? undefined : ['sedan', 'wheels', ...saved]);
+  bootBar.stage(0.27, 0.55, 'boot.engine', 16);
   await engine.physics.init();
   await render.install(engine);
   await weather.install(engine);
   // Central Beijing from OSM by default; ?world=yard is the M0 driving-school yard (handling sandbox).
   const worldName = new URLSearchParams(location.search).get('world') ?? 'city';
   if (worldName === 'city') await city.install(engine); else { await readyBodies(); await world.install(engine); }
+  bootBar.stage(0.96, 0.97, 'boot.cars', 2);
   await bodies;
   // the rest of the bodies now the spawn's tiles are in (traffic adds their cars as they arrive)
   void readyBodies();
+  bootBar.stage(0.97, 0.995, 'boot.world', 2);
   await vehicle.install(engine);
   await player.install(engine);
   await damage.install(engine);
@@ -109,6 +113,7 @@ async function boot() {
   });
   if (shotMode) installShotMode(engine);
   else engine.start();
+  bootBar.stage(1, 1, 'boot.ready', 0);
   loading?.remove();
 }
 

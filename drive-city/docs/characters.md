@@ -37,7 +37,7 @@ node scripts/characters/pack.mjs .scratch/chars/chenye.glb public/models/charact
 - 眼睛：MakeHuman 的"棕色"虹膜偏红，游戏距离下看着像红眼，压成深褐色。
 - 高精度眼球带一层角膜壳，改成不透明后眼睛变黑，所以改用单层眼球。
 
-游戏里（`character/Cast.ts`）：`?cast=1` 时主角换成陈野；熟人有模型的（目前老K）由自己的模型画，同样由步态驱动，70 米外换回人群里的低模。
+游戏里（`character/Cast.ts`）：主角是陈野，熟人用各自的模型，同样由步态驱动，70 米外换回人群里的低模。2026-10-12 起默认打开，`?cast=0` 换回旧的占位主角和人群低模（对比用）；陈野的模型下载失败时自动退回旧主角。
 
 ## 动画片段（AnimationMixer，2026-10-12）
 
@@ -92,7 +92,7 @@ node scripts/characters/pack-anims.mjs .scratch/anims/out public/models/anims   
 node scripts/characters/pack.mjs .scratch/chars/chenye.glb public/models/characters/chenye.glb
 # 九人对比照（游戏渲染器，脸、四分之三侧、全身正背）
 node .scratch/chars/portrait.mjs out.png /models/characters/chenye.glb /models/characters/laok.glb ...
-# 城里看熟人（?cast=1）
+# 城里看熟人
 node .scratch/chars/contacts.mjs outPrefix [laok,xiaoyu,...]
 ```
 
@@ -147,4 +147,8 @@ node .scratch/chars/contacts.mjs outPrefix [laok,xiaoyu,...]
 3. 补动画：坐凳子、挥手、推人、打电话、摔倒爬起等，补一个就在 `cast.json` 的 `actions` 里加一行。
 4. 让人"活"起来：说话时嘴巴随配音音量开合（MPFB 带面部表情目标，可以导出成少量形变）、眨眼、看向说话对象；过场时给人物打主光和轮廓光。
 5. 路人：生成 8–12 个基础人体（男女 × 青中老年）加几套换装，替换 22 米内的近景人群模型。远景继续用现在的程序人体，保证手机性能。
-6. 默认打开（去掉 `?cast=1`），测手机帧率和下载大小。
+6. ~~默认打开~~（2026-10-12）。手机实测（模拟 iPhone 13 Pro，低画质，`.scratch/chars/phonecost.mjs "cast=0" "cast=1"`，步行站在老K桌边，画面里有主角和老K）：
+   - 最初每帧多约 4 ms、30 个 draw call。拆开看：隐藏模型就回到原水平，换普通材质不省时间，开销在绘制次数和影子。
+   - 低画质改为精简模式（`AuthoredOpts.lite`）：不画头发软边那一遍，头发不投影；眉毛、睫毛、眼球所有画质都不投影（太小看不出）。身体、衣服、鞋仍然投影，不然人会"飘"。
+   - 之后五组平均多约 2 ms（12.7 → 15 ms，噪声 ±2 ms），只在步行且熟人在 70 米内时。
+   - 下载：陈野 0.62 MB + 10 个动画约 1 MB，在开局之后后台加载，不拖慢进入游戏；每遇到一个熟人再多约 0.6 MB。
