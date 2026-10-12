@@ -266,6 +266,11 @@ export async function install(engine: Engine): Promise<void> {
     if (race) a.push({ label: t('adv.cancelRace'), run: () => { race = null; state.phase = 'parked'; returningToYard = true; driver.reset(); persist(); } });
     if (!state.clue) a.push({ label: t('adv.trackSource'), run: () => target(paperSpot, 'adv.source') });
     a.push({ label: t('adv.trackGarage'), run: () => target(mechanicBase, 'adv.garage') });
+    if (state.tool === 'held' && !repairRequested) a.push({ label: t('adv.toolDrop'), run: () => {
+      const ft = pl.foot;
+      if (!ft) { toast('adv.toolDropFoot'); return; }
+      state.tool = 'ground'; state.toolAt = { x: ft.pos.x + Math.sin(ft.yaw) * .7, z: ft.pos.z + Math.cos(ft.yaw) * .7 }; persist();
+    } });
     if (state.informed) a.push({ label: t('adv.trackParking'), run: () => target(layout.parking, 'adv.parking') });
     if (state.keys) a.unshift({ label: t('adv.trackCar'), run: () => target(car.pos, 'adv.title') });
     if (state.phase === 'secured') a.push({ label: t('adv.keep'), run: () => { keep(state); nav.clearTarget('mission'); persist(); } });
@@ -387,7 +392,7 @@ export async function install(engine: Engine): Promise<void> {
         mechanic.goTo(hood.x, hood.z, 1.8);
         if (dist(mechanic.pos, hood) < 1.6 && car.speed < 1) {
           mechanic.stop(); mechanic.face(car.pos.x, car.pos.z); mechanic.act('cook'); companion.work += dt;
-          if (companion.work >= 8) { damage().repair(car); companion.mode = 'base'; repairRequested = false; mechanic.act('cheer'); state.tool = 'held'; toast('adv.repaired'); persist(); }
+          if (companion.work >= 8) { damage().repair(car); companion.mode = 'base'; repairRequested = false; mechanic.act('cheer'); state.tool = 'base'; state.toolAt = null; toast('adv.repaired'); persist(); }
         }
       }
     },
@@ -444,14 +449,22 @@ export async function install(engine: Engine): Promise<void> {
       }
       const toolAt = { x: mechanicBase.x - 2, z: mechanicBase.z };
       tool.visible = true;
-      if (state.tool === 'base') {
-        tool.position.set(toolAt.x, .25, toolAt.z);
-        offer(toolAt, 'adv.tool', () => { state.tool = 'held'; toast('adv.toolCollected'); persist(); });
+      tool.rotation.set(0, 0, 0);
+      if (state.tool !== 'held') {
+        // at the bay, or where the player put it down
+        const at = state.tool === 'ground' && state.toolAt ? state.toolAt : toolAt;
+        tool.position.set(at.x, .15, at.z);
+        offer(at, 'adv.tool', () => { state.tool = 'held'; state.toolAt = null; toast('adv.toolCollected'); persist(); });
       } else {
-        if (pl.mode === 'onfoot') { tool.position.copy(pl.position); tool.position.x += .35; tool.position.y += .9; }
-        else { tool.position.set(-.45, .2, -1).applyQuaternion(v().renderQuat).add(v().renderPos); }
+        const ft = pl.foot;
+        if (ft) {
+          // in the right hand by its handle, its long side along the way the player faces
+          const s = Math.sin(ft.yaw), c = Math.cos(ft.yaw);
+          tool.position.set(ft.pos.x - c * .3 + s * .05, ft.pos.y + .5, ft.pos.z + s * .3 + c * .05);
+          tool.rotation.y = ft.yaw + Math.PI / 2;
+        } else { tool.position.set(-.45, .2, -1).applyQuaternion(v().renderQuat).add(v().renderPos); }
         if (companion.mode === 'work' && mechanic) { mechanic.joint(J.wristR, toolMatrix); carryPoint.setFromMatrixPosition(toolMatrix); tool.position.copy(carryPoint); }
-        if (!repairRequested) offer(toolAt, 'adv.toolReturn', () => { state.tool = 'base'; persist(); });
+        if (!repairRequested) offer(toolAt, 'adv.toolReturn', () => { state.tool = 'base'; state.toolAt = null; persist(); });
       }
       goalRing.visible = !!race?.running;
       if (race?.running && race.points[race.me]) {

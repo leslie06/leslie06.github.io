@@ -23,6 +23,9 @@ describe('persistent street adventure', () => {
   it('restores clues, tools, damage and ownership after leaving the game', () => {
     const s = save(); s.phase = 'kept'; s.clue = s.informed = s.keys = true; s.tool = 'held'; s.condition = 43; s.pose = { x: 700, z: -200, yaw: 1 };
     expect(restore(JSON.stringify(s))).toEqual(s);
+    const d = save(); d.tool = 'ground'; d.toolAt = { x: 12.5, z: -40 };
+    expect(restore(JSON.stringify(d)).toolAt).toEqual({ x: 12.5, z: -40 });
+    d.toolAt = null; expect(restore(JSON.stringify(d)).tool).toBe('base');
   });
   it('an interrupted race returns to the yard and leaves other approaches open', () => {
     const s = save(); s.phase = 'race'; s.clue = s.informed = true;

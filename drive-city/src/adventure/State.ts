@@ -5,7 +5,9 @@ export interface Spot { x: number; z: number; yaw: number }
 export interface Layout { source: Spot; parking: Spot; garage: Spot; finish: Spot }
 export interface Save {
   version: 1; phase: Phase; tracking: boolean; clue: boolean; informed: boolean; keys: boolean;
-  method: Method | null; rewarded: boolean; returning: boolean; condition: number; tool: 'base' | 'held';
+  method: Method | null; rewarded: boolean; returning: boolean; condition: number;
+  /** Daliu's tool case: at his bay, carried, or put down by the player at `toolAt`. */
+  tool: 'base' | 'held' | 'ground'; toolAt?: { x: number; z: number } | null;
   layout: Layout | null; pose: Spot | null;
 }
 const phases: Phase[] = ['available', 'search', 'parked', 'race', 'secured', 'kept', 'returned', 'borrowed'];
@@ -25,7 +27,9 @@ export function restore(raw: string | null): Save {
     s.keys = ['secured', 'kept', 'returned', 'borrowed'].includes(s.phase);
     s.method = ['intercept', 'tail', 'race'].includes(v.method!) ? v.method! : null;
     s.condition = typeof v.condition === 'number' && Number.isFinite(v.condition) ? Math.max(0, Math.min(100, v.condition)) : 100;
-    s.tool = v.tool === 'held' ? 'held' : 'base';
+    const at = v.toolAt;
+    s.tool = v.tool === 'held' ? 'held' : v.tool === 'ground' && !!at && Number.isFinite(at.x) && Number.isFinite(at.z) && Math.abs(at.x) < 100000 && Math.abs(at.z) < 100000 ? 'ground' : 'base';
+    if (s.tool === 'ground') s.toolAt = { x: at!.x, z: at!.z };
     if (v.phase === 'race' || v.returning === true && s.phase === 'parked') s.pose = l.parking;
   } catch { /* A damaged save must not lock the player out of the encounter. */ }
   return s;

@@ -79,6 +79,22 @@ body.dc-touch .hud .objective{top:calc(10px + env(safe-area-inset-top,0px));font
  * `engine.input.touch`, which `Input.poll` merges with the keyboard and pad, so the game itself
  * knows nothing about touch.
  */
+/**
+ * Safari on iPad and iPhone zooms the page on a double tap and a pinch even with `touch-action: none` (2026-10-12,
+ * 「ipad点了几下反击，屏幕就放大了」: hammering a button zoomed the game, and with every gesture taken by the game
+ * there was no pinching back). A second tap within 350 ms has its touchend cancelled (not in text fields), and
+ * Safari's pinch gestures are cancelled.
+ */
+function noZoom(): void {
+  let last = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = e.timeStamp, el = e.target as HTMLElement | null;
+    if (now - last < 350 && !(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) e.preventDefault();
+    last = now;
+  }, { passive: false });
+  for (const ev of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+}
+
 export class TouchControls implements System {
   readonly name = 'touch';
   private root: HTMLDivElement;
@@ -150,6 +166,7 @@ export class TouchControls implements System {
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave'] as const) surface.addEventListener(ev, (e) => this.up(e));
     container.style.touchAction = 'none';
     document.body.style.overscrollBehavior = 'none';
+    noZoom();
   }
 
   private button(parent: HTMLElement, mode: Mode, label: string, set: (down: boolean) => void, hold = false, cls = ''): void {
@@ -162,6 +179,9 @@ export class TouchControls implements System {
       b.classList.toggle('down', down && hold);
       set(down);
     };
+    // iOS zooms on a quick second tap from the touch events, whatever the pointer events did: cancel them here
+    b.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    b.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
     b.addEventListener('pointerdown', press(true));
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave'] as const) b.addEventListener(ev, press(false));
     this.btns.push({ el: b, mode });
