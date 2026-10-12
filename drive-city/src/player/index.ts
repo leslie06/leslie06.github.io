@@ -15,6 +15,7 @@ import { OnFoot } from './OnFoot';
 import { Crowd, CROWD_CAP } from '../character/Crowd';
 import type { Look } from '../character/Body';
 import { Hero } from '../character/hero/Hero';
+import { CAST_ON, castModel } from '../character/Cast';
 import type { RenderSystem } from '../render/RenderSystem';
 
 /** The player: a Beijing cabbie in a slate jacket over a white tee. */
@@ -48,8 +49,11 @@ export async function install(engine: Engine): Promise<void> {
   // The player's own model (character/hero), loaded in the background; until it arrives (or with
   // ?hero=0) the player is drawn by the crowd like everyone else.
   let hero: Hero | null = null;
-  const heroReady: Promise<void> = new URLSearchParams(location.search).get('hero') === '0' ? Promise.resolve() : Hero.load(`${import.meta.env.BASE_URL}models/hero/`, look)
-    .then((h) => { engine.get<RenderSystem>('render')?.prepare(h.root); engine.scene.add(h.root); hero = h; })
+  const heroReady: Promise<void> = new URLSearchParams(location.search).get('hero') === '0' ? Promise.resolve()
+    // ?cast=1: Chen Ye, the realistic cast's model (character/Cast.ts)
+    : (CAST_ON ? castModel(engine, 'chenye', look).then((h) => { hero = h; foot.getupSecs = h.getupSecs ?? 0.9; })
+      : Hero.load(`${import.meta.env.BASE_URL}models/hero/`, look)
+        .then((h) => { engine.get<RenderSystem>('render')?.prepare(h.root); engine.scene.add(h.root); hero = h; }))
     .catch((e) => console.warn('hero model failed to load; drawing the player with the crowd', e));
   let mode: 'driving' | 'onfoot' = 'driving';
   let health = 100, hurtT = 99, wastedT = -1;

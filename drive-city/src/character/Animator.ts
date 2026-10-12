@@ -100,6 +100,10 @@ export class Gait {
   scale = 1; fem = 0; age = 0.3; build = 0;
   /** Drawn with the far LOD (Crowd's hysteresis state). */
   lodFar = false;
+  /** The last Motion this gait was updated with (an authored model's animation clips choose from it: character/Clips.ts). */
+  speed = 0; act: Action = 'move'; seat: number | undefined = undefined;
+  /** Seconds this gait has run (a model's clock: deterministic in shot mode). */
+  get clock(): number { return this.time; }
 
   private seed = -1;
   private time = 0;
@@ -143,6 +147,7 @@ export class Gait {
   update(m: Motion, dt: number, seed: number): void {
     if (seed !== this.seed) this.setSeed(seed);
     this.time += dt;
+    this.speed = m.speed; this.act = m.action; this.seat = m.seat;
     if (m.action !== this.action) {
       this.from.set(this.rot); this.from[JOINT_COUNT * 3] = this.sway; this.from[JOINT_COUNT * 3 + 1] = this.bob; this.from[JOINT_COUNT * 3 + 2] = this.fwd; this.from[JOINT_COUNT * 3 + 3] = this.drop;
       this.fade = 1; this.action = m.action;

@@ -1,0 +1,90 @@
+{
+  "_note": "Realistic characters built by scripts/blender/characters/mpfb_char.py (MPFB). Phenotype values 0..1: age 0.5 = 25 years, 1 = 90; gender 1 = male.",
+  "cast": [
+    {
+      "id": "chenye",
+      "name": "陈野",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.55,
+        "muscle": 0.7,
+        "weight": 0.48,
+        "proportions": 0.65,
+        "height": 0.6,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "middleage_asian_male/middleage_asian_male.mhmat",
+      "hair": "short02/short02.mhclo",
+      "eyebrows": "eyebrow010/eyebrow010.mhclo",
+      "clothes": [
+        "male_casualsuit05/male_casualsuit05.mhclo",
+        "shoes03/shoes03.mhclo"
+      ],
+      "targets": {
+        "head-square": 0.55,
+        "chin-width-incr": 0.35,
+        "chin-bones-incr": 0.3,
+        "chin-prominent-incr": 0.25,
+        "lr-cheek-bones-incr": 0.45,
+        "lr-cheek-volume-decr": 0.35,
+        "eyebrows-trans-down": 0.35,
+        "forehead-temple-decr": 0.2,
+        "nose-scale-vert-incr": 0.2,
+        "nose-hump-incr": 0.15,
+        "lr-eye-height2-incr": 0.35,
+        "lr-eye-eyefold-up": 0.3,
+        "mouth-scale-horiz-incr": 0.12,
+        "mouth-angles-down": 0.1,
+        "neck-scale-horiz-incr": 0.35
+      }
+    },
+    {
+      "id": "laok",
+      "name": "老K",
+      "phenotype": {
+        "gender": 1.0,
+        "age": 0.78,
+        "muscle": 0.4,
+        "weight": 0.62,
+        "proportions": 0.5,
+        "height": 0.45,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {
+          "asian": 1.0,
+          "caucasian": 0.0,
+          "african": 0.0
+        }
+      },
+      "skin": "old_asian_male/old_asian_male.mhmat",
+      "hair": "short01/short01.mhclo",
+      "hairTint": [
+        0.55,
+        0.55,
+        0.55
+      ],
+      "eyebrows": "eyebrow002/eyebrow002.mhclo",
+      "clothes": [
+        "male_elegantsuit01/male_elegantsuit01.mhclo",
+        "shoes01/shoes01.mhclo"
+      ],
+      "targets": {
+        "head-fat-incr": 0.35,
+        "head-age-incr": 0.5,
+        "neck-double-incr": 0.35,
+        "lr-eye-bag-incr": 0.55,
+        "lr-eye-height2-incr": 0.2,
+        "mouth-angles-down": 0.35,
+        "eyebrows-angle-down": 0.25,
+        "nose-scale-horiz-incr": 0.2,
+        "lr-cheek-volume-incr": 0.25
+      }
+    }
+  ]
+}

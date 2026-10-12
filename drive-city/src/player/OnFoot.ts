@@ -25,6 +25,8 @@ export class OnFoot {
   airTime = 0;
   /** Knocked down by a car: seconds into the fall, lying, getting up. */
   knock: { phase: 'knocked' | 'down' | 'getup'; t: number } | null = null;
+  /** How long getting up takes (a realistic model's own get-up clip is slower than the gait's 0.9 s). */
+  getupSecs = 0.9;
   /** Wasted: stays down. */
   dead = false;
   /** Seconds left of the shove animation (also its cooldown). */
@@ -75,7 +77,7 @@ export class OnFoot {
       k.t += dt;
       if (k.phase === 'knocked' && k.t > 0.4 && this.grounded) { k.phase = 'down'; k.t = 0; }
       else if (k.phase === 'down' && k.t > 1.6 && !this.dead) { k.phase = 'getup'; k.t = 0; }
-      else if (k.phase === 'getup' && k.t > 0.9) this.knock = null;
+      else if (k.phase === 'getup' && k.t > this.getupSecs) this.knock = null;
       const drag = this.grounded ? Math.exp(-dt * 6) : Math.exp(-dt * 0.5);
       this.vel.x *= drag; this.vel.z *= drag;
       dx = this.vel.x * dt; dz = this.vel.z * dt;

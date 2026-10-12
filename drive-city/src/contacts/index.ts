@@ -11,6 +11,7 @@ import type { StoryApi } from '../story';
 import type { Action } from '../character/Animator';
 import { randomLook, type Look } from '../character/Body';
 import { nearestKerb, SIDEWALK } from '../people/Pavement';
+import { CAST_ON, castModel, hasModel } from '../character/Cast';
 import { journalOf } from '../npc/Journal';
 import { clearOfWorld, LifeProps, PropBodies, type PropKind } from '../life/Props';
 import { setPoliceOnEdge } from '../ui/Minimap';
@@ -146,6 +147,7 @@ export async function install(engine: Engine): Promise<void> {
     return { d, x, z, yaw, actor: null, chatted: false, looks: d.look(rnd), bodies: [], k: k ? { link: k.link, s: k.s, side: k.side } : null, settled: false };
   });
   const reserved = new Set<ContactId>();
+  const models: Partial<Record<ContactId, Promise<import('../character/hero/Hero').Hero>>> = {};
 
   // Their voice carries who they are: their lines are recorded in their own voice (audio/VoiceClips.ts).
   const speakerOf = (h: Here): Speaker => ({ name: `${t(h.d.name)} ${heartText(heartsOf(h.d.id))}`, color: h.d.color, look: h.looks, voice: h.actor ? { ...h.actor.voice, character: h.d.id } : undefined, at: h.actor?.pos ?? null });
@@ -252,6 +254,14 @@ export async function install(engine: Engine): Promise<void> {
             }
           }
           h.actor = people.spawnActor!(h.x, h.z, { look: h.looks, yaw: h.yaw });
+          // the realistic cast (?cast=1): their own model, once loaded (kept for the next time they are out)
+          if (h.actor && CAST_ON) {
+            const actor = h.actor, id = h.d.id, look = h.looks;
+            void hasModel(id).then((yes) => {
+              if (!yes) return;
+              (models[id] ??= castModel(engine, id, look)).then((m) => { if (actor.alive) actor.model = m; }).catch((e) => console.warn('[contacts] model', e));
+            });
+          }
           h.actor?.act(h.d.act, { seat: h.d.seat });
           h.chatted = false;
           // their table, stool or cart, solid (put back where it belongs each time they are)

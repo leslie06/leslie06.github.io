@@ -13,3 +13,6 @@ data/*.zip
 data/*.tif
 # the NPC barks' packed sprites are source for the build (src/voice imports them), not build output
 !/assets/voice/dist/
+
+# Mixamo source animations (FBX): their terms allow them in the game, not redistributing the raw files. The game uses public/models/anims/.
+/assets/anims/

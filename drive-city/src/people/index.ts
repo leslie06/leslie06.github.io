@@ -3,7 +3,7 @@ import { t } from '../core/I18n';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
-import type { Actor, NpcVoice, PeopleApi, PlayerApi, RenderApi, VehicleApi, VoiceApi, VoiceArchetype, VoiceTrigger, WantedApi } from '../game/Contracts';
+import type { Actor, NpcVoice, PeopleApi, PlayerApi, RenderApi, VehicleApi, VoiceApi, VoiceArchetype, VoiceTrigger, WantedApi, CharacterModel } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import type { Link } from '../traffic/LaneGraph';
 import type { Vehicle } from '../vehicle/Vehicle';
@@ -500,6 +500,7 @@ export async function install(engine: Engine): Promise<void> {
   class Act implements ActorImpl {
     pts: number[] = []; ptI = 0; speed = 0; faceTo = NaN; gesture: Action | null = null; gestureT = 0; seat = 0.46;
     arrivedF = true; hitsN = 0; aliveF = true; voiceS: VoiceSpec; fair = false; downFor = NaN;
+    model: CharacterModel | null = null;
     constructor(public p: Ped) { this.voiceS = voiceOf(p.look, p.seed); }
     get alive() { return this.aliveF; }
     get pos() { return this.p.pos; }
@@ -526,6 +527,7 @@ export async function install(engine: Engine): Promise<void> {
       if (!this.aliveF) return;
       const p = this.p;
       this.aliveF = false; p.on = false; p.actor = null; actorsOn--;
+      this.model?.hide(); this.model = null;
       if (how === 'vanish') return;
       // An ordinary passer-by from here: a pedestrian slot takes over (the farthest one if all are out).
       let q = peds.find((r) => !r.on);
@@ -613,7 +615,7 @@ export async function install(engine: Engine): Promise<void> {
       if (p.pos.y <= GROUND) { p.pos.y = GROUND; grounded = true; p.vy = p.vy < -3 ? -p.vy * 0.25 : 0; p.vel.multiplyScalar(Math.exp(-dt * 5)); }
       if (p.mode === 'knocked' && p.t > 0.45 && grounded && p.vy === 0 && hs < 2.5) { p.mode = 'down'; p.t = 0; p.hold = p.actor && Number.isFinite(p.actor.downFor) ? p.actor.downFor : 1.8 + rnd() * 2.5; }
       else if (p.mode === 'down') { p.vel.multiplyScalar(Math.exp(-dt * 8)); if (p.t > p.hold) { p.mode = 'getup'; p.t = 0; } }
-      else if (p.mode === 'getup' && p.t > 0.9) { if (p.actor) { p.mode = 'script'; p.t = 0; p.cur = 0; p.vel.set(0, 0, 0); } else reattach(p); }
+      else if (p.mode === 'getup' && p.t > (p.actor?.model?.getupSecs ?? 0.9)) { if (p.actor) { p.mode = 'script'; p.t = 0; p.cur = 0; p.vel.set(0, 0, 0); } else reattach(p); }
       p.moved = 0;
       return;
     }
@@ -858,7 +860,7 @@ export async function install(engine: Engine): Promise<void> {
         if (Number.isFinite(p.faceYaw)) p.want = p.faceYaw;
         p.yaw += wrap(p.want - p.yaw) * Math.min(1, dt * (p.mode === 'flee' ? 12 : 7));
         const dx = p.pos.x - cam.x, dz = p.pos.z - cam.z, d = Math.hypot(dx, dz);
-        if (d > 8 && dx * camDir.x + dz * camDir.z < -0.2 * d) continue;   // behind the camera
+        if (d > 8 && dx * camDir.x + dz * camDir.z < -0.2 * d) { p.actor?.model?.hide(); continue; }   // behind the camera
         const down = p.mode === 'knocked' || p.mode === 'down' || p.mode === 'getup';
         const a = p.actor;
         const action: Action = down ? p.mode as Action : p.mode === 'call' ? 'phone' : a?.gesture ?? p.gest ?? 'move';
@@ -866,7 +868,10 @@ export async function install(engine: Engine): Promise<void> {
         p.gait.update({ speed: p.moved, action, t: at, seat: a?.seat }, dt, p.seed);
         if (p.mode === 'call') p.gait.prop = 1;
         draw.lerpVectors(p.prev, p.pos, alpha);
-        crowd.add(draw, p.yaw, p.gait, p.look);
+        // an authored model (a contact's: character/hero) near the camera, else the crowd's body
+        const model = p.actor?.model;
+        if (model && d < 70) model.draw(draw, p.yaw, p.gait);
+        else { model?.hide(); crowd.add(draw, p.yaw, p.gait, p.look); }
       }
     },
   };

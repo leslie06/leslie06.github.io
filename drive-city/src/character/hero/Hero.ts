@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { retry } from '../../core/Retry';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { ANKLE_H, BALL, BASE_HEIGHT, J, JOINT_COUNT, type Look } from '../Body';
 import { bindWorld, poseWorld, type Gait } from '../Animator';
 import { dress } from './Outfit';
+import type { Retargeted, Rig } from '../Clips';
 
 /**
  * The player drawn as an authored character instead of the crowd's procedural body.
@@ -22,8 +24,14 @@ import { dress } from './Outfit';
  * them although the two legs differ in length.
  */
 
-/** Crown of the model (feet at 0). */
-const MODEL_HEIGHT = 1.81;
+/** Crown of the Quaternius model (feet at 0); an authored character's own is measured. */
+const QUATERNIUS_HEIGHT = 1.81;
+
+/**
+ * A finished character (scripts/blender/characters/mpfb_char.py: MPFB's `game_engine` rig, dressed, haired):
+ * drawn as it is - no Outfit, no skin tint, no bone scales - with its hair tinted if asked.
+ */
+export interface AuthoredOpts { hairColor?: THREE.Color }
 
 /** Model bone -> crowd joint whose rotation it follows. */
 const MAP: Record<string, number> = {
@@ -53,8 +61,8 @@ interface Bone {
   obj: THREE.Bone;
   parent: number;
   joint: number;
-  /** Rest local position and rotation (fingers: relaxed curl; `grip` is the phone hand's). */
-  lp: THREE.Vector3; lq: THREE.Quaternion; grip: THREE.Quaternion | null;
+  /** Rest local position and rotation (fingers: relaxed curl; `grip` is the phone hand's); `rq` the model's own rest. */
+  lp: THREE.Vector3; lq: THREE.Quaternion; grip: THREE.Quaternion | null; rq: THREE.Quaternion;
   /** Bind position in model space. */
   pb: THREE.Vector3;
   /** Bind orientation in model space and its alignment onto the crowd's bind. */
@@ -63,6 +71,52 @@ interface Bone {
   axis: THREE.Vector3; len: number;
   /** Accumulated scale of the parent (BONE_SCALE), which scales this bone's offset. */
   ps: number;
+}
+
+/**
+ * What a gait action plays when the model has clips: a clip's name, or 'locomotion' (idle / walk / run by speed);
+ * `legs: 'gait'` keeps the gait's pelvis and legs under the clip's upper body (a shove while walking on).
+ */
+export type ClipAction = string | { clip: string; legs?: 'gait' };
+export type ClipActions = Partial<Record<string, ClipAction>>;
+/** Seated actions: the pelvis and legs stay the gait's (its seat height and feet), the clip moves the rest. */
+const SEATED = new Set(['sit', 'drink', 'chess', 'erhu']);
+const LEGS = /^(pelvis|thigh_|calf_|foot_|ball_)/;
+const sstep = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+/**
+ * An MPFB material (a base colour map, sometimes a normal map, roughness 0.5-0.9) as a physical one tuned by what
+ * it is: skin with a warm sheen at grazing angles (the light through the edges of ears and cheeks that plain
+ * diffuse skin lacks), hair with a soft sheen band and alpha-tested cards, wet eyes under a clear coat, cloth with a
+ * fabric sheen, shoes a little glossy.
+ */
+function physical(src: THREE.MeshStandardMaterial, name: string, o: AuthoredOpts): THREE.MeshPhysicalMaterial {
+  const card = /short|bob|long|ponytail|braid|afro|eyebrow|eyelash/i.test(name);
+  const kind = /eyelash|eyebrow/i.test(name) ? 'brow' : card ? 'hair' : /body|skin/i.test(name) ? 'skin'
+    : /low-poly|high-poly|eye/i.test(name) ? 'eye' : /shoe|boot/i.test(name) ? 'shoes' : 'cloth';
+  const p = new THREE.MeshPhysicalMaterial({ name: src.name, map: src.map, normalMap: src.normalMap, color: src.color.clone() });
+  if (src.normalMap) p.normalScale.copy(src.normalScale);
+  p.userData.wet = true;
+  if (card) { p.alphaTest = 0.5; p.side = THREE.DoubleSide; }
+  if (kind === 'skin') {
+    p.roughness = 0.5; p.specularIntensity = 0.5;
+    p.sheen = 0.45; p.sheenRoughness = 0.45; p.sheenColor.set('#ff9a7a');
+  } else if (kind === 'hair') {
+    if (o.hairColor) p.color.copy(o.hairColor);
+    p.roughness = 0.5; p.specularIntensity = 0.7;
+    p.sheen = 0.7; p.sheenRoughness = 0.35; p.sheenColor.copy(p.color).lerp(new THREE.Color('#a49686'), 0.5);
+  } else if (kind === 'brow') {
+    p.roughness = 0.8;
+  } else if (kind === 'eye') {
+    p.roughness = 0.25; p.clearcoat = 1; p.clearcoatRoughness = 0.04;
+  } else if (kind === 'shoes') {
+    p.roughness = 0.42; p.clearcoat = 0.25; p.clearcoatRoughness = 0.3;
+  } else {
+    p.roughness = 0.9; p.specularIntensity = 0.35;
+    p.sheen = 0.5; p.sheenRoughness = 0.8; p.sheenColor.set('#6b6b6b');
+  }
+  src.dispose();
+  return p;
 }
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
@@ -84,11 +138,29 @@ export class Hero {
   private readonly phone: THREE.Mesh;
   private readonly hipLat = [0, 0];
   private leg: { thigh: number; calf: number; foot: number; hip: number; knee: number; ankle: number; side: number }[] = [];
+  /** Crown height of this model, model units. */
+  private readonly H: number;
+  /** Clips (character/Clips.ts) played by a mixer when the gait's action has one; else the gait poses the model. */
+  private mixer: THREE.AnimationMixer | null = null;
+  private readonly acts = new Map<string, { a: THREE.AnimationAction; speed: number; dur: number; w: number; loop: boolean }>();
+  /** The clip state playing (a clip's name or 'locomotion') and whether its legs are the gait's. */
+  private cur: string | null = null; private legsGait = false;
+  private clipActions: ClipActions = {};
+  /** How much of the pose is the clips' (0: the gait's), the locomotion cycle's phase, the gait clock last drawn. */
+  private cw = 0; private phase = 0; private lastClock = -1;
+  private procQ: THREE.Quaternion[] = [];
+  private readonly procP = new THREE.Vector3();
+  private legs: boolean[] = [];
 
-  private constructor(scene: THREE.Group, private readonly look: Look) {
+  private constructor(scene: THREE.Group, private readonly look: Look, private readonly authored: AuthoredOpts | null = null) {
     this.root = scene;
     scene.name = 'hero';
+    // MPFB's head bone is 'head'; the map (and the crowd's joint) say 'Head'
+    scene.traverse((o) => { if ((o as THREE.Bone).isBone && o.name === 'head') o.name = 'Head'; });
     scene.updateMatrixWorld(true);
+    if (authored) { const b = new THREE.Box3().setFromObject(scene); this.H = b.max.y - Math.min(0, b.min.y); }
+    else this.H = QUATERNIUS_HEIGHT;
+    const MODEL_HEIGHT = this.H;
     const skinned: THREE.SkinnedMesh[] = [];
     scene.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) skinned.push(o as THREE.SkinnedMesh); });
     const body = skinned.find((m) => m.skeleton.bones.length > 10 && (m.geometry.getAttribute('position').count > 3000))!;
@@ -106,11 +178,11 @@ export class Hero {
       const pi = b.parent && (b.parent as THREE.Bone).isBone ? this.byName.get(b.parent.name)! : -1;
       b.updateWorldMatrix(false, false);
       const qb = new THREE.Quaternion(), pb = new THREE.Vector3(); b.matrixWorld.decompose(pb, qb, _v2);
-      this.bones.push({ obj: b, parent: pi, joint: MAP[b.name] ?? -1, lp: b.position.clone(), lq: b.quaternion.clone(), grip: null, pb, qb, align: new THREE.Quaternion(), axis: new THREE.Vector3(0, 1, 0), len: 0, ps: 1 });
+      this.bones.push({ obj: b, parent: pi, joint: MAP[b.name] ?? -1, lp: b.position.clone(), lq: b.quaternion.clone(), grip: null, rq: b.quaternion.clone(), pb, qb, align: new THREE.Quaternion(), axis: new THREE.Vector3(0, 1, 0), len: 0, ps: 1 });
     }
     const ws = this.bones.map(() => 1);
     this.bones.forEach((bn, i) => {
-      const own = BONE_SCALE[bn.obj.name] ?? 1;
+      const own = authored ? 1 : BONE_SCALE[bn.obj.name] ?? 1;
       bn.ps = bn.parent >= 0 ? ws[bn.parent] : 1;
       ws[i] = bn.ps * own;
     });
@@ -167,26 +239,35 @@ export class Hero {
     this.Qw = this.bones.map(() => new THREE.Quaternion());
     this.Pw = this.bones.map(() => new THREE.Vector3());
 
+    if (authored) {
+      scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+        if (!Array.isArray(m.material)) m.material = physical(m.material as THREE.MeshStandardMaterial, `${m.name} ${m.material.name}`, authored);
+      });
+    } else {
     // Skin and hair in the look's colours, then the clothes.
-    // The texture is a warm tan; this lightens it to the look's skin (relative to the player's own).
-    const ref = new THREE.Color('#e2bd98');
-    const skinTint = new THREE.Color(1.18, 1.06, 0.98).multiply(new THREE.Color(look.skin.r / ref.r, look.skin.g / ref.g, look.skin.b / ref.b));
-    for (const m of skinned) {
-      m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
-      const mat = m.material as THREE.MeshStandardMaterial;
-      mat.userData.wet = true;
-      if (/hair/i.test(mat.name)) mat.color.copy(look.hair).multiplyScalar(1.6);
-      else if (/superhero/i.test(mat.name)) mat.color.copy(skinTint);
-    }
-    scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.isMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh) { m.castShadow = true; m.frustumCulled = false; const mat = m.material as THREE.MeshStandardMaterial; if (/hair/i.test(mat.name)) mat.color.copy(look.hair).multiplyScalar(1.6); }
-    });
-    const clothes = dress(body, {
-      top: look.shirt, inner: look.inner ?? new THREE.Color('#e8e6df'), pants: look.pants, shoes: look.shoes, sole: look.sole ?? new THREE.Color('#2a2a2c'),
-    });
-    for (const c of clothes) body.parent!.add(c);
+      // The texture is a warm tan; this lightens it to the look's skin (relative to the player's own).
+      const ref = new THREE.Color('#e2bd98');
+      const skinTint = new THREE.Color(1.18, 1.06, 0.98).multiply(new THREE.Color(look.skin.r / ref.r, look.skin.g / ref.g, look.skin.b / ref.b));
+      for (const m of skinned) {
+        m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+        const mat = m.material as THREE.MeshStandardMaterial;
+        mat.userData.wet = true;
+        if (/hair/i.test(mat.name)) mat.color.copy(look.hair).multiplyScalar(1.6);
+        else if (/superhero/i.test(mat.name)) mat.color.copy(skinTint);
+      }
+      scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh) { m.castShadow = true; m.frustumCulled = false; const mat = m.material as THREE.MeshStandardMaterial; if (/hair/i.test(mat.name)) mat.color.copy(look.hair).multiplyScalar(1.6); }
+      });
+      const clothes = dress(body, {
+        top: look.shirt, inner: look.inner ?? new THREE.Color('#e8e6df'), pants: look.pants, shoes: look.shoes, sole: look.sole ?? new THREE.Color('#2a2a2c'),
+      });
+      for (const c of clothes) body.parent!.add(c);
 
+    }
     // The phone, held in the right palm.
     const hb = this.bones[this.byName.get('hand_r')!];
     const phone = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.009, 0.15), new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.3, metalness: 0.4 }));
@@ -201,7 +282,7 @@ export class Hero {
     phone.castShadow = true; phone.visible = false; phone.name = 'hero-phone';
     hb.obj.add(phone);
     this.phone = phone;
-    for (const bn of this.bones) bn.obj.scale.setScalar(BONE_SCALE[bn.obj.name] ?? 1);
+    for (const bn of this.bones) bn.obj.scale.setScalar(authored ? 1 : BONE_SCALE[bn.obj.name] ?? 1);
     scene.visible = false;
   }
 
@@ -219,6 +300,12 @@ export class Hero {
     };
     const [body, hair] = await Promise.all([retry('hero body', once('body.gltf')), retry('hero hair', once('hair.gltf'))]);
     return Hero.build(body.scene, hair.scene, look);
+  }
+
+  /** A finished character glb (public/models/characters/<id>.glb). */
+  static async loadAuthored(url: string, look: Look, opts: AuthoredOpts = {}): Promise<Hero> {
+    const gltf = await retry(`character ${url}`, () => new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url));
+    return new Hero(gltf.scene, look, opts);
   }
 
   /** Dress and rig loaded scenes (tests parse the glTF themselves). */
@@ -241,9 +328,98 @@ export class Hero {
 
   hide(): void { this.root.visible = false; }
 
+  /** The skeleton at rest, for retargeting clips onto it. */
+  rig(): Rig {
+    return {
+      names: this.bones.map((b) => b.obj.name), parent: this.bones.map((b) => b.parent),
+      restQ: this.bones.map((b) => b.rq.clone()), restP: this.bones.map((b) => b.lp.clone()),
+      baseQ: this.baseQ.clone(), baseP: this.baseP.clone(),
+    };
+  }
+
+  /** Play clips (by name: 'idle', 'walk', 'run', 'sit', 'talk'...) for the actions `actions` maps to them. */
+  useClips(clips: Record<string, Retargeted>, actions: ClipActions): void {
+    this.mixer?.stopAllAction();
+    this.mixer = new THREE.AnimationMixer(this.root);
+    this.acts.clear();
+    for (const [name, r] of Object.entries(clips)) {
+      const a = this.mixer.clipAction(r.clip);
+      if (!r.loop) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
+      a.play(); a.setEffectiveWeight(0);
+      this.acts.set(name, { a, speed: r.speed, dur: r.clip.duration, w: 0, loop: r.loop });
+    }
+    this.clipActions = actions;
+    this.procQ = this.bones.map(() => new THREE.Quaternion());
+    this.legs = this.bones.map((b) => LEGS.test(b.obj.name));
+    this.cw = 0; this.lastClock = -1; this.cur = null;
+  }
+
+  /** Seconds this model takes to get up off the ground (its 'getup' clip), if it has one: people/ waits for it. */
+  get getupSecs(): number | undefined {
+    const a = this.clipActions.getup, name = typeof a === 'string' ? a : a?.clip;
+    return name ? this.acts.get(name)?.dur : undefined;
+  }
+
+  /** Blend the clips over the gait's pose (which `draw` has just set on the bones). */
+  private animate(g: Gait, sm: number): void {
+    const mixer = this.mixer!;
+    const clock = g.clock;
+    const dt = this.lastClock < 0 ? 0 : Math.min(0.1, Math.max(0, clock - this.lastClock));
+    this.lastClock = clock;
+    let spec = this.clipActions[g.act];
+    if (spec !== undefined && g.speed > 0.4 && (typeof spec === 'string' ? spec : spec.clip) === 'talk') spec = this.clipActions.move;
+    const state = typeof spec === 'string' ? spec : spec?.clip;
+    const have = state === 'locomotion' ? this.acts.has('idle') : !!state && this.acts.has(state);
+    const v = g.speed;
+    // what each clip should weigh
+    const target = new Map<string, number>();
+    if (have && state === 'locomotion') {
+      const walk = this.acts.has('walk') ? sstep(0.12, 0.9, v) : 0, run = this.acts.has('run') ? sstep(2.3, 3.6, v) * (this.acts.has('walk') ? 1 : sstep(0.12, 0.9, v)) : 0;
+      target.set('idle', 1 - walk); target.set('walk', walk * (1 - run)); target.set('run', run);
+    } else if (have) target.set(state!, 1);
+    if (have && state !== this.cur) {
+      // a clip played once starts from its beginning; one that goes on into the next action (falling, then lying) carries on
+      const c = state === 'locomotion' ? null : this.acts.get(state!);
+      if (c && !c.loop) c.a.reset();
+      this.cur = state!;
+    }
+    if (have) this.legsGait = SEATED.has(g.act) || (typeof spec === 'object' && spec.legs === 'gait');
+    const k = dt > 0 ? 1 - Math.exp(-dt / 0.12) : 1;
+    if (have) {
+      let sum = 0;
+      for (const [name, c] of this.acts) { c.w += ((target.get(name) ?? 0) - c.w) * k; sum += c.w; }
+      for (const c of this.acts.values()) c.w = sum > 1e-4 ? c.w / sum : 0;
+    }
+    const tc = have ? 1 : 0;
+    this.cw = dt > 0 ? this.cw + (tc - this.cw) * (1 - Math.exp(-dt / 0.15)) : tc;
+    if (this.cw < 0.002) { this.cw = 0; return; }
+    // walk and run share one cycle, each at the rate that keeps its planted foot under the ground speed
+    const w = this.acts.get('walk'), r = this.acts.get('run');
+    let cyc = 0, ws = 0;
+    for (const c of [w, r]) if (c && c.speed > 0 && c.w > 0) { cyc += c.w * (v / (c.speed * sm)) / c.dur; ws += c.w; }
+    if (ws > 0) this.phase = (this.phase + dt * cyc / ws) % 1;
+    for (const c of [w, r]) if (c) { c.a.timeScale = 0; c.a.time = this.phase * c.dur; }
+    for (const c of this.acts.values()) c.a.setEffectiveWeight(c.w);
+    // the gait's pose, then the clips', then between the two
+    for (let i = 0; i < this.bones.length; i++) this.procQ[i].copy(this.bones[i].obj.quaternion);
+    const pel = this.bones[this.byName.get('pelvis')!].obj;
+    this.procP.copy(pel.position);
+    mixer.update(dt);
+    const seated = this.legsGait;
+    for (let i = 0; i < this.bones.length; i++) {
+      const o = this.bones[i].obj;
+      if (seated && this.legs[i]) { o.quaternion.copy(this.procQ[i]); continue; }
+      _q.copy(o.quaternion);
+      o.quaternion.copy(this.procQ[i]).slerp(_q, this.cw);
+    }
+    if (seated) pel.position.copy(this.procP);
+    else pel.position.lerpVectors(this.procP, _v.copy(pel.position), this.cw);
+  }
+
   /** Pose from `g` and place the feet at `root`, facing `yaw` (same arguments as `Crowd.add`). */
   draw(root: THREE.Vector3, yaw: number, g: Gait): void {
     if (g.look !== this.look) g.bindLook(this.look);
+    const MODEL_HEIGHT = this.H;
     const sm = g.scale * BASE_HEIGHT / MODEL_HEIGHT;
     this.root.visible = true;
     this.root.position.copy(root);
@@ -312,5 +488,6 @@ export class Hero {
       if (bn.obj.name === 'pelvis') bn.obj.position.copy(Pw).sub(pp).applyQuaternion(_q2);
     }
     this.phone.visible = grip;
+    if (this.mixer) this.animate(g, sm);
   }
 }

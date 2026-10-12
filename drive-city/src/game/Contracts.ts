@@ -331,6 +331,18 @@ export interface Actor {
   getUp(): void;
   /** Hand back: an ordinary pedestrian from here (`flee`: running away), or gone at once (`vanish`). */
   release(how?: 'walk' | 'flee' | 'vanish'): void;
+  /**
+   * An authored model to draw this person with instead of the crowd's body (character/hero/Hero.ts on a cast glb:
+   * scripts/characters/cast.json), posed by the same gait; null: the crowd's.
+   */
+  model: CharacterModel | null;
+}
+/** Something that draws a person from a gait (character/hero/Hero.ts). */
+export interface CharacterModel {
+  draw(root: THREE.Vector3, yaw: number, g: import('../character/Animator').Gait): void;
+  hide(): void;
+  /** Seconds the model's own get-up takes, if it has one (people/ and the player's knock wait for it; else 0.9). */
+  readonly getupSecs?: number;
 }
 
 /** Who is talking in the dialogue box (dialogue/). */
