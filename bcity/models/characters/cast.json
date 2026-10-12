@@ -1,5 +1,5 @@
 {
-  "_note": "Realistic characters (character/Cast.ts, docs/characters.md). Paths are relative to this folder. 'clips': animation clips by name - a glb (a skeleton and one animation, retargeted at load onto each model's rig), or {file, range: [s0, s1], speed, loop (default true), anchor: 'start'|'end' (the hips' travel pinned where they are at that end)}. 'actions': which clip a gait action plays ('locomotion' = idle/walk/run by speed), or {clip, legs: 'gait'} (the gait's pelvis and legs under the clip's upper body); consecutive actions on one clip carry on (knocked then down: the fall holds its last frame lying); an action not listed keeps the procedural gait. A character may override 'clips' or 'actions'. hairColor tints the hair. Mixamo's Sitting Idle leans back into a chair's back; 'sit' is its Sitting (upright, hands on knees); drink and chess keep the gait (the cup, the pieces).",
+  "_note": "Realistic characters (character/Cast.ts, docs/characters.md). Paths are relative to this folder. 'clips': animation clips by name - a glb (a skeleton and one animation, retargeted at load onto each model's rig), or {file, range: [s0, s1], speed, loop (default true), anchor: 'start'|'end' (the hips' travel pinned where they are at that end)}. 'actions': which clip a gait action plays ('locomotion' = idle/walk/run by speed), or {clip, legs: 'gait'} (the gait's pelvis and legs under the clip's upper body); consecutive actions on one clip carry on (knocked then down: the fall holds its last frame lying); an action not listed keeps the procedural gait. A character may override 'clips' or 'actions'. hairColor (optional) multiplies the hair's colour; each character's colours are baked into its textures by scripts/characters/pack.mjs from the `look` in scripts/characters/cast.json. Mixamo's Sitting Idle leans back into a chair's back; 'sit' is its Sitting (upright, hands on knees); drink and chess keep the gait (the cup, the pieces).",
   "clips": {
     "idle": "../anims/idle.glb",
     "walk": "../anims/walk.glb",
@@ -60,12 +60,31 @@
   },
   "characters": {
     "chenye": {
-      "file": "chenye.glb",
-      "hairColor": "#141210"
+      "file": "chenye.glb"
     },
     "laok": {
-      "file": "laok.glb",
-      "hairColor": "#8a8884"
+      "file": "laok.glb"
+    },
+    "xiaoyu": {
+      "file": "xiaoyu.glb"
+    },
+    "daliu": {
+      "file": "daliu.glb"
+    },
+    "wang": {
+      "file": "wang.glb"
+    },
+    "laozhang": {
+      "file": "laozhang.glb"
+    },
+    "liujie": {
+      "file": "liujie.glb"
+    },
+    "feilong": {
+      "file": "feilong.glb"
+    },
+    "baoge": {
+      "file": "baoge.glb"
     }
   }
 }
