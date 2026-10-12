@@ -41,6 +41,7 @@ const VOICES: Record<string, { name: string; style: string; styleEn?: string; v:
   wang: { name: '王队', style: '王队，五十岁的老刑警队长，声音沉稳威严，说话简短，略带警告。', styleEn: "Captain Wang, a veteran police captain of fifty, calm, stern, few words, a hint of warning.", v: design('中年男性，50 岁左右，音色低沉有力，吐字清晰，语速偏慢，严肃威严，带命令口吻。', '又是你。别给我惹事儿。我盯着你呢，好好开车。') },
   laozhang: { name: '老张', style: '老张，七十岁的老出租车司机，京腔儿化音重，慢悠悠，和蔼爱唠叨。', styleEn: "Old Zhang, a cab driver of seventy, slow, kindly and chatty.", v: design('老年男性，70 岁左右，北京口音很重，儿化音多，音色温和略沙哑，语速缓慢，和蔼爱唠叨。', '小伙子，跑出租啦？开出租就两条：嘴要甜，车要稳。') },
   liujie: { name: '刘姐', style: '刘姐，四十多岁摆煎饼摊的大姐，京腔，热情麻利。', styleEn: "Sister Liu, a jianbing stall owner in her forties, warm and brisk.", v: design('中年女性，45 岁左右，北京口音，嗓门亮，音色明快，语速偏快，热情麻利。', '来啦？今儿吃点儿什么？加个蛋不？薄脆给你多放点儿。') },
+  chenye: { name: '陈野', style: '陈野，二十八岁的前地下车手，主角，话少、嘴毒、沉着，北京口音不重。', styleEn: "Chen Ye, a former street racer of twenty-eight, the hero: few words, dry and sharp, unflappable.", v: design('青年男性，28 岁左右，音色低沉偏冷、略带沙哑，语速偏慢，话少、冷静，语气淡淡的带点儿嘲讽，普通话略带北京口音。', '街没变，人变了。你们找错人了，我只管开车。') },
   feilong: { name: '小飞龙', style: '小飞龙，十九岁的飙车小子，嚣张、语速快、爱挑衅。', styleEn: "Little Dragon, a nineteen-year-old street racer, cocky, fast-talking and provocative.", v: design('青年男性，19 岁左右，音色清亮偏高，语速很快，语气嚣张、爱挑衅，带点儿痞气。', '哟，开出租的也敢来找我？三环上我叫小飞龙。') },
 };
 
@@ -56,6 +57,16 @@ const INSTRUCT: Record<string, string> = {
   'con.feilong.greet': '轻蔑地挑衅。', 'con.feilong.chat1': '嚣张地炫耀。', 'con.feilong.duelOn': '兴奋地应战。', 'con.feilong.lost': '嘲讽地大笑。',
   'con.feilong.noCar': '不屑地嘲笑。', 'con.feilong.pink': '不甘心地认输，最后爽快起来。', 'con.feilong.won': '不服气，嘴硬。',
   'con.noTask': '随意地说。',
+  // the main story, chapter 1 《回京》
+  'cmp.m1.k1': '慢悠悠地开口，像在试探，带一点儿感慨。', 'cmp.m1.c1': '淡淡地，带点儿自嘲。',
+  'cmp.m1.k2': '不紧不慢，给人情也给压力。', 'cmp.m1.c2': '简短，冷静。',
+  'cmp.m1.k3': '压低声音交代，最后一句加重语气。', 'cmp.m1.k4': '提醒，带着警告的意味，然后轻描淡写。',
+  'cmp.m1.k5': '电话里，半开玩笑地叮嘱，心疼自己的车。', 'cmp.m1.c3': '随口一句，满不在乎。',
+  'cmp.m1.y1': '上下打量，好奇又带点儿挑衅。', 'cmp.m1.c4': '淡淡地。', 'cmp.m1.y2': '撇撇嘴，然后干脆地说正事。',
+  'cmp.m1.y3': '惊慌，大声喊。', 'cmp.m1.c5': '冷静，低沉，咬着牙。',
+  'cmp.m1.y4': '惊叫，紧张。', 'cmp.m1.y5': '兴奋地叫好。', 'cmp.m1.y6': '急促地大喊提醒。', 'cmp.m1.y7': '喘着气，又后怕又佩服。',
+  'cmp.m1.y8': '轻松，有点儿得意，夸人也不好意思明说。',
+  'cmp.m1.k6': '慢条斯理，听得出压着火，最后一句意味深长。', 'cmp.m1.c6': '小声嘀咕，无奈又早有预料。',
   // street events and life
   'event.blackShout': '探出车窗吆喝揽客。',
   'life.bbq.buy': '吆喝着应声。', 'life.bbq.toast': '举杯，豪爽地。', 'life.busker.thanks': '开心地道谢。', 'life.chess.none': '头也不抬，不耐烦。',
@@ -101,6 +112,15 @@ const INSTRUCT_EN: Record<string, string> = {
   'con.feilong.greet': 'Sneering challenge.', 'con.feilong.chat1': 'Cocky bragging.', 'con.feilong.duelOn': 'Excited, accepting the challenge.', 'con.feilong.lost': 'Mocking laughter.',
   'con.feilong.noCar': 'Scornful.', 'con.feilong.pink': 'Grudgingly conceding, then wholehearted.', 'con.feilong.won': 'Sore loser, defiant.',
   'con.noTask': 'Casual.',
+  'cmp.m1.k1': 'Slow and probing, a little wistful.', 'cmp.m1.c1': 'Flat, a touch of self-mockery.',
+  'cmp.m1.k2': 'Unhurried, a favour with pressure behind it.', 'cmp.m1.c2': 'Short and calm.',
+  'cmp.m1.k3': 'Low voice, giving instructions, the last sentence firm.', 'cmp.m1.k4': 'A warning, then offhand.',
+  'cmp.m1.k5': 'On the phone, half joking, protective of his car.', 'cmp.m1.c3': 'Offhand, unbothered.',
+  'cmp.m1.y1': 'Sizing him up, curious and a little provocative.', 'cmp.m1.c4': 'Flat.', 'cmp.m1.y2': 'A dry pout, then straight to business.',
+  'cmp.m1.y3': 'Alarmed, shouting.', 'cmp.m1.c5': 'Calm, low, through gritted teeth.',
+  'cmp.m1.y4': 'Shrieking, tense.', 'cmp.m1.y5': 'Cheering excitedly.', 'cmp.m1.y6': 'Urgent shouted warning.', 'cmp.m1.y7': 'Out of breath, shaken and impressed.',
+  'cmp.m1.y8': 'Relaxed, a little smug, praising him without quite saying so.',
+  'cmp.m1.k6': 'Measured, anger held in check, the last line pointed.', 'cmp.m1.c6': 'Muttered, resigned, saw it coming.',
   'event.blackShout': 'Leaning out of a car window, touting for fares.',
   'life.bbq.buy': 'Calling back cheerfully.', 'life.bbq.toast': 'Raising a glass, hearty.', 'life.busker.thanks': 'Happy thanks.', 'life.chess.none': "Without looking up, impatient.",
   'life.dance.bad': 'Kind reassurance.', 'life.dance.good': 'Happy praise.', 'life.dance.join': 'Warm invitation.', 'life.dance.scatter1': 'Startled, complaining loudly.', 'life.dance.scatter2': 'Still shaken, hand on her chest.',
@@ -145,6 +165,8 @@ const voicesOf = (key: string) => {
   if (m && CHARACTERS.includes(m[1])) return [m[1]];
   if (key === 'con.noTask') return CHARACTERS;
   if (key.startsWith('npc.foreigner.')) return ['xm'];
+  const story = /^cmp\.m\d+\.([kyc])\d+$/.exec(key);
+  if (story) return [{ k: 'laok', y: 'xiaoyu', c: 'chenye' }[story[1]]!];
   return GENERAL;
 };
 
@@ -153,7 +175,7 @@ for (const [id, v] of Object.entries(VOICES)) {
   const kept = old?.archetypes?.[id]?.voices as string[] | undefined;
   archetypes[id] = {
     name: v.name,
-    voiceHint: id in { laok: 1, xiaoyu: 1, daliu: 1, wang: 1, laozhang: 1, liujie: 1, feilong: 1 } ? '熟人专属音色' : v.v.voice ? `复用路人原型的音色` : '新设计',
+    voiceHint: id in { laok: 1, xiaoyu: 1, daliu: 1, wang: 1, laozhang: 1, liujie: 1, feilong: 1, chenye: 1 } ? '熟人专属音色' : v.v.voice ? `复用路人原型的音色` : '新设计',
     voices: kept?.length ? kept : v.v.voice ? [v.v.voice] : [],
     voiceDesign: [v.v.design],
     style: v.style,

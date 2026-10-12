@@ -269,6 +269,23 @@
     1
    ]
   },
+  "chenye": {
+   "name": "陈野",
+   "voiceHint": "熟人专属音色",
+   "voices": ["cosyvoice-v3.5-plus-vd-chenye1-7f059d078bd941da9f422e48a2876403"],
+   "voiceDesign": [
+    {
+     "prompt": "青年男性，28 岁左右，音色低沉偏冷、略带沙哑，语速偏慢，话少、冷静，语气淡淡的带点儿嘲讽，普通话略带北京口音。",
+     "previewText": "街没变，人变了。你们找错人了，我只管开车。"
+    }
+   ],
+   "style": "陈野，二十八岁的前地下车手，主角，话少、嘴毒、沉着，北京口音不重。",
+   "styleEn": "Chen Ye, a former street racer of twenty-eight, the hero: few words, dry and sharp, unflappable.",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
   "feilong": {
    "name": "小飞龙",
    "voiceHint": "熟人专属音色",
@@ -290,6 +307,206 @@
   }
  },
  "lines": [
+  {
+   "id": "cmp.m1.c1",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "街没变，人变了。",
+   "instruct": "淡淡地，带点儿自嘲。",
+   "textEn": "The street hasn't changed. The people have.",
+   "instructEn": "Flat, a touch of self-mockery."
+  },
+  {
+   "id": "cmp.m1.c2",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跑什么？",
+   "instruct": "简短，冷静。",
+   "textEn": "Run what?",
+   "instructEn": "Short and calm."
+  },
+  {
+   "id": "cmp.m1.c3",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "刮了算我的。",
+   "instruct": "随口一句，满不在乎。",
+   "textEn": "Any scratches are on me.",
+   "instructEn": "Offhand, unbothered."
+  },
+  {
+   "id": "cmp.m1.c4",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他夸张了。",
+   "instruct": "淡淡地。",
+   "textEn": "He exaggerates.",
+   "instructEn": "Flat."
+  },
+  {
+   "id": "cmp.m1.c5",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "坐稳了。",
+   "instruct": "冷静，低沉，咬着牙。",
+   "textEn": "Hold on.",
+   "instructEn": "Calm, low, through gritted teeth."
+  },
+  {
+   "id": "cmp.m1.c6",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我就知道没那么简单。",
+   "instruct": "小声嘀咕，无奈又早有预料。",
+   "textEn": "I knew it wouldn't be that simple.",
+   "instructEn": "Muttered, resigned, saw it coming."
+  },
+  {
+   "id": "cmp.m1.k1",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "三年了。还认得这条街吗？",
+   "instruct": "慢悠悠地开口，像在试探，带一点儿感慨。",
+   "textEn": "Three years. You still know this street?",
+   "instructEn": "Slow and probing, a little wistful."
+  },
+  {
+   "id": "cmp.m1.k2",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你那笔医药费，我不催。帮我跑一趟，算你还一半。",
+   "instruct": "不紧不慢，给人情也给压力。",
+   "textEn": "Your hospital bill - I won't push. Do one run for me and we'll call it half paid.",
+   "instructEn": "Unhurried, a favour with pressure behind it."
+  },
+  {
+   "id": "cmp.m1.k3",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "小雨在国贸等你，有个包要送到我车库。别问里面是什么。",
+   "instruct": "压低声音交代，最后一句加重语气。",
+   "textEn": "Xiaoyu's waiting at Guomao with a bag for my garage. Don't ask what's in it.",
+   "instructEn": "Low voice, giving instructions, the last sentence firm."
+  },
+  {
+   "id": "cmp.m1.k4",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "东郊那帮人最近不老实。车停在路边，钥匙在上面。",
+   "instruct": "提醒，带着警告的意味，然后轻描淡写。",
+   "textEn": "The East Side crew's been restless lately. Car's at the kerb, keys are in it.",
+   "instructEn": "A warning, then offhand."
+  },
+  {
+   "id": "cmp.m1.k5",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "车还顺手吧？那是我的宝贝，别给我刮了。",
+   "instruct": "电话里，半开玩笑地叮嘱，心疼自己的车。",
+   "textEn": "Handles all right? That's my baby - don't you scratch it.",
+   "instructEn": "On the phone, half joking, protective of his car."
+  },
+  {
+   "id": "cmp.m1.k6",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "听说路上热闹了？豹哥的人敢动我的货……明天来喝茶，有正事。",
+   "instruct": "慢条斯理，听得出压着火，最后一句意味深长。",
+   "textEn": "Heard it got lively out there. Panther's men touching my goods... Come for tea tomorrow. There's real work.",
+   "instructEn": "Measured, anger held in check, the last line pointed."
+  },
+  {
+   "id": "cmp.m1.y1",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你就是陈野？老K说你开车很野。",
+   "instruct": "上下打量，好奇又带点儿挑衅。",
+   "textEn": "So you are Chen Ye. K says you drive wild.",
+   "instructEn": "Sizing him up, curious and a little provocative."
+  },
+  {
+   "id": "cmp.m1.y2",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "但愿没有。走吧，回老K那儿，包他要亲手收。",
+   "instruct": "撇撇嘴，然后干脆地说正事。",
+   "textEn": "Let's hope not. Back to K's - he wants the bag in his own hands.",
+   "instructEn": "A dry pout, then straight to business."
+  },
+  {
+   "id": "cmp.m1.y3",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "后面那两辆黑车——是黑豹的人！",
+   "instruct": "惊慌，大声喊。",
+   "textEn": "Those two black cars behind us - Black Panther!",
+   "instructEn": "Alarmed, shouting."
+  },
+  {
+   "id": "cmp.m1.y4",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他们要撞过来了！",
+   "instruct": "惊叫，紧张。",
+   "textEn": "They're coming at us!",
+   "instructEn": "Shrieking, tense."
+  },
+  {
+   "id": "cmp.m1.y5",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "干掉一辆！",
+   "instruct": "兴奋地叫好。",
+   "textEn": "One down!",
+   "instructEn": "Cheering excitedly."
+  },
+  {
+   "id": "cmp.m1.y6",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "左边！小心左边！",
+   "instruct": "急促地大喊提醒。",
+   "textEn": "Watch the left!",
+   "instructEn": "Urgent shouted warning."
+  },
+  {
+   "id": "cmp.m1.y7",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "甩掉了……你真是个疯子。",
+   "instruct": "喘着气，又后怕又佩服。",
+   "textEn": "We lost them... you're insane.",
+   "instructEn": "Out of breath, shaken and impressed."
+  },
+  {
+   "id": "cmp.m1.y8",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "K哥，包给你。他这车技，没白长。",
+   "instruct": "轻松，有点儿得意，夸人也不好意思明说。",
+   "textEn": "Your bag, K. And he really can drive.",
+   "instructEn": "Relaxed, a little smug, praising him without quite saying so."
+  },
   {
    "id": "con.daliu.chat1",
    "archetype": "daliu",

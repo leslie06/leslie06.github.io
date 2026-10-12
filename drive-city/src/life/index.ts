@@ -356,7 +356,7 @@ export async function install(engine: Engine): Promise<void> {
     let sayT = 4;
     s.step = (dt) => {
       sayT -= dt;
-      if (sayT <= 0) { sayT = 9 + rnd() * 8; const who = s.cast[Math.floor(rnd() * 4)]; if (who.alive) who.say(t(rnd() < 0.5 ? 'life.chess.talk1' : 'life.chess.talk2'), 2.2, t('life.who.chess')); }
+      if (sayT <= 0) { sayT = 9 + rnd() * 8; const who = s.cast[Math.floor(rnd() * 4)]; if (who?.alive) who.say(t(rnd() < 0.5 ? 'life.chess.talk1' : 'life.chess.talk2'), 2.2, t('life.who.chess')); }
     };
     s.frame = () => talkOffer(s.cast, t('npc.talk'), 2.2, (who) => { journal.meet('life.chess'); gossip(speaker(who, 'life.who.chess', '#c9b38a')); });
     return s;
@@ -574,10 +574,11 @@ export async function install(engine: Engine): Promise<void> {
     s.cast.forEach((a, i) => { if (i > 0) a.act(rnd() < 0.4 ? 'photo' : rnd() < 0.5 ? 'point' : null); });
     let sayT = 2, asked = false;
     const m = new THREE.Matrix4(), v = new THREE.Vector3();
-    s.step = (dt) => { sayT -= dt; if (sayT <= 0) { sayT = 14 + rnd() * 8; if (s.cast[0].alive) s.cast[0].say(t(rnd() < 0.5 ? 'life.tour.guide1' : 'life.tour.guide2'), 3, t('life.who.guide')); } };
+    s.step = (dt) => { sayT -= dt; if (sayT <= 0) { sayT = 14 + rnd() * 8; if (s.cast[0]?.alive) s.cast[0].say(t(rnd() < 0.5 ? 'life.tour.guide1' : 'life.tour.guide2'), 3, t('life.who.guide')); } };
     s.frame = () => {
       const gd = s.cast[0];
-      if (gd.alive) { gd.joint(J.wristR, m); v.setFromMatrixPosition(m); props.place('flag', v.x, v.y, v.z, gd.yaw); }
+      // (the cast drops anyone gone - line `scenes ... filter` - so the guide can be missing: knocked down, released)
+      if (gd?.alive) { gd.joint(J.wristR, m); v.setFromMatrixPosition(m); props.place('flag', v.x, v.y, v.z, gd.yaw); }
       if (!asked) talkOffer(s.cast.slice(1), t('npc.talk'), 2.2, (who) => {
         asked = true;
         const sp = speaker(who, 'life.who.tourist', '#ffb35c');

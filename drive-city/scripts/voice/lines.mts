@@ -7,6 +7,7 @@
  */
 import { STRINGS, type TKey } from '../../src/core/I18n';
 import { NPC_ZH } from '../../src/core/i18n/npc';
+import { CAMPAIGN_ZH } from '../../src/core/i18n/campaign';
 
 const HUD = /(^|\.)(obj|opt[A-Za-z]*|who|name|role|mapLabel|hearts|unlock|hint[A-Za-z]*|banner|talk|j|wins|met|pickBag|bagGot|legit)(\.|\d|$)|^(map|garage|perk|pax\.obj|life\.(buy|tip|game))\b/;
 const TOAST = /[+-]¥|¥\{|^F |·|：\+|体力 \+/;
@@ -57,7 +58,9 @@ const SPOKEN_EN: Record<string, string> = {
   'pax.drunk.crash': 'Bang! Ha ha ha!',
 };
 
-const keys = new Set<string>([...Object.keys(NPC_ZH), ...Object.keys(STRINGS.zh).filter((k) => k.startsWith('shout.'))]);
+// the main story's spoken lines (campaign/: 老K k, Xiaoyu y, Chen Ye c), not its HUD text
+const STORY = /^cmp\.m\d+\.[kyc]\d+$/;
+const keys = new Set<string>([...Object.keys(NPC_ZH), ...Object.keys(CAMPAIGN_ZH).filter((k) => STORY.test(k)), ...Object.keys(STRINGS.zh).filter((k) => k.startsWith('shout.'))]);
 const out: { key: string; text: string; textEn: string }[] = [];
 for (const key of [...keys].sort()) {
   const s = STRINGS.zh[key as TKey];
