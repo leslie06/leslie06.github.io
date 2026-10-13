@@ -44,7 +44,13 @@
 - 出招时刻表：`STRIKE`（命中时间 / 总时长）由动画和判定共用。
 - 玩家这边：`OnFoot.play(action, secs, yaw, lunge)` 出招时带冲步，冲步速度只作用在前 40% 的时间里。
 
-**待做**：换成 Mixamo 动作片段（FBX、Without Skin、In Place）：Fight Idle、Lead Jab、Cross Punch、Hook Punch、Uppercut、Mma Kick、Body Block、Head Hit、Stomach Hit。放进 `assets/anims/mixamo/` 后，在 `public/models/characters/cast.json` 的 `actions` 里把 guard、jab、cross、hook、uppercut、kick、block、flinch 映射过去。
+**动作片段（2026-10-13 接入）**：用户下载的 9 个 Mixamo FBX（FightIdle、LeadJab、CrossPunch、HookPunch、Uppercut、MmaKick、BodyBlock、HeadHit、StomachHit）放在 `assets/anims/mixamo/`，用 `scripts/blender/characters/anims.py` 和 `scripts/characters/pack-anims.mjs` 转成 `public/models/anims/*.glb`（9 个共约 450 KB），在 `public/models/characters/cast.json` 里映射：
+- **对齐命中时刻**：每个出招片段都裁掉前面的准备和后面的收势，再加速，让拳头（或脚）打到的那一帧正好落在 `STRIKE[k].hit`。刺拳 [0.30, 0.88] ×1.9，直拳 [0.85, 1.63] ×2.3，勾拳 [0.68, 1.44] ×1.8，上勾拳 [0.33, 0.96] ×1.25，踢腿 [0.30, 1.18] ×1.45（锚定起点）。命中时刻用 `.scratch/sweep/animmeasure.test.ts` 量：拳头最快那一帧稍后一点。不能用"伸得最远"来量：勾拳是横扫的，上勾拳打完还会举过头顶，这么量两个都会量错。
+- **站姿**：陈野用刺拳片段的第一帧当站姿（双拳护在下巴前，`guardUp`）。Mixamo 的 Fight Idle 是 MMA 式的，双手伸在身前，改给黑豹的三个打手用（`thug1-3` 的 `actions.guard`），像街头混混，敌我也好区分。
+- **腿**：站姿、刺拳、直拳、勾拳、格挡、受击用游戏自己的步态腿（他们会移动、会冲步）；上勾拳和踢腿用片段的全身动作。受击每次随机选打头（HeadHit）或打肚子（StomachHit）：`clip` 写成数组，每次进入动作时挑一个（`Hero.ts`）。
+- **坑**：Mixamo 的格斗架势髋部往右转约 45°，上半身再拧回来；换成游戏的步态髋部以后，上半身跟着偏了 45°，每一拳都打向左前方。`Hero.animate` 现在会把片段髋部和步态髋部的差补到 `spine_01` 上（坐姿类动作除外）。另外，出拳、格挡、受击的片段淡入改成 0.04 秒（`SNAP`），原来 0.12 秒的淡入，到命中时拳头只伸出六成。
+- 这 9 个 FBX 是从另一个更大的 Mixamo 角色导出的（髋到脚 1.53，走路片段是 0.95），重定向按比例缩放，不影响。
+- 检查：`Clips.test.ts`（打斗片段的四肢方向允许偏差 4°，走路类是 1°；新增一条测试：用步态播放站姿、出拳、踢腿和两种受击，没有 NaN、脚不离地）；`TIMES="jab:0.06,0.12;kick:0.26" CAMX=2.6 CAMZ=2.4 node .scratch/combat/poses.mjs out.png [castId]` 按指定时刻拍定格表（默认用游戏的方式加载 chenye，带动作片段）；`.scratch/sweep/animjoints.test.ts`（`AT=FightIdle:1`）打印片段某一时刻的关节位置。
 
 ## 遭遇：黑豹的人（`npc/` kind `gang`）
 
@@ -74,4 +80,4 @@
 
 ## 后续（第 2 步剩下的）
 
-环境处决（把人往墙、车门、垃圾箱上撞）、擒拿、高速跳车夺车、第二章。
+环境处决（把人往墙、车门、垃圾箱上撞）、擒拿、高速跳车夺车。第二章已完成（`docs/gta-plan.md` §6）。

@@ -78,12 +78,15 @@ interface Bone {
 
 /**
  * What a gait action plays when the model has clips: a clip's name, or 'locomotion' (idle / walk / run by speed);
- * `legs: 'gait'` keeps the gait's pelvis and legs under the clip's upper body (a shove while walking on).
+ * `legs: 'gait'` keeps the gait's pelvis and legs under the clip's upper body (a shove while walking on); a list of
+ * clips plays one of them, picked each time the action begins (a blow to the head or to the stomach).
  */
-export type ClipAction = string | { clip: string; legs?: 'gait' };
+export type ClipAction = string | { clip: string | string[]; legs?: 'gait' };
 export type ClipActions = Partial<Record<string, ClipAction>>;
 /** Seated actions: the pelvis and legs stay the gait's (its seat height and feet), the clip moves the rest. */
 const SEATED = new Set(['sit', 'drink', 'chess', 'erhu']);
+/** Actions whose clip cuts in rather than fades (blows, a block, a flinch). */
+const SNAP = new Set(['jab', 'cross', 'hook', 'uppercut', 'kick', 'block', 'flinch']);
 const LEGS = /^(pelvis|thigh_|calf_|foot_|ball_)/;
 const sstep = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -167,6 +170,8 @@ export class Hero {
   private readonly acts = new Map<string, { a: THREE.AnimationAction; speed: number; dur: number; w: number; loop: boolean }>();
   /** The clip state playing (a clip's name or 'locomotion') and whether its legs are the gait's. */
   private cur: string | null = null; private legsGait = false;
+  /** The action a clip was picked for (a list of clips), and the pick. */
+  private pickAct: string | null = null; private pick: string | null = null;
   private clipActions: ClipActions = {};
   /** How much of the pose is the clips' (0: the gait's), the locomotion cycle's phase, the gait clock last drawn. */
   private cw = 0; private phase = 0; private lastClock = -1;
@@ -387,7 +392,7 @@ export class Hero {
 
   /** Seconds this model takes to get up off the ground (its 'getup' clip), if it has one: people/ waits for it. */
   get getupSecs(): number | undefined {
-    const a = this.clipActions.getup, name = typeof a === 'string' ? a : a?.clip;
+    const a = this.clipActions.getup, c = typeof a === 'string' ? a : a?.clip, name = Array.isArray(c) ? c[0] : c;
     return name ? this.acts.get(name)?.dur : undefined;
   }
 
@@ -399,7 +404,13 @@ export class Hero {
     this.lastClock = clock;
     let spec = this.clipActions[g.act];
     if (spec !== undefined && g.speed > 0.4 && (typeof spec === 'string' ? spec : spec.clip) === 'talk') spec = this.clipActions.move;
-    const state = typeof spec === 'string' ? spec : spec?.clip;
+    // a list of clips: one picked as the action begins, kept while it lasts
+    if (g.act !== this.pickAct) {
+      this.pickAct = g.act;
+      const c = typeof spec === 'object' ? spec.clip : null;
+      this.pick = Array.isArray(c) ? c[Math.floor(Math.random() * c.length)] : null;
+    }
+    const state = typeof spec === 'string' ? spec : this.pick ?? (spec?.clip as string | undefined);
     const have = state === 'locomotion' ? this.acts.has('idle') : !!state && this.acts.has(state);
     const v = g.speed;
     // what each clip should weigh
@@ -415,7 +426,8 @@ export class Hero {
       this.cur = state!;
     }
     if (have) this.legsGait = SEATED.has(g.act) || (typeof spec === 'object' && spec.legs === 'gait');
-    const k = dt > 0 ? 1 - Math.exp(-dt / 0.12) : 1;
+    // a blow lands 0.12-0.26 s in: its clip comes in at once, or the fist is only half out when it connects
+    const k = dt > 0 ? 1 - Math.exp(-dt / (SNAP.has(g.act) ? 0.04 : 0.12)) : 1;
     if (have) {
       let sum = 0;
       for (const [name, c] of this.acts) { c.w += ((target.get(name) ?? 0) - c.w) * k; sum += c.w; }
@@ -437,6 +449,17 @@ export class Hero {
     this.procP.copy(pel.position);
     mixer.update(dt);
     const seated = this.legsGait;
+    // The gait's pelvis under a standing clip's upper body: the clip's spine is posed against the clip's own pelvis,
+    // which a fighting stance turns ~45 degrees - against the gait's square-on pelvis the whole upper body (and every
+    // jab) went 45 degrees off to the left. Turn the spine by the difference so the upper body faces as in the clip.
+    // (Seated actions keep the old way: their upper bodies are authored against the seat.)
+    if (seated && !SEATED.has(g.act)) {
+      const pi = this.byName.get('pelvis'), si = this.byName.get('spine_01');
+      if (pi !== undefined && si !== undefined) {
+        _q2.copy(this.procQ[pi]).invert().multiply(this.bones[pi].obj.quaternion);
+        this.bones[si].obj.quaternion.premultiply(_q2);
+      }
+    }
     for (let i = 0; i < this.bones.length; i++) {
       const o = this.bones[i].obj;
       if (seated && this.legs[i]) { o.quaternion.copy(this.procQ[i]); continue; }

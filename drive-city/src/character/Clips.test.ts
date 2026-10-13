@@ -1,14 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createIO } from '../../scripts/landmarks/lib.mjs';
 import { Gait } from './Animator';
 import type { Look } from './Body';
-import { retarget, type Retargeted } from './Clips';
+import { retarget, type ClipOpts, type Retargeted } from './Clips';
 import { Hero } from './hero/Hero';
 
 const PUB = path.resolve(__dirname, '../../public/models');
+const FIGHT = new Set(['LeadJab', 'CrossPunch', 'MmaKick', 'BodyBlock', 'HeadHit']);
 (globalThis as { ProgressEvent?: unknown }).ProgressEvent ??= class extends Event { constructor(type: string, public init: object = {}) { super(type); } };
 
 /** A published glb parsed in Node: meshopt decoded and textures dropped by glTF-Transform, then three's loader. */
@@ -37,7 +38,11 @@ async function setup(clip: string): Promise<{ h: Hero; src: { scene: THREE.Group
 
 describe('animation clips retargeted onto a cast model', () => {
   it('follows the source limb for limb, at its own proportions', async () => {
-    for (const clip of ['walk', 'run', 'idle', 'talk']) {
+    // fight clips hold the arms high and bent, where the rest-pose swing leaves a few degrees (2.8 on the jab's
+    // upper arm): 4x the walk's 1 degree there
+    const worst: Record<string, number> = {};
+    afterAll(() => console.log('worst limb error / tolerance', JSON.stringify(Object.fromEntries(Object.entries(worst).map(([k, v]) => [k, +v.toFixed(2)])))));
+    for (const clip of ['walk', 'run', 'idle', 'talk', 'LeadJab', 'CrossPunch', 'MmaKick', 'BodyBlock', 'HeadHit']) {
       const { h, src, r } = await setup(clip);
       expect(r.clip.tracks.length).toBeGreaterThan(40);
       const sN = new Map<string, THREE.Object3D>(), tN = new Map<string, THREE.Object3D>();
@@ -54,11 +59,13 @@ describe('animation clips retargeted onto a cast model', () => {
         ['LeftUpLeg', 'LeftLeg', 'thigh_l', 'calf_l', 1], ['RightLeg', 'RightFoot', 'calf_r', 'foot_r', 1],
         ['Hips', 'Spine2', 'pelvis', 'spine_03', 3],
       ];
-      for (const t of [0, r.clip.duration * 0.3, r.clip.duration * 0.7]) {
+      for (const t of [0, r.clip.duration * 0.3, r.clip.duration * 0.5, r.clip.duration * 0.7]) {
         sm.setTime(t); tm.setTime(t); src.scene.updateMatrixWorld(true); h.root.updateMatrixWorld(true);
         for (const [a, b, c, d, tol] of pairs) {
           const ds = P(sN.get(b)!).sub(P(sN.get(a)!)).normalize(), dt = P(tN.get(d)!).sub(P(tN.get(c)!)).normalize();
-          expect(ds.angleTo(dt) * 180 / Math.PI, `${clip} ${a} at ${t.toFixed(2)}`).toBeLessThan(tol);
+          const err = ds.angleTo(dt) * 180 / Math.PI;
+          worst[clip] = Math.max(worst[clip] ?? 0, err / tol);
+          expect(err, `${clip} ${a} at ${t.toFixed(2)}`).toBeLessThan(tol * (FIGHT.has(clip) ? 4 : 1));
         }
         // the face keeps looking ahead as the model's rest does (taking the neck's alignment tipped it to the sky)
         const tTurn = tN.get('Head')!.getWorldQuaternion(new THREE.Quaternion()).angleTo(headRest), sTurn = sN.get('Head')!.getWorldQuaternion(new THREE.Quaternion()).angleTo(sHeadRest);
@@ -132,6 +139,28 @@ describe('animation clips retargeted onto a cast model', () => {
       const y = P(pelvis).y;
       expect(y, `${action} at ${speed}: pelvis height`).toBeGreaterThan(0.75);
       expect(y).toBeLessThan(1.05);
+    }
+  });
+
+  it('fights through the gait: the blows, the guard, a block and a flinch from either clip, no NaN, feet on the ground', async () => {
+    const clips: Record<string, Retargeted> = {};
+    let h: Hero | null = null;
+    const files: Record<string, [string, ClipOpts]> = {
+      fightIdle: ['FightIdle', {}], jab: ['LeadJab', { range: [0.3, 0.88], speed: 1.9, loop: false }], kick: ['MmaKick', { range: [0.3, 1.18], speed: 1.45, loop: false, anchor: 'start' }],
+      hitHead: ['HeadHit', { range: [0, 0.95], speed: 2.1, loop: false }], hitBody: ['StomachHit', { range: [0, 0.9], speed: 2, loop: false }],
+    };
+    for (const [name, [file, o]] of Object.entries(files)) { const s = await setup(file); h ??= s.h; clips[name] = retarget(s.src, h.rig(), name, o); }
+    h!.useClips(clips, { guard: { clip: 'fightIdle', legs: 'gait' }, jab: { clip: 'jab', legs: 'gait' }, kick: 'kick', flinch: { clip: ['hitHead', 'hitBody'], legs: 'gait' } });
+    const g = new Gait();
+    const root = new THREE.Vector3(), pelvis = h!.root.getObjectByName('pelvis')!, foot = h!.root.getObjectByName('foot_l')!;
+    for (const [action, speed, secs] of [['guard', 0, 0.6], ['jab', 0, 0.3], ['guard', 1.2, 0.6], ['kick', 0, 0.6], ['flinch', 0, 0.45], ['guard', 0, 0.3], ['flinch', 0, 0.45]] as const) {
+      const n = Math.round(secs * 60);
+      for (let i = 0; i < n; i++) { g.update({ action, speed, t: i / 60 }, 1 / 60, 7); h!.draw(root, 0, g); }
+      h!.root.updateMatrixWorld(true);
+      h!.root.traverse((o) => { expect(Number.isFinite(o.quaternion.x + o.position.y), `${action} ${o.name}`).toBe(true); });
+      expect(P(pelvis).y, `${action}: pelvis height`).toBeGreaterThan(0.7);
+      expect(P(pelvis).y).toBeLessThan(1.1);
+      expect(P(foot).y, `${action}: the left foot`).toBeLessThan(action === 'kick' ? 0.6 : 0.25);
     }
   });
 });
