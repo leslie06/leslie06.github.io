@@ -13,7 +13,7 @@ import { decodeRail, type RailFileV2 } from '../city/visual/Railways';
 import { L } from './lang';
 
 css(`
-.navmap{position:fixed;inset:0;z-index:40;background:#0b0e10;font-family:${F.ui};color:${C.paper};user-select:none;overflow:hidden;cursor:crosshair}
+.navmap{position:fixed;inset:0;z-index:40;background:#0b0e10;font-family:${F.ui};color:${C.paper};user-select:none;overflow:hidden;cursor:crosshair;touch-action:none}
 .navmap[hidden]{display:none}
 .navmap .close{position:absolute;right:calc(max(16px,3vw) + env(safe-area-inset-right,0px));top:calc(max(12px,3.2vh) + env(safe-area-inset-top,0px));
   min-width:88px;min-height:48px;padding:10px 16px;border:1px solid ${C.line};border-radius:8px;background:${C.inkGlass};color:${C.paper};font:700 15px/1 ${F.ui};cursor:pointer;touch-action:manipulation}
@@ -130,6 +130,7 @@ export class MapScreen implements System {
   /** The world point kept under a screen point while a zoom animates. */
   private anchor = { sx: 0, sy: 0, wx: 0, wz: 0 };
   private mouse = { x: -1, y: -1, down: false, dragged: false, sx: 0, sy: 0 };
+  private fingers = new Map<number, { x: number; y: number }>();
   private held = new Set<string>();
   private padMode = false;
   private padPrev: boolean[] = [];
@@ -258,6 +259,7 @@ export class MapScreen implements System {
     this.open_ = false;
     this.root.hidden = true;
     this.root.classList.remove('drag');
+    this.fingers.clear(); this.mouse.down = false;
     this.nav?.setMapOpen(false);
     if (this.savedRender && this.engine.renderFrame === this.noRender) this.engine.renderFrame = this.savedRender;
     this.savedRender = null;
@@ -280,29 +282,59 @@ export class MapScreen implements System {
   private bindInput(): void {
     const r = this.root, m = this.mouse;
     r.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Fingers (and the mouse) by pointer id: one drags, two pinch - zoom about their midpoint and pan
+    // with it. Without `touch-action: none` on the root a phone took the drag as a page scroll and
+    // cancelled the pointer after a few pixels, so the map never moved (2026-10-13).
+    const fingers = this.fingers;
+    const pinch = () => {
+      const [a, b] = [...fingers.values()];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
+    };
+    let last = { x: 0, y: 0, d: 1 };
     r.addEventListener('pointerdown', (e) => {
       if (!this.open_) return;
       this.padMode = false;
       if (e.button === 2) { this.clearWaypoint(); return; }
       if (e.button !== 0) return;
-      m.down = true; m.dragged = false; m.sx = e.clientX; m.sy = e.clientY;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       r.setPointerCapture(e.pointerId);
+      if (fingers.size === 1) { m.down = true; m.dragged = false; m.sx = e.clientX; m.sy = e.clientY; m.x = e.clientX; m.y = e.clientY; }
+      else { m.dragged = true; last = pinch(); }
     });
     r.addEventListener('pointermove', (e) => {
       if (!this.open_) return;
-      const dx = e.clientX - m.x, dy = e.clientY - m.y;
+      this.padMode = false;
+      const f = fingers.get(e.pointerId);
+      if (!f) { m.x = e.clientX; m.y = e.clientY; return; }
+      const dx = e.clientX - f.x, dy = e.clientY - f.y;
+      f.x = e.clientX; f.y = e.clientY;
+      if (fingers.size >= 2) {
+        const p = pinch();
+        const [wx, wz] = this.toWorld(last.x, last.y);
+        this.s = this.ts = Math.max(S_MIN, Math.min(S_MAX, this.s * p.d / last.d));
+        this.cx = wx - (p.x - this.w / 2) / this.s; this.cz = wz - (p.y - this.h / 2) / this.s;
+        this.anchor.sx = -1;
+        last = p;
+        return;
+      }
       m.x = e.clientX; m.y = e.clientY;
-      if (m.down && (m.dragged || Math.hypot(e.clientX - m.sx, e.clientY - m.sy) > 4)) {
+      if (m.down && (m.dragged || Math.hypot(e.clientX - m.sx, e.clientY - m.sy) > (e.pointerType === 'mouse' ? 4 : 8))) {
         if (!m.dragged) { m.dragged = true; r.classList.add('drag'); }
         this.cx -= dx / this.s; this.cz -= dy / this.s; this.anchor.sx = -1;
       }
-      this.padMode = false;
     });
-    r.addEventListener('pointerup', (e) => {
-      if (!this.open_ || e.button !== 0 || !m.down) return;
+    const lift = (e: PointerEvent, cancelled: boolean) => {
+      if (!fingers.delete(e.pointerId)) return;
+      if (fingers.size >= 2) { last = pinch(); return; }
+      if (fingers.size === 1) return;
+      const tap = this.open_ && m.down && !m.dragged && !cancelled;
       m.down = false; r.classList.remove('drag');
-      if (!m.dragged) this.pick(e.clientX, e.clientY);
-    });
+      // A finger leaves no hover: the place readout goes back to the map's centre.
+      if (e.pointerType !== 'mouse') { m.x = -1; m.y = -1; }
+      if (tap) this.pick(e.clientX, e.clientY);
+    };
+    r.addEventListener('pointerup', (e) => lift(e, false));
+    r.addEventListener('pointercancel', (e) => lift(e, true));
     r.addEventListener('wheel', (e) => {
       if (!this.open_) return;
       e.preventDefault();
