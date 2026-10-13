@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { monotoneSpline, moonAt, nightFromElevation, sunAt, type SkyBody } from './SunPath';
+import { cityLights, monotoneSpline, moonAt, nightFromElevation, sunAt, type SkyBody } from './SunPath';
 import { ATMO, skySummary, transmittance, type AtmoInputs } from './Atmo';
 import type { GradeParams } from './effects/Grade';
 import type { AtmosphereParams } from './effects/Atmosphere';
@@ -83,8 +83,10 @@ export interface Look {
   moon: SkyBody;
   sunDir: THREE.Vector3;
   moonDir: THREE.Vector3;
-  /** Contract value: 0 day .. 1 night. */
+  /** The sky's darkness: 0 day .. 1 night (sun at -9 deg). */
   night: number;
+  /** The city's lights: 0 off .. 1 on (photocell: sunset, or an hour earlier under rain cloud). */
+  lights: number;
   /** Low-sun warmth, blue-hour and overcast weights (0..1). */
   golden: number;
   blue: number;
@@ -124,7 +126,7 @@ function makeLook(): Look {
   const v = () => new THREE.Vector3(0, 1, 0);
   const sun = sunAt(12);
   return {
-    hour: 12, rain: 0, sun, moon: moonAt(12), sunDir: v(), moonDir: v(), night: 0, golden: 0, blue: 0, overcast: 0,
+    hour: 12, rain: 0, sun, moon: moonAt(12), sunDir: v(), moonDir: v(), night: 0, lights: 0, golden: 0, blue: 0, overcast: 0,
     atmo: { sunDir: v(), moonDir: v(), sunE: c(), moonE: c(), aod: 0.3, mieG: 0.78, ms: 0.06, alt: 0.01, lightPollution: c(), airglow: c(), ground: c(), fill: c() },
     skyAmbient: c(), horizon: c(), sunT: c(), moonT: c(),
     keyDir: v(), keyColor: new THREE.Color(1, 1, 1), keyIntensity: 1, keyIsMoon: false, shadowIntensity: 1,
@@ -161,6 +163,7 @@ export class TimeOfDay {
     L.blue = smooth(1, -3, el) * (1 - smooth(-8, -14, el));
     const oc = L.overcast = smooth(0.05, 0.7, rain);
     const night = L.night;
+    const lights = L.lights = cityLights(el, oc);
 
     // --- atmosphere ---
     const a = L.atmo;
@@ -173,8 +176,9 @@ export class TimeOfDay {
     a.sunE.setScalar(E_SUN * skyGain * TWILIGHT(el));
     const moonUp = smooth(-6, 2, L.moon.elevationDeg) * night;
     a.moonE.setRGB(0.82, 0.9, 1.0).multiplyScalar(E_MOON * MOON_SKY * skyGain * moonUp);
-    // Sodium city glow: lives in the haze, so it grows with overcast (cloud base reflects it back).
-    a.lightPollution.setRGB(1.0, 0.52, 0.22).multiplyScalar(night * (0.014 + 0.004 * oc));
+    // Sodium city glow: lives in the haze, so it grows with overcast (cloud base reflects it back - a
+    // rainy Beijing night is an orange sky, brighter than a clear one) and comes on with the lamps.
+    a.lightPollution.setRGB(1.0, 0.52, 0.22).multiplyScalar(lights * (0.014 + 0.016 * oc));
     // A deep-blue floor, so a moonless or overcast night sky is navy rather than black or brown.
     a.airglow.setRGB(0.0008, 0.0014, 0.0035).multiplyScalar(night);
 

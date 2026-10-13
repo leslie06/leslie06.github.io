@@ -433,6 +433,7 @@ export interface RenderApi extends System {
   timeScale: number;
   /** 0..1 rain; wetness follows with a lag. Writable. */
   rain: number;
+  /** 0 = day .. 1 = the city's lights fully on (from sunset; `look.night` is the sky's own darkness). */
   readonly night: number;
   readonly wetness: number;
   readonly sunDir: THREE.Vector3;

@@ -105,7 +105,8 @@ class Render implements RenderSystem {
     this.markEnv(this.tod.look);
   }
 
-  get night(): number { return this.tod.look.night; }
+  /** The city's lights (lamps, headlights, windows): on from sunset, not the sky's slower `night`. */
+  get night(): number { return this.tod.look.lights; }
   get look(): Look { return this.tod.look; }
   get bypass(): boolean { return this.postfx.bypass; }
   set bypass(v: boolean) { this.postfx.bypass = v; }
@@ -117,7 +118,7 @@ class Render implements RenderSystem {
 
   private updateLook(force: boolean): void {
     const L = this.tod.compute(this.timeOfDay, this.rain, force);
-    this.uniforms.uNight.value = L.night;
+    this.uniforms.uNight.value = L.lights;
     this.sunDir.copy(L.sunDir);
     this.hazeColor.copy(L.horizon);
     const b = this.backdrop.value, h = L.horizon, r = this.refHorizon;
@@ -186,7 +187,7 @@ class Render implements RenderSystem {
     this.lighting.setKey(L.keyDir, L.keyColor, L.keyIntensity, L.shadowIntensity, L.keyIsMoon ? 1 : L.overcast);
     this.lighting.setAmbient(L.hemiSky, L.hemiGround);
     this.lighting.beforeRender(this.focus);
-    this.lamps.update(e.camera.position, L.night);
+    this.lamps.update(e.camera.position, this.uniforms.uNight.value);
     if (this.lutDirty(L)) { this.sky.setAtmosphere(L.atmo); this.sky.renderLut(); this.markLut(L); }
     this.framesSinceEnv++;
     // The env capture (6 faces + PMREM) is the one expensive refresh: only when the sky changed by

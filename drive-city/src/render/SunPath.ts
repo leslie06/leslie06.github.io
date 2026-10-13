@@ -88,3 +88,17 @@ export function nightFromElevation(elevationDeg: number): number {
   const t = Math.max(0, Math.min(1, (3 - elevationDeg) / 12));
   return t * t * (3 - 2 * t);
 }
+
+/**
+ * How far the city's own lights are on (lamps, headlights, windows, signs, the sodium glow), by the
+ * sun's elevation and the overcast: photocells switch street lamps on when the daylight fails, which
+ * on a clear evening is sunset (on from +2 deg, full by -1.3) and under rain cloud an hour before it
+ * (from +10, full by +4). `night`, the sky's own darkness, runs on to -9 deg, while the exposure is at
+ * its night ceiling by 18:00 - lights that followed `night` left a rainy dusk black, the lamps a third
+ * on and the headlights off (2026-10-13, 「到晚上，路面都是黑的，没有路灯，也没车灯」).
+ */
+export function cityLights(elevationDeg: number, overcast: number): number {
+  const on = 2 + 8 * overcast, full = -1.3 + 5.3 * overcast;
+  const t = Math.max(0, Math.min(1, (on - elevationDeg) / (on - full)));
+  return t * t * (3 - 2 * t);
+}

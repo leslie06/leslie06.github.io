@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moonAt, nightFromElevation, sunAt, sunHourAngle } from './SunPath';
+import { cityLights, moonAt, nightFromElevation, sunAt, sunHourAngle } from './SunPath';
 import { TimeOfDay } from './TimeOfDay';
 
 /**
@@ -71,5 +71,28 @@ describe('time of day look', () => {
     const night = tod.compute(22, 0, true).keyIntensity;
     expect(noon).toBeGreaterThan(night * 10);
     expect(tod.compute(22, 0, true).keyIsMoon).toBe(true);
+  });
+});
+
+describe('city lights', () => {
+  const tod = new TimeOfDay();
+  const at = (h: number, rain: number) => tod.compute(h, rain, true).lights;
+
+  it('are off by day and on through the evening, clear or wet', () => {
+    for (const rain of [0, 0.8]) {
+      expect(at(15, rain)).toBe(0);
+      for (const h of [19, 19.5, 20, 22, 1, 4.5]) expect(at(h, rain)).toBeGreaterThan(0.95);
+    }
+  });
+
+  it('come on at sunset on a clear evening, an hour earlier under rain cloud', () => {
+    // The lamps followed the sky's `night` (full only at -9 deg): a rainy 19:00 was black, the lamps
+    // a third on and the headlights off (2026-10-13).
+    expect(at(18, 0)).toBe(0);
+    expect(at(18.75, 0)).toBeGreaterThan(0.95);
+    expect(at(17.75, 0.8)).toBeGreaterThan(0.85);
+    expect(at(18, 0.8)).toBeGreaterThan(0.95);
+    expect(cityLights(2.5, 0)).toBe(0);
+    expect(cityLights(6, 1)).toBeGreaterThan(0.5);
   });
 });
