@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
-import type { Blip, CameraApi, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, Speaker, VehicleApi, WantedApi } from '../game/Contracts';
+import type { Blip, CameraApi, CombatApi, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, Speaker, VehicleApi, WantedApi } from '../game/Contracts';
 import type { ContactsApi } from '../contacts';
 import type { DamageApi } from '../damage';
 import { Marker } from '../missions/Marker';
@@ -8,7 +8,7 @@ import { nearestKerb } from '../people/Pavement';
 import type { TrafficApi } from '../traffic';
 import { css } from '../ui/theme';
 import { ScriptCar } from './Cars';
-import type { Step, StepCtx, StepResult } from './Runner';
+import type { MissionDef, Step, StepCtx, StepResult } from './Runner';
 import { Card, Letterbox } from './Screens';
 
 css(`body.cmp-cine .hud>:not(.dlg),body.cmp-cine .touch,body.cmp-cine .phone{opacity:0!important;pointer-events:none!important;transition:opacity .3s}
@@ -16,6 +16,19 @@ body.cmp-cine .hud .dlg{bottom:calc(11vh + 12px);z-index:27}
 body.cmp-cine.dc-touch .hud .dlg{top:auto;bottom:calc(11vh + 8px)}`);
 
 export type V3 = [number, number, number];
+
+/** A chapter of the main story: a mission plus what the campaign system shows and pays for it. */
+export interface Chapter<S> extends MissionDef<S> {
+  title: string; kick: string; who: string; blip: string;
+  /** Where the chapter is picked up, or null until its place is known (the contacts placed). */
+  start(): { x: number; z: number } | null;
+  /** The results card's rows and medal, at the end. */
+  result(clock: number, s: S): { rows: [string, string][]; medal: 'gold' | 'silver' | 'bronze'; pay: number };
+  /** Every frame while running, before the runner (the guard's clocks, the most stars). */
+  tick(dt: number, s: S | null): void;
+  /** For probes: the chapter's own things (CampaignApi.debug.chapter()). */
+  debug?: Record<string, () => unknown>;
+}
 /** A shot: the camera moves from `from` to `to` over `secs`, looking from `look` to `look2` (default: `look`). */
 export interface Shot { from: V3; to?: V3; look: V3; look2?: V3; secs: number; fov?: number }
 export interface Line { who: Speaker; text: string }
@@ -43,6 +56,7 @@ export class Env {
   get wanted(): WantedApi | undefined { return this.engine.get<WantedApi>('wanted'); }
   get damage(): DamageApi | undefined { return this.engine.get<DamageApi>('damage'); }
   get cam(): CameraApi { return this.engine.get<CameraApi>('camera')!; }
+  get combat(): CombatApi | undefined { return this.engine.get<CombatApi>('combat'); }
   /** The objective line (MissionApi.story: street events, fares and jobs wait while it is set). */
   objective(text: string | null): void { const m = this.engine.get<MissionApi>('missions'); if (m) m.story = text; }
 

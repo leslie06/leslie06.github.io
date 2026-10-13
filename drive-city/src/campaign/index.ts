@@ -7,9 +7,10 @@ import type { IntroApi } from '../intro';
 import type { StoryApi } from '../story';
 import type { TrafficApi } from '../traffic';
 import { Marker } from '../missions/Marker';
-import { Env } from './Kit';
+import { Env, type Chapter } from './Kit';
 import { Runner } from './Runner';
-import { chapter1, type M1 } from './missions/m1';
+import { chapter1 } from './missions/m1';
+import { chapter2 } from './missions/m2';
 
 /**
  * The main story as missions (docs/gta-plan.md §4): system `campaign`. The next chapter's start is a gold corona and a
@@ -23,6 +24,8 @@ export interface CampaignApi extends System {
   readonly done: readonly string[];
   debug: {
     runner(): Runner<unknown> | null;
+    /** The chapter running (its `debug` hooks), or null. */
+    chapter(): Chapter<unknown> | null;
     /** Start a chapter now (wherever the player is: the cutscene puts them in place). */
     start(id?: string): void;
     /** Jump to step `id` of the running chapter (a probe), restoring at the checkpoint before it. */
@@ -45,8 +48,8 @@ export function install(engine: Engine): void {
   try { save = { ...save, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') as Save }; } catch { /* fresh */ }
   const write = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* private mode */ } };
 
-  const chapters: M1[] = [chapter1(env)];
-  let runner: Runner<unknown> | null = null, def: M1 | null = null, failT = -1, asked = false, cool = 0;
+  const chapters = [chapter1(env), chapter2(env)] as unknown as Chapter<unknown>[];
+  let runner: Runner<unknown> | null = null, def: Chapter<unknown> | null = null, failT = -1, asked = false, cool = 0;
   const next = () => chapters.find((c) => !save.done.includes(c.id)) ?? null;
 
   // the mission's cars: F takes the mission car; a mission car the player left is kept simulated by us
@@ -65,7 +68,7 @@ export function install(engine: Engine): void {
       && (intro === undefined || intro === 'off' || intro === 'done') && !engine.get<MissionApi>('missions')?.busy;
   };
 
-  const begin = (c: M1) => {
+  const begin = (c: Chapter<unknown>) => {
     def = c; runner = new Runner(c as never) as Runner<unknown>;
     failT = -1; asked = false;
     startMark.hide();
@@ -86,6 +89,7 @@ export function install(engine: Engine): void {
     get done() { return save.done; },
     debug: {
       runner: () => runner,
+      chapter: () => def,
       start: (id) => { const c = chapters.find((x) => x.id === (id ?? next()?.id)); if (c && !runner) begin(c); },
       skipTo: (id) => {
         if (!runner || !def) return;

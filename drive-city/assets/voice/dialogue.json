@@ -272,7 +272,9 @@
   "chenye": {
    "name": "陈野",
    "voiceHint": "熟人专属音色",
-   "voices": ["cosyvoice-v3.5-plus-vd-chenye1-7f059d078bd941da9f422e48a2876403"],
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-chenye1-7f059d078bd941da9f422e48a2876403"
+   ],
    "voiceDesign": [
     {
      "prompt": "青年男性，28 岁左右，音色低沉偏冷、略带沙哑，语速偏慢，话少、冷静，语气淡淡的带点儿嘲讽，普通话略带北京口音。",
@@ -281,6 +283,23 @@
    ],
    "style": "陈野，二十八岁的前地下车手，主角，话少、嘴毒、沉着，北京口音不重。",
    "styleEn": "Chen Ye, a former street racer of twenty-eight, the hero: few words, dry and sharp, unflappable.",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "baoge": {
+   "name": "豹哥",
+   "voiceHint": "熟人专属音色",
+   "voices": ["cosyvoice-v3.5-plus-vd-baoge1-2e4d874e846b43609bcfb68ba620fb60"],
+   "voiceDesign": [
+    {
+     "prompt": "中年男性，45 岁左右，北京口音，音色低沉粗哑、有压迫感，语速偏慢，说话阴沉带笑，透着狠劲儿。",
+     "previewText": "身手不错啊。回去告诉老K，东郊这片儿，姓豹。"
+    }
+   ],
+   "style": "豹哥，四十多岁的东郊黑帮头目，黑豹帮老大，京腔，阴沉狠辣，说话慢、带笑也带威胁。",
+   "styleEn": "Panther, the East Side gang boss in his forties: slow, smiling and menacing.",
    "rateRange": [
     1,
     1
@@ -506,6 +525,306 @@
    "instruct": "轻松，有点儿得意，夸人也不好意思明说。",
    "textEn": "Your bag, K. And he really can drive.",
    "instructEn": "Relaxed, a little smug, praising him without quite saying so."
+  },
+  {
+   "id": "cmp.m2.b1",
+   "archetype": "baoge",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "身手不错啊。老K从哪儿找来的你？",
+   "instruct": "阴沉地笑着，慢悠悠地打量。",
+   "textEn": "Not bad. Where did K dig you up?",
+   "instructEn": "A dark smile, slowly sizing him up."
+  },
+  {
+   "id": "cmp.m2.b2",
+   "archetype": "baoge",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拿？你得追得上才行。开车！",
+   "instruct": "冷笑，最后一声厉喝。",
+   "textEn": "Taking it? You have to catch it first. Go!",
+   "instructEn": "A sneer, then a sharp shout."
+  },
+  {
+   "id": "cmp.m2.b3",
+   "archetype": "baoge",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "回去告诉老K，东郊这片儿，姓豹。",
+   "instruct": "慢条斯理，透着威胁。",
+   "textEn": "Tell K the East Side belongs to Panther.",
+   "instructEn": "Slow and menacing."
+  },
+  {
+   "id": "cmp.m2.c1",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "说正事吧。",
+   "instruct": "淡淡地，不绕弯子。",
+   "textEn": "Let's hear the real work.",
+   "instructEn": "Flat, straight to the point."
+  },
+  {
+   "id": "cmp.m2.c2",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "几个人？",
+   "instruct": "简短，冷静。",
+   "textEn": "How many?",
+   "instructEn": "Short and calm."
+  },
+  {
+   "id": "cmp.m2.c3",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "知道了。",
+   "instruct": "淡淡地。",
+   "textEn": "Got it.",
+   "instructEn": "Flat."
+  },
+  {
+   "id": "cmp.m2.c4",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我来提车。老K的。",
+   "instruct": "冷冷地，不紧不慢。",
+   "textEn": "I'm here for a truck. K's.",
+   "instructEn": "Cold and unhurried."
+  },
+  {
+   "id": "cmp.m2.c5",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "货我拿走了。",
+   "instruct": "平静，不容置疑。",
+   "textEn": "I'm taking the truck.",
+   "instructEn": "Calm, final."
+  },
+  {
+   "id": "cmp.m2.c6",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跑不了。",
+   "instruct": "低沉，笃定。",
+   "textEn": "It won't get far.",
+   "instructEn": "Low and certain."
+  },
+  {
+   "id": "cmp.m2.c7",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "开这玩意儿可甩不掉谁。",
+   "instruct": "无奈地自嘲，咬着牙。",
+   "textEn": "This thing won't shake anyone.",
+   "instructEn": "Wry, through gritted teeth."
+  },
+  {
+   "id": "cmp.m2.c8",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "账？",
+   "instruct": "一愣，追问。",
+   "textEn": "A ledger?",
+   "instructEn": "Caught off guard, asking."
+  },
+  {
+   "id": "cmp.m2.c9",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他会来找的。",
+   "instruct": "冷静地提醒。",
+   "textEn": "He'll come looking.",
+   "instructEn": "A calm warning."
+  },
+  {
+   "id": "cmp.m2.d1",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，豹记的车？你小子胆儿够肥的。",
+   "instruct": "又惊又乐，嗓门大。",
+   "textEn": "A Panther truck? You've got some nerve, kid.",
+   "instructEn": "Surprised and amused, loud."
+  },
+  {
+   "id": "cmp.m2.d2",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我瞧瞧……好家伙，全是改装件。还有一本账。",
+   "instruct": "边翻边嘀咕，最后一句压低声音，透着吃惊。",
+   "textEn": "Let's have a look... Tuning parts, the lot. And a ledger.",
+   "instructEn": "Muttering as he looks, the last sentence hushed and startled."
+  },
+  {
+   "id": "cmp.m2.d3",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "套牌、黑车、谁给他们供货，全记在上面。",
+   "instruct": "认真起来，压低声音。",
+   "textEn": "Fake plates, black cabs, who supplies them - it's all in here.",
+   "instructEn": "Serious now, voice lowered."
+  },
+  {
+   "id": "cmp.m2.g1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，洗车啊？今儿不营业。",
+   "instruct": "吊儿郎当，挑衅地笑。",
+   "textEn": "Here for a wash? We're closed today.",
+   "instructEn": "Swaggering, a mocking grin."
+  },
+  {
+   "id": "cmp.m2.g2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老K？哥几个，给他好好洗洗！",
+   "instruct": "先一愣，然后恶狠狠地招呼同伙。",
+   "textEn": "K? Boys, give him the full wash!",
+   "instructEn": "Taken aback, then nastily rallying his mates."
+  },
+  {
+   "id": "cmp.m2.g3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "里头的，都出来！有人砸场子！",
+   "instruct": "扯着嗓子大喊，又惊又怒。",
+   "textEn": "Get out here! Somebody is wrecking the place!",
+   "instructEn": "Bellowing, shocked and furious."
+  },
+  {
+   "id": "cmp.m2.k1",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "坐。昨天那趟，干得漂亮。",
+   "instruct": "慢悠悠，带着满意。",
+   "textEn": "Sit. Yesterday - nicely done.",
+   "instructEn": "Unhurried, pleased."
+  },
+  {
+   "id": "cmp.m2.k2",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我一车货，让豹哥的人扣了。就在东四环外头，四惠枢纽边上那家豹记洗车行。",
+   "instruct": "压着火，一字一句地交代。",
+   "textEn": "Panther's men took a whole truckload of mine. It's at their car wash past the East 4th Ring, by the Sihui bus hub.",
+   "instructEn": "Anger held in, word by word."
+  },
+  {
+   "id": "cmp.m2.k3",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "三五个看场子的。小雨查过了，货车还没挪窝。",
+   "instruct": "轻描淡写，胸有成竹。",
+   "textEn": "A few minding the place. Xiaoyu checked - the truck hasn't moved.",
+   "instructEn": "Offhand, confident."
+  },
+  {
+   "id": "cmp.m2.k4",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "把车给我开回来，送到大刘那儿。他会验货。",
+   "instruct": "不容商量地叮嘱。",
+   "textEn": "Bring it to Big Liu's garage. He'll go through the load.",
+   "instructEn": "Firm, not up for discussion."
+  },
+  {
+   "id": "cmp.m2.k5",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "账本收好。豹哥丢了这个，比丢一车货还疼。",
+   "instruct": "电话里，慢条斯理，意味深长。",
+   "textEn": "Keep that ledger safe. Losing it hurts Panther more than losing the truck.",
+   "instructEn": "On the phone, measured and pointed."
+  },
+  {
+   "id": "cmp.m2.k6",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那就让他来。",
+   "instruct": "电话里，不慌不忙，带着底气。",
+   "textEn": "Then let him come.",
+   "instructEn": "On the phone, unhurried, sure of himself."
+  },
+  {
+   "id": "cmp.m2.y1",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我是小雨。洗车行门口三个，屋里还有，都不是善茬。",
+   "instruct": "电话里，语速快，有点儿紧张。",
+   "textEn": "It's Xiaoyu. Three at the door, more inside. Not the friendly kind.",
+   "instructEn": "On the phone, fast, a little tense."
+  },
+  {
+   "id": "cmp.m2.y2",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "货车是辆白色箱货，车厢上印着\"豹\"字。",
+   "instruct": "电话里，干脆利落地补充。",
+   "textEn": "The truck's a white box van with Panther painted on the side.",
+   "instructEn": "On the phone, brisk."
+  },
+  {
+   "id": "cmp.m2.y3",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "货车跑了！它想绕上建国路往城里钻，截住它！",
+   "instruct": "电话里，急促地大喊。",
+   "textEn": "The truck's running - it wants Jianguo Road into town. Cut it off!",
+   "instructEn": "On the phone, urgent shouting."
+  },
+  {
+   "id": "cmp.m2.y4",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "后面又来两辆！",
+   "instruct": "惊叫，紧张。",
+   "textEn": "Two more behind you!",
+   "instructEn": "Shrieking, tense."
+  },
+  {
+   "id": "cmp.m2.y5",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "漂亮！",
+   "instruct": "兴奋地叫好。",
+   "textEn": "Nice!",
+   "instructEn": "Cheering excitedly."
+  },
+  {
+   "id": "cmp.m2.y6",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他们慢下来了……不追了！",
+   "instruct": "松了口气，难以置信。",
+   "textEn": "They're dropping back... they've given up!",
+   "instructEn": "Relieved, disbelieving."
   },
   {
    "id": "con.daliu.chat1",
@@ -3396,6 +3715,36 @@
    "instruct": "惊叹，非常兴奋。",
    "textEn": "Wow! What is that? Amazing!",
    "instructEn": "Amazed, very excited."
+  },
+  {
+   "id": "npc.gang.taunt1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你就是陈野？豹哥让我们来问候问候你。",
+   "instruct": "痞里痞气地挑衅，带着狠劲儿。",
+   "textEn": "So you're Chen Ye? Brother Bao says hello.",
+   "instructEn": "Thuggish, taunting, menacing."
+  },
+  {
+   "id": "npc.gang.taunt2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这条街现在归黑豹管。要么交钱，要么挨揍。",
+   "instruct": "痞里痞气地挑衅，带着狠劲儿。",
+   "textEn": "This street is the Panthers' now. Pay up or get hurt.",
+   "instructEn": "Thuggish, taunting, menacing."
+  },
+  {
+   "id": "npc.gang.taunt3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老K的跑腿的？让哥几个看看你有几斤几两。",
+   "instruct": "痞里痞气地挑衅，带着狠劲儿。",
+   "textEn": "Lao K's errand boy, is it? Let's see what you've got.",
+   "instructEn": "Thuggish, taunting, menacing."
   },
   {
    "id": "npc.preg.air",

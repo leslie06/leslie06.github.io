@@ -12,7 +12,7 @@ import { CAMPAIGN_ZH } from '../../src/core/i18n/campaign';
 const HUD = /(^|\.)(obj|opt[A-Za-z]*|who|name|role|mapLabel|hearts|unlock|hint[A-Za-z]*|banner|talk|j|wins|met|pickBag|bagGot|legit)(\.|\d|$)|^(map|garage|perk|pax\.obj|life\.(buy|tip|game))\b/;
 const TOAST = /[+-]¥|¥\{|^F |·|：\+|体力 \+/;
 /** HUD text that reads like speech. */
-const SHOWN = /^life\.(dir|thing|noCash|taichi\.done)|^event\.black(?!Shout)|^con\.warning|^npc\.\w+(Late|Gone|Fled|Fail)$/;
+const SHOWN = /^life\.(dir|thing|noCash|taichi\.done)|^event\.black(?!Shout)|^con\.warning|^npc\.\w+(Late|Gone|Fled|Fail)$|^npc\.gang\.(fled|story)$/;
 
 /** What a line with a parameter is recorded as. Lines with parameters not listed here are not recorded. */
 const SPOKEN: Record<string, string> = {
@@ -58,8 +58,8 @@ const SPOKEN_EN: Record<string, string> = {
   'pax.drunk.crash': 'Bang! Ha ha ha!',
 };
 
-// the main story's spoken lines (campaign/: 老K k, Xiaoyu y, Chen Ye c), not its HUD text
-const STORY = /^cmp\.m\d+\.[kyc]\d+$/;
+// the main story's spoken lines (campaign/: 老K k, Xiaoyu y, Chen Ye c, 大刘 d, 豹哥 b, Panther's thugs g), not its HUD text
+const STORY = /^cmp\.m\d+\.[kycdbg]\d+$/;
 const keys = new Set<string>([...Object.keys(NPC_ZH), ...Object.keys(CAMPAIGN_ZH).filter((k) => STORY.test(k)), ...Object.keys(STRINGS.zh).filter((k) => k.startsWith('shout.'))]);
 const out: { key: string; text: string; textEn: string }[] = [];
 for (const key of [...keys].sort()) {

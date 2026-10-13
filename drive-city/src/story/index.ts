@@ -1,3 +1,4 @@
+import type { CampaignApi } from '../campaign';
 import type { Engine, System } from '../core/Engine';
 import { lang, t, type TKey, type TParams } from '../core/I18n';
 import { Rng } from '../core/Rng';
@@ -92,6 +93,10 @@ export async function install(engine: Engine): Promise<void> {
   let save: Save = { ch: 0, heists: 0, best: 0, combo: 0 };
   try { save = { ...save, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Save> }; } catch { /* private mode */ }
   const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* ignore */ } };
+  const mainFirst = () => {
+    const c = engine.get<CampaignApi>('campaign');
+    return !!c && (c.running !== null || (save.ch === 0 && !c.done.includes('m1')));
+  };
 
   let phase: Phase = 'wait', calm = 0, started = false, heist: Heist = 'off', clock = 0, hT = 0, getaway = 0, again = false;
   let visited = [false, false, false], seen = [0, 0, 0], jacked: unknown = null, drop: Stop | null = null, alarm = false, lastLv = 0, aimed = false, dropCd = 0;
@@ -264,10 +269,12 @@ export async function install(engine: Engine): Promise<void> {
       const ch = chapter(), v = vehicle(), c = v.car, driving = pl.mode === 'driving' && v.occupied;
       const P = pl.position;
 
-      // A new chapter, once it is calm for long enough.
+      // A new chapter, once it is calm for long enough - and never over the main story (campaign/): a new player hears
+      // 老K's side of things from chapter 1 first (two 老K stories at once read as two different men, 2026-10-13), and
+      // no text comes while a chapter of it runs.
       if (phase === 'wait') {
         const offer = ch !== 'end' || (again || save.heists > 0);
-        if (!offer || !isCalm()) return;
+        if (!offer || !isCalm() || mainFirst()) return;
         calm += dt;
         if (calm < (ch === 'end' ? AGAIN_AFTER : GAP)) return;
         if (ch === 'end') { again = true; open('heist'); }

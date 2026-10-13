@@ -5,8 +5,7 @@ import { randomLook, type Look } from '../../character/Body';
 import { Rng } from '../../core/Rng';
 import { Banner } from '../../ui/Banner';
 import { ScriptCar } from '../Cars';
-import { call, cutscene, drive, Gang, getIn, talk, wait, type Env, type Line, type V3 } from '../Kit';
-import type { MissionDef } from '../Runner';
+import { call, cutscene, drive, Gang, getIn, talk, wait, type Chapter, type Env, type Line, type V3 } from '../Kit';
 import type { Livery } from '../../vehicle/CarModel';
 
 /**
@@ -24,15 +23,7 @@ interface S {
   wrecked: number;
   stars: number;
 }
-export interface M1 extends MissionDef<S> {
-  title: string; kick: string; who: string; blip: string;
-  /** Where the mission is picked up (老K's stall), or null until the contacts are placed. */
-  start(): { x: number; z: number } | null;
-  /** The results card's rows and medal, at the end. */
-  result(clock: number, s: S): { rows: [string, string][]; medal: 'gold' | 'silver' | 'bronze'; pay: number };
-  /** Every frame while running, before the runner (the guard's clocks, the most stars). */
-  tick(dt: number, s: S | null): void;
-}
+export type M1 = Chapter<S>;
 
 const K_LIVERY: Livery = { upper: '#111214', lower: '#111214', roofSign: null, plate: { text: '京A·K8888', bg: '#1d49b5', fg: '#ffffff' }, doorText: 'K', doorColor: '#f3b50f' };
 const PANTHER: Livery = { upper: '#0b0b0c', lower: '#0b0b0c', roofSign: null, plate: { text: '京N·8B4T7', bg: '#1d49b5', fg: '#ffffff' }, doorText: '豹', doorColor: '#b8862b' };
