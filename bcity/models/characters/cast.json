@@ -1,5 +1,5 @@
 {
-  "_note": "Realistic characters (character/Cast.ts, docs/characters.md). Paths are relative to this folder. 'clips': animation clips by name - a glb (a skeleton and one animation, retargeted at load onto each model's rig), or {file, range: [s0, s1], speed, loop (default true), anchor: 'start'|'end' (the hips' travel pinned where they are at that end)}. 'actions': which clip a gait action plays ('locomotion' = idle/walk/run by speed), or {clip, legs: 'gait'} (the gait's pelvis and legs under the clip's upper body); consecutive actions on one clip carry on (knocked then down: the fall holds its last frame lying); an action not listed keeps the procedural gait. A character may override 'clips' or 'actions'. hairColor (optional) multiplies the hair's colour; each character's colours are baked into its textures by scripts/characters/pack.mjs from the `look` in scripts/characters/cast.json. Mixamo's Sitting Idle leans back into a chair's back; 'sit' is its Sitting (upright, hands on knees); drink and chess keep the gait (the cup, the pieces).",
+  "_note": "Realistic characters (character/Cast.ts, docs/characters.md). Paths are relative to this folder. 'clips': animation clips by name - a glb (a skeleton and one animation, retargeted at load onto each model's rig), or {file, range: [s0, s1], speed, loop (default true), anchor: 'start'|'end' (the hips' travel pinned where they are at that end)}. 'actions': which clip a gait action plays ('locomotion' = idle/walk/run by speed), or {clip, legs: 'gait'} (the gait's pelvis and legs under the clip's upper body); consecutive actions on one clip carry on (knocked then down: the fall holds its last frame lying); an action not listed keeps the procedural gait. A character may override 'clips' or 'actions'. hairColor (optional) multiplies the hair's colour; each character's colours are baked into its textures by scripts/characters/pack.mjs from the `look` in scripts/characters/cast.json. Mixamo's Sitting Idle leans back into a chair's back; 'sit' is its Sitting (upright, hands on knees); drink and chess keep the gait (the cup, the pieces). Fight (2026-10-13, Mixamo): guard/jab/cross/hook/block/flinch keep the gait's legs (they step and lunge); uppercut and kick are whole-body; each blow's clip is cut and sped up so it lands at character/Animator.ts STRIKE[k].hit (a little after the fist's or foot's fastest frame, .scratch/sweep/animmeasure.test.ts: the hook sweeps across and the uppercut rises past its blow, so 'furthest out' misread both); flinch picks the head or the stomach hit. The guard is the jab clip's opening pose held (fists by the chin); Mixamo's Fight Idle holds both hands out in front, MMA style, and is the Black Panther thugs' guard instead (a brawler's look, and the two sides read apart).",
   "clips": {
     "idle": "../anims/idle.glb",
     "walk": "../anims/walk.glb",
@@ -42,6 +42,88 @@
       "speed": 1.6,
       "loop": false,
       "anchor": "end"
+    },
+    "fightIdle": "../anims/FightIdle.glb",
+    "jab": {
+      "file": "../anims/LeadJab.glb",
+      "range": [
+        0.3,
+        0.88
+      ],
+      "speed": 1.9,
+      "loop": false
+    },
+    "cross": {
+      "file": "../anims/CrossPunch.glb",
+      "range": [
+        0.85,
+        1.63
+      ],
+      "speed": 2.3,
+      "loop": false
+    },
+    "hook": {
+      "file": "../anims/HookPunch.glb",
+      "range": [
+        0.68,
+        1.44
+      ],
+      "speed": 1.8,
+      "loop": false
+    },
+    "uppercut": {
+      "file": "../anims/Uppercut.glb",
+      "range": [
+        0.33,
+        0.96
+      ],
+      "speed": 1.25,
+      "loop": false
+    },
+    "kick": {
+      "file": "../anims/MmaKick.glb",
+      "range": [
+        0.3,
+        1.18
+      ],
+      "speed": 1.45,
+      "loop": false,
+      "anchor": "start"
+    },
+    "block": {
+      "file": "../anims/BodyBlock.glb",
+      "range": [
+        1.05,
+        1.65
+      ],
+      "speed": 1.1,
+      "loop": false
+    },
+    "hitHead": {
+      "file": "../anims/HeadHit.glb",
+      "range": [
+        0.0,
+        0.95
+      ],
+      "speed": 2.1,
+      "loop": false
+    },
+    "hitBody": {
+      "file": "../anims/StomachHit.glb",
+      "range": [
+        0.0,
+        0.9
+      ],
+      "speed": 2.0,
+      "loop": false
+    },
+    "guardUp": {
+      "file": "../anims/LeadJab.glb",
+      "range": [
+        0.0,
+        0.12
+      ],
+      "speed": 0.12
     }
   },
   "actions": {
@@ -56,7 +138,36 @@
     },
     "knocked": "fall",
     "down": "fall",
-    "getup": "getup"
+    "getup": "getup",
+    "guard": {
+      "clip": "guardUp",
+      "legs": "gait"
+    },
+    "jab": {
+      "clip": "jab",
+      "legs": "gait"
+    },
+    "cross": {
+      "clip": "cross",
+      "legs": "gait"
+    },
+    "hook": {
+      "clip": "hook",
+      "legs": "gait"
+    },
+    "uppercut": "uppercut",
+    "kick": "kick",
+    "block": {
+      "clip": "block",
+      "legs": "gait"
+    },
+    "flinch": {
+      "clip": [
+        "hitHead",
+        "hitBody"
+      ],
+      "legs": "gait"
+    }
   },
   "characters": {
     "chenye": {
@@ -87,13 +198,31 @@
       "file": "baoge.glb"
     },
     "thug1": {
-      "file": "thug1.glb"
+      "file": "thug1.glb",
+      "actions": {
+        "guard": {
+          "clip": "fightIdle",
+          "legs": "gait"
+        }
+      }
     },
     "thug2": {
-      "file": "thug2.glb"
+      "file": "thug2.glb",
+      "actions": {
+        "guard": {
+          "clip": "fightIdle",
+          "legs": "gait"
+        }
+      }
     },
     "thug3": {
-      "file": "thug3.glb"
+      "file": "thug3.glb",
+      "actions": {
+        "guard": {
+          "clip": "fightIdle",
+          "legs": "gait"
+        }
+      }
     }
   }
 }
