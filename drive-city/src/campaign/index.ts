@@ -12,6 +12,7 @@ import { Runner } from './Runner';
 import { Nudge } from './Screens';
 import { chapter1 } from './missions/m1';
 import { chapter2 } from './missions/m2';
+import { chapter3 } from './missions/m3';
 
 /** The start's circle: walk into it, or stop a car in it (its edge, a little wider: K stands on the pavement). */
 const START_R = 4, START_R_CAR = 6.5;
@@ -68,7 +69,7 @@ export function install(engine: Engine): void {
   try { save = { ...save, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') as Save }; } catch { /* fresh */ }
   const write = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* private mode */ } };
 
-  const chapters = [chapter1(env), chapter2(env)] as unknown as Chapter<unknown>[];
+  const chapters = [chapter1(env), chapter2(env), chapter3(env)] as unknown as Chapter<unknown>[];
   let runner: Runner<unknown> | null = null, def: Chapter<unknown> | null = null, failT = -1, asked = false, cool = 0;
   const next = () => chapters.find((c) => !save.done.includes(c.id)) ?? null;
 

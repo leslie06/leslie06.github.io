@@ -284,7 +284,8 @@ export class Hud implements HudApi {
     this.rideEl.hidden = park?.prompt !== 'board';
     this.rideOffEl.hidden = park?.prompt !== 'exit';
     // What F does now (get in, talk, pick up): the player picks it (PlayerApi.prompt).
-    const pr = onFoot && !park?.prompt ? pl?.prompt ?? (pl?.nearCar ? t('hud.enterCar') : null) : null;
+    // while driving only an offer's (the hijack's leap: PlayerApi.offer)
+    const pr = park?.prompt ? null : onFoot ? pl?.prompt ?? (pl?.nearCar ? t('hud.enterCar') : null) : pl?.prompt ?? null;
     this.promptEl.hidden = !pr;
     if (pr && this.promptEl.textContent !== pr) this.promptEl.textContent = pr;
     this.flipped.hidden = onFoot || !(car.flippedTime > 1.2);

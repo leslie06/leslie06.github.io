@@ -291,7 +291,9 @@
   "baoge": {
    "name": "豹哥",
    "voiceHint": "熟人专属音色",
-   "voices": ["cosyvoice-v3.5-plus-vd-baoge1-2e4d874e846b43609bcfb68ba620fb60"],
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-baoge1-2e4d874e846b43609bcfb68ba620fb60"
+   ],
    "voiceDesign": [
     {
      "prompt": "中年男性，45 岁左右，北京口音，音色低沉粗哑、有压迫感，语速偏慢，说话阴沉带笑，透着狠劲儿。",
@@ -825,6 +827,216 @@
    "instruct": "松了口气，难以置信。",
    "textEn": "They're dropping back... they've given up!",
    "instructEn": "Relieved, disbelieving."
+  },
+  {
+   "id": "cmp.m3.c1",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "账本呢？",
+   "instruct": "沉声，直接。",
+   "textEn": "The ledger?",
+   "instructEn": "Low and direct."
+  },
+  {
+   "id": "cmp.m3.c2",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞不动，就上他的车。",
+   "instruct": "平静，不容置疑。",
+   "textEn": "Then I'll get in it.",
+   "instructEn": "Calm, final."
+  },
+  {
+   "id": "cmp.m3.c3",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "盯住他。",
+   "instruct": "低沉，笃定。",
+   "textEn": "Stay on him.",
+   "instructEn": "Low and certain."
+  },
+  {
+   "id": "cmp.m3.c4",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞不动……得贴上去，跳过去。",
+   "instruct": "咬着牙，自言自语。",
+   "textEn": "Doesn't budge... I'll have to get alongside and jump.",
+   "instructEn": "Through gritted teeth, to himself."
+  },
+  {
+   "id": "cmp.m3.c5",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "账本在副驾上。钱会计，下回记得系安全带。",
+   "instruct": "喘着气，带点儿冷幽默。",
+   "textEn": "Ledger's on the passenger seat. Buckle up next time, Qian.",
+   "instructEn": "Out of breath, dry humour."
+  },
+  {
+   "id": "cmp.m3.c6",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "钱会计记得细。每一笔，后头都有个名字。",
+   "instruct": "翻着账本，冷静地。",
+   "textEn": "Qian keeps tidy books. Every entry has a name behind it.",
+   "instructEn": "Leafing through the ledger, calm."
+  },
+  {
+   "id": "cmp.m3.c7",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那就别让他们睡。",
+   "instruct": "淡淡地，带着狠劲儿。",
+   "textEn": "Then let's keep them up.",
+   "instructEn": "Quiet, with an edge."
+  },
+  {
+   "id": "cmp.m3.d1",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你可算来了。昨儿后半夜，豹哥的人把我这铺子砸了。",
+   "instruct": "又气又累，拍着大腿抱怨。",
+   "textEn": "About time. Panther's lot smashed the place up in the small hours.",
+   "instructEn": "Angry and worn out, complaining."
+  },
+  {
+   "id": "cmp.m3.d2",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "抢走了。小雨跟了一宿——东西交到了他们管账的手里，钱会计。",
+   "instruct": "叹口气，压低声音交代。",
+   "textEn": "Gone. Xiaoyu tailed them all night - it ended up with their bookkeeper. Qian.",
+   "instructEn": "A sigh, then a lowered voice."
+  },
+  {
+   "id": "cmp.m3.d3",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他那辆奔驰，用的就是你扣下的那批改装件，车门里焊了钢板，撞是撞不动的。",
+   "instruct": "认真地提醒，带点儿心疼自己的货。",
+   "textEn": "His Mercedes is built from the parts you took off them. Steel in the doors. Ramming it won't do a thing.",
+   "instructEn": "A serious warning, a little sore about his parts."
+  },
+  {
+   "id": "cmp.m3.d4",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "开我这辆。后备箱里给你装了氮气，追的时候用得上。",
+   "instruct": "爽快地递钥匙，带点儿得意。",
+   "textEn": "Take my car. There's nitro in the boot - you'll want it.",
+   "instructEn": "Handing over the keys, a bit proud."
+  },
+  {
+   "id": "cmp.m3.d5",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拿回来了？好小子。",
+   "instruct": "又惊又喜，拍拍肩膀。",
+   "textEn": "You got it back? Good lad.",
+   "instructEn": "Surprised and delighted."
+  },
+  {
+   "id": "cmp.m3.d6",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这名字……这不是交通队的老周吗？",
+   "instruct": "凑过来一看，倒吸一口凉气。",
+   "textEn": "This name... isn't that Zhou, from the traffic police?",
+   "instructEn": "Leaning in to look, a sharp intake of breath."
+  },
+  {
+   "id": "cmp.m3.g1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的车！你知道这是谁的车吗！",
+   "instruct": "摔在地上，气急败坏地尖叫。",
+   "textEn": "My car! Do you know whose car this is?!",
+   "instructEn": "Sprawled on the road, shrieking with rage."
+  },
+  {
+   "id": "cmp.m3.k1",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "豹哥上头还有人。账本收好——这回，轮到他们睡不着了。",
+   "instruct": "电话里，慢条斯理，意味深长。",
+   "textEn": "So Panther has someone above him. Keep the ledger safe - this time they're the ones who won't sleep.",
+   "instructEn": "On the phone, measured and pointed."
+  },
+  {
+   "id": "cmp.m3.y1",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥，钱会计的车刚上东三环，往北跑了。黑色奔驰，车牌尾号零零一。",
+   "instruct": "电话里，语速快，盯梢的紧张。",
+   "textEn": "Qian's just hit the East 3rd Ring heading north. Black Mercedes, plate ending zero-zero-one.",
+   "instructEn": "On the phone, fast, tense from tailing him."
+  },
+  {
+   "id": "cmp.m3.y2",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "后头跟着一辆SUV。他要上机场高速——过了四元桥，就追不上了。",
+   "instruct": "电话里，急促地补充。",
+   "textEn": "There's an SUV behind him. He's going for the airport road - past Siyuan Bridge, he's gone.",
+   "instructEn": "On the phone, urgent."
+  },
+  {
+   "id": "cmp.m3.y3",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "SUV 在别你！甩开它，盯住奔驰！",
+   "instruct": "电话里，急促地大喊。",
+   "textEn": "The SUV's trying to push you off! Shake it, stay on the Mercedes!",
+   "instructEn": "On the phone, urgent shouting."
+  },
+  {
+   "id": "cmp.m3.y4",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥！没事吧？快找辆车，接着追！",
+   "instruct": "惊叫，担心。",
+   "textEn": "Are you OK?! Grab a car and keep after him!",
+   "instructEn": "Shrieking, worried."
+  },
+  {
+   "id": "cmp.m3.y5",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "后面又上来两辆，豹哥急了。",
+   "instruct": "紧张，语速快。",
+   "textEn": "Two more coming up behind - Panther's getting desperate.",
+   "instructEn": "Tense and fast."
+  },
+  {
+   "id": "cmp.m3.y6",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他们掉头了。哥，回大刘那儿。",
+   "instruct": "松了口气。",
+   "textEn": "They're turning back. Get to Big Liu's.",
+   "instructEn": "Relieved."
   },
   {
    "id": "con.daliu.chat1",

@@ -153,9 +153,19 @@ export interface PlayerApi extends System {
   /**
    * Something on foot the player can use with F (talk to someone, pick something up). Offer it every
    * frame it is available; the player takes the nearest of the offers, the cars and the bikes in
-   * reach (an offer's `r` is its reach) and shows its `label` as the prompt.
+   * reach (an offer's `r` is its reach) and shows its `label` as the prompt. Offers within reach of the car work
+   * while driving too (2026-10-14: the hijack's leap), and take F over from getting out.
    */
   offer?(o: Interaction): void;
+  /**
+   * Leap from the driving seat into `to`, a car alongside (campaign/'s hijack, 2026-10-14, 「高速跳车夺车」): the world
+   * slows, the camera swings out, Chen Ye jumps across. `done` gets `ok` and the car left behind once he is in (it is
+   * the caller's to keep or hand to traffic), or `ok: false` when the cars drew apart mid-air and he fell to the road.
+   * False when he cannot (on foot, already leaping).
+   */
+  leap?(to: Vehicle, look: CarLook, done: (r: { ok: boolean; prev: { car: Vehicle; look: CarLook } | null }) => void): boolean;
+  /** Mid-leap. */
+  readonly leaping?: boolean;
   /**
    * Held in a seat (`setRiding`) and drawn doing this (dancing in a square, tai chi in a park), or null.
    * The clock starts at `t` (a group's), so the player moves with them.

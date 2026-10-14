@@ -4,7 +4,7 @@ import { J, SKELETON } from '../character/Body';
 import { SEAT, type TwoWheeler } from '../vehicle/TwoWheelers';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
-import type { CombatApi, HudApi, Interaction, MissionApi, ParkApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { CameraApi, CarLook, CombatApi, HudApi, Interaction, MissionApi, ParkApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import { project } from '../city/Geo';
 import { t } from '../core/I18n';
@@ -30,6 +30,10 @@ const REACH = 4.2;
 /** A shared bike is taken from beside it (they stand 0.62 m apart in a rack). */
 const BIKE_REACH = 1.8;
 const BIKE_FRAME = new THREE.Color('#2a2b2d');
+/** The leap across to a car alongside: seconds of game time (the world runs at LEAP_SLOW meanwhile). */
+const LEAP_SECS = 0.85, LEAP_SLOW = 0.4;
+/** Doors further apart than this as he lands: he misses and falls. */
+const LEAP_MISS = 6;
 /** Where the wasted wake up: 北京协和医院, on 东单北大街 (rough WGS84 hint; the street name decides). */
 const HOSPITAL = { road: '东单北大街', lat: 39.9125, lon: 116.415 };
 
@@ -98,6 +102,7 @@ export async function install(engine: Engine): Promise<void> {
     v.inputEnabled = true;
   };
   let jumpLatch = false;
+  const shotLeap = new URLSearchParams(location.search).has('shot');
   let nearCar = false;
   /** F's offers (PlayerApi.offer): this frame's, collected while systems update, and last frame's, used now. */
   let offers: Interaction[] = [], offered: Interaction[] = [];
@@ -183,8 +188,58 @@ export async function install(engine: Engine): Promise<void> {
     cam.snap();
   };
 
+  /**
+   * Leaping into a car alongside (PlayerApi.leap): from the door of the car he is in to the facing door of `to`, both
+   * moving, along an arc; `side*` say which side of each car faces the other.
+   */
+  let leapS: { to: Vehicle; look: CarLook; t: number; sideA: number; sideB: number; input: boolean; done: Parameters<NonNullable<PlayerApi['leap']>>[2] } | null = null;
+  const leapFrom = new THREE.Vector3(), leapTo = new THREE.Vector3(), leapPos = new THREE.Vector3(), leapCam = new THREE.Vector3(), leapLook = new THREE.Vector3();
+  const doorOf = (car: Vehicle, side: number, half: number, out: THREE.Vector3) => out.copy(car.pos).addScaledVector(car.left, side * half);
+  /** Where he is in the air at `k` (0..1 of the leap), feet. */
+  const leapAt = (k: number, out: THREE.Vector3, l = leapS!) => {
+    const v = vehicle();
+    doorOf(v.car, l.sideA, v.model.size.width / 2 + 0.2, leapFrom);
+    doorOf(l.to, l.sideB, 1.05, leapTo);
+    const e = k * k * (3 - 2 * k);
+    out.lerpVectors(leapFrom, leapTo, e);
+    out.y = leapFrom.y + (leapTo.y - leapFrom.y) * e - 0.35 + 0.8 * Math.sin(Math.PI * k);
+    return out;
+  };
+  const endLeap = () => {
+    const v = vehicle(), l = leapS;
+    if (!l) return;
+    leapS = null;
+    v.slowMo = 1;
+    const cr = engine.get<CameraApi>('camera');
+    if (cr) cr.override = null;
+    leapAt(1, leapPos, l);
+    const gap = Math.hypot(leapFrom.x - leapTo.x, leapFrom.z - leapTo.z);
+    if (gap > LEAP_MISS || l.to.up.y < 0.5) {
+      // the cars drew apart: he gets as far across as a jump goes
+      leapPos.lerpVectors(leapFrom, leapTo, Math.min(1, LEAP_MISS * 0.6 / gap));
+      // short of it: down on the road, rolling with the speed he had
+      const ground = engine.physics.raycast({ x: leapPos.x, y: leapPos.y + 1.5, z: leapPos.z }, { x: 0, y: -1, z: 0 }, 6, groups(CG.PED, CG.WORLD), true);
+      foot.enable(leapPos.x, ground ? leapPos.y + 1.5 - ground.distance : leapPos.y, leapPos.z, Math.atan2(v.car.fwd.x, v.car.fwd.z));
+      foot.hit(tmp.copy(v.car.vel).multiplyScalar(0.7));
+      hurt(22);
+      v.occupied = false; v.inputEnabled = l.input;
+      mode = 'onfoot';
+      engine.events.emit('player:mode', { mode, carjacked: false });
+      prevFeet.copy(foot.pos); curFeet.copy(foot.pos);
+      cam.snap();
+      l.done({ ok: false, prev: null });
+      return;
+    }
+    const prev = v.swapCar(l.to, l.look);
+    v.occupied = true; v.inputEnabled = l.input;
+    // not a carjacking the police hear of: the car is a gang's, nobody calls it in (the mission decides what follows)
+    engine.events.emit('player:mode', { mode: 'driving', carjacked: false });
+    l.done({ ok: true, prev });
+  };
+
   // A reset (respawn, a new game, a shot pose) puts the player back in the driver's seat.
   engine.events.on('vehicle:reset', () => {
+    if (leapS) { const l = leapS; leapS = null; vehicle().slowMo = 1; vehicle().inputEnabled = l.input; const cr = engine.get<CameraApi>('camera'); if (cr) cr.override = null; }
     foot.dead = false; entering = null; rideSeat = null;
     if (mode !== 'onfoot') return;
     foot.disable();
@@ -193,7 +248,7 @@ export async function install(engine: Engine): Promise<void> {
     engine.events.emit('player:mode', { mode, carjacked: false });
   });
 
-  const api: PlayerApi = {
+  const api: PlayerApi & { debugLeap(): unknown } = {
     name: 'player',
     get mode() { return mode; },
     get position() { return mode === 'onfoot' ? position.copy(foot.pos) : position.copy(vehicle().car.pos); },
@@ -204,7 +259,34 @@ export async function install(engine: Engine): Promise<void> {
     setPose(a, t = 0) { pose = a; poseT = t; },
     crowd,
     heroReady,
-    getOut() { if (mode === 'driving') exitCar(); },
+    getOut() { if (mode === 'driving' && !leapS) exitCar(); },
+    get leaping() { return !!leapS; },
+    debugLeap: () => (leapS ? { t: leapS.t, pos: leapPos.toArray().map(Math.round), from: leapFrom.toArray().map(Math.round), to: leapTo.toArray().map(Math.round), a: vehicle().car.pos.toArray().map(Math.round), b: leapS.to.pos.toArray().map(Math.round) } : null),
+    leap(to, carLook, done) {
+      const v = vehicle();
+      if (mode !== 'driving' || leapS || !v.occupied || to === v.car) return false;
+      const dx = to.pos.x - v.car.pos.x, dz = to.pos.z - v.car.pos.z;
+      const sideA = dx * v.car.left.x + dz * v.car.left.z >= 0 ? 1 : -1, sideB = -dx * to.left.x - dz * to.left.z >= 0 ? 1 : -1;
+      leapS = { to, look: carLook, t: 0, sideA, sideB, input: v.inputEnabled, done };
+      // nobody at the wheel: the car rolls on (occupied, no input) while he is in the air
+      v.inputEnabled = false;
+      if (!shotLeap) v.slowMo = LEAP_SLOW;
+      leapAt(0, leapPos);
+      leapCam.copy(engine.camera.position);
+      const cr = engine.get<CameraApi>('camera');
+      if (cr) cr.override = (c, dt) => {
+        // out past the far side of his car, a little behind, low: side on to the gap he crosses
+        const car = vehicle().car, l = leapS;
+        if (!l) return;
+        leapLook.copy(leapPos);
+        tmp.copy(car.pos).addScaledVector(to.pos, 1).multiplyScalar(0.5).addScaledVector(car.fwd, -3).addScaledVector(car.left, -l.sideA * 6.5);
+        tmp.y = Math.max(car.pos.y, to.pos.y) + 1.6;
+        leapCam.lerp(tmp, 1 - Math.exp(-dt * 7));
+        c.position.copy(leapCam);
+        c.lookAt(leapLook.x, leapLook.y + 0.9, leapLook.z);
+      };
+      return true;
+    },
     strike(action, secs, yaw, lunge, chainFrom) { return mode === 'onfoot' && !rideSeat && !entering && foot.play(action, secs, yaw, lunge, chainFrom); },
     struck(fromX, fromZ, knock) {
       if (mode !== 'onfoot' || rideSeat || foot.knock) return;
@@ -233,6 +315,11 @@ export async function install(engine: Engine): Promise<void> {
         vehicle().inputEnabled = false;
       }
       if (wastedT >= 0) { wastedT += dt; if (wastedT > 4.5) wakeUp(); }
+      if (leapS) {
+        leapS.t += dt;
+        if (leapS.t >= LEAP_SECS) endLeap();
+        return;
+      }
       if (mode !== 'onfoot') return;
       // On a ride: the seat is the only thing that moves the character.
       if (rideSeat) {
@@ -317,8 +404,12 @@ export async function install(engine: Engine): Promise<void> {
         if (v.inputEnabled && inp.enterPressed && free) {
           if (use) use.use(); else if (bike) takeSharedBike(bike); else if (target) enterCar(target);
         }
-      } else if (v.inputEnabled && v.occupied && inp.enterPressed && !v.autopilot) {
-        exitCar();
+      } else if (mode === 'driving' && !leapS) {
+        // an offer in reach of the car (the hijack's leap) has F instead of getting out
+        let use: Interaction | null = null, dUse = Infinity;
+        for (const o of offered) { const d = Math.hypot(o.x - v.car.pos.x, o.z - v.car.pos.z); if (d <= o.r && d < dUse) { dUse = d; use = o; } }
+        if (use && v.occupied) prompt = use.label;
+        if (v.inputEnabled && v.occupied && inp.enterPressed && !v.autopilot) { if (use) use.use(); else exitCar(); }
       }
       // Health bar (top-right, under the cash) while on foot or hurt.
       if (!hpEl) {
@@ -360,6 +451,13 @@ export async function install(engine: Engine): Promise<void> {
         foot.gait.update(rideMotion, dt, 0.3);
         seatPos.y -= SKELETON[J.pelvis].offset[1] * foot.gait.scale;
         if (hero) hero.draw(seatPos, Math.atan2(seatFwd.x, seatFwd.z), foot.gait); else crowd.add(seatPos, Math.atan2(seatFwd.x, seatFwd.z), foot.gait, look);
+      } else if (leapS) {
+        // in the air between the cars
+        leapAt(Math.min(1, leapS.t / LEAP_SECS), leapPos);
+        foot.gait.update({ speed: 0, action: 'air', t: leapS.t + 0.3 }, dt, 0.3);
+        const car = v.car, dx = leapTo.x - leapFrom.x, dz = leapTo.z - leapFrom.z, dd = Math.hypot(dx, dz) || 1;
+        const yaw = Math.atan2(car.fwd.x * 0.8 + dx / dd, car.fwd.z * 0.8 + dz / dd);
+        if (hero) hero.draw(leapPos, yaw, foot.gait); else crowd.add(leapPos, yaw, foot.gait, look);
       } else hero?.hide();
     },
   };

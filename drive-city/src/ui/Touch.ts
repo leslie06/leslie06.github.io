@@ -265,7 +265,7 @@ export class TouchControls implements System {
     if (n2o !== this.n2o) { this.n2o = n2o; this.syncMode(); if (!n2o) this.state.nitro = false; }
     const park = this.engine.get<ParkApi>('park');
     const prompt = park?.prompt === 'board' ? t('hud.ride') : park?.prompt === 'exit' ? t('hud.rideOff') : player?.prompt;
-    const label = prompt === t('npc.talk') ? t('touch.talk') : !park?.prompt && driving ? t('touch.exit')
+    const label = prompt === t('npc.talk') ? t('touch.talk') : !park?.prompt && driving ? (prompt ? t('touch.leap') : t('touch.exit'))
       : player?.nearCar ? t('touch.enter') : t('touch.interact');
     const text = `F\n${label}`;
     if (this.interactBtn.textContent !== text) {
