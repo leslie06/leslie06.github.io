@@ -289,6 +289,8 @@ export async function install(engine: Engine): Promise<void> {
     speak(p, text, 2.2);
     return false;
   };
+  /** The story is talking (VoiceApi.hushed): passers-by say nothing, out loud or in a bubble; scripted actors still do. */
+  const hushed = (p: Ped) => !p.actor && !!engine.get<VoiceApi>('voices')?.hushed;
   /** Their voice (voice/): passers-by only, the archetype from their look unless they were given one. */
   const voiceOfPed = (p: Ped): NpcVoice | null => {
     const vs = engine.get<VoiceApi>('voices');
@@ -298,6 +300,7 @@ export async function install(engine: Engine): Promise<void> {
   };
   /** A recorded line for this event, with its text in a bubble over them. True when it is said. */
   const bark2 = (p: Ped, trigger: VoiceTrigger, onDone?: (completed: boolean) => void): boolean => {
+    if (hushed(p)) return false;
     const text = voiceOfPed(p)?.say(trigger, onDone);
     if (!text) return false;
     engine.events.emit('people:shout', { x: p.pos.x, z: p.pos.z, text, follow: p.pos, secs: Math.min(3.5, 1.2 + text.length * 0.12) });
@@ -305,6 +308,7 @@ export async function install(engine: Engine): Promise<void> {
   };
   /** A line over their head that follows them, in their own voice. */
   const speak = (p: Ped, text: string, secs: number, name?: string) => {
+    if (hushed(p)) return;
     engine.events.emit('people:shout', { x: p.pos.x, z: p.pos.z, text, follow: p.pos, name, secs });
     engine.events.emit('npc:voice', { text, voice: p.actor?.voice ?? voiceOf(p.look, p.seed), x: p.pos.x, z: p.pos.z, id: p.actor ? `actor${actorSlots.indexOf(p)}` : undefined });
   };

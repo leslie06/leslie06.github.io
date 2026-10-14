@@ -5,12 +5,19 @@ import { C } from '../ui/theme';
  * Blip icons and markers shared by the minimap and the full map. Canvas 2D, identity transform (CSS
  * pixels after the DPR scale). Angles are screen angles: radians clockwise from straight up.
  */
-export type MarkKind = BlipKind | 'waypoint' | 'mission';
+export type MarkKind = BlipKind | 'waypoint' | 'mission' | 'waypointDot';
 
 export const INK = 'rgba(9,11,13,0.9)';
 export const POLICE_RED = '#ff3b30', POLICE_BLUE = '#2f7bff';
+/**
+ * The player's own waypoint and its route: purple, as GTA's (2026-10-14), so that a stray tap on the map does not
+ * pass for the mission's yellow.
+ */
+export const WAYPOINT = '#c46bff';
+/** The GPS route's colour for a target of this kind. */
+export const routeColor = (kind: string | undefined): string => (kind === 'waypoint' ? WAYPOINT : C.yellow);
 export const BLIP_COLOR: Record<MarkKind, string> = {
-  police: POLICE_BLUE, target: C.yellow, pickup: '#3aa6ff', dropoff: '#3ccf72', car: '#d8dbde', landmark: '#d4b264', landmarkDone: '#8a8270', trial: '#5fd1ff', waypoint: C.yellow, mission: C.yellow,
+  police: POLICE_BLUE, target: C.yellow, pickup: '#3aa6ff', dropoff: '#3ccf72', car: '#d8dbde', landmark: '#d4b264', landmarkDone: '#8a8270', trial: '#5fd1ff', waypoint: WAYPOINT, waypointDot: WAYPOINT, mission: C.yellow, story: C.yellow,
   jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a', encounter: '#ff9f1c', suspect: '#ff3b30', contact: '#b07cff',
 };
 
@@ -27,7 +34,7 @@ function disc(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, fi
  * One blip at (x, y), radius `r` px. `angle` (screen, NaN = none) turns police and cars into arrows;
  * `time` (seconds) drives flashing.
  */
-export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: number, y: number, r: number, angle: number, time: number, flash = false): void {
+export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: number, y: number, r: number, angle: number, time: number, flash = false, glyph?: string): void {
   ctx.save();
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (flash && kind !== 'police' && Math.floor(time * 3) % 2) ctx.globalAlpha *= 0.35;
@@ -157,6 +164,16 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       ctx.beginPath(); ctx.arc(x, y, r * 0.45, 0, Math.PI * 2); ctx.lineWidth = Math.max(1.2, r * 0.22); ctx.strokeStyle = '#fff'; ctx.stroke();
       break;
     }
+    case 'story': {
+      // The main story's next chapter: a big gold disc with who gives it, ringed in white.
+      disc(ctx, x, y, r * 1.2, col);
+      ctx.beginPath(); ctx.arc(x, y, r * 1.2 + Math.max(1.5, r * 0.3), 0, Math.PI * 2);
+      ctx.lineWidth = Math.max(1, r * 0.16); ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.stroke();
+      ctx.fillStyle = INK; ctx.font = `900 ${Math.round(r * 1.45)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(glyph ?? '★', x, y + r * 0.08);
+      break;
+    }
+    case 'waypointDot':
     case 'mission':
     case 'target': {
       disc(ctx, x, y, r, col);

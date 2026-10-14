@@ -26,6 +26,19 @@ css(`
 .cmp-card .medal.gold{color:#f6c445}.cmp-card .medal.silver{color:#d6dbe0}.cmp-card .medal.bronze{color:#d08a52}
 .cmp-card .pay{margin-top:8px;font:800 22px/1 ${F.num};color:#62d39a}
 .cmp-card .go{margin-top:20px;pointer-events:auto;padding:12px 26px;border:0;border-radius:8px;background:${C.yellow};color:${C.ink};font:800 15px/1 ${F.ui};letter-spacing:.14em;cursor:pointer}
+.cmp-nudge{position:fixed;left:50%;top:76px;z-index:24;transform:translate(-50%,-8px);opacity:0;transition:opacity .4s,transform .4s;pointer-events:none;
+  display:flex;align-items:center;gap:12px;padding:10px 18px 10px 10px;border-radius:12px;background:rgba(14,17,20,.86);border:1px solid ${C.yellowDim};
+  box-shadow:0 10px 30px rgba(0,0,0,.45);font-family:${F.ui};color:${C.paper};max-width:min(560px,86vw)}
+.cmp-nudge.on{opacity:1;transform:translate(-50%,0)}
+.cmp-nudge[hidden],body.cmp-cine .cmp-nudge{display:none}
+.cmp-nudge .g{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:${C.yellow};color:${C.ink};font:900 18px/1 ${F.ui};
+  box-shadow:0 0 0 2px rgba(255,255,255,.8)}
+.cmp-nudge .h{font:800 15px/1.25 ${F.ui};color:${C.yellow}}
+.cmp-nudge .s{font:600 13px/1.35 ${F.ui};color:${C.paper};margin-top:2px}
+body.dc-touch .cmp-nudge{top:calc(46px + env(safe-area-inset-top,0px));padding:7px 12px 7px 7px;gap:9px}
+body.dc-touch .cmp-nudge .g{width:28px;height:28px;font-size:15px}
+body.dc-touch .cmp-nudge .h{font-size:13px}
+body.dc-touch .cmp-nudge .s{font-size:12px}
 @media (max-height:520px){.cmp-card table{margin-top:8px}.cmp-card td{padding:4px 10px}.cmp-card .go{margin-top:10px}}
 `);
 
@@ -81,4 +94,23 @@ export class Card {
       this.timer = window.setTimeout(close, 12000);
     }, 0);
   }
+}
+
+/** A short note at the top of the screen pointing the player at the main story's next chapter (2026-10-14). */
+export class Nudge {
+  private root = el('div', 'cmp-nudge', document.body);
+  private glyph = el('div', 'g', this.root);
+  private head: HTMLElement;
+  private sub: HTMLElement;
+  private timer = 0;
+  constructor() { const b = el('div', '', this.root); this.head = el('div', 'h', b); this.sub = el('div', 's', b); this.root.hidden = true; }
+  show(glyph: string, head: string, sub: string, secs = 7): void {
+    clearTimeout(this.timer);
+    this.glyph.textContent = glyph; this.head.textContent = head; this.sub.textContent = sub;
+    this.root.hidden = false;
+    requestAnimationFrame(() => this.root.classList.add('on'));
+    this.timer = window.setTimeout(() => this.hide(), secs * 1000);
+  }
+  hide(): void { this.root.classList.remove('on'); clearTimeout(this.timer); this.timer = window.setTimeout(() => { this.root.hidden = true; }, 450); }
+  get shown(): boolean { return !this.root.hidden; }
 }

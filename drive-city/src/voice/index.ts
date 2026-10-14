@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import type { AudioApi } from '../audio';
-import type { NpcVoice, PeopleApi, VoiceApi, WorldApi } from '../game/Contracts';
+import type { DialogueApi, NpcVoice, PeopleApi, VoiceApi, WorldApi } from '../game/Contracts';
 import { lang, onLangChange, t, type Lang } from '../core/I18n';
 import { ARCHETYPES, Director, TRIGGERS, type Archetype, type Line, type Output, type Speaker, type Sprite, type Trigger } from './Director';
 import spriteUrl from '../../assets/voice/dist/sprite.json?url';
@@ -139,13 +139,17 @@ export async function install(engine: Engine): Promise<void> {
     return Math.hypot(pos.x - cam.x, pos.z - cam.z) <= max;
   };
 
+  /** A dialogue line or a cutscene is on: no barks (VoiceApi.hushed). */
+  const hushed = () => !!engine.get<DialogueApi>('dialogue')?.busy || document.body.classList.contains('cmp-cine');
+  let wasHushed = false;
+
   const makeVoice = (e: Entry): NpcVoice => ({
     get archetype() { return e.speaker.archetype; },
     get rate() { return e.speaker.rate; },
     get speaking() { return !!e.speaker.line && !e.speaker.line.cut; },
     say(trigger, onDone) {
       const set = sets.get(e.lang);
-      if (!set || e.lang !== lang() || !heard(e.pos)) return null;
+      if (!set || e.lang !== lang() || !heard(e.pos) || hushed()) return null;
       set.director.now = clock();
       const line = set.director.say(e.speaker, trigger, onDone);
       return line ? line.clip.text : null;
@@ -171,6 +175,7 @@ export async function install(engine: Engine): Promise<void> {
   const api: VoiceApi & { debug: Record<string, unknown> } = {
     name: 'voices',
     get ready() { return unlocked && !!current(); },
+    get hushed() { return hushed(); },
     unlock() {
       if (unlocked) return;
       const c = ctxOf(), out = audio()?.output;
@@ -225,6 +230,10 @@ export async function install(engine: Engine): Promise<void> {
       panel.update();
       const set = current();
       if (!unlocked || !set) return;
+      // the story starts talking: whatever the street was saying stops
+      const h = hushed();
+      if (h && !wasHushed) for (const s of sets.values()) s.director.silenceAll();
+      wasHushed = h;
       if (startedAt >= 0 && prefetched !== set.lang && clock() - startedAt > PREFETCH_AFTER) {
         prefetched = set.lang;   // (again after a change of language)
         for (const a of ARCHETYPES) load(set, a);

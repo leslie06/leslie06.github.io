@@ -172,7 +172,7 @@ export function chapter2(env: Env): M2 {
 
   const def: M2 = {
     id: 'm2',
-    title: t('cmp.m2.title'), kick: t('cmp.m2.kick'), who: t('cmp.m2.who'), blip: t('cmp.m2.blip'),
+    title: t('cmp.m2.title'), kick: t('cmp.m2.kick'), who: t('cmp.m2.who'), blip: t('cmp.m2.blip'), giver: t('who.laok'), glyph: 'K',
     start: () => { const s = kSpot(); return s ? { x: s.x + Math.sin(s.yaw) * 1.8, z: s.z + Math.cos(s.yaw) * 1.8 } : null; },
     init: () => ({ cp: null, ko: 0, wrecked: 0, stars: 0 }),
     tick(dt, st) {

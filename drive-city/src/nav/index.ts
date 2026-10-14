@@ -88,10 +88,10 @@ export async function install(engine: Engine): Promise<void> {
   const shot = new URLSearchParams(location.search).has('shot');
 
   let target: NavTarget | null = null;
-  const slots: Record<NavTarget['kind'], NavTarget | null> = { waypoint: null, mission: null };
-  /** The GPS follows the waypoint while there is one, else the mission; a change reroutes. */
+  const slots: Record<NavTarget['kind'], NavTarget | null> = { waypoint: null, mission: null, story: null };
+  /** The GPS follows the waypoint while there is one, else the mission, else the story; a change reroutes. */
   const retarget = () => {
-    const next = slots.waypoint ?? slots.mission;
+    const next = slots.waypoint ?? slots.mission ?? slots.story;
     const same = next && target && next.x === target.x && next.z === target.z;
     target = next;
     if (same) return;
@@ -165,6 +165,7 @@ export async function install(engine: Engine): Promise<void> {
     attribution: m?.attribution ?? '© OpenStreetMap contributors (ODbL)',
     searchArea: null,
     get target() { return target; },
+    get goal() { return slots.mission ?? slots.story; },
     get routeLeft() { return routeLeft; },
     get gps() { return gps; },
     get nextTurn() {
@@ -183,7 +184,12 @@ export async function install(engine: Engine): Promise<void> {
     },
     setTarget(tg) {
       if (!tg) { slots.waypoint = null; slots.mission = null; }
-      else slots[tg.kind] = { ...tg };
+      else {
+        // the next objective: the GPS goes back to the job
+        const was = slots[tg.kind];
+        if (tg.kind === 'mission' && (!was || Math.hypot(was.x - tg.x, was.z - tg.z) > 30)) slots.waypoint = null;
+        slots[tg.kind] = { ...tg };
+      }
       retarget();
     },
     clearTarget(kind) {

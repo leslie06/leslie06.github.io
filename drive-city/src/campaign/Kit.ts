@@ -20,6 +20,8 @@ export type V3 = [number, number, number];
 /** A chapter of the main story: a mission plus what the campaign system shows and pays for it. */
 export interface Chapter<S> extends MissionDef<S> {
   title: string; kick: string; who: string; blip: string;
+  /** Who the chapter is picked up from (named in the nudge) and the letter in its blip (GTA's F, M, T). */
+  giver: string; glyph: string;
   /** Where the chapter is picked up, or null until its place is known (the contacts placed). */
   start(): { x: number; z: number } | null;
   /** The results card's rows and medal, at the end. */
@@ -180,7 +182,9 @@ export function getIn<S>(env: Env, o: { id: string; car: () => ScriptCar; line: 
     enter(ctx) {
       const sc = o.car(); sc.takeable = true;
       env.objective(o.line);
-      ctx.step.defer(() => { env.markers[0].hide(); });
+      // the GPS to it too, for when it is out of sight (a retry, the player wandered off)
+      env.nav.setTarget({ x: sc.car.pos.x, z: sc.car.pos.z, kind: 'mission', label: o.line });
+      ctx.step.defer(() => { env.markers[0].hide(); env.nav.clearTarget('mission'); });
     },
     update() {
       const sc = o.car(), c = sc.car.pos;

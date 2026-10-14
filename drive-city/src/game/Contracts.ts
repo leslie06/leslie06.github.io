@@ -199,25 +199,35 @@ export interface HomeApi extends System {
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------
 
-export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact';
+export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact' | 'story';
 /** A marker on the minimap and map. `heading` (atan2(x, z)) turns it into an arrow. */
 export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string;
   /** The label's colour (a contact's own), else the map's default. */
-  color?: string }
-export interface NavTarget { x: number; z: number; kind: 'waypoint' | 'mission'; label?: string }
+  color?: string;
+  /** A letter in the blip (`story`: who gives the chapter, as GTA's F, M, T). */
+  glyph?: string }
+/**
+ * `story`: where the next chapter of the main story starts (campaign/, 2026-10-14), led to only while nothing else is:
+ * the waypoint first, then a mission's target, then the story.
+ */
+export interface NavTarget { x: number; z: number; kind: 'waypoint' | 'mission' | 'story'; label?: string }
 
 export interface NavApi extends System {
   /** Shortest legal drive (one-ways respected) from a point heading `heading` to a point: [x, z, ...] and metres. */
   route(fromX: number, fromZ: number, heading: number, toX: number, toZ: number): { pts: Float32Array; len: number } | null;
   /**
-   * Set the GPS target of its kind: the player's map waypoint or a mission's target. Both are
-   * kept; the GPS leads to the waypoint while there is one. null clears both.
+   * Set the GPS target of its kind: the player's map waypoint, a mission's target or the story's start. All are
+   * kept; the GPS leads to the waypoint while there is one, else the mission's. A mission target somewhere new (the
+   * next objective) drops the waypoint: a stray tap on the map must not keep the player off the job. null clears the
+   * waypoint and the mission's.
    */
   setTarget(t: NavTarget | null): void;
   /** Clear one kind of target (a mission ending must not clear the player's waypoint). */
   clearTarget(kind: NavTarget['kind']): void;
-  /** What the GPS leads to now: the waypoint if set, else the mission target. */
+  /** What the GPS leads to now: the waypoint if set, else the mission target, else the story's. */
   readonly target: NavTarget | null;
+  /** The mission's target, else the story's: what the waypoint (if any) is leading away from. */
+  readonly goal: NavTarget | null;
   /** Metres left along the GPS route (Infinity without a target). */
   readonly routeLeft: number;
   /** Blip providers are asked for their blips on every minimap/map redraw. */
@@ -523,6 +533,11 @@ export interface VoiceApi extends System {
    * The same key and seed give the same voice; a new seed (the slot reused by someone else) a new one.
    */
   npc(key: object, archetype: VoiceArchetype, pos: { readonly x: number; readonly y: number; readonly z: number }, opts?: { sex?: 'm' | 'f'; seed?: number }): NpcVoice;
+  /**
+   * Someone the player is listening to is talking (a line in the dialogue box, a cutscene): passers-by and drivers
+   * keep quiet (2026-10-14, 「播放剧情人物说话时……不要让路人有声音」). Scripted actors still speak.
+   */
+  readonly hushed: boolean;
   /** The archetype a passer-by of this look at (x, z) speaks as. */
   archetypeFor(look: { fem?: number; age?: number; cap?: unknown }, seed: number, x: number, z: number): VoiceArchetype;
 }

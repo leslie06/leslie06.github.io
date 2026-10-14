@@ -9,12 +9,20 @@ import type { TrafficApi } from '../traffic';
 import { Marker } from '../missions/Marker';
 import { Env, type Chapter } from './Kit';
 import { Runner } from './Runner';
+import { Nudge } from './Screens';
 import { chapter1 } from './missions/m1';
 import { chapter2 } from './missions/m2';
 
+/** The start's circle: walk into it, or stop a car in it (its edge, a little wider: K stands on the pavement). */
+const START_R = 4, START_R_CAR = 6.5;
+/** Near enough to the start to be told to step in. */
+const NEAR_R = 45;
+
 /**
- * The main story as missions (docs/gta-plan.md §4): system `campaign`. The next chapter's start is a gold corona and a
- * map blip; walking or driving into it (calm: no stars, no heist, race or garage) shows the chapter's title and runs
+ * The main story as missions (docs/gta-plan.md §4): system `campaign`. The next chapter's start is a gold corona, a
+ * lettered gold blip pinned to the radar's edge, and the GPS's `story` target (a route there whenever nothing else is
+ * being led to; 2026-10-14, 「模仿gta5，让玩家能容易找到玩剧情的入口」), with a nudge at the top of the screen when it is
+ * first open and on the way in; walking or driving into it (calm: no stars, no heist, race or garage) shows the chapter's title and runs
  * it. Failing shows why and asks: retry from the checkpoint, or give up. Passing shows the results card, pays, and is
  * saved in `drivecity.campaign.v1` with the best medal. Off in shot mode unless `?campaign=1`; `?campaign=0` off.
  */
@@ -44,6 +52,18 @@ export function install(engine: Engine): void {
   if (!tr) return;
   const env = new Env(engine);
   const startMark = new Marker(engine.scene);
+  const nudge = new Nudge();
+  /** Where the GPS's story target was put (set only when it moves: a new target object redraws the maps). */
+  let guided: { x: number; z: number } | null = null;
+  const guide = (c: Chapter<unknown> | null, at: { x: number; z: number } | null) => {
+    if (!c || !at) { if (guided) { env.nav.clearTarget('story'); guided = null; } return; }
+    if (guided && Math.hypot(guided.x - at.x, guided.z - at.z) < 1) return;
+    guided = { x: at.x, z: at.z };
+    env.nav.setTarget({ x: at.x, z: at.z, kind: 'story', label: c.blip });
+  };
+  /** The chapters already pointed out this session, and the one the player was told to step into. */
+  const nudged = new Set<string>();
+  let nearNudged = '';
   let save: Save = { done: [], best: {} };
   try { save = { ...save, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') as Save }; } catch { /* fresh */ }
   const write = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* private mode */ } };
@@ -71,7 +91,7 @@ export function install(engine: Engine): void {
   const begin = (c: Chapter<unknown>) => {
     def = c; runner = new Runner(c as never) as Runner<unknown>;
     failT = -1; asked = false;
-    startMark.hide();
+    startMark.hide(); guide(null, null); nudge.hide();
     env.card.title(c.kick, c.title, c.who);
     runner.start();
   };
@@ -141,16 +161,23 @@ export function install(engine: Engine): void {
       } else {
         // the next chapter's start
         const c = next(), at = c?.start();
+        guide(c, at ?? null);
         if (c && at) {
-          startMark.show(at.x, at.z, '#ffc21f', 0.8);
-          env.blips.push({ kind: 'target', x: at.x, z: at.z, label: c.blip, color: '#ffc21f' });
+          startMark.show(at.x, at.z, '#ffc21f', START_R / 2.1);
+          env.blips.push({ kind: 'story', x: at.x, z: at.z, label: c.blip, glyph: c.glyph });
           const P = env.pl.position, d = Math.hypot(P.x - at.x, P.z - at.z);
-          const slow = env.pl.mode === 'onfoot' || env.v.car.speed < 3;
-          if (d < 3.4 && slow && cool <= 0) {
+          const onFoot = env.pl.mode === 'onfoot', slow = onFoot || env.v.car.speed < 3;
+          // point it out: once a session when it opens (nothing else on), and again on the way in
+          const quiet = calm() && cool <= 0 && !env.dialogue?.busy;
+          const head = t('cmp.nudge.head', { kick: c.kick, title: c.title });
+          if (quiet && !nudged.has(c.id) && d > NEAR_R) { nudged.add(c.id); nudge.show(c.glyph, head, t('cmp.nudge.go', { who: c.giver })); }
+          if (d < NEAR_R && nearNudged !== c.id && calm()) { nearNudged = c.id; nudged.add(c.id); nudge.show(c.glyph, head, t('cmp.nudge.here'), 6); }
+          if (d > NEAR_R * 2 && nearNudged === c.id) nearNudged = '';
+          if (d < (onFoot ? START_R : START_R_CAR) && slow && cool <= 0) {
             if (calm()) { startMark.hide(); begin(c); }
             else if ((engine.get<WantedApi>('wanted')?.level ?? 0) > 0) { env.hud?.toast(t('cmp.busyWanted')); cool = 6; }
           }
-        } else startMark.hide();
+        } else { startMark.hide(); guide(null, null); }
       }
       for (const car of env.cars) car.draw(alpha);
     },

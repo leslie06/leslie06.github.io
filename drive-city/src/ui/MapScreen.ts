@@ -3,7 +3,7 @@ import { lang, t, type TKey } from '../core/I18n';
 import type { VehicleApi, WorldApi } from '../game/Contracts';
 import type { NavSystem } from '../nav';
 import { TIERS, type AreaCell, type RoadCell } from '../nav/MapData';
-import { INK, drawBlip, drawPlayer, screenAngle, type MarkKind } from '../nav/Draw';
+import { INK, drawBlip, drawPlayer, routeColor, screenAngle, type MarkKind } from '../nav/Draw';
 import type { UiApi } from '.';
 import { fmtDist } from './Minimap';
 import { Labeller, type LabelStyle, type MapHit } from './MapLabels';
@@ -31,6 +31,11 @@ css(`
 .navmap .dest[hidden]{display:none}
 .navmap .dest .d{font:800 34px/1 ${F.num};font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .navmap .dest .s{margin-top:8px;font:600 13px/1.3 ${F.ui};color:${C.muted}}
+.navmap .dest .acts{display:grid;gap:7px;margin-top:12px}
+.navmap .dest .acts[hidden],.navmap .dest .acts button[hidden]{display:none}
+.navmap .dest .acts button{pointer-events:auto;cursor:pointer;min-height:40px;padding:8px 10px;border-radius:8px;text-align:left;
+  font:700 13px/1.25 ${F.ui};color:${C.paper};background:rgba(243,181,15,.12);border:1px solid ${C.yellowDim}}
+.navmap .dest .acts button.back{background:${C.yellow};color:${C.ink};border-color:${C.yellow}}
 .navmap .legend .row{display:flex;align-items:center;gap:10px;height:25px;font:500 13px/1 ${F.ui}}
 .navmap .legend canvas{width:22px;height:22px;flex:none}
 .navmap .keys{position:absolute;left:50%;bottom:max(20px,3vh);transform:translateX(-50%);display:flex;gap:20px;align-items:center;padding:10px 18px;border-radius:9px;
@@ -77,6 +82,10 @@ export class MapScreen implements System {
   private destTag: HTMLHeadingElement;
   private destD: HTMLDivElement;
   private destS: HTMLDivElement;
+  /** Under a waypoint: drop it, back to the mission's route (a stray tap on a phone sets one). */
+  private backBtn: HTMLButtonElement;
+  /** Centre the map on the mission's target or the story's start. */
+  private goalBtn: HTMLButtonElement;
   private scaleEl: HTMLDivElement;
   private scaleBar: HTMLElement;
   private scaleText: Text;
@@ -162,9 +171,15 @@ export class MapScreen implements System {
     this.destTag = el('h2', '', this.dest);
     this.destD = el('div', 'd', this.dest);
     this.destS = el('div', 's', this.dest);
+    const acts = el('div', 'acts', this.dest);
+    this.backBtn = el('button', 'back', acts); this.backBtn.type = 'button';
+    this.goalBtn = el('button', '', acts); this.goalBtn.type = 'button';
+    for (const b of [this.backBtn, this.goalBtn]) for (const event of ['pointerdown', 'pointerup', 'pointermove'] as const) b.addEventListener(event, (e) => e.stopPropagation());
+    this.backBtn.addEventListener('click', () => { this.clearWaypoint(); const g = this.nav?.goal; if (g) this.focus(g.x, g.z); this.drawn.version = -1; });
+    this.goalBtn.addEventListener('click', () => { const g = this.nav?.goal; if (g) { this.focus(g.x, g.z, Math.max(this.s, 0.5)); this.drawn.version = -1; } });
     const legend = el('div', 'card legend', side);
     el('h2', '', legend).appendChild(L('map.legend'));
-    const rows: [MarkKind | 'you' | 'route' | 'search', TKey][] = [['you', 'map.you'], ['waypoint', 'map.waypoint'], ['mission', 'map.mission'], ['pickup', 'map.pickup'], ['dropoff', 'map.dropoff'],
+    const rows: [MarkKind | 'you' | 'route' | 'search', TKey][] = [['you', 'map.you'], ['waypoint', 'map.waypoint'], ['mission', 'map.mission'], ['story', 'map.story'], ['pickup', 'map.pickup'], ['dropoff', 'map.dropoff'],
       ['police', 'map.police'], ['car', 'map.car'], ['landmark', 'map.landmark'], ['landmarkDone', 'map.landmarkDone'], ['trial', 'map.trial'], ['jump', 'map.jump'], ['collect', 'map.collect'], ['parking', 'map.parking'], ['shortcut', 'map.shortcut'], ['encounter', 'map.encounter'], ['suspect', 'map.suspect'], ['contact', 'map.contact'], ['route', 'map.route'], ['search', 'map.search']];
     for (const [kind, key] of rows) {
       const r = el('div', 'row', legend);
@@ -421,19 +436,25 @@ export class MapScreen implements System {
   /** The DOM around the canvas: destination card, place under the cursor, scale bar, loading. */
   private panels(now: number): void {
     const nav = this.nav!, world = this.engine.get<WorldApi>('world');
-    const tg = nav.target;
-    const destKey = tg ? `${tg.kind}|${tg.label ?? ''}|${fmtDist(nav.routeLeft)}|${Math.round(tg.x)},${Math.round(tg.z)}|${lang()}|${nav.gps ? 1 : 0}` : '';
+    const tg = nav.target, goal = nav.goal;
+    const destKey = tg ? `${tg.kind}|${tg.label ?? ''}|${fmtDist(nav.routeLeft)}|${Math.round(tg.x)},${Math.round(tg.z)}|${lang()}|${nav.gps ? 1 : 0}|${goal?.kind ?? ''}` : '';
     if (destKey !== this.shownDest) {
       this.shownDest = destKey;
       this.dest.hidden = !tg;
       if (tg) {
-        this.destTag.textContent = (tg.label ?? t(tg.kind === 'mission' ? 'nav.mission' : 'nav.waypoint')).toUpperCase();
+        this.destTag.textContent = (tg.label ?? t(tg.kind === 'waypoint' ? 'nav.waypoint' : 'nav.mission')).toUpperCase();
+        this.destTag.style.color = routeColor(tg.kind);
         this.destD.textContent = fmtDist(nav.routeLeft);
+        const story = goal?.kind === 'story';
+        this.backBtn.hidden = !(tg.kind === 'waypoint' && goal);
+        this.backBtn.textContent = t(story ? 'map.backStory' : 'map.backMission');
+        this.goalBtn.hidden = !goal;
+        this.goalBtn.textContent = t(story ? 'map.showStory' : 'map.showGoal');
         // The big number is already the distance; repeating it as "6.3 km to go" underneath said
         // nothing. Name the place when we know it, otherwise say what kind of target this is.
         const place = world?.placeName?.(tg.x, tg.z);
         this.destS.textContent = !nav.gps ? t('nav.noRoute')
-          : place || t(tg.kind === 'mission' ? 'nav.mission' : 'nav.waypoint');
+          : place || t(tg.kind === 'waypoint' ? 'nav.waypoint' : 'nav.mission');
       }
     }
     if (now - this.placeT > 90) {
@@ -539,9 +560,10 @@ export class MapScreen implements System {
     if (g && g.pts.length >= 4) {
       ctx.beginPath(); ctx.moveTo(g.x, g.z);
       for (let i = (g.i + 1) * 2; i < g.pts.length; i += 2) ctx.lineTo(g.pts[i], g.pts[i + 1]);
-      ctx.strokeStyle = 'rgba(243,181,15,0.16)'; ctx.lineWidth = 16 / s; ctx.stroke();
+      const wp = nav.target?.kind === 'waypoint';
+      ctx.strokeStyle = wp ? 'rgba(196,107,255,0.16)' : 'rgba(243,181,15,0.16)'; ctx.lineWidth = 16 / s; ctx.stroke();
       ctx.strokeStyle = 'rgba(9,11,13,0.7)'; ctx.lineWidth = 8 / s; ctx.stroke();
-      ctx.strokeStyle = C.yellow; ctx.lineWidth = 4.5 / s; ctx.stroke();
+      ctx.strokeStyle = routeColor(nav.target?.kind); ctx.lineWidth = 4.5 / s; ctx.stroke();
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -552,6 +574,15 @@ export class MapScreen implements System {
     // then landmarks, then street names at street zoom.
     ctx.textBaseline = 'middle';
     const lg = lang();
+    for (const bl of nav.blips()) {
+      if (bl.kind !== 'story' || !bl.label) continue;
+      // the story's start: its name always, bold and gold, before anything else takes the room (it is what the player is looking for)
+      const sx = X(bl.x), sy = Y(bl.z), font = `800 14px ${F.ui}`;
+      ctx.font = font;
+      const w = ctx.measureText(bl.label).width;
+      this.label(sx - 12, sy - 12, sx + 17 + w, sy + 12);
+      this.halo(bl.label, sx + 15, sy, C.yellow, 'left', font);
+    }
     for (const bl of nav.blips()) {
       if (bl.kind !== 'contact' || !bl.label) continue;
       const sx = X(bl.x), sy = Y(bl.z);
@@ -576,20 +607,19 @@ export class MapScreen implements System {
     for (const bl of nav.blips()) {
       const sx = X(bl.x), sy = Y(bl.z);
       if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
-      drawBlip(ctx, bl.kind, sx, sy, 7, bl.heading === undefined ? NaN : screenAngle(bl.heading, Math.PI), time, bl.flash ?? false);
+      drawBlip(ctx, bl.kind, sx, sy, 7, bl.heading === undefined ? NaN : screenAngle(bl.heading, Math.PI), time, bl.flash ?? false, bl.glyph);
       // Other blips' labels take what room is left (they used to be drawn over the contacts' names).
-      if (bl.label && bl.kind !== 'police' && bl.kind !== 'car' && bl.kind !== 'contact') {
+      if (bl.label && bl.kind !== 'police' && bl.kind !== 'car' && bl.kind !== 'contact' && bl.kind !== 'story') {
         const font = `600 12px ${F.ui}`;
         ctx.font = font;
         const w = ctx.measureText(bl.label).width;
         if (this.label(sx + 9, sy - 8, sx + 13 + w, sy + 8)) this.halo(bl.label, sx + 11, sy, C.paper, 'left', font);
       }
     }
-    const tg = nav.target;
-    if (tg) {
-      const sx = X(tg.x), sy = Y(tg.z);
-      drawBlip(ctx, tg.kind === 'mission' ? 'mission' : 'waypoint', sx, sy, tg.kind === 'mission' ? 8 : 9, NaN, time);
-    }
+    const tg = nav.target, goal = nav.goal;
+    // the mission's target stays on the map under a waypoint (the story's start is a blip of its own)
+    if (goal?.kind === 'mission' && goal !== tg) drawBlip(ctx, 'mission', X(goal.x), Y(goal.z), 8, NaN, time);
+    if (tg && tg.kind !== 'story') drawBlip(ctx, tg.kind, X(tg.x), Y(tg.z), tg.kind === 'mission' ? 8 : 9, NaN, time);
     const me = nav.player(this.me), px = X(me.x), py = Y(me.z);
     const ph = (time * 0.8) % 1;
     ctx.beginPath(); ctx.arc(px, py, 10 + ph * 16, 0, Math.PI * 2);
@@ -628,6 +658,6 @@ export class MapScreen implements System {
     } else if (kind === 'search') {
       ctx.beginPath(); ctx.arc(11, 11, 8.5, Math.PI / 2, Math.PI * 1.5); ctx.fillStyle = 'rgba(226,64,47,0.45)'; ctx.fill(); ctx.strokeStyle = '#ff5a46'; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.beginPath(); ctx.arc(11, 11, 8.5, -Math.PI / 2, Math.PI / 2); ctx.fillStyle = 'rgba(47,123,255,0.45)'; ctx.fill(); ctx.strokeStyle = '#5096ff'; ctx.stroke();
-    } else drawBlip(ctx, kind, 11, kind === 'waypoint' ? 19 : 11, kind === 'waypoint' ? 6.5 : 6.5, kind === 'police' || kind === 'car' ? 0.6 : NaN, 0);
+    } else drawBlip(ctx, kind, 11, kind === 'waypoint' ? 19 : 11, kind === 'story' ? 5.5 : 6.5, kind === 'police' || kind === 'car' ? 0.6 : NaN, 0, false, kind === 'story' ? 'K' : undefined);
   }
 }

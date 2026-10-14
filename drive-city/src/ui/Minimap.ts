@@ -6,7 +6,7 @@ import type { NavSystem } from '../nav';
 import type { PresenceApi } from '../online/Presence';
 import { TIERS, type AreaCell, type RoadCell } from '../nav/MapData';
 import type { TurnKind } from '../nav/Turns';
-import { BLIP_COLOR, INK, drawBlip, drawEdgeArrow, drawPlayer, screenAngle, type MarkKind } from '../nav/Draw';
+import { BLIP_COLOR, INK, drawBlip, drawEdgeArrow, drawPlayer, routeColor, screenAngle, type MarkKind } from '../nav/Draw';
 import { C, F, css, el } from './theme';
 import { Labeller, type LabelStyle } from './MapLabels';
 
@@ -60,7 +60,7 @@ const ROAD = ['#343c42', '#465057', '#5c656c', '#757d83', '#8f969a'];
 const ROAD_PX = [1.4, 2.4, 3.6, 5, 6.6];
 const GROUND = '#161b1e', WATER = '#1a3444', GREEN = '#1c2f23';
 const REF_SCALE = 0.6;
-const EDGE_KINDS = new Set<MarkKind>(['target', 'pickup', 'dropoff', 'mission', 'waypoint', 'encounter', 'suspect']);
+const EDGE_KINDS = new Set<MarkKind>(['target', 'pickup', 'dropoff', 'mission', 'waypoint', 'encounter', 'suspect', 'story']);
 /** 小雨's favour (contacts/): police cars out of the radar's range are pinned to its edge. */
 export function setPoliceOnEdge(on: boolean): void { if (on) EDGE_KINDS.add('police'); else EDGE_KINDS.delete('police'); }
 /**
@@ -181,13 +181,17 @@ export class Minimap implements System {
   }
 
   private updateBar(nav: NavSystem): void {
-    const tg = nav.target;
-    const text = tg ? `${fmtDist(nav.routeLeft)}|${tg.label ?? t(tg.kind === 'mission' ? 'nav.mission' : 'nav.waypoint')}` : '';
+    const tg = nav.target, goal = nav.goal;
+    // a waypoint over a mission (a stray tap on the map?): say how to get back to it
+    const label = !tg ? '' : tg.kind === 'waypoint' && goal ? t(goal.kind === 'story' ? 'nav.waypointOverStory' : 'nav.waypointOver')
+      : tg.label ?? t(tg.kind === 'waypoint' ? 'nav.waypoint' : 'nav.mission');
+    const text = tg ? `${fmtDist(nav.routeLeft)}|${label}|${tg.kind}` : '';
     if (text === this.shownBar) return;
     this.shownBar = text;
     this.bar.hidden = !tg;
-    const [d, l] = text.split('|');
+    const [d, l, kind] = text.split('|');
     this.barD.textContent = d ?? ''; this.barL.textContent = l ?? '';
+    this.barD.style.color = routeColor(kind);
   }
 
   /** One redraw; public so a benchmark can call it directly. */
@@ -245,11 +249,11 @@ export class Minimap implements System {
       ctx.beginPath(); ctx.moveTo(g.x, g.z);
       for (let i = (g.i + 1) * 2; i < g.pts.length; i += 2) ctx.lineTo(g.pts[i], g.pts[i + 1]);
       ctx.strokeStyle = 'rgba(9,11,13,0.6)'; ctx.lineWidth = 7.5 / s; ctx.stroke();
-      ctx.strokeStyle = C.yellow; ctx.lineWidth = 4.2 / s; ctx.stroke();
+      ctx.strokeStyle = routeColor(nav.target?.kind); ctx.lineWidth = 4.2 / s; ctx.stroke();
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const tg = nav.target;
+    const tg = nav.target, goal = nav.goal;
     // Road names, interchanges and places, clear of the player, the blips, the north badge and the turn strip.
     const boxes = this.labels.boxes;
     boxes.length = 0;
@@ -277,8 +281,10 @@ export class Minimap implements System {
       const sx = toX(lm.x, lm.z), sy = toY(lm.x, lm.z);
       if (sx > 4 && sx < W - 4 && sy > 4 && sy < H - 4) drawBlip(ctx, lm.visited ? 'landmarkDone' : 'landmark', sx, sy, 3.6, NaN, time);
     }
-    for (const b of nav.blips()) this.mark(b.kind, b.x, b.z, b.heading, up, time, b.flash ?? false, ax, ay, toX, toY);
-    if (tg) this.mark(tg.kind === 'mission' ? 'mission' : 'waypoint', tg.x, tg.z, undefined, up, time, false, ax, ay, toX, toY);
+    for (const b of nav.blips()) this.mark(b.kind, b.x, b.z, b.heading, up, time, b.flash ?? false, ax, ay, toX, toY, b.glyph);
+    // the mission's target stays on the radar (pinned to its edge) under a waypoint; the story's start is a blip of its own
+    if (goal?.kind === 'mission' && goal !== tg) this.mark('mission', goal.x, goal.z, undefined, up, time, false, ax, ay, toX, toY);
+    if (tg && tg.kind !== 'story') this.mark(tg.kind, tg.x, tg.z, undefined, up, time, false, ax, ay, toX, toY);
 
     drawPlayer(ctx, ax, ay, screenAngle(me.heading, up), 17);
     this.north(up, W, H);
@@ -290,14 +296,14 @@ export class Minimap implements System {
 
   /** A blip inside the radar, or pinned to its edge with an arrow when it is a destination. */
   private mark(kind: MarkKind, x: number, z: number, heading: number | undefined, up: number, time: number, flash: boolean,
-    ax: number, ay: number, toX: (x: number, z: number) => number, toY: (x: number, z: number) => number): void {
+    ax: number, ay: number, toX: (x: number, z: number) => number, toY: (x: number, z: number) => number, glyph?: string): void {
     const W = this.w, H = this.h, ctx = this.ctx;
     const sx = toX(x, z), sy = toY(x, z);
     const angle = heading === undefined ? NaN : screenAngle(heading, up);
     const r = kind === 'waypoint' ? 6.5 : kind === 'police' || kind === 'car' ? 4.8 : 6;
     const m = kind === 'waypoint' ? 4 : 5;
     const inside = sx > m && sx < W - m && sy > (kind === 'waypoint' ? 18 : m) && sy < H - m;
-    if (inside) { drawBlip(ctx, kind, sx, sy, r, angle, time, flash); return; }
+    if (inside) { drawBlip(ctx, kind, sx, sy, r, angle, time, flash, glyph); return; }
     if (!EDGE_KINDS.has(kind)) return;
     // Clamp along the ray from the player to a rectangle inset from the edge.
     const inset = 15, dx = sx - ax, dy = sy - ay;
@@ -306,7 +312,7 @@ export class Minimap implements System {
     const tt = Math.min(tx, ty), px = ax + dx * tt, py = ay + dy * tt;
     const ang = Math.atan2(dx, -dy);
     drawEdgeArrow(ctx, px + Math.sin(ang) * 10, py - Math.cos(ang) * 10, ang, BLIP_COLOR[kind], 5);
-    drawBlip(ctx, kind === 'waypoint' ? 'target' : kind, px, py, 5, NaN, time, flash);
+    drawBlip(ctx, kind === 'waypoint' ? 'waypointDot' : kind, px, py, 5, NaN, time, flash, glyph);
   }
 
   /** "N" on the radar's edge where north is. */
