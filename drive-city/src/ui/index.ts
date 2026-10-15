@@ -14,6 +14,7 @@ import { MapScreen } from './MapScreen';
 import { Boards } from './Boards';
 import { Chapters } from './Chapters';
 import { AccountPanel } from './Account';
+import { formatPlaytime, readPlaytime, trackPlaytime } from './PlayTime';
 import type { CloudApi } from '../online/Cloud';
 import { FeedbackPanel } from './Feedback';
 import type { PresenceApi } from '../online/Presence';
@@ -89,6 +90,9 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     c.fov = 50; c.updateProjectionMatrix();
   };
 
+  // the player's own play time (the pause screen, the account panel): counted while in the city
+  trackPlaytime(engine, () => api.state === 'playing');
+
   const api: UiApi = {
     name: 'ui',
     state: 'title',
@@ -142,7 +146,8 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       const journal = journalOf(engine);
       let taxiBest = 0;
       try { taxiBest = Number(localStorage.getItem('drivecity.taxi.best') ?? 0) || 0; } catch { /* private mode */ }
-      menu.setProgress(jumps && rabbits ? t('pause.progress', { j: jumps.done, jt: jumps.total, r: rabbits.found, rt: rabbits.total, c: checkins?.found ?? 0, ct: checkins?.total ?? 0, m: trials?.medals ?? 0, mt: (trials?.total ?? 0) * 3, taxi: taxiBest, combo: (combo?.best ?? 0).toLocaleString(), npc: journal.count, npct: journal.total }) : '');
+      const played = t('pause.playtime', { time: formatPlaytime(readPlaytime()) });
+      menu.setProgress(played + '\n' + (jumps && rabbits ? t('pause.progress', { j: jumps.done, jt: jumps.total, r: rabbits.found, rt: rabbits.total, c: checkins?.found ?? 0, ct: checkins?.total ?? 0, m: trials?.medals ?? 0, mt: (trials?.total ?? 0) * 3, taxi: taxiBest, combo: (combo?.best ?? 0).toLocaleString(), npc: journal.count, npct: journal.total }) : ''));
       menu.set('paused');
       v().inputEnabled = false;
       engine.paused = true;

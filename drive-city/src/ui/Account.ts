@@ -3,6 +3,7 @@ import { lang, onLangChange, t, type TKey } from '../core/I18n';
 import type { CloudApi } from '../online/Cloud';
 import type { Summary } from '../online/CloudSave';
 import { C, F, css, el } from './theme';
+import { formatPlaytime, readPlaytime } from './PlayTime';
 
 css(`
 .acct{position:fixed;inset:0;z-index:31;display:grid;place-items:center;background:rgba(9,11,13,.62);font-family:${F.ui};color:${C.paper};padding:16px;box-sizing:border-box}
@@ -191,6 +192,7 @@ export class AccountPanel {
 
   private me(b: HTMLElement, c: CloudApi): void {
     el('div', 'me', b).textContent = c.user ?? '';
+    el('div', 'st', b).textContent = t('pause.playtime', { time: formatPlaytime(readPlaytime()) });
     const s = c.status, at = c.lastSync ? when(c.lastSync) : '';
     const st = el('div', `st ${s === 'ok' ? 'ok' : s === 'offline' ? 'bad' : ''}`, b);
     st.textContent = s === 'syncing' || this.busy ? t('acct.syncing') : s === 'offline' ? t('acct.offline') : at ? t('acct.synced', { when: at }) : t('acct.notYet');
@@ -222,6 +224,7 @@ export class AccountPanel {
       el('div', '', d).textContent = t('acct.chapters', { n: s.chapters });
       el('div', '', d).textContent = `¥${s.cash.toLocaleString()}`;
       el('div', '', d).textContent = t(s.car ? 'acct.car' : 'acct.noCar');
+      el('div', '', d).textContent = t('pause.playtime', { time: formatPlaytime(s.secs) });
       if (when) el('div', 'when', d).textContent = when;
     };
     side('acct.local', k.local, '');

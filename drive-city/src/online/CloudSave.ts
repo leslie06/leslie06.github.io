@@ -10,7 +10,7 @@ const PREFIX = 'drivecity.';
 
 export type Snapshot = Record<string, string>;
 /** What the conflict dialog shows of a save. */
-export interface Summary { chapters: number; cash: number; car: boolean; keys: number }
+export interface Summary { chapters: number; cash: number; car: boolean; keys: number; /** Seconds played (ui/PlayTime.ts). */ secs: number }
 
 /** The save as it is in `store`: the synced keys and their values. */
 export function snapshot(store: Pick<Storage, 'length' | 'key' | 'getItem'>): Snapshot {
@@ -39,7 +39,7 @@ export function fingerprint(text: string): string {
 export const parse = <T>(v: string | undefined | null, d: T): T => { try { return v ? JSON.parse(v) as T : d; } catch { return d; } };
 export function summary(s: Snapshot): Summary {
   const camp = parse<{ done?: string[] }>(s['drivecity.campaign.v1'], {});
-  return { chapters: camp.done?.length ?? 0, cash: Math.max(0, Number(s['drivecity.cash'] ?? 0) || 0), car: !!s['drivecity.garage.v1'], keys: Object.keys(s).length };
+  return { chapters: camp.done?.length ?? 0, cash: Math.max(0, Number(s['drivecity.cash'] ?? 0) || 0), car: !!s['drivecity.garage.v1'], keys: Object.keys(s).length, secs: Math.max(0, Number(s['drivecity.playtime.v1'] ?? 0) || 0) };
 }
 /**
  * Progress worth keeping in it: a chapter, money, a car of one's own. A browser that has only driven about has a dozen
