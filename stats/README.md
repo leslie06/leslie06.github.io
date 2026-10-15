@@ -195,7 +195,7 @@ node stats/apply.mjs --off      # 把所有页面里的片段删干净
 | 接口 | 传什么 | 回什么 |
 | --- | --- | --- |
 | `POST /chat` | `g, text, p`（随机玩家号）、`t`（登录令牌，可不给） | `msg`，或 `error`：`fast` 太快、`dup` 重复、`ad` 广告、`banned` 禁言中（带 `until`） |
-| `GET /chat?g=&after=id` | `after` 不给就是最近 50 条 | `msgs`（旧的在前）、`last` |
+| `GET /chat?g=&after=id&wait=秒` | `after` 不给就是最近 50 条；带 `after` 和 `wait`（最多 25）时 Node 版没有新消息就挂着，有人发言马上回（长轮询，Worker 版忽略 `wait`） | `msgs`（旧的在前）、`last` |
 
 - **限制**：每条 1–120 字；同一个人（玩家号或设备）3 秒一条、一分钟最多 15 条；30 秒内一字不差的重复不收；网址、微信、QQ、7 位以上数字这类广告联系方式不收；脏话换成星号。
 - **屏蔽词**：`worker.js` 的 `CHAT_WORDS` 是默认的一小份；自建服务器上设 `CHAT_WORDS_FILE=/etc/ai-games-stats/chat-words.txt`（一行一个词，写进 `/etc/ai-games-stats/env`），重启服务生效，可以随时往里加。

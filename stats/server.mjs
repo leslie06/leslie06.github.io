@@ -5,6 +5,7 @@
 //
 // 环境变量：PORT、DASH_KEY、SALT、DB_FILE、VERBOSE=1（每收一条打点打个点，调试用）
 import { createServer } from 'node:http';
+import { EventEmitter } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -101,6 +102,17 @@ function geoHint(masked) {
   geoSoon = setTimeout(() => { geoSoon = null; resolveGeo(); }, 1500);
 }
 
+// 聊天长轮询：GET /chat?after=&wait=秒 没有新消息就挂着，等到有人发言（POST /chat 成功会敲一下）或等满 wait 秒（最多 25）
+// 才回，游戏里别人的话马上就能看到。Cloudflare Worker 版没有这个，wait 被忽略、立刻回，游戏那边就退回每 3 秒问一次。
+const chatBell = new EventEmitter();
+chatBell.setMaxListeners(0);
+const ring = (ms, res) => new Promise(r => {
+  const done = () => { clearTimeout(t); chatBell.off('msg', done); res.off('close', done); r(); };
+  const t = setTimeout(done, ms);
+  chatBell.on('msg', done);
+  res.on('close', done);
+});
+
 createServer(async (req, res) => {
   try {
     const chunks = [];
@@ -109,12 +121,26 @@ createServer(async (req, res) => {
     for await (const c of req) { size += c.length; if (size > 1 << 20) { res.writeHead(413); res.end(); return; } chunks.push(c); }
     // 反代过来的真实 IP：Caddy/nginx 会带 X-Forwarded-For
     const fwd = (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
-    const request = new Request(`http://127.0.0.1:${port}${req.url}`, {
+    const mk = () => new Request(`http://127.0.0.1:${port}${req.url}`, {
       method: req.method,
       headers: { ...req.headers, 'cf-connecting-ip': fwd || req.socket.remoteAddress || '' },
       body: chunks.length ? Buffer.concat(chunks) : undefined,
     });
-    const out = await worker.fetch(request, env);
+    const request = mk();
+    const url = new URL(request.url);
+    let out = await worker.fetch(request, env);
+    if (url.pathname === '/chat' && req.method === 'GET' && url.searchParams.has('after') && url.searchParams.has('wait')) {
+      let gone = false;
+      res.once('close', () => { gone = true; });
+      const until = Date.now() + Math.min(25, Math.max(0, +url.searchParams.get('wait') || 0)) * 1000;
+      while (out.status === 200 && !gone && Date.now() < until && !(await out.clone().json()).msgs?.length) {
+        await ring(until - Date.now(), res);
+        if (gone) return;
+        out = await worker.fetch(mk(), env);
+      }
+      if (gone) return;
+    }
+    if (url.pathname === '/chat' && req.method === 'POST' && out.status === 200) chatBell.emit('msg');
     res.writeHead(out.status, Object.fromEntries(out.headers));
     res.end(Buffer.from(await out.arrayBuffer()));
     if (new URL(request.url).pathname === '/fb' && req.method === 'POST') geoHint(maskIp(request.headers.get('cf-connecting-ip') ?? ''));
