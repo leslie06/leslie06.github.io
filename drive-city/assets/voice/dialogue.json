@@ -307,6 +307,25 @@
     1
    ]
   },
+  "laozhou": {
+   "name": "老周",
+   "voiceHint": "熟人专属音色",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-laozhou1-e32f945ba1da468ca16ca9eccfdf42a8"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "中年男性，55 岁左右，北京口音，音色偏亮略尖，语速中等偏快，说话带官腔、圆滑，透着心虚。",
+     "previewText": "这车停这儿不行啊。罚款二百，扣三分——你自己说，怎么办？"
+    }
+   ],
+   "style": "老周，五十多岁的交警，管拖车场，官腔，圆滑又心虚，急了就慌。",
+   "styleEn": "Zhou, a traffic cop in his fifties who runs the tow yard: officious and slippery, panicky when cornered.",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
   "feilong": {
    "name": "小飞龙",
    "voiceHint": "熟人专属音色",
@@ -1037,6 +1056,346 @@
    "instruct": "松了口气。",
    "textEn": "They're turning back. Get to Big Liu's.",
    "instructEn": "Relieved."
+  },
+  {
+   "id": "cmp.m4.c1",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "交警？",
+   "instruct": "微微一愣，短促地问。",
+   "textEn": "A cop?",
+   "instructEn": "A beat of surprise, short."
+  },
+  {
+   "id": "cmp.m4.c2",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跟人，我会。",
+   "instruct": "淡淡地，带点儿自信。",
+   "textEn": "Following people I can do.",
+   "instructEn": "Flat, a little confident."
+  },
+  {
+   "id": "cmp.m4.c3",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他在看后视镜……退一点。",
+   "instruct": "低声自语，警觉。",
+   "textEn": "He's watching his mirror... ease off.",
+   "instructEn": "Muttering to himself, alert."
+  },
+  {
+   "id": "cmp.m4.c4",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……被看见了。",
+   "instruct": "低声，不慌不忙。",
+   "textEn": "...Made.",
+   "instructEn": "Low, unhurried."
+  },
+  {
+   "id": "cmp.m4.c5",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老周，交通队的？借一步说话。",
+   "instruct": "平静，带点儿嘲讽。",
+   "textEn": "Zhou. Traffic police, right? A word.",
+   "instructEn": "Calm, a little mocking."
+  },
+  {
+   "id": "cmp.m4.c6",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这车门，够结实。",
+   "instruct": "喘口气，冷幽默。",
+   "textEn": "Solid doors on these.",
+   "instructEn": "Catching his breath, dry humour."
+  },
+  {
+   "id": "cmp.m4.c7",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "账本上有你的名字。每一笔，记得清清楚楚。",
+   "instruct": "冷冷地，一字一句。",
+   "textEn": "Your name's in the ledger. Every payment, written down nice and neat.",
+   "instructEn": "Cold, word by word."
+  },
+  {
+   "id": "cmp.m4.c8",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那就让他走不成。",
+   "instruct": "淡淡地，带着狠劲儿。",
+   "textEn": "Then he's not going anywhere.",
+   "instructEn": "Quiet, with an edge."
+  },
+  {
+   "id": "cmp.m4.c9",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "礼拜五晚上，京哈高速，白鹿收费站。",
+   "instruct": "简短，笃定。",
+   "textEn": "Friday night. The Jingha expressway, Bailu toll gate.",
+   "instructEn": "Short and certain."
+  },
+  {
+   "id": "cmp.m4.g1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "周队，豹哥让我问问，账本的事儿，您那儿怎么说？",
+   "instruct": "皮笑肉不笑，带点儿威胁。",
+   "textEn": "Officer Zhou. The boss wants to know - what are you doing about the ledger?",
+   "instructEn": "A thin smile, a hint of threat."
+  },
+  {
+   "id": "cmp.m4.g2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "豹哥说了，礼拜五那批货走完，就收手。",
+   "instruct": "不耐烦地敷衍。",
+   "textEn": "The boss says after Friday's load, that's it. We're done.",
+   "instructEn": "Impatient, brushing it off."
+  },
+  {
+   "id": "cmp.m4.g3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "周队……后头那辆车，跟您一路了吧？",
+   "instruct": "眯着眼，慢悠悠地。",
+   "textEn": "Officer Zhou... that car back there. Been with you all the way, hasn't it?",
+   "instructEn": "Squinting, slow."
+  },
+  {
+   "id": "cmp.m4.k1",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "账本上那个老周，我查清楚了。东边交通队的，管事故车和拖车场。",
+   "instruct": "慢条斯理，压低声音交底。",
+   "textEn": "That Zhou in the ledger - I looked into him. Traffic police, out east. Runs the accident cars and the tow yard.",
+   "instructEn": "Unhurried, lowering his voice."
+  },
+  {
+   "id": "cmp.m4.k2",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "穿着制服的黑豹。小雨说，他今晚一下班，就去见豹哥的人。",
+   "instruct": "冷笑一声，意味深长。",
+   "textEn": "A Panther in uniform. Xiaoyu says he's meeting Panther's people tonight, straight after his shift.",
+   "instructEn": "A dry laugh, meaningfully."
+  },
+  {
+   "id": "cmp.m4.k3",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别开我那辆，他认得。路边那辆灰的，钥匙在上头。",
+   "instruct": "叮嘱，朝路边努努嘴。",
+   "textEn": "Don't take my car, he knows it. The grey one by the kerb - keys are in it.",
+   "instructEn": "An instruction, a nod towards the kerb."
+  },
+  {
+   "id": "cmp.m4.k4",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "跟着他。别跟丢了，也别让他瞧见你。",
+   "instruct": "一字一句，不怒自威。",
+   "textEn": "Follow him. Don't lose him, and don't let him see you.",
+   "instructEn": "Word by word, quietly menacing."
+  },
+  {
+   "id": "cmp.m4.k5",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老周的事，我听说了。",
+   "instruct": "电话里，慢悠悠，听不出喜怒。",
+   "textEn": "I heard about Zhou.",
+   "instructEn": "On the phone, unhurried, giving nothing away."
+  },
+  {
+   "id": "cmp.m4.k6",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "豹哥这是要跑……我去叫上大刘。这回，咱们把路堵上。",
+   "instruct": "电话里，沉吟片刻，然后果断。",
+   "textEn": "Panther's making a run for it... I'll get Big Liu. This time we block the road.",
+   "instructEn": "On the phone, a pause, then decisive."
+  },
+  {
+   "id": "cmp.m4.y1",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥，他出来了。银色轿车，车牌尾号七三一。",
+   "instruct": "电话里，压低声音，盯梢的紧张。",
+   "textEn": "He's out. Silver saloon, plate ending seven-three-one.",
+   "instructEn": "On the phone, hushed, tense from tailing him."
+  },
+  {
+   "id": "cmp.m4.y2",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别跟太近。他是交警，看后视镜比谁都勤。",
+   "instruct": "电话里，认真地提醒。",
+   "textEn": "Don't sit on his tail. He's traffic police - he checks his mirrors more than anyone.",
+   "instructEn": "On the phone, a serious warning."
+  },
+  {
+   "id": "cmp.m4.y3",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他要拐了，别跟丢！",
+   "instruct": "电话里，着急地催。",
+   "textEn": "He's turning off - don't lose him!",
+   "instructEn": "On the phone, urgent."
+  },
+  {
+   "id": "cmp.m4.y4",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这不是回家的路……他往广渠门去了。",
+   "instruct": "电话里，疑惑地嘀咕。",
+   "textEn": "This isn't the way home... he's heading for Guangqumen.",
+   "instructEn": "On the phone, puzzled."
+  },
+  {
+   "id": "cmp.m4.y5",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他停车了。找个地方停下，离远点儿。",
+   "instruct": "电话里，压低声音。",
+   "textEn": "He's pulled over. Find somewhere to stop and keep your distance.",
+   "instructEn": "On the phone, hushed."
+  },
+  {
+   "id": "cmp.m4.y6",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥，老周跑了，还报了警！别让他跑回支队！",
+   "instruct": "电话里，急促地大喊。",
+   "textEn": "Zhou's running - and he called the police! Stop him before he gets back to his station!",
+   "instructEn": "On the phone, urgent shouting."
+  },
+  {
+   "id": "cmp.m4.y7",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "警车往你那儿去了！快走！",
+   "instruct": "电话里，紧张地催。",
+   "textEn": "Police coming your way! Go, now!",
+   "instructEn": "On the phone, tense and hurrying."
+  },
+  {
+   "id": "cmp.m4.y8",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "甩掉了。哥，老K找你。",
+   "instruct": "电话里，松了口气。",
+   "textEn": "You're clear. Old K's calling.",
+   "instructEn": "On the phone, relieved."
+  },
+  {
+   "id": "cmp.m4.z1",
+   "archetype": "laozhou",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我怎么说？你们自己把账本弄丢了，还有脸问我？",
+   "instruct": "恼火，官腔十足地数落。",
+   "textEn": "Me? You lot lose your own ledger and come asking me?",
+   "instructEn": "Irritated, officious scolding."
+  },
+  {
+   "id": "cmp.m4.z2",
+   "archetype": "laozhou",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我把拖车场借给你们换牌子，事故车进来，干净车出去——出了事，我第一个进去。",
+   "instruct": "压着火，越说越心虚。",
+   "textEn": "I lend you my yard to swap plates - a wreck goes in, a clean car comes out. If this blows up, I'm the first one inside.",
+   "instructEn": "Holding his temper, growing nervous."
+  },
+  {
+   "id": "cmp.m4.z3",
+   "archetype": "laozhou",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……礼拜五以后，别再找我。",
+   "instruct": "沉默片刻，咬着牙。",
+   "textEn": "...After Friday, don't ever call me again.",
+   "instructEn": "A pause, through gritted teeth."
+  },
+  {
+   "id": "cmp.m4.z4",
+   "archetype": "laozhou",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "什么？！",
+   "instruct": "吓了一跳，失声。",
+   "textEn": "What?!",
+   "instructEn": "Startled, blurting."
+  },
+  {
+   "id": "cmp.m4.z5",
+   "archetype": "laozhou",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……给我废了他！",
+   "instruct": "慌了，色厉内荏地大喊。",
+   "textEn": "...Take care of him!",
+   "instructEn": "Panicking, blustering shout."
+  },
+  {
+   "id": "cmp.m4.z6",
+   "archetype": "laozhou",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "喂，110吗？广渠门这儿有人袭警！",
+   "instruct": "对着电话，慌张又装腔作势。",
+   "textEn": "Hello, police? Someone's attacking an officer at Guangqumen!",
+   "instructEn": "Into the phone, flustered but putting on airs."
+  },
+  {
+   "id": "cmp.m4.z7",
+   "archetype": "laozhou",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别、别动手！我就是个看拖车场的！",
+   "instruct": "吓得发抖，求饶。",
+   "textEn": "Don't - don't hit me! I just run the tow yard!",
+   "instructEn": "Trembling, begging."
+  },
+  {
+   "id": "cmp.m4.z8",
+   "archetype": "laozhou",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "礼拜五……礼拜五晚上，豹哥最后一车货走京哈高速，过白鹿收费站出京。货一走，他就收手。",
+   "instruct": "结结巴巴，竹筒倒豆子。",
+   "textEn": "Friday... Friday night Panther's sending one last load out on the Jingha expressway, through the Bailu toll gate. After that he's out.",
+   "instructEn": "Stammering, spilling everything."
   },
   {
    "id": "con.daliu.chat1",

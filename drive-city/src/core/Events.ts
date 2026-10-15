@@ -43,6 +43,8 @@ export interface GameEvents {
   'combat:swing': { x: number; z: number; heavy: boolean };
   /** A gang member down for good. */
   'combat:ko': { x: number; z: number };
+  /** A finisher: a fighter kicked into a car or a wall at (x, z), the point of impact. */
+  'combat:finisher': { x: number; z: number; kind: 'car' | 'wall' };
   /** A counter: the player caught one winding up. */
   'combat:counter': { x: number; z: number };
   /** A move that scores in the street combo (stunts/): a near miss, a drift, a jump... `points` before the multiplier. */

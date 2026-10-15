@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Brain, TOUGH } from './Brain';
-import { COMBO, Combo, CHAIN_GAP, inReach, pickTarget } from './Moves';
+import { COMBO, Combo, CHAIN_GAP, inReach, pickTarget, softened } from './Moves';
 import { STRIKE } from '../character/Animator';
 
 const DT = 1 / 60;
@@ -114,5 +114,21 @@ describe('the player\'s moves', () => {
     expect(inReach(0, 0, 0, 0, -1.2)).toBe(false);      // behind
     expect(inReach(0, 0, 0, 0, 2.5)).toBe(false);       // too far
     expect(inReach(0, 0, Math.PI / 2, 1.3, 0.2)).toBe(true);
+  });
+});
+
+describe('the finisher', () => {
+  it('is on offer for one reeling from a blow, or worn down - never one winding up (that is the counter)', () => {
+    expect(softened('flinch', 70, 70)).toBe(true);
+    expect(softened('circle', 30, 70)).toBe(true);
+    expect(softened('circle', 50, 70)).toBe(false);
+    expect(softened('windup', 10, 70)).toBe(false);
+    expect(softened('strike', 10, 70)).toBe(false);
+    expect(softened('down', 10, 70)).toBe(false);
+    // a blow on a fighter in the ring leaves it reeling: the window
+    const b = new Brain(0, 0, TOUGH);
+    b.state = 'circle';
+    b.hit(9);
+    expect(softened(b.state, b.hp, TOUGH.hp)).toBe(true);
   });
 });

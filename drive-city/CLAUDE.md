@@ -2,7 +2,7 @@
 
 设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`。
 
-现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到四环、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，当前在做剧情战役（`campaign/`，第一至三章已完成，见 `docs/gta-plan.md` §5–7）和近战（`combat/`）。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
+现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到四环、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，当前在做剧情战役（`campaign/`，第一至四章已完成，见 `docs/gta-plan.md` §5–8）和近战（`combat/`）。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
 
 **详细笔记在 `docs/notes/`**（从本文件原样搬过去的：每个功能的设计、数字、坑和 probe 命令，带日期，「」里是用户的原话）。动某块之前先读对应文件；新的细节写到那里，不要写到这里——本文件只放每次会话都需要的内容。
 

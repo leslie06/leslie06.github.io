@@ -43,6 +43,7 @@ const VOICES: Record<string, { name: string; style: string; styleEn?: string; v:
   liujie: { name: '刘姐', style: '刘姐，四十多岁摆煎饼摊的大姐，京腔，热情麻利。', styleEn: "Sister Liu, a jianbing stall owner in her forties, warm and brisk.", v: design('中年女性，45 岁左右，北京口音，嗓门亮，音色明快，语速偏快，热情麻利。', '来啦？今儿吃点儿什么？加个蛋不？薄脆给你多放点儿。') },
   chenye: { name: '陈野', style: '陈野，二十八岁的前地下车手，主角，话少、嘴毒、沉着，北京口音不重。', styleEn: "Chen Ye, a former street racer of twenty-eight, the hero: few words, dry and sharp, unflappable.", v: design('青年男性，28 岁左右，音色低沉偏冷、略带沙哑，语速偏慢，话少、冷静，语气淡淡的带点儿嘲讽，普通话略带北京口音。', '街没变，人变了。你们找错人了，我只管开车。') },
   baoge: { name: '豹哥', style: '豹哥，四十多岁的东郊黑帮头目，黑豹帮老大，京腔，阴沉狠辣，说话慢、带笑也带威胁。', styleEn: "Panther, the East Side gang boss in his forties: slow, smiling and menacing.", v: design('中年男性，45 岁左右，北京口音，音色低沉粗哑、有压迫感，语速偏慢，说话阴沉带笑，透着狠劲儿。', '身手不错啊。回去告诉老K，东郊这片儿，姓豹。') },
+  laozhou: { name: '老周', style: '老周，五十多岁的交警，管拖车场，官腔，圆滑又心虚，急了就慌。', styleEn: "Zhou, a traffic cop in his fifties who runs the tow yard: officious and slippery, panicky when cornered.", v: design('中年男性，55 岁左右，北京口音，音色偏亮略尖，语速中等偏快，说话带官腔、圆滑，透着心虚。', '这车停这儿不行啊。罚款二百，扣三分——你自己说，怎么办？') },
   feilong: { name: '小飞龙', style: '小飞龙，十九岁的飙车小子，嚣张、语速快、爱挑衅。', styleEn: "Little Dragon, a nineteen-year-old street racer, cocky, fast-talking and provocative.", v: design('青年男性，19 岁左右，音色清亮偏高，语速很快，语气嚣张、爱挑衅，带点儿痞气。', '哟，开出租的也敢来找我？三环上我叫小飞龙。') },
 };
 
@@ -90,6 +91,18 @@ const INSTRUCT: Record<string, string> = {
   'cmp.m3.y5': '紧张，语速快。', 'cmp.m3.y6': '松了口气。',
   'cmp.m3.d5': '又惊又喜，拍拍肩膀。', 'cmp.m3.c6': '翻着账本，冷静地。', 'cmp.m3.d6': '凑过来一看，倒吸一口凉气。',
   'cmp.m3.k1': '电话里，慢条斯理，意味深长。', 'cmp.m3.c7': '淡淡地，带着狠劲儿。',
+  'cmp.m4.k1': '慢条斯理，压低声音交底。', 'cmp.m4.c1': '微微一愣，短促地问。', 'cmp.m4.k2': '冷笑一声，意味深长。',
+  'cmp.m4.k3': '叮嘱，朝路边努努嘴。', 'cmp.m4.k4': '一字一句，不怒自威。', 'cmp.m4.c2': '淡淡地，带点儿自信。',
+  'cmp.m4.y1': '电话里，压低声音，盯梢的紧张。', 'cmp.m4.y2': '电话里，认真地提醒。', 'cmp.m4.c3': '低声自语，警觉。',
+  'cmp.m4.y3': '电话里，着急地催。', 'cmp.m4.y4': '电话里，疑惑地嘀咕。', 'cmp.m4.y5': '电话里，压低声音。',
+  'cmp.m4.g1': '皮笑肉不笑，带点儿威胁。', 'cmp.m4.z1': '恼火，官腔十足地数落。', 'cmp.m4.z2': '压着火，越说越心虚。',
+  'cmp.m4.g2': '不耐烦地敷衍。', 'cmp.m4.z3': '沉默片刻，咬着牙。', 'cmp.m4.g3': '眯着眼，慢悠悠地。',
+  'cmp.m4.z4': '吓了一跳，失声。', 'cmp.m4.c4': '低声，不慌不忙。', 'cmp.m4.c5': '平静，带点儿嘲讽。',
+  'cmp.m4.z5': '慌了，色厉内荏地大喊。', 'cmp.m4.c6': '喘口气，冷幽默。', 'cmp.m4.z6': '对着电话，慌张又装腔作势。',
+  'cmp.m4.y6': '电话里，急促地大喊。', 'cmp.m4.z7': '吓得发抖，求饶。', 'cmp.m4.c7': '冷冷地，一字一句。',
+  'cmp.m4.z8': '结结巴巴，竹筒倒豆子。', 'cmp.m4.c8': '淡淡地，带着狠劲儿。', 'cmp.m4.y7': '电话里，紧张地催。',
+  'cmp.m4.y8': '电话里，松了口气。', 'cmp.m4.k5': '电话里，慢悠悠，听不出喜怒。', 'cmp.m4.c9': '简短，笃定。',
+  'cmp.m4.k6': '电话里，沉吟片刻，然后果断。',
   // street events and life
   'event.blackShout': '探出车窗吆喝揽客。',
   'life.bbq.buy': '吆喝着应声。', 'life.bbq.toast': '举杯，豪爽地。', 'life.busker.thanks': '开心地道谢。', 'life.chess.none': '头也不抬，不耐烦。',
@@ -164,6 +177,18 @@ const INSTRUCT_EN: Record<string, string> = {
   'cmp.m3.y5': 'Tense and fast.', 'cmp.m3.y6': 'Relieved.',
   'cmp.m3.d5': 'Surprised and delighted.', 'cmp.m3.c6': 'Leafing through the ledger, calm.', 'cmp.m3.d6': 'Leaning in to look, a sharp intake of breath.',
   'cmp.m3.k1': 'On the phone, measured and pointed.', 'cmp.m3.c7': 'Quiet, with an edge.',
+  'cmp.m4.k1': 'Unhurried, lowering his voice.', 'cmp.m4.c1': 'A beat of surprise, short.', 'cmp.m4.k2': 'A dry laugh, meaningfully.',
+  'cmp.m4.k3': 'An instruction, a nod towards the kerb.', 'cmp.m4.k4': 'Word by word, quietly menacing.', 'cmp.m4.c2': 'Flat, a little confident.',
+  'cmp.m4.y1': 'On the phone, hushed, tense from tailing him.', 'cmp.m4.y2': 'On the phone, a serious warning.', 'cmp.m4.c3': 'Muttering to himself, alert.',
+  'cmp.m4.y3': 'On the phone, urgent.', 'cmp.m4.y4': 'On the phone, puzzled.', 'cmp.m4.y5': 'On the phone, hushed.',
+  'cmp.m4.g1': 'A thin smile, a hint of threat.', 'cmp.m4.z1': 'Irritated, officious scolding.', 'cmp.m4.z2': 'Holding his temper, growing nervous.',
+  'cmp.m4.g2': 'Impatient, brushing it off.', 'cmp.m4.z3': 'A pause, through gritted teeth.', 'cmp.m4.g3': 'Squinting, slow.',
+  'cmp.m4.z4': 'Startled, blurting.', 'cmp.m4.c4': 'Low, unhurried.', 'cmp.m4.c5': 'Calm, a little mocking.',
+  'cmp.m4.z5': 'Panicking, blustering shout.', 'cmp.m4.c6': 'Catching his breath, dry humour.', 'cmp.m4.z6': 'Into the phone, flustered but putting on airs.',
+  'cmp.m4.y6': 'On the phone, urgent shouting.', 'cmp.m4.z7': 'Trembling, begging.', 'cmp.m4.c7': 'Cold, word by word.',
+  'cmp.m4.z8': 'Stammering, spilling everything.', 'cmp.m4.c8': 'Quiet, with an edge.', 'cmp.m4.y7': 'On the phone, tense and hurrying.',
+  'cmp.m4.y8': 'On the phone, relieved.', 'cmp.m4.k5': 'On the phone, unhurried, giving nothing away.', 'cmp.m4.c9': 'Short and certain.',
+  'cmp.m4.k6': 'On the phone, a pause, then decisive.',
   'event.blackShout': 'Leaning out of a car window, touting for fares.',
   'life.bbq.buy': 'Calling back cheerfully.', 'life.bbq.toast': 'Raising a glass, hearty.', 'life.busker.thanks': 'Happy thanks.', 'life.chess.none': "Without looking up, impatient.",
   'life.dance.bad': 'Kind reassurance.', 'life.dance.good': 'Happy praise.', 'life.dance.join': 'Warm invitation.', 'life.dance.scatter1': 'Startled, complaining loudly.', 'life.dance.scatter2': 'Still shaken, hand on her chest.',
@@ -210,8 +235,8 @@ const voicesOf = (key: string) => {
   if (key.startsWith('npc.foreigner.')) return ['xm'];
   // Panther's thugs (the street brawl's taunts) in one voice, the one chapter 2's thugs speak in
   if (key.startsWith('npc.gang.')) return ['mm'];
-  const story = /^cmp\.m\d+\.([kycdbg])\d+$/.exec(key);
-  if (story) return [{ k: 'laok', y: 'xiaoyu', c: 'chenye', d: 'daliu', b: 'baoge', g: 'mm' }[story[1]]!];
+  const story = /^cmp\.m\d+\.([kycdbgz])\d+$/.exec(key);
+  if (story) return [{ k: 'laok', y: 'xiaoyu', c: 'chenye', d: 'daliu', b: 'baoge', g: 'mm', z: 'laozhou' }[story[1]]!];
   return GENERAL;
 };
 
@@ -220,7 +245,7 @@ for (const [id, v] of Object.entries(VOICES)) {
   const kept = old?.archetypes?.[id]?.voices as string[] | undefined;
   archetypes[id] = {
     name: v.name,
-    voiceHint: id in { laok: 1, xiaoyu: 1, daliu: 1, wang: 1, laozhang: 1, liujie: 1, feilong: 1, chenye: 1, baoge: 1 } ? '熟人专属音色' : v.v.voice ? `复用路人原型的音色` : '新设计',
+    voiceHint: id in { laok: 1, xiaoyu: 1, daliu: 1, wang: 1, laozhang: 1, liujie: 1, feilong: 1, chenye: 1, baoge: 1, laozhou: 1 } ? '熟人专属音色' : v.v.voice ? `复用路人原型的音色` : '新设计',
     voices: kept?.length ? kept : v.v.voice ? [v.v.voice] : [],
     voiceDesign: [v.v.design],
     style: v.style,

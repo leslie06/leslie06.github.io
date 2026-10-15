@@ -16,6 +16,16 @@ export const COMBO: readonly { action: StrikeAction; dmg: number; knock: boolean
 export const COUNTER = { action: 'uppercut' as StrikeAction, dmg: 28, knock: true };
 /** The block: how long it is held, and what share of a blow still gets through. */
 export const BLOCK = { secs: 0.55, through: 0.25 };
+/**
+ * The finisher (环境处决): a fighter softened up (reeling from a blow, or at half health or less) with a car or a wall
+ * within `back` m behind him, seen from the player, is kicked flying into it - out at once. `dmg` is enough for any.
+ * The reach is generous (a fight keeps them a metre or two off the player, the cars round it 4-6 m out).
+ */
+export const FINISH = { action: 'kick' as StrikeAction, back: 3.5, soft: 0.5, dmg: 999 };
+/** Whether a fighter in `state` at `hp` of `max` is soft enough for a finisher (the surface is the caller's ray). */
+export function softened(state: string, hp: number, max: number): boolean {
+  return state === 'flinch' || (hp <= max * FINISH.soft && (state === 'circle' || state === 'approach' || state === 'recover' || state === 'close'));
+}
 /** A strike goes for someone within this (it steps in up to `LUNGE` to reach), and lands within `REACH` in front. */
 export const SEEK = 4.2, LUNGE = 2.4, REACH = 1.75, STAND_OFF = 1.0;
 /** A press within this long after a strike ends carries the combo on; later starts it again. */

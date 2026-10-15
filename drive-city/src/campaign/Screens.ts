@@ -39,6 +39,16 @@ body.dc-touch .cmp-nudge{top:calc(46px + env(safe-area-inset-top,0px));padding:7
 body.dc-touch .cmp-nudge .g{width:28px;height:28px;font-size:15px}
 body.dc-touch .cmp-nudge .h{font-size:13px}
 body.dc-touch .cmp-nudge .s{font-size:12px}
+.cmp-meter{position:fixed;left:50%;top:70px;z-index:23;transform:translateX(-50%);width:min(240px,50vw);pointer-events:none;font-family:${F.ui};color:${C.paper};text-align:center}
+.cmp-meter[hidden],body.cmp-cine .cmp-meter{display:none}
+.cmp-meter .l{font:800 12px/1 ${F.ui};letter-spacing:.2em;margin-bottom:5px;text-shadow:0 1px 6px rgba(0,0,0,.9)}
+.cmp-meter .b{height:8px;border-radius:4px;background:rgba(8,10,12,.62);box-shadow:inset 0 0 0 1px rgba(244,241,232,.22);overflow:hidden}
+.cmp-meter .b>i{display:block;height:100%;width:0;border-radius:4px;background:${C.yellow};transition:width .15s linear,background .3s}
+.cmp-meter.hot .b>i{background:#ff5a4a}
+.cmp-meter.hot .l{color:#ff7a6a;animation:cmpm .4s ease-in-out infinite alternate}
+.cmp-meter .n{margin-top:4px;font:600 12px/1.2 ${F.ui};color:${C.muted};text-shadow:0 1px 6px rgba(0,0,0,.9)}
+@keyframes cmpm{from{opacity:.65}to{opacity:1}}
+body.dc-touch .cmp-meter{top:calc(84px + env(safe-area-inset-top,0px))}
 @media (max-height:520px){.cmp-card table{margin-top:8px}.cmp-card td{padding:4px 10px}.cmp-card .go{margin-top:10px}}
 `);
 
@@ -113,4 +123,20 @@ export class Nudge {
   }
   hide(): void { this.root.classList.remove('on'); clearTimeout(this.timer); this.timer = window.setTimeout(() => { this.root.hidden = true; }, 450); }
   get shown(): boolean { return !this.root.hidden; }
+}
+
+/** A bar under the objective (a tail's suspicion): `hot` turns it red and pulses the label; `note` is a line under it. */
+export class Meter {
+  private root = el('div', 'cmp-meter', document.body);
+  private label = el('div', 'l', this.root);
+  private fill: HTMLElement;
+  private note: HTMLElement;
+  constructor() { this.fill = el('i', '', el('div', 'b', this.root)); this.note = el('div', 'n', this.root); this.root.hidden = true; }
+  show(label: string): void { this.label.textContent = label; this.root.hidden = false; }
+  set(v: number, hot: boolean, note = ''): void {
+    this.fill.style.width = `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
+    this.root.classList.toggle('hot', hot);
+    if (this.note.textContent !== note) this.note.textContent = note;
+  }
+  hide(): void { this.root.hidden = true; }
 }

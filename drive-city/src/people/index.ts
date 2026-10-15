@@ -104,6 +104,7 @@ export async function install(engine: Engine): Promise<void> {
   const rng = new Rng(9001);
   const rnd = () => rng.next();
   const wallGroups = groups(CG.PED, CG.WORLD);
+  const flyGroups = groups(CG.WORLD, CG.WORLD | CG.CAR);
 
   // Links ending at each node (LaneGraph keeps the ones leaving it).
   const inn: number[][] = g.out.map(() => []);
@@ -616,7 +617,8 @@ export async function install(engine: Engine): Promise<void> {
     if (p.mode === 'knocked' || p.mode === 'down' || p.mode === 'getup') {
       const hs = Math.hypot(p.vel.x, p.vel.z);
       if (hs > 0.3) {
-        const hit = engine.physics.raycast({ x: p.pos.x, y: p.pos.y + 0.7, z: p.pos.z }, { x: p.vel.x / hs, y: 0, z: p.vel.z / hs }, hs * dt + 0.35, wallGroups, true);
+        // walls and cars stop a body in flight (a PED ray passes through a chassis: they flew through parked cars)
+        const hit = engine.physics.raycast({ x: p.pos.x, y: p.pos.y + 0.7, z: p.pos.z }, { x: p.vel.x / hs, y: 0, z: p.vel.z / hs }, hs * dt + 0.35, flyGroups, true);
         if (hit) p.vel.multiplyScalar(-0.15);
       }
       p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; p.pos.y += p.vy * dt; p.vy -= 9.81 * dt;

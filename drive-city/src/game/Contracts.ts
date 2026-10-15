@@ -258,6 +258,8 @@ export type Crime = 'hit_person' | 'carjack' | 'hit_police' | 'ram' | 'speeding'
 export interface CombatApi extends System {
   /** Enemies standing within reach of a fight (the HUD, the touch counter button, player/'s attack routing). */
   readonly engaged: boolean;
+  /** Finishers landed so far this session (a fighter kicked into a car or a wall; missions count their own share). */
+  readonly finishers: number;
   /** Attack pressed on foot (`heavy`: held and released). False when there is nobody to fight (player/ shoves instead). */
   attack(heavy: boolean): boolean;
   /** Counter pressed: counters an enemy winding up near the player, else a block. */

@@ -343,6 +343,14 @@ export async function install(engine: Engine): Promise<void> {
     g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.5 * k, t + 0.008); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18 + 0.08 * power);
     o.connect(g).connect(master); o.start(t); o.stop(t + 0.3);
   });
+  // A finisher: into a car a dull boom of sheet metal ringing out; into a wall a heavier, deader thud.
+  engine.events.on('combat:finisher', ({ x, z, kind }) => {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime, k = near(x, z);
+    burst(t, kind === 'car' ? 700 : 400, 0.8, 0.5 * k, 0.12);
+    if (kind === 'car') { ring(t, 92, 0.32 * k, 0.5, 'triangle'); ring(t, 163, 0.16 * k, 0.32, 'triangle'); ring(t + 0.01, 431, 0.07 * k, 0.22, 'sine'); }
+    else ring(t, 62, 0.4 * k, 0.24, 'sine');
+  });
   engine.events.on('combat:swing', ({ x, z, heavy }) => {
     if (!ctx || muted) return;
     const c = ctx, t = c.currentTime, k = near(x, z), dur = heavy ? 0.22 : 0.13;
