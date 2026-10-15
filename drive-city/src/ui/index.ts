@@ -16,6 +16,8 @@ import { Chapters } from './Chapters';
 import { AccountPanel } from './Account';
 import { formatPlaytime, readPlaytime, trackPlaytime } from './PlayTime';
 import type { CloudApi } from '../online/Cloud';
+import type { ChatApi } from '../online/Chat';
+import { ChatPanel } from './ChatPanel';
 import { FeedbackPanel } from './Feedback';
 import type { PresenceApi } from '../online/Presence';
 import { journalOf } from '../npc/Journal';
@@ -58,6 +60,10 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   const cloud = engine.get<CloudApi>('cloud');
   const account = cloud?.enabled ? new AccountPanel(engine, container, () => menu.setAccount(cloud.user)) : null;
   if (account && cloud) { menu.onAccount = () => account.show(); menu.setAccount(cloud.user); }
+  // The in-game chat (online/Chat.ts): a button under the radar, new messages fading under it, Y to talk; in the game only.
+  const chatApi = engine.get<ChatApi>('chat');
+  const chat = chatApi?.enabled ? new ChatPanel(engine, hud.root, container, chatApi, () => api.state === 'playing') : null;
+  chat?.setVisible(false);
   // Players' feedback (online/Feedback.ts), from the title and the pause screen.
   const feedback = engine.get('feedback') ? new FeedbackPanel(engine, container) : null;
   if (feedback) menu.onFeedback = () => feedback.show();
@@ -100,7 +106,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     showTitle() {
       api.state = 'title';
       menu.set('title');
-      hud.setVisible(false);
+      hud.setVisible(false); chat?.setVisible(false);
       const veh = v();
       veh.inputEnabled = false;
       startAttract();
@@ -123,7 +129,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       }
       api.state = 'playing';
       menu.set('playing');
-      hud.setVisible(true);
+      hud.setVisible(true); chat?.setVisible(true);
       veh.inputEnabled = true;
       engine.paused = false;
       if (!TOUCH) engine.input.requestLock();
@@ -140,6 +146,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     pause() {
       if (api.state !== 'playing') return;
       api.state = 'paused';
+      chat?.close();
       // What there is to do and how far along it is: ramps, 兔儿爷, the best shift and combo.
       const jumps = engine.get<{ name: string; done: number; total: number }>('jumps'), rabbits = engine.get<{ name: string; found: number; total: number }>('collect');
       const checkins = engine.get<{ name: string; found: number; total: number }>('checkins'), trials = engine.get<{ name: string; medals: number; total: number }>('trials');

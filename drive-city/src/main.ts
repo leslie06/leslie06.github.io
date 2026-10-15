@@ -46,6 +46,7 @@ import * as leaderboard from './online/Leaderboard';
 import * as feedback from './online/Feedback';
 import * as presence from './online/Presence';
 import * as cloud from './online/Cloud';
+import * as chat from './online/Chat';
 import * as campaign from './campaign';
 import * as underground from './underground';
 import * as park from './park';
@@ -114,6 +115,7 @@ async function boot() {
   feedback.install(engine);
   presence.install(engine);
   cloud.install(engine);
+  if (worldName === 'city') chat.install(engine);
   await ui.install(engine, container);
   if (worldName === 'city') { registerCityPoses(); registerTrafficPoses(); registerPeoplePoses(); registerCharacterPoses(); registerNavPoses(); registerPolicePoses(); registerVehiclePoses(); registerMissionPoses(); registerRacePoses(); registerParkPoses(); registerHomePoses(); registerTitlePose(); } else registerPoses();
   engine.resize();
