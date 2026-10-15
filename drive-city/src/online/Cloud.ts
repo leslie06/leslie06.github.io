@@ -38,7 +38,11 @@ export interface CloudApi extends System {
   login(name: string, pw: string): Promise<{ ok: true } | { ok: false; error: string }>;
   reset(name: string, recovery: string, pw: string): Promise<{ ok: true; recovery: string } | { ok: false; error: string }>;
   logout(): Promise<void>;
-  syncNow(): Promise<void>;
+  /**
+   * The panel's 立即同步: always a round trip - local changes go up ('pushed'), else the cloud is checked ('same': it
+   * matches; a newer one is taken, a conflict asked). Resolves to how it went ('offline', 'conflict', 'off' too).
+   */
+  syncNow(): Promise<'pushed' | 'same' | CloudStatus>;
 }
 
 interface Acct { name: string; token: string }
@@ -94,6 +98,8 @@ export function install(engine: Engine): CloudApi {
   let status: CloudStatus = acct && enabled ? 'idle' : 'off';
   let conflict: CloudConflict | null = null;
   let busy = false, tick = 0;
+  /** The last time the server confirmed it has this save (a check that changed nothing still counts). */
+  let checked = 0;
   const changed = () => api.onChange?.();
   const set = (s: CloudStatus) => { if (status !== s) { status = s; changed(); } };
   const local = () => serialise(snapshot(localStorage));
@@ -157,7 +163,7 @@ export function install(engine: Engine): CloudApi {
     enabled,
     get user() { return acct?.name ?? null; },
     get status() { return status; },
-    get lastSync() { return sync?.ts ?? 0; },
+    get lastSync() { return Math.max(sync?.ts ?? 0, checked); },
     get conflict() { return conflict; },
     onChange: null,
     async register(name, pw) {
@@ -182,7 +188,15 @@ export function install(engine: Engine): CloudApi {
       if (acct) { await push(); void call('/acct/logout', { t: acct.token }); }
       await dropLogin();
     },
-    syncNow: () => (sync ? push() : pull()),
+    async syncNow() {
+      if (!acct) return 'off';
+      if (busy) return status;
+      if (sync && sync.fp !== fingerprint(local())) { await push(); return status === 'ok' ? 'pushed' : status; }
+      // nothing changed here (or never synced): ask the server - the same save, a newer one, or a conflict
+      await pull(false);
+      if (status === 'ok') { checked = Date.now(); changed(); return 'same'; }
+      return status;
+    },
     update(dt) {
       if (!acct || !enabled) return;
       tick += dt;

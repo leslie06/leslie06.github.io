@@ -56,6 +56,8 @@ export class AccountPanel {
   private error = '';
   /** What was typed, kept across redraws (an error redraws the form); cleared when the panel closes or it worked. */
   private vals = new Map<string, string>();
+  /** What the last 立即同步 did, shown under the status. */
+  private result = '';
 
   constructor(private engine: Engine, container: HTMLElement, private onUser: () => void) {
     const root = this.root = el('div', 'acct', container);
@@ -84,7 +86,7 @@ export class AccountPanel {
     this.root.hidden = false;
     this.build();
   }
-  hide(): void { this.root.hidden = true; this.vals.clear(); }
+  hide(): void { this.root.hidden = true; this.vals.clear(); this.result = ''; }
   get open(): boolean { return !this.root.hidden; }
 
   private build(): void {
@@ -177,16 +179,33 @@ export class AccountPanel {
     el('div', 'st', b).textContent = t('acct.recoveryNote');
     el('div', 'code', b).textContent = this.code;
     const ok = el('button', 'go', b); ok.textContent = t('acct.saved');
-    ok.addEventListener('click', () => { this.code = ''; const c = this.api(); this.view = c?.conflict ? 'conflict' : 'me'; this.build(); });
+    ok.addEventListener('click', () => {
+      this.code = '';
+      const c = this.api();
+      if (c?.conflict) { this.view = 'conflict'; this.build(); return; }
+      // done: back to the game, a word that it is in hand
+      this.hide();
+      this.engine.get<{ name: string; toast(s: string): void }>('hud')?.toast(t('acct.welcome', { name: c?.user ?? '' }));
+    });
   }
 
   private me(b: HTMLElement, c: CloudApi): void {
     el('div', 'me', b).textContent = c.user ?? '';
     const s = c.status, at = c.lastSync ? when(c.lastSync) : '';
     const st = el('div', `st ${s === 'ok' ? 'ok' : s === 'offline' ? 'bad' : ''}`, b);
-    st.textContent = s === 'syncing' ? t('acct.syncing') : s === 'offline' ? t('acct.offline') : at ? t('acct.synced', { when: at }) : t('acct.notYet');
-    const sync = el('button', 'go', b); sync.textContent = t('acct.syncNow'); sync.disabled = s === 'syncing';
-    sync.addEventListener('click', () => { void c.syncNow(); });
+    st.textContent = s === 'syncing' || this.busy ? t('acct.syncing') : s === 'offline' ? t('acct.offline') : at ? t('acct.synced', { when: at }) : t('acct.notYet');
+    // what the last 立即同步 did (it always talks to the server: a click that changes nothing still says so)
+    if (this.result && !this.busy) el('div', 'st ok', b).textContent = this.result;
+    const back = el('button', 'go', b); back.textContent = t('acct.back2game');
+    back.addEventListener('click', () => this.hide());
+    const sync = el('button', 'alt', b); sync.textContent = t(this.busy ? 'acct.syncing' : 'acct.syncNow'); sync.disabled = s === 'syncing' || this.busy;
+    sync.addEventListener('click', async () => {
+      this.busy = true; this.result = ''; this.build();
+      const r = await c.syncNow();
+      this.busy = false;
+      this.result = r === 'pushed' ? t('acct.didPush') : r === 'same' ? t('acct.didSame') : r === 'offline' ? '' : '';
+      this.build();
+    });
     const out = el('button', 'alt', b); out.textContent = t('acct.logout');
     out.addEventListener('click', async () => { await c.logout(); this.view = 'login'; this.build(); });
     el('div', 'note', b).textContent = t('acct.meNote');
