@@ -1,7 +1,7 @@
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
 import { shotMode } from '../debug/ShotMode';
-import type { AdventureApi, Blip, MissionApi, RaceApi, Speaker, WantedApi } from '../game/Contracts';
+import type { Blip, MissionApi, RaceApi, Speaker, WantedApi } from '../game/Contracts';
 import type { GarageApi } from '../garage';
 import type { IntroApi } from '../intro';
 import type { StoryApi } from '../story';
@@ -94,13 +94,23 @@ export function install(engine: Engine): void {
   });
 
   /** Nothing else going on that the chapter would trample. */
-  const calm = () => {
+  /**
+   * What the chapter would trample, as the chapter select says it, or null. The opening's adventure (FLY-07) is not
+   * one: a chapter runs alongside it as it always did (2026-10-15 it was briefly counted, and a player with the
+   * adventure left half done could start no chapter at all - 「现在不行」 with no reason given).
+   */
+  const busyWith = (): string | null => {
     const intro = engine.get<IntroApi>('intro')?.step;
-    return (engine.get<WantedApi>('wanted')?.level ?? 0) === 0 && !engine.get<RaceApi>('races')?.active
-      && (engine.get<StoryApi>('story')?.heist ?? 'off') === 'off' && !engine.get<GarageApi>('garage')?.open
-      && (intro === undefined || intro === 'off' || intro === 'done') && !engine.get<MissionApi>('missions')?.busy
-      && !engine.get<AdventureApi>('adventure')?.active;
+    if ((engine.get<WantedApi>('wanted')?.level ?? 0) > 0) return t('cmp.sel.why.wanted');
+    if (engine.get<RaceApi>('races')?.active) return t('cmp.sel.why.race');
+    if ((engine.get<StoryApi>('story')?.heist ?? 'off') !== 'off') return t('cmp.sel.why.heist');
+    if (engine.get<GarageApi>('garage')?.open) return t('cmp.sel.why.garage');
+    if (!(intro === undefined || intro === 'off' || intro === 'done')) return t('cmp.sel.why.intro');
+    if (engine.get<MissionApi>('missions')?.busy) return t('cmp.sel.why.job');
+    return null;
   };
+  /** Nothing else going on that the chapter would trample. */
+  const calm = () => busyWith() === null;
 
   /** The running chapter was started again from the chapter select after it was cleared: no pay. */
   let replay = false;
@@ -132,7 +142,7 @@ export function install(engine: Engine): void {
         return { id: c.id, kick: c.kick, title: c.title, state };
       });
     },
-    blocked: () => runner ? t('cmp.sel.busy') : !calm() ? t('cmp.sel.notCalm') : null,
+    blocked: () => { if (runner) return t('cmp.sel.busy'); const w = busyWith(); return w ? t('cmp.sel.notCalm', { why: w }) : null; },
     play: (id) => {
       const i = chapters.findIndex((c) => c.id === id);
       if (i < 0 || api.blocked()) return false;

@@ -174,7 +174,9 @@ export const CAMPAIGN_EN = {
   'cmp.sel.replay': 'Replay', 'cmp.sel.start': 'Start', 'cmp.sel.skip': 'Skip to here',
   'cmp.sel.confirm': 'Skip {n} chapter(s)? Tap again',
   'cmp.sel.busy': 'A chapter is running - finish it or give it up first',
-  'cmp.sel.notCalm': 'Not now: lose the police and finish the race, fare or job first',
+  'cmp.sel.notCalm': 'Not now: {why}',
+  'cmp.sel.why.wanted': 'lose the police first', 'cmp.sel.why.race': 'finish the race first', 'cmp.sel.why.heist': 'finish the robbery job first',
+  'cmp.sel.why.garage': 'close the garage first', 'cmp.sel.why.intro': 'finish the opening getaway first', 'cmp.sel.why.job': 'finish the fare or job you are on first',
   'cmp.sel.noPay': 'Replay - no payment',
   'cmp.sel.quit': 'Give up this chapter', 'cmp.sel.quitSure': 'Give it up? Tap again',
 } as const;
@@ -354,7 +356,9 @@ export const CAMPAIGN_ZH: Record<keyof typeof CAMPAIGN_EN, string> = {
   'cmp.sel.replay': '重玩', 'cmp.sel.start': '开始', 'cmp.sel.skip': '跳到这一章',
   'cmp.sel.confirm': '跳过前面 {n} 章？再点一次',
   'cmp.sel.busy': '剧情进行中：先完成或放弃当前这一章',
-  'cmp.sel.notCalm': '现在不行：先甩掉警察，结束比赛、载客或别的任务',
+  'cmp.sel.notCalm': '现在不行：{why}',
+  'cmp.sel.why.wanted': '先甩掉警察', 'cmp.sel.why.race': '先跑完比赛', 'cmp.sel.why.heist': '先完成抢劫任务',
+  'cmp.sel.why.garage': '先关掉车库', 'cmp.sel.why.intro': '先完成开局逃亡', 'cmp.sel.why.job': '先送完乘客或做完手上的短任务',
   'cmp.sel.noPay': '重玩不发奖金',
   'cmp.sel.quit': '放弃当前这一章', 'cmp.sel.quitSure': '确定放弃？再点一次',
 };
