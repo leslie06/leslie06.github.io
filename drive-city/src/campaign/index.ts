@@ -1,7 +1,7 @@
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
 import { shotMode } from '../debug/ShotMode';
-import type { Blip, MissionApi, RaceApi, Speaker, WantedApi } from '../game/Contracts';
+import type { AdventureApi, Blip, MissionApi, RaceApi, Speaker, WantedApi } from '../game/Contracts';
 import type { GarageApi } from '../garage';
 import type { IntroApi } from '../intro';
 import type { StoryApi } from '../story';
@@ -32,6 +32,17 @@ export interface CampaignApi extends System {
   /** The chapter running, or null. */
   readonly running: string | null;
   readonly done: readonly string[];
+  /** The chapter select (pause screen): every chapter and where the player stands with it. */
+  list(): { id: string; kick: string; title: string; state: 'gold' | 'silver' | 'bronze' | 'skipped' | 'next' | 'locked' }[];
+  /** Why no chapter can be started from the menu now (one running, stars, a race...), or null. */
+  blocked(): string | null;
+  /**
+   * Start chapter `id` from the chapter select, wherever the player is (its first cutscene puts them in place): a
+   * cleared one is a replay (the medal can improve, no pay), a locked one marks those before it skipped first.
+   */
+  play(id: string): boolean;
+  /** Give up the running chapter (the chapter select's button): as the failure card's 放弃. */
+  quit(): void;
   debug: {
     runner(): Runner<unknown> | null;
     /** The chapter running (its `debug` hooks), or null. */
@@ -87,10 +98,14 @@ export function install(engine: Engine): void {
     const intro = engine.get<IntroApi>('intro')?.step;
     return (engine.get<WantedApi>('wanted')?.level ?? 0) === 0 && !engine.get<RaceApi>('races')?.active
       && (engine.get<StoryApi>('story')?.heist ?? 'off') === 'off' && !engine.get<GarageApi>('garage')?.open
-      && (intro === undefined || intro === 'off' || intro === 'done') && !engine.get<MissionApi>('missions')?.busy;
+      && (intro === undefined || intro === 'off' || intro === 'done') && !engine.get<MissionApi>('missions')?.busy
+      && !engine.get<AdventureApi>('adventure')?.active;
   };
 
-  const begin = (c: Chapter<unknown>) => {
+  /** The running chapter was started again from the chapter select after it was cleared: no pay. */
+  let replay = false;
+  const begin = (c: Chapter<unknown>, again = false) => {
+    replay = again;
     def = c; runner = new Runner(c as never) as Runner<unknown>;
     failT = -1; asked = false;
     startMark.hide(); guide(null, null); nudge.hide();
@@ -109,6 +124,25 @@ export function install(engine: Engine): void {
     name: 'campaign',
     get running() { return runner?.state === 'running' || runner?.state === 'failed' ? def?.id ?? null : null; },
     get done() { return save.done; },
+    list: () => {
+      const n = next();
+      return chapters.map((c) => {
+        const b = save.best[c.id];
+        const state = b ? b.medal as 'gold' | 'silver' | 'bronze' : save.done.includes(c.id) ? 'skipped' : c === n ? 'next' : 'locked';
+        return { id: c.id, kick: c.kick, title: c.title, state };
+      });
+    },
+    blocked: () => runner ? t('cmp.sel.busy') : !calm() ? t('cmp.sel.notCalm') : null,
+    play: (id) => {
+      const i = chapters.findIndex((c) => c.id === id);
+      if (i < 0 || api.blocked()) return false;
+      const c = chapters[i], again = save.done.includes(c.id);
+      // a locked chapter: the ones before it skipped (done, no medal: the chapter select says 已跳过)
+      if (!again) { for (const p of chapters.slice(0, i)) if (!save.done.includes(p.id)) save.done.push(p.id); write(); }
+      begin(c, again);
+      return true;
+    },
+    quit: () => { if (!runner) return; env.card.hide(); env.dialogue?.clear(5); runner.abandon(); finish(); },
     debug: {
       runner: () => runner,
       chapter: () => def,
@@ -156,9 +190,10 @@ export function install(engine: Engine): void {
           const old = save.best[c.id];
           if (!old || MEDAL_RANK[res.medal] > MEDAL_RANK[old.medal] || (res.medal === old.medal && clock < old.secs)) save.best[c.id] = { medal: res.medal, secs: Math.round(clock) };
           write();
-          engine.get<MissionApi>('missions')?.addCash(res.pay);
+          // a replay from the chapter select: the medal counts, the money does not (no farming a chapter)
+          if (!replay) engine.get<MissionApi>('missions')?.addCash(res.pay);
           engine.events.emit('campaign:passed', { id: c.id, medal: res.medal });
-          env.card.passed(`${c.kick} · ${c.title}`, res.rows, res.medal, res.pay, () => {});
+          env.card.passed(`${c.kick} · ${c.title}`, res.rows, res.medal, replay ? 0 : res.pay, () => {}, replay ? t('cmp.sel.noPay') : undefined);
         }
       } else {
         // the next chapter's start

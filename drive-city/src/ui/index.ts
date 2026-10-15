@@ -12,6 +12,7 @@ import { Menu, type MenuState } from './Menu';
 import { Minimap } from './Minimap';
 import { MapScreen } from './MapScreen';
 import { Boards } from './Boards';
+import { Chapters } from './Chapters';
 import { FeedbackPanel } from './Feedback';
 import type { PresenceApi } from '../online/Presence';
 import { journalOf } from '../npc/Journal';
@@ -46,6 +47,9 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   // The leaderboards, where there are any (the city).
   const boards = engine.get('leaderboard') ? new Boards(engine, container) : null;
   if (boards) menu.onBoards = () => boards.show();
+  // The story's chapter select (campaign/), from the pause screen: picking one resumes the game and starts it.
+  const chapters = engine.get('campaign') ? new Chapters(engine, container, () => api.start()) : null;
+  if (chapters) menu.onChapters = () => chapters.show();
   // Players' feedback (online/Feedback.ts), from the title and the pause screen.
   const feedback = engine.get('feedback') ? new FeedbackPanel(engine, container) : null;
   if (feedback) menu.onFeedback = () => feedback.show();
@@ -93,7 +97,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       engine.paused = false;
     },
     start() {
-      boards?.hide();
+      boards?.hide(); chapters?.hide();
       engine.get<AudioApi>('audio')?.unlock();
       engine.get<VoiceApi>('voices')?.unlock();   // in the same click: three's audio shares the context
       const veh = v();

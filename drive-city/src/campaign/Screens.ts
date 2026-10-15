@@ -86,15 +86,16 @@ export class Card {
   failed(reason: string, secs = 0): void {
     this.open('fail', (b) => { el('h1', '', b).textContent = t('cmp.failed'); el('div', 'who', b).textContent = reason; }, secs);
   }
-  /** The result; `onClose` when the player closes it (button, Enter, Space) or after 12 s. */
-  passed(title: string, rows: [string, string][], medal: Medal, pay: number, onClose: () => void): void {
+  /** The result; `onClose` when the player closes it (button, Enter, Space) or after 12 s. `note` in place of the pay. */
+  passed(title: string, rows: [string, string][], medal: Medal, pay: number, onClose: () => void, note?: string): void {
     this.open('pass', (b) => {
       el('div', 'kick', b).textContent = title;
       el('h1', '', b).textContent = t('cmp.passed');
       const tb = el('table', '', b);
       for (const [k, v] of rows) { const tr = el('tr', '', tb); el('td', '', tr).textContent = k; el('td', 'v', tr).textContent = v; }
       el('div', `medal ${medal}`, b).textContent = t(`cmp.medal.${medal}` as 'cmp.medal.gold');
-      el('div', 'pay', b).textContent = `+¥${pay.toLocaleString()}`;
+      if (note) el('div', 'who', b).textContent = note;
+      else el('div', 'pay', b).textContent = `+¥${pay.toLocaleString()}`;
       const go = el('button', 'go', b); go.textContent = t('cmp.continue');
       let done = false;
       const close = () => { if (done) return; done = true; removeEventListener('keydown', key, true); this.hide(); onClose(); };

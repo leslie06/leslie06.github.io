@@ -66,6 +66,9 @@ export class Menu {
   /** The 排行榜 button; unset (the yard), the button stays hidden. */
   onBoards: (() => void) | null = null;
   private boardsBtn: HTMLButtonElement;
+  /** The 主线章节 button (the pause screen only: from the title the opening would run over it); unset, hidden. */
+  onChapters: (() => void) | null = null;
+  private chaptersBtn: HTMLButtonElement;
   /** The 意见反馈 button (title and pause); unset, it stays hidden. */
   onFeedback: (() => void) | null = null;
   private feedbackBtn: HTMLButtonElement;
@@ -90,6 +93,10 @@ export class Menu {
     this.goLabel = L('title.start');
     go.appendChild(this.goLabel);
     go.addEventListener('click', () => this.onStart());
+    const chapters = this.chaptersBtn = el('button', 'ghost', row);
+    chapters.id = 'chapters';
+    chapters.appendChild(L('cmp.sel.button'));
+    chapters.addEventListener('click', () => this.onChapters?.());
     const boards = this.boardsBtn = el('button', 'ghost', row);
     boards.appendChild(L('lb.title'));
     boards.addEventListener('click', () => this.onBoards?.());
@@ -146,6 +153,7 @@ export class Menu {
     this.boardsBtn.hidden = !this.onBoards;
     this.feedbackBtn.hidden = !this.onFeedback;
     const paused = state === 'paused';
+    this.chaptersBtn.hidden = !this.onChapters || !paused;
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');
     this.pauseHint.hidden = !paused;
     this.progressEl.hidden = !paused || !this.progressEl.textContent;

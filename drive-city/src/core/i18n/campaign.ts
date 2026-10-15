@@ -167,6 +167,16 @@ export const CAMPAIGN_EN = {
   'cmp.why.spotted': 'Zhou spotted you', 'cmp.why.lostZhou': 'You lost Zhou', 'cmp.why.zhouGone': 'Zhou got back to his station',
   'cmp.why.fledFight': 'You ran from the fight',
   'cmp.row.alert': 'Most suspicion', 'cmp.row.finishers': 'Finishers',
+  'cmp.sel.title': 'STORY CHAPTERS', 'cmp.sel.button': 'Chapters',
+  'cmp.sel.hint': 'Replay a chapter you have cleared, or skip ahead and start any chapter now.',
+  'cmp.sel.skipped': 'Skipped', 'cmp.sel.next': 'Up next', 'cmp.sel.locked': 'Locked',
+  'cmp.sel.medal.gold': 'Gold', 'cmp.sel.medal.silver': 'Silver', 'cmp.sel.medal.bronze': 'Bronze',
+  'cmp.sel.replay': 'Replay', 'cmp.sel.start': 'Start', 'cmp.sel.skip': 'Skip to here',
+  'cmp.sel.confirm': 'Skip {n} chapter(s)? Tap again',
+  'cmp.sel.busy': 'A chapter is running - finish it or give it up first',
+  'cmp.sel.notCalm': 'Not now: lose the police and finish the race, fare or job first',
+  'cmp.sel.noPay': 'Replay - no payment',
+  'cmp.sel.quit': 'Give up this chapter', 'cmp.sel.quitSure': 'Give it up? Tap again',
 } as const;
 
 export const CAMPAIGN_ZH: Record<keyof typeof CAMPAIGN_EN, string> = {
@@ -337,4 +347,14 @@ export const CAMPAIGN_ZH: Record<keyof typeof CAMPAIGN_EN, string> = {
   'cmp.why.spotted': '老周发现你了', 'cmp.why.lostZhou': '你跟丢了老周', 'cmp.why.zhouGone': '老周逃回了支队',
   'cmp.why.fledFight': '你从打斗里跑了',
   'cmp.row.alert': '最高警觉', 'cmp.row.finishers': '环境处决',
+  'cmp.sel.title': '主线章节', 'cmp.sel.button': '主线章节',
+  'cmp.sel.hint': '已通关的章节可以重玩；也可以跳过前面的章节，直接开始任意一章。',
+  'cmp.sel.skipped': '已跳过', 'cmp.sel.next': '下一章', 'cmp.sel.locked': '未解锁',
+  'cmp.sel.medal.gold': '金牌', 'cmp.sel.medal.silver': '银牌', 'cmp.sel.medal.bronze': '铜牌',
+  'cmp.sel.replay': '重玩', 'cmp.sel.start': '开始', 'cmp.sel.skip': '跳到这一章',
+  'cmp.sel.confirm': '跳过前面 {n} 章？再点一次',
+  'cmp.sel.busy': '剧情进行中：先完成或放弃当前这一章',
+  'cmp.sel.notCalm': '现在不行：先甩掉警察，结束比赛、载客或别的任务',
+  'cmp.sel.noPay': '重玩不发奖金',
+  'cmp.sel.quit': '放弃当前这一章', 'cmp.sel.quitSure': '确定放弃？再点一次',
 };
