@@ -63,3 +63,41 @@ CREATE TABLE IF NOT EXISTS fb_shot (
   id   INTEGER PRIMARY KEY,
   data TEXT    NOT NULL
 );
+
+-- 账号和云存档（2026-10-15 起，b城追车在用）：用户名 + 密码，只存加盐的 PBKDF2 哈希（pbkdf2$迭代$盐$哈希）。
+-- 不收手机号、邮箱；忘了密码靠注册时给的恢复码（同样只存哈希）。ip_hash 同 ev 表，每天换盐，只用来限制一台设备一天注册几个号。
+CREATE TABLE IF NOT EXISTS acct (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  game    TEXT    NOT NULL,
+  name    TEXT    NOT NULL,             -- 玩家起的用户名（原样显示）
+  lname   TEXT    NOT NULL,             -- 小写，查重和登录用
+  pw      TEXT    NOT NULL,
+  rc      TEXT    NOT NULL,             -- 恢复码的哈希
+  day     TEXT    NOT NULL DEFAULT '',
+  ip_hash TEXT    NOT NULL DEFAULT '',
+  ts      INTEGER NOT NULL DEFAULT 0,
+  seen    INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (game, lname)
+);
+CREATE INDEX IF NOT EXISTS acct_day ON acct (day, ip_hash);
+-- 登录状态：游戏里存一个随机令牌，库里只存它的 SHA-256；180 天不用就失效，重设密码时这个号的全部作废。
+CREATE TABLE IF NOT EXISTS sess (
+  token TEXT    PRIMARY KEY,
+  acct  INTEGER NOT NULL,
+  ts    INTEGER NOT NULL,
+  seen  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sess_acct ON sess (acct);
+-- 存档：每个号一份（游戏 localStorage 里要同步的那些键，JSON），ver 每存一次加一，用来发现两台设备同时改。
+CREATE TABLE IF NOT EXISTS save (
+  acct INTEGER PRIMARY KEY,
+  data TEXT    NOT NULL,
+  ver  INTEGER NOT NULL,
+  ts   INTEGER NOT NULL
+);
+-- 登录 / 重设失败的记录，限流用（同一个号 15 分钟 10 次，同一台设备 15 分钟 30 次），一天前的随手删掉。
+CREATE TABLE IF NOT EXISTS acct_fail (
+  key TEXT    NOT NULL,
+  ts  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS acct_fail_key ON acct_fail (key, ts);

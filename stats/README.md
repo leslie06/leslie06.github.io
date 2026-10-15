@@ -168,3 +168,22 @@ node stats/apply.mjs --off      # 把所有页面里的片段删干净
 - **占用**：服务常驻内存约 60 MB（systemd 里限了 300 MB 上限），一次会话在库里就一行、几十字节，每天一万次会话一年也才几十 MB。
 - **丢数据的情况**：心跳 15 秒一次，手机上标签页被系统杀掉时，最后不到 15 秒的时长会丢。统计趋势没影响。
 - **密钥别外传**：看板地址带着 `?k=`，发给别人等于给了查看权限。密钥泄露了重新 `wrangler secret put DASH_KEY` 就行。
+
+## 账号和云存档（2026-10-15 起，b城追车在用）
+
+玩家用用户名加密码注册，存档整份存在服务器上，换设备登录接着玩。不收手机号、邮箱。接口都是 POST text/plain 的 JSON（不触发跨域预检），登录令牌放在请求体的 `t` 里，不用 Cookie：
+
+| 接口 | 传什么 | 回什么 |
+| --- | --- | --- |
+| `/acct/register` | `g, name, pw` | `token, name, recovery`（恢复码只给这一次） |
+| `/acct/login` | `g, name, pw` | `token, name` |
+| `/acct/reset` | `g, name, recovery, pw` | `token, name, recovery`（新恢复码；这个号原来的登录全部作废） |
+| `/acct/logout` | `g, t` | `ok` |
+| `/save/get` | `g, t` | `name, ver, ts, data`（没存过 `data` 是 null） |
+| `/save/put` | `g, t, ver, data, force` | `ver, ts`；`ver` 不是库里当前的版本（别的设备存过）回 409，`force` 强行覆盖 |
+
+- **库里存什么**：`acct` 表只有用户名和两个哈希（密码、恢复码；PBKDF2-SHA256 迭代 10 万次加 16 字节随机盐，格式 `pbkdf2$迭代$盐$哈希`）；`sess` 表只存令牌的 SHA-256，180 天不用失效；`save` 表一个号一行（存档 JSON 文本，最多 60 万字符）和版本号；`acct_fail` 记登录失败，限流用。
+- **限制**：用户名 2–16 个字（字母、数字、汉字、下划线、减号，不分大小写查重）；密码 6–64 位；同一台设备（每天换盐的 ip_hash）一天最多注册 5 个号；同一个号 15 分钟内登录或重设失败 10 次、同一台设备 30 次，就先回 429。
+- **哪些游戏能用**：`worker.js` 的 `SAVE_GAMES`（现在只有 `bcity`）。
+- 表是 `schema.sql` 里的 `CREATE TABLE IF NOT EXISTS`，服务启动时自动建，更新服务器照上面「改完代码怎么更新服务器」传三个文件、重启就行。
+- 本地测：`node stats/test.mjs`（账号部分 24 条）。

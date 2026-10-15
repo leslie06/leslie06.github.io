@@ -8,6 +8,7 @@
 //   GET  /fb?k=密钥    反馈列表（/fb/list 取数，/fb/shot?id= 截图，POST /fb/state?id=&s= 标状态）
 //   GET  /?k=密钥      看板
 //   GET  /api?k=密钥   看板取数
+//   POST /acct/*、/save/*  账号（用户名 + 密码）和云存档，见下面「账号与云存档」
 //
 // 部署见 stats/README.md。本地可以 `node stats/test.mjs` 跑一遍，不需要 Cloudflare 账号。
 
@@ -275,6 +276,158 @@ async function api(env, days) {
   };
 }
 
+// ---------------------------------------------------------------- 账号与云存档
+// 用户名 + 密码（不收手机号、邮箱），存档整份存在服务器上。都是 POST text/plain 的 JSON（不触发跨域预检），
+// 登录令牌放在请求体里（t），不走 Cookie。
+//   /acct/register {g, name, pw}           -> {ok, name, token, recovery}
+//   /acct/login    {g, name, pw}           -> {ok, name, token}
+//   /acct/reset    {g, name, recovery, pw} -> {ok, name, token, recovery}（新的恢复码；旧的登录全部作废）
+//   /acct/logout   {g, t}                  -> {ok}
+//   /save/get      {g, t}                  -> {ok, name, ver, ts, data}（没存过 data 为 null）
+//   /save/put      {g, t, ver, data, force} -> {ok, ver, ts}；ver 不是库里的当前版本（别的设备存过）回 409 {error:'conflict', ver, ts}，force 强行覆盖
+export const SAVE_GAMES = new Set(['bcity']);
+const PBKDF2_ITER = 100000;      // Cloudflare Workers 上 PBKDF2 最多 10 万次
+const SAVE_MAX = 600000;         // 一份存档最多 60 万字符
+const SESS_DAYS = 180;
+const ACCT_NEW_PER_DAY = 5;      // 一台设备（每天换盐的 ip_hash）一天最多注册几个号
+const FAIL_WINDOW = 15 * 60e3, FAIL_PER_NAME = 10, FAIL_PER_DEVICE = 30;
+const RC_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 恢复码不用 0 O 1 I，免得抄错
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const randHex = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
+async function pbkdf2(pw, saltHex, iter = PBKDF2_ITER) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const salt = Uint8Array.from(saltHex.match(/../g).map((h) => parseInt(h, 16)));
+  return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, key, 256));
+}
+async function pwHash(pw) { const salt = randHex(16); return `pbkdf2$${PBKDF2_ITER}$${salt}$${await pbkdf2(pw, salt)}`; }
+async function pwCheck(pw, stored) {
+  const [kind, iter, salt, h] = String(stored).split('$');
+  if (kind !== 'pbkdf2' || !salt || !h) return false;
+  const got = await pbkdf2(pw, salt, +iter);
+  // 等长比较，不在第一个不同的字符就返回
+  let d = got.length ^ h.length;
+  for (let i = 0; i < Math.min(got.length, h.length); i++) d |= got.charCodeAt(i) ^ h.charCodeAt(i);
+  return d === 0;
+}
+const sha = async (s) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+function recoveryCode() {
+  const b = crypto.getRandomValues(new Uint8Array(12));
+  const c = [...b].map((x) => RC_ABC[x % RC_ABC.length]).join('');
+  return `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8)}`;
+}
+const cleanRc = (s) => String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+/** 用户名：2-16 个字，字母、数字、汉字、下划线、减号；像网址的不要。 */
+export function cleanUser(raw) {
+  const n = String(raw ?? '').normalize('NFKC').trim();
+  const len = [...n].length;
+  if (len < 2 || len > 16) return '';
+  if (!/^[\p{L}\p{N}_-]+$/u.test(n)) return '';
+  if (/https?|www|\.(com|cn|net)/i.test(n)) return '';
+  return n;
+}
+const goodPw = (pw) => typeof pw === 'string' && pw.length >= 6 && pw.length <= 64;
+const ACSQL = {
+  byName: 'SELECT id, name, pw, rc FROM acct WHERE game = ? AND lname = ?',
+  insert: 'INSERT INTO acct (game, name, lname, pw, rc, day, ip_hash, ts, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
+  newToday: 'SELECT COUNT(*) AS c FROM acct WHERE day = ? AND ip_hash = ?',
+  seen: 'UPDATE acct SET seen = ? WHERE id = ?',
+  setPw: 'UPDATE acct SET pw = ?, rc = ? WHERE id = ?',
+  sessPut: 'INSERT INTO sess (token, acct, ts, seen) VALUES (?, ?, ?, ?)',
+  sessGet: 'SELECT s.acct, s.seen, a.name FROM sess s JOIN acct a ON a.id = s.acct WHERE s.token = ? AND a.game = ?',
+  sessSeen: 'UPDATE sess SET seen = ? WHERE token = ?',
+  sessDel: 'DELETE FROM sess WHERE token = ?',
+  sessDelAll: 'DELETE FROM sess WHERE acct = ?',
+  failPut: 'INSERT INTO acct_fail (key, ts) VALUES (?, ?)',
+  failCount: 'SELECT COUNT(*) AS c FROM acct_fail WHERE key = ? AND ts > ?',
+  failGc: 'DELETE FROM acct_fail WHERE ts < ?',
+  saveGet: 'SELECT data, ver, ts FROM save WHERE acct = ?',
+  savePut: `INSERT INTO save (acct, data, ver, ts) VALUES (?, ?, ?, ?)
+            ON CONFLICT(acct) DO UPDATE SET data = excluded.data, ver = excluded.ver, ts = excluded.ts`,
+};
+async function body(request) { try { return JSON.parse(await request.text()); } catch { return null; } }
+async function deviceHash(request, env) {
+  const ip = request.headers.get('cf-connecting-ip') ?? '', ua = request.headers.get('user-agent') ?? '';
+  return hash(ip, ua, cnDay(), env.SALT ?? 'salt');
+}
+/** 失败太多（这个号，或者这台设备）：先别试了。 */
+async function throttled(env, keys) {
+  const since = Date.now() - FAIL_WINDOW;
+  for (const [k, max] of keys) { const r = await env.DB.prepare(ACSQL.failCount).bind(k, since).first(); if ((r?.c ?? 0) >= max) return true; }
+  return false;
+}
+async function failed(env, keys) {
+  const now = Date.now();
+  for (const [k] of keys) await env.DB.prepare(ACSQL.failPut).bind(k, now).run();
+  await env.DB.prepare(ACSQL.failGc).bind(now - 86400e3).run();
+}
+async function newSession(env, acct) {
+  const token = randHex(32), now = Date.now();
+  await env.DB.prepare(ACSQL.sessPut).bind(await sha(token), acct, now, now).run();
+  await env.DB.prepare(ACSQL.seen).bind(now, acct).run();
+  return token;
+}
+async function session(env, g, t) {
+  if (typeof t !== 'string' || t.length !== 64) return null;
+  const key = await sha(t), s = await env.DB.prepare(ACSQL.sessGet).bind(key, g).first();
+  if (!s) return null;
+  const now = Date.now();
+  if (now - s.seen > SESS_DAYS * 86400e3) { await env.DB.prepare(ACSQL.sessDel).bind(key).run(); return null; }
+  if (now - s.seen > 3600e3) { await env.DB.prepare(ACSQL.sessSeen).bind(now, key).run(); await env.DB.prepare(ACSQL.seen).bind(now, s.acct).run(); }
+  return { acct: s.acct, name: s.name, key };
+}
+async function account(request, env, path) {
+  const b = await body(request);
+  if (!b || !SAVE_GAMES.has(b.g)) return json({ error: 'game' }, 400);
+  const g = b.g;
+  if (path === '/acct/register') {
+    const name = cleanUser(b.name);
+    if (!name) return json({ error: 'name' }, 400);
+    if (!goodPw(b.pw)) return json({ error: 'pw' }, 400);
+    const dev = await deviceHash(request, env), day = cnDay();
+    const n = await env.DB.prepare(ACSQL.newToday).bind(day, dev).first();
+    if ((n?.c ?? 0) >= ACCT_NEW_PER_DAY) return json({ error: 'busy' }, 429);
+    if (await env.DB.prepare(ACSQL.byName).bind(g, name.toLowerCase()).first()) return json({ error: 'taken' }, 409);
+    const recovery = recoveryCode(), now = Date.now();
+    let row;
+    try { row = await env.DB.prepare(ACSQL.insert).bind(g, name, name.toLowerCase(), await pwHash(b.pw), await pwHash(cleanRc(recovery)), day, dev, now, now).first(); }
+    catch { return json({ error: 'taken' }, 409); }   // 两个人同时抢同一个名字：唯一约束兜底
+    return json({ ok: true, name, token: await newSession(env, row.id), recovery });
+  }
+  if (path === '/acct/login' || path === '/acct/reset') {
+    const name = cleanUser(b.name), dev = await deviceHash(request, env);
+    const keys = [[`n:${g}:${name.toLowerCase()}`, FAIL_PER_NAME], [`d:${dev}`, FAIL_PER_DEVICE]];
+    if (await throttled(env, keys)) return json({ error: 'busy' }, 429);
+    const a = name ? await env.DB.prepare(ACSQL.byName).bind(g, name.toLowerCase()).first() : null;
+    if (path === '/acct/login') {
+      if (!a || typeof b.pw !== 'string' || !(await pwCheck(b.pw, a.pw))) { await failed(env, keys); return json({ error: 'wrong' }, 401); }
+      return json({ ok: true, name: a.name, token: await newSession(env, a.id) });
+    }
+    if (!goodPw(b.pw)) return json({ error: 'pw' }, 400);
+    if (!a || !(await pwCheck(cleanRc(b.recovery), a.rc))) { await failed(env, keys); return json({ error: 'wrong' }, 401); }
+    const recovery = recoveryCode();
+    await env.DB.prepare(ACSQL.setPw).bind(await pwHash(b.pw), await pwHash(cleanRc(recovery)), a.id).run();
+    await env.DB.prepare(ACSQL.sessDelAll).bind(a.id).run();
+    return json({ ok: true, name: a.name, token: await newSession(env, a.id), recovery });
+  }
+  const s = await session(env, g, b.t);
+  if (path === '/acct/logout') { if (s) await env.DB.prepare(ACSQL.sessDel).bind(s.key).run(); return json({ ok: true }); }
+  if (!s) return json({ error: 'auth' }, 401);
+  if (path === '/save/get') {
+    const r = await env.DB.prepare(ACSQL.saveGet).bind(s.acct).first();
+    return json({ ok: true, name: s.name, ver: r?.ver ?? 0, ts: r?.ts ?? 0, data: r ? r.data : null });
+  }
+  if (path === '/save/put') {
+    if (typeof b.data !== 'string' || !b.data || b.data.length > SAVE_MAX) return json({ error: 'size' }, 413);
+    try { JSON.parse(b.data); } catch { return json({ error: 'json' }, 400); }
+    const r = await env.DB.prepare(ACSQL.saveGet).bind(s.acct).first(), cur = r?.ver ?? 0;
+    if (!b.force && (+b.ver || 0) !== cur) return json({ error: 'conflict', ver: cur, ts: r?.ts ?? 0 }, 409);
+    const now = Date.now();
+    await env.DB.prepare(ACSQL.savePut).bind(s.acct, b.data, cur + 1, now).run();
+    return json({ ok: true, ver: cur + 1, ts: now });
+  }
+  return json({ error: 'path' }, 404);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -290,6 +443,9 @@ export default {
         if (request.method === 'GET') return await board(env, url.searchParams.get('g'), url.searchParams.get('b'), cleanPid(url.searchParams.get('p')));
         return new Response(null, { status: 405, headers: CORS });
       } catch (e) { console.error('lb', e); return json({ error: 'server' }, 500); }
+    }
+    if ((url.pathname.startsWith('/acct/') || url.pathname.startsWith('/save/')) && request.method === 'POST') {
+      try { return await account(request, env, url.pathname); } catch (e) { console.error('acct', e); return json({ error: 'server' }, 500); }
     }
     if (url.pathname === '/fb' && request.method === 'POST') {
       try { return await feedback(request, env); } catch (e) { console.error('fb', e); return json({ error: 'server' }, 500); }

@@ -174,5 +174,48 @@ await admin('/fb/state?id=' + f1.body.id + '&s=done', { method: 'POST' });
 ok('标为已处理', (await (await admin('/fb/list?state=done')).json()).items.map((r) => r.id).join() === String(f1.body.id));
 ok('反馈页要密钥才出', (await worker.fetch(new Request('https://s/fb'), env)).status === 401 && (await admin('/fb')).status === 200);
 
+// —— 账号与云存档
+const ac = async (path, b, ip = '7.7.7.7') => { const r = await worker.fetch(new Request('https://s' + path, { method: 'POST', body: JSON.stringify(b), headers: { 'content-type': 'text/plain', 'user-agent': 'test-ua', 'cf-connecting-ip': ip } }), env); return { status: r.status, body: await r.json() }; };
+const reg = await ac('/acct/register', { g: 'bcity', name: '陈野Fan', pw: 'secret1' });
+ok('注册成功：给令牌和恢复码', reg.status === 200 && reg.body.token?.length === 64 && /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(reg.body.recovery), JSON.stringify(reg.body).slice(0, 80));
+ok('同名（不分大小写）不能再注册', (await ac('/acct/register', { g: 'bcity', name: '陈野fan', pw: 'secret2' })).status === 409);
+ok('名字太短、带空格、像网址的不行', (await ac('/acct/register', { g: 'bcity', name: 'a', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: 'a b', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: 'www.x.com', pw: 'secret1' })).status === 400);
+ok('密码太短不行', (await ac('/acct/register', { g: 'bcity', name: 'short', pw: '123' })).status === 400);
+ok('不认识的游戏不行', (await ac('/acct/register', { g: 'nope', name: 'abc', pw: 'secret1' })).status === 400);
+const row = db.prepare('SELECT * FROM acct').get();
+ok('库里没有密码和恢复码原文', !JSON.stringify(row).includes('secret1') && !JSON.stringify(row).includes(reg.body.recovery.replace(/-/g, '')) && row.pw.startsWith('pbkdf2$100000$'));
+ok('库里没有令牌原文', !JSON.stringify(db.prepare('SELECT * FROM sess').all()).includes(reg.body.token));
+const t1 = reg.body.token;
+const g0 = await ac('/save/get', { g: 'bcity', t: t1 });
+ok('新号没有存档', g0.status === 200 && g0.body.data === null && g0.body.ver === 0 && g0.body.name === '陈野Fan');
+const p1 = await ac('/save/put', { g: 'bcity', t: t1, ver: 0, data: JSON.stringify({ 'drivecity.cash': '500' }) });
+ok('存档：版本 1', p1.status === 200 && p1.body.ver === 1);
+const lg = await ac('/acct/login', { g: 'bcity', name: '陈野FAN', pw: 'secret1' });
+ok('另一台设备登录（大小写不敏感）', lg.status === 200 && lg.body.name === '陈野Fan' && lg.body.token !== t1);
+const g1 = await ac('/save/get', { g: 'bcity', t: lg.body.token });
+ok('另一台设备读到存档', g1.body.ver === 1 && JSON.parse(g1.body.data)['drivecity.cash'] === '500');
+await ac('/save/put', { g: 'bcity', t: lg.body.token, ver: 1, data: JSON.stringify({ 'drivecity.cash': '900' }) });
+const stale = await ac('/save/put', { g: 'bcity', t: t1, ver: 1, data: JSON.stringify({ 'drivecity.cash': '100' }) });
+ok('旧版本上的存档被挡：409 冲突', stale.status === 409 && stale.body.error === 'conflict' && stale.body.ver === 2);
+ok('强行覆盖可以', (await ac('/save/put', { g: 'bcity', t: t1, ver: 1, force: true, data: JSON.stringify({ 'drivecity.cash': '100' }) })).body.ver === 3);
+ok('坏数据、太大的存档不收', (await ac('/save/put', { g: 'bcity', t: t1, ver: 3, data: 'not json' })).status === 400 && (await ac('/save/put', { g: 'bcity', t: t1, ver: 3, data: JSON.stringify({ x: 'y'.repeat(700000) }) })).status === 413);
+ok('没登录不能读写', (await ac('/save/get', { g: 'bcity', t: 'f'.repeat(64) })).status === 401 && (await ac('/save/put', { g: 'bcity', data: '{}' })).status === 401);
+let wrong = 0, blocked = 0;
+for (let i = 0; i < 12; i++) { const r = await ac('/acct/login', { g: 'bcity', name: '陈野Fan', pw: 'bad' + i }, '8.8.8.' + i); if (r.status === 401) wrong++; if (r.status === 429) blocked++; }
+ok('同一个号 15 分钟错 10 次就先挡住', wrong === 10 && blocked === 2, `(${wrong} 错 ${blocked} 挡)`);
+ok('挡住期间密码对了也先别登', (await ac('/acct/login', { g: 'bcity', name: '陈野Fan', pw: 'secret1' }, '6.6.6.6')).status === 429);
+db.prepare('DELETE FROM acct_fail').run();
+ok('恢复码错了不能重设', (await ac('/acct/reset', { g: 'bcity', name: '陈野Fan', recovery: 'AAAA-BBBB-CCCC', pw: 'newpass1' })).status === 401);
+const rs = await ac('/acct/reset', { g: 'bcity', name: '陈野Fan', recovery: reg.body.recovery.toLowerCase().replace(/-/g, ' '), pw: 'newpass1' });
+ok('恢复码重设密码（大小写、分隔符随意），给新恢复码', rs.status === 200 && rs.body.recovery && rs.body.recovery !== reg.body.recovery);
+ok('重设后旧登录作废', (await ac('/save/get', { g: 'bcity', t: t1 })).status === 401 && (await ac('/save/get', { g: 'bcity', t: lg.body.token })).status === 401);
+ok('新密码能登、旧密码不行', (await ac('/acct/login', { g: 'bcity', name: '陈野Fan', pw: 'newpass1' })).status === 200 && (await ac('/acct/login', { g: 'bcity', name: '陈野Fan', pw: 'secret1' })).status === 401);
+ok('旧恢复码用过就失效', (await ac('/acct/reset', { g: 'bcity', name: '陈野Fan', recovery: reg.body.recovery, pw: 'x123456' })).status === 401);
+await ac('/acct/logout', { g: 'bcity', t: rs.body.token });
+ok('退出后令牌失效', (await ac('/save/get', { g: 'bcity', t: rs.body.token })).status === 401);
+let made = 0;
+for (let i = 0; i < 7; i++) if ((await ac('/acct/register', { g: 'bcity', name: 'bot' + i, pw: 'secret1' }, '3.3.3.3')).status === 200) made++;
+ok('同一台设备一天最多注册 5 个号', made === 5, `(${made})`);
+
 console.log(failed ? `\n${failed} 条没过` : '\n全过');
 process.exit(failed ? 1 : 0);
