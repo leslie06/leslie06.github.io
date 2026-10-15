@@ -212,7 +212,9 @@ export async function install(engine: Engine): Promise<void> {
   // street, drawn by this plane).
   const R = physics.R;
   const gbody = physics.world.createRigidBody(R.RigidBodyDesc.fixed());
-  const size = 26000, E = size / 2;
+  // the whole data box and a margin (a fixed 26 km left the east of the 2026-10-14 corridors, past x 16450, with
+  // no ground: cars fell through on 京通快速路 at 116.59)
+  const size = Math.max(26000, Math.max(b.x1 - b.x0, b.z1 - b.z0) + 1000), E = size / 2;
   const hole = undergroundHoles();
   // The underpasses' open trenches are holes in the ground too (a ring each, x, z pairs).
   const trenches = (tunnels?.holes ?? []).map((r) => { const P: [number, number][] = []; for (let i = 0; i < r.length; i += 2) P.push([r[i], r[i + 1]]); return P; });

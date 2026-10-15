@@ -211,9 +211,10 @@ describe('the real city', () => {
     const STREET = new Set(['primary', 'secondary', 'tertiary', 'unclassified', 'residential']);
     const arms: number[][] = Array.from({ length: g.nodeX.length }, () => []);
     // Up on an interchange's deck (over 3 m) the heads could only stand on the ground below: those
-    // few junctions (7, on 广渠路's viaduct and the like) are left dark on purpose.
+    // few junctions (7, on 广渠路's viaduct and the like) are left dark on purpose - and so are those down in
+    // an underpass (under -3 m: 管庄路 under 机场第二高速, two short tunnels off 京通快速路), as Signals does.
     const deck = new Set<number>();
-    for (const e of city.edges) if (e.h) { if (e.h[0] > 3) deck.add(e.a); if (e.h[e.h.length - 1] > 3) deck.add(e.b); }
+    for (const e of city.edges) if (e.h) { if (Math.abs(e.h[0]) > 3) deck.add(e.a); if (Math.abs(e.h[e.h.length - 1]) > 3) deck.add(e.b); }
     for (const e of city.edges) {
       if (e.p.length < 4 || !STREET.has(e.c)) continue;
       const m = e.p.length;

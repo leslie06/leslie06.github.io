@@ -29,6 +29,25 @@ export const EXTRA = [
   // 奥林匹克公园's centre (2026-10-02, 「扩到奥林匹克公园」): the map stopped behind 水立方 and 鸟巢 stood
   // outside it - o is the strip north of the 4th Ring box between 北辰西路 and 北辰东路 up to 国家会议中心.
   { tag: 'o', s: 39.992, w: 116.374, n: 40.008, e: 116.404, chunks: 1 },
+  // Out past the East 4th Ring along the roads (2026-10-14, 「京通往东，五环往北，南延也行，姚家园路到机场二高，京哈往东到
+  // 北京白鹿收费站，京津一小段，京沪到五环」): corridors again, not one box over the east (that alone would be ~95 km2).
+  //   a 东五环 north from the e corridor to 39.962 (it curves north-west to 116.52 there), with 姚家园路 off it;
+  //   b 姚家园路's motorway east to where 机场第二高速 turns north, c that road's first stretch north;
+  //   d 京通快速路, 朝阳路 and 广渠快速路 east past 东五环 to 杨闸 and the 京通/通燕 split (116.61);
+  //   g 东五环 south from the e corridor to 39.840 (广渠路, 京哈 at 化工桥, 京津's start), h and i 广渠路 and
+  //   京哈 between the main box and it; j the ring's curve south-west and k 大羊坊, where 京沪 meets it (the s
+  //   box stopped 京沪 at 39.826); l 京哈 east to 北京白鹿收费站 (116.574); m 京津 a few km south-east.
+  { tag: 'a', s: 39.921, w: 116.504, n: 39.962, e: 116.548, chunks: 2 },
+  { tag: 'b', s: 39.932, w: 116.548, n: 39.950, e: 116.592, chunks: 1 },
+  { tag: 'c', s: 39.950, w: 116.568, n: 39.962, e: 116.592, chunks: 1 },
+  { tag: 'd', s: 39.886, w: 116.550, n: 39.921, e: 116.612, chunks: 2 },
+  { tag: 'g', s: 39.840, w: 116.522, n: 39.897, e: 116.550, chunks: 2 },
+  { tag: 'h', s: 39.884, w: 116.504, n: 39.897, e: 116.522, chunks: 1 },
+  { tag: 'i', s: 39.860, w: 116.504, n: 39.875, e: 116.522, chunks: 1 },
+  { tag: 'j', s: 39.826, w: 116.504, n: 39.840, e: 116.550, chunks: 1 },
+  { tag: 'k', s: 39.810, w: 116.480, n: 39.826, e: 116.525, chunks: 1 },
+  { tag: 'l', s: 39.856, w: 116.550, n: 39.876, e: 116.582, chunks: 1 },
+  { tag: 'm', s: 39.824, w: 116.550, n: 39.840, e: 116.580, chunks: 1 },
 ];
 /** Every box of the playable area, the main one first. */
 export const REGIONS = [BBOX, ...EXTRA];

@@ -539,9 +539,29 @@ const heightNear = (W, x, z) => { let best = 0, bd = Infinity; for (const d of W
 // sink the road below into, so a 29 m span over 东二环 with its approaches running alongside 东二环
 // could only climb 1-2 m (STEEP from the pins) and sat on top of the traffic under it. Such bridges
 // go back to the flat, with their pins, and everything is solved again.
-let demoted = 0;
+// A crossing it cannot clear within END_SLACK of either end, where it clears others, is OSM ending the
+// bridge tag short at an abutment (2026-10-14, 「朝阳路和东四环……弄反了，东四环在上朝阳路在下」): 东四环's two
+// layer-2 decks over 朝阳路 at 慈云寺桥 each also cross a slip road 17 m from their north ends, where the road
+// carries on as a non-bridge way at ground height; that one crossing sent both decks back to the flat and
+// left 朝阳路's layer-1 deck on top. Such a crossing is dropped (the crossings pass gives it room or brings
+// it level) and the bridge kept; one it cannot clear in its middle, or all of them, still flattens it.
+const END_SLACK = 35;
+const arcNear = (W, x, z) => { let best = 0, bd = Infinity; for (const d of W._dense) { const dd = (d.x - x) ** 2 + (d.z - z) ** 2; if (dd < bd) { bd = dd; best = d.s; } } return best; };
+let demoted = 0, endDropped = 0;
 const demotedWays = [];
-for (const [W, lf] of [...lifted]) for (const { o, x, z } of lf.over) if (!lifted.has(o) && heightNear(W, x, z) < DECK - 1.2) { lifted.delete(W); demoted++; demotedWays.push(W); break; }
+for (const [W, lf] of [...lifted]) {
+  const len = W._dense.at(-1).s;
+  const fail = lf.over.filter(({ o, x, z }) => !lifted.has(o) && heightNear(W, x, z) < DECK - 1.2);
+  if (!fail.length) continue;
+  // only a lesser road at the abutment (a slip road under a main line's end), not two streets' worth
+  const atEnd = (c) => { const s = arcNear(W, c.x, c.z); return (s < END_SLACK || len - s < END_SLACK) && CLASS_RANK.indexOf(c.o._road.cls) < CLASS_RANK.indexOf(W._road.cls); };
+  // and only for a deck over another deck: flattening it is what puts the lower deck on top (elsewhere the
+  // old rule stands - kept, the others added walls across lanes in the audit, 41 -> 50)
+  const overDeck = lf.over.some(({ o }) => lifted.has(o));
+  if (overDeck && fail.length < lf.over.length && fail.every(atEnd)) { lf.over = lf.over.filter((c) => !fail.includes(c)); endDropped += fail.length; continue; }
+  lifted.delete(W); demoted++; demotedWays.push(W);
+}
+if (endDropped) console.log(`elevation: ${endDropped} crossings a bridge could not clear at its very end dropped (the bridge kept)`);
 // A dual carriageway's other half goes with it (2026-10-01): 紫竹院路's two bridges over 西三环 are separate
 // ways; one could not climb and went flat, the other stayed a deck, was tied down to its flat twin and
 // ended 0-0.5 m up with parapets standing across all four carriageways it crosses.
@@ -550,7 +570,9 @@ for (const D of demotedWays) {
   if (!D.tags.name) continue;
   const [a, b, c, d] = bbOf(D);
   for (const [W] of [...lifted]) {
-    if (W.tags.name !== D.tags.name) continue;
+    // the twin is the same road: same class and layer (东四环's side road, also 东四环中路, flattened its
+    // short layer-1 bridges and took the main line's layer-2 decks over 朝阳路 with it)
+    if (W.tags.name !== D.tags.name || W._road.cls !== D._road.cls || layerOf(W.tags) !== layerOf(D.tags)) continue;
     const [e, f, g, h] = bbOf(W);
     if (e > c + 30 || g < a - 30 || f > d + 30 || h < b - 30) continue;
     lifted.delete(W); demoted++;
@@ -918,8 +940,10 @@ if (process.env.ELEV_CONFLICTS) {
   }
   console.log('kinks', kinks.length, kinks.slice(0, 40));
 }
-if (process.env.ELEV_WAY) {
-  const w = carWays.find((q) => String(q.id) === process.env.ELEV_WAY), lf = lifted.get(w);
+if (process.env.ELEV_WAY) for (const wid of process.env.ELEV_WAY.split(',')) {
+  const w = carWays.find((q) => String(q.id) === wid), lf = lifted.get(w);
+  if (!w) { console.log('WAY', wid, 'not a car way'); continue; }
+  for (const c of crossings(w, carGrid)) console.log('  crosses', c.it.w.id, c.it.w.tags.name ?? c.it.w.tags.highway, 'layer', c.it.w.tags.layer ?? '-', 'bridge', c.it.w.tags.bridge ?? '-', 'at', Math.round(c.x), Math.round(c.z), 'sharesNear', sharesNear(w, c.it.w, c.x, c.z, 40));
   console.log('WAY', w.id, w.tags.name ?? w.tags.highway, 'layer', w.tags.layer, 'bridge', w.tags.bridge, 'pts', w._pts.map((p) => p.map(Math.round).join(',')).join(' '), 'H', lf?.H, 'over', lf?.over.map((c) => `${c.o.id}:${c.o.tags.name ?? c.o.tags.highway}@${Math.round(c.x)},${Math.round(c.z)}`).join(' '));
   for (const id of w._ids) for (const o of waysAt.get(id) ?? []) if (o !== w) console.log('  shares node', id, 'at', nodeXZ.get(id).map(Math.round).join(','), 'with', o.id, o.tags.name ?? o.tags.highway, 'pinned there', pinned.has(String(id)), 'HT', (HT.get(String(id)) ?? 0).toFixed(2));
   if (process.env.ELEV_KEYS) for (const d of w._dense) console.log('   KEY', d.key, d.s.toFixed(1), (HT.get(d.key) ?? 0).toFixed(2), JSON.stringify((adj.get(d.key) ?? []).map(([k, dd]) => [k, +dd.toFixed(1)])));
@@ -977,7 +1001,26 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
   for (const w of allCar) { const D = w._dense; for (let i = 1; i < D.length; i++) { const k = `${Math.floor((D[i - 1].x + D[i].x) / 2 / SG)},${Math.floor((D[i - 1].z + D[i].z) / 2 / SG)}`; (segGrid.get(k) ?? segGrid.set(k, []).get(k)).push([w, i]); } }
   const segsNear = (x, z) => { const out = [], cx = Math.floor(x / SG), cz = Math.floor(z / SG); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) out.push(...(segGrid.get(`${cx + a},${cz + b}`) ?? [])); return out; };
   const cross = (ax, az, bx, bz, cx, cz, dx, dz) => { const d = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx); if (!d) return false; const t = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / d, u = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / d; return t >= 0 && t <= 1 && u >= 0 && u <= 1; };
-  const active = new Set(tun), extra = new Map();   // extra: key -> the tunnel it hangs off
+  // A cross street under a deck between two sunk carriageways (2026-10-14): 管庄路's two carriageways run down
+  // under the 姚家园路/机场第二高速 interchange and two short tunnels join them across, each a junction at both ends
+  // - four junctions at -6 m. A trench only knows one road going under: the cross tunnels' side walls stood
+  // across 管庄路's lanes and cars hit them. A tunnel under 80 m with a junction (three arms) at both ends and a
+  // raised road over it stays on the ground (the deck is its cover; flattened under it, it is left out like the
+  // other tunnels under a raised road below). Narrower tries took 西三环's and 西直门外大街's main-line underpasses,
+  // OSM-split into short pieces between slip roads, and 中关村地下环廊.
+  const carAt = new Map();
+  // arms at a node: a way ending there is one, a way running through it two
+  for (const w of allCar) w._ids.forEach((id, i) => carAt.set(id, (carAt.get(id) ?? 0) + (i === 0 || i === w._ids.length - 1 ? 1 : 2)));
+  const junction = (n) => (carAt.get(n) ?? 0) >= 3;
+  const underDeck = (w) => w._dense.some((d) => segsNear(d.x, d.z).some(([o, j]) => {
+    if (o === w || !o._road) return false;
+    const p = o._dense[j - 1], q = o._dense[j];
+    return Math.max(HT.get(p.key) ?? 0, HT.get(q.key) ?? 0) > 3 && segDist(d.x, d.z, p.x, p.z, q.x, q.z) < w._road.w / 2 + o._road.w / 2;
+  }));
+  const gridded = new Set(tun.filter((w) => w._dense.at(-1).s < 80 && junction(w._ids[0]) && junction(w._ids.at(-1)) && underDeck(w)));
+  if (gridded.size) console.log(`underpasses: ${gridded.size} short tunnels between junctions under a deck kept on the ground`);
+  if (process.env.TUN_GRID) for (const w of gridded) console.log('GRID', w.id, w._road.cls, w.tags.name ?? '', 'at', Math.round(w._pts[0][0]), Math.round(w._pts[0][1]), 'L', Math.round(w._dense.at(-1).s));
+  const active = new Set(tun.filter((w) => !gridded.has(w))), extra = new Map();   // extra: key -> the tunnel it hangs off
   let H = new Map(), src = new Map(), dropped = 0, passes = 0, flatDropped = 0;
   for (let pass = 0; pass < 60; pass++) {
     passes = pass + 1;
@@ -1044,6 +1087,8 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
   // Not where a raised road passes over it: flattened under a ramp it ran into the ramp's underside
   // (bridgeaudit's blocks 765 -> 1097) - those are left out, as before.
   for (const w of tun) if (!active.has(w)) {
+    // the cross streets under a deck over 3 m keep their place in the network, on the ground: the deck clears them
+    if (gridded.has(w)) { w._road.tunnel = 0; continue; }
     const hw = w._road.w / 2;
     const under = w._dense.some((d) => segsNear(d.x, d.z).some(([o, j]) => {
       if (o === w || !o._road) return false;
@@ -1183,6 +1228,27 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
     } catch (e) { console.warn('underpasses: union failed', e.message); }
   }
   console.log(`underpasses: solved in ${passes} passes; ${active.size} tunnels kept, ${dropped - flatDropped} kept on the ground instead (no room for the approaches; ${flatDropped} more under a raised road left out), ${extra.size} approach points covered by a road over them; ${(covered / 1000).toFixed(1)} km covered, ${(open / 1000).toFixed(1)} km open, ${TRENCH.holes.length} holes`);
+  // Last, the sunk stretches' slopes by the distances as built (2026-10-14): the solve walks the height graph's
+  // arc lengths, but trench points moved away from a road beside them and tie points spliced in sit closer in
+  // plan, and 康各庄路 by the 管庄路 underpass under 机场第二高速 dropped 1 m in 4 m (25%). A point deeper than its
+  // neighbour allows at TUN.STEEP over their plan distance is raised towards the ground (never above it).
+  let eased = 0;
+  for (let round = 0; round < 4; round++) {
+    let moved = 0;
+    for (const w of allCar) {
+      const D = w._dense;
+      if (!D.some((d) => (HT.get(d.key) ?? 0) < -0.05)) continue;
+      const ease = (i, j) => {
+        const hi = HT.get(D[i].key) ?? 0, hj = HT.get(D[j].key) ?? 0, lim = hj - TUN.STEEP * Math.hypot(D[i].x - D[j].x, D[i].z - D[j].z);
+        if (hi < 0 && hi < lim - 0.01) { const v = Math.min(0, lim); if (v > -0.02) HT.delete(D[i].key); else HT.set(D[i].key, v); moved++; }
+      };
+      for (let i = 1; i < D.length; i++) ease(i, i - 1);
+      for (let i = D.length - 2; i >= 0; i--) ease(i, i + 1);
+    }
+    eased += moved;
+    if (!moved) break;
+  }
+  if (eased) console.log(`underpasses: ${eased} sunk points eased to TUN.STEEP over their distance as built`);
 }
 /** Whether way w is an open trench at arc length s (its carriageway is a hole in the ground there). */
 const trenchOpen = (w, s) => { const op = TRENCH.open.get(w); if (!op) return false; const D = w._dense; for (let i = 1; i < D.length; i++) if (s <= D[i].s) return op[i - 1]; return false; };

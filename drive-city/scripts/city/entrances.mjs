@@ -95,7 +95,7 @@ function obb(o) {
 const stationNames = new Set(stations.map((s) => s.zh));
 
 const placed = [], names = [], nameIdx = new Map();
-let inBuilding = 0, noRoad = 0, noRoom = 0, replaced = 0;
+let inBuilding = 0, noRoad = 0, noRoom = 0, replaced = 0, noName = 0;
 for (const e of [...ents.values()].sort((a, b) => a.id - b.id)) {
   const [x, z] = project(e.lat, e.lon);
   const T = around(x, z);
@@ -173,6 +173,9 @@ for (const e of [...ents.values()].sort((a, b) => a.id - b.id)) {
     let d = 700;
     for (const st of stations) { const dd = Math.hypot(st.x - x, st.z - z); if (dd < d) { d = dd; zh = st.zh; en = st.en; } }
   }
+  // no station within reach (one whose station stands outside a corridor's box, 2026-10-14): its board would
+  // have nothing to say, so it is left out
+  if (!zh) { noName++; continue; }
   en = en.replace(/ (Subway|Metro)\b.*$/i, '');
   if (zh && !en) en = placeEn(zh) || '';
   let ref = (t.ref ?? '').trim();
@@ -193,4 +196,4 @@ const out = {
   e: placed.map((p) => [q2(p.x), q2(p.z), +Math.atan2(p.ux, p.uz).toFixed(4), q2(p.len), q2(p.wid), p.ni, p.ref]),
 };
 fs.writeFileSync(path.join(DIR, 'entrances.json'), JSON.stringify(out));
-console.log(`subway entrances: ${placed.length} placed of ${ents.size} (${replaced} in place of OSM's own box, ${inBuilding} inside a building, ${noRoad} with no street near, ${noRoom} with no room), ${names.length} stations, ${placed.filter((p) => p.ni < 0).length} unnamed`);
+console.log(`subway entrances: ${placed.length} placed of ${ents.size} (${replaced} in place of OSM's own box, ${inBuilding} inside a building, ${noRoad} with no street near, ${noRoom} with no room), ${names.length} stations, ${noName} left out with no station near`);
