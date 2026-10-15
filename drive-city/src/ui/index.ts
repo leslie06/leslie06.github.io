@@ -50,7 +50,8 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   // The leaderboards, where there are any (the city).
   const boards = engine.get('leaderboard') ? new Boards(engine, container) : null;
   if (boards) menu.onBoards = () => boards.show();
-  // The story's chapter select (campaign/), from the pause screen: picking one resumes the game and starts it.
+  // The story's chapter select (campaign/), from the title and the pause screen: picking one starts (or resumes) the
+  // game and the chapter; from the title it is the city's start too (the opening's adventure only sets up on it).
   const chapters = engine.get('campaign') ? new Chapters(engine, container, () => api.start()) : null;
   if (chapters) menu.onChapters = () => chapters.show();
   // Accounts and the cloud save (online/Cloud.ts), from the title and the pause screen, where the server is on.

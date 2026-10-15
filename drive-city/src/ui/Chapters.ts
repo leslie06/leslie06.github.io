@@ -31,7 +31,8 @@ css(`
 `);
 
 /**
- * The chapter select (2026-10-15, 「加一个章节选择，已通关的章节可以跳过」; the pause screen's 主线章节 button): every
+ * The chapter select (2026-10-15, 「加一个章节选择，已通关的章节可以跳过」; the title's and pause screen's 主线章节
+ * button - on the title too since 「怎么把主线章节弄丢了」): every
  * chapter with its medal, 已跳过, 下一章 or 未解锁, and a button - replay a cleared one, start the next, or skip ahead to a
  * locked one (a second tap confirms skipping those before it). Picking one closes the menu and starts it there and then.
  */

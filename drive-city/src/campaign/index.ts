@@ -205,10 +205,12 @@ export function install(engine: Engine): void {
           const P = env.pl.position, d = Math.hypot(P.x - at.x, P.z - at.z);
           const onFoot = env.pl.mode === 'onfoot', slow = onFoot || env.v.car.speed < 3;
           // point it out: once a session when it opens (nothing else on), and again on the way in
-          const quiet = calm() && cool <= 0 && !env.dialogue?.busy;
+          // not over the title or the pause screen (it sat on top of the menu): only once in the city
+          const inGame = engine.get<{ name: string; state: string }>('ui')?.state === 'playing';
+          const quiet = inGame && calm() && cool <= 0 && !env.dialogue?.busy;
           const head = t('cmp.nudge.head', { kick: c.kick, title: c.title });
           if (quiet && !nudged.has(c.id) && d > NEAR_R) { nudged.add(c.id); nudge.show(c.glyph, head, t('cmp.nudge.go', { who: c.giver })); }
-          if (d < NEAR_R && nearNudged !== c.id && calm()) { nearNudged = c.id; nudged.add(c.id); nudge.show(c.glyph, head, t('cmp.nudge.here'), 6); }
+          if (d < NEAR_R && nearNudged !== c.id && inGame && calm()) { nearNudged = c.id; nudged.add(c.id); nudge.show(c.glyph, head, t('cmp.nudge.here'), 6); }
           if (d > NEAR_R * 2 && nearNudged === c.id) nearNudged = '';
           if (d < (onFoot ? START_R : START_R_CAR) && slow && cool <= 0) {
             if (calm()) { startMark.hide(); begin(c); }
@@ -219,6 +221,8 @@ export function install(engine: Engine): void {
       for (const car of env.cars) car.draw(alpha);
     },
   };
+  // a note still up when the game is paused goes (it would sit over the menu)
+  engine.events.on('game:pause', () => nudge.hide());
   env.nav.addBlips(() => env.blips.slice());
   engine.add(api);
 }

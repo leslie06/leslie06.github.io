@@ -66,7 +66,7 @@ export class Menu {
   /** The 排行榜 button; unset (the yard), the button stays hidden. */
   onBoards: (() => void) | null = null;
   private boardsBtn: HTMLButtonElement;
-  /** The 主线章节 button (the pause screen only: from the title the opening would run over it); unset, hidden. */
+  /** The 主线章节 button (title and pause); unset (no story in this world), hidden. */
   onChapters: (() => void) | null = null;
   private chaptersBtn: HTMLButtonElement;
   /** The 登录 / 注册 button (title and pause; 账号：名字 once logged in); unset (no server in this build), hidden. */
@@ -167,7 +167,7 @@ export class Menu {
     this.accountBtn.hidden = !this.onAccount;
     this.setAccount(this.accountName);
     const paused = state === 'paused';
-    this.chaptersBtn.hidden = !this.onChapters || !paused;
+    this.chaptersBtn.hidden = !this.onChapters;
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');
     this.pauseHint.hidden = !paused;
     this.progressEl.hidden = !paused || !this.progressEl.textContent;
