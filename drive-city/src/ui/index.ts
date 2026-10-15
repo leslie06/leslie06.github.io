@@ -13,6 +13,8 @@ import { Minimap } from './Minimap';
 import { MapScreen } from './MapScreen';
 import { Boards } from './Boards';
 import { Chapters } from './Chapters';
+import { AccountPanel } from './Account';
+import type { CloudApi } from '../online/Cloud';
 import { FeedbackPanel } from './Feedback';
 import type { PresenceApi } from '../online/Presence';
 import { journalOf } from '../npc/Journal';
@@ -50,6 +52,10 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   // The story's chapter select (campaign/), from the pause screen: picking one resumes the game and starts it.
   const chapters = engine.get('campaign') ? new Chapters(engine, container, () => api.start()) : null;
   if (chapters) menu.onChapters = () => chapters.show();
+  // Accounts and the cloud save (online/Cloud.ts), from the title and the pause screen, where the server is on.
+  const cloud = engine.get<CloudApi>('cloud');
+  const account = cloud?.enabled ? new AccountPanel(engine, container, () => menu.setAccount(cloud.user)) : null;
+  if (account && cloud) { menu.onAccount = () => account.show(); menu.setAccount(cloud.user); }
   // Players' feedback (online/Feedback.ts), from the title and the pause screen.
   const feedback = engine.get('feedback') ? new FeedbackPanel(engine, container) : null;
   if (feedback) menu.onFeedback = () => feedback.show();
@@ -98,6 +104,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     },
     start() {
       boards?.hide(); chapters?.hide();
+      if (!cloud?.conflict) account?.hide();
       engine.get<AudioApi>('audio')?.unlock();
       engine.get<VoiceApi>('voices')?.unlock();   // in the same click: three's audio shares the context
       const veh = v();

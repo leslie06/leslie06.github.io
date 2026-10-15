@@ -69,6 +69,9 @@ export class Menu {
   /** The 主线章节 button (the pause screen only: from the title the opening would run over it); unset, hidden. */
   onChapters: (() => void) | null = null;
   private chaptersBtn: HTMLButtonElement;
+  /** The 登录 / 注册 button (title and pause; 账号：名字 once logged in); unset (no server in this build), hidden. */
+  onAccount: (() => void) | null = null;
+  private accountBtn: HTMLButtonElement;
   /** The 意见反馈 button (title and pause); unset, it stays hidden. */
   onFeedback: (() => void) | null = null;
   private feedbackBtn: HTMLButtonElement;
@@ -102,6 +105,10 @@ export class Menu {
     boards.addEventListener('click', () => this.onBoards?.());
     this.onlineEl = el('div', 'online', left);
     this.onlineEl.hidden = true;
+    const acct = this.accountBtn = el('button', 'ghost', row);
+    acct.id = 'account';
+    acct.textContent = t('acct.button');
+    acct.addEventListener('click', () => this.onAccount?.());
     const fb = this.feedbackBtn = el('button', 'ghost', row);
     fb.id = 'feedback';
     fb.appendChild(L('fb.button'));
@@ -113,6 +120,7 @@ export class Menu {
       b.textContent = LANG_NAME[l];
       b.addEventListener('click', () => setLang(l));
     }
+    onLangChange(() => this.setAccount(this.accountName));
     onLangChange((l) => { [...langSeg.children].forEach((b, i) => b.classList.toggle('on', LANGS[i] === l)); if (this.onlineN) this.setOnline(...this.onlineN); });
     const qLabel = el('span', 'seglabel', opts); qLabel.appendChild(L('settings.quality'));
     const qSeg = el('div', 'seg', opts);
@@ -145,6 +153,10 @@ export class Menu {
     this.onlineEl.hidden = false;
   }
 
+  /** Who is logged in (the account button's label), or null. */
+  setAccount(name: string | null): void { this.accountName = name; this.accountBtn.textContent = name ? t('acct.buttonUser', { name }) : t('acct.button'); }
+  private accountName: string | null = null;
+
   /** The pause screen's progress lines (ramps, 兔儿爷, bests), or '' for none. */
   setProgress(text: string): void { this.progressEl.textContent = text; }
 
@@ -152,6 +164,8 @@ export class Menu {
     this.root.hidden = state === 'playing' || state === 'overlay';
     this.boardsBtn.hidden = !this.onBoards;
     this.feedbackBtn.hidden = !this.onFeedback;
+    this.accountBtn.hidden = !this.onAccount;
+    this.setAccount(this.accountName);
     const paused = state === 'paused';
     this.chaptersBtn.hidden = !this.onChapters || !paused;
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');

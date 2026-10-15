@@ -45,6 +45,7 @@ import * as adventure from './adventure';
 import * as leaderboard from './online/Leaderboard';
 import * as feedback from './online/Feedback';
 import * as presence from './online/Presence';
+import * as cloud from './online/Cloud';
 import * as campaign from './campaign';
 import * as underground from './underground';
 import * as park from './park';
@@ -72,11 +73,16 @@ async function boot() {
   // the two downloads: +12 s to playable at 500 KB/s.
   // The saloon and the wheels before the world, and the body of the player's saved car (the garage's or
   // the one parked at home); the other bodies after the spawn's tiles (below).
-  const saved: BodySource[] = [];
-  for (const [key, pick] of [['drivecity.garage.v1', (j: { body?: string }) => j.body], ['drivecity.home.v1', (j: { car?: { body?: string } }) => j.car?.body]] as const) {
-    try { const b = (pick as (j: unknown) => string | undefined)(JSON.parse(localStorage.getItem(key) ?? 'null') ?? {}); if (b && b !== 'sedan' && ['hatch', 'suv', 'mpv', 'bus', 'truck'].includes(b)) saved.push(b as BodySource); } catch { /* no save */ }
-  }
+  const savedBodies = () => {
+    const out: BodySource[] = [];
+    for (const [key, pick] of [['drivecity.garage.v1', (j: { body?: string }) => j.body], ['drivecity.home.v1', (j: { car?: { body?: string } }) => j.car?.body]] as const) {
+      try { const b = (pick as (j: unknown) => string | undefined)(JSON.parse(localStorage.getItem(key) ?? 'null') ?? {}); if (b && b !== 'sedan' && ['hatch', 'suv', 'mpv', 'bus', 'truck'].includes(b)) out.push(b as BodySource); } catch { /* no save */ }
+    }
+    return out;
+  };
+  const saved = savedBodies();
   const bodies = readyBodies(shotMode ? undefined : ['sedan', 'wheels', ...saved]);
+  const cloudReady = cloud.boot();
   bootBar.stage(0.27, 0.55, 'boot.engine', 16);
   await engine.physics.init();
   await render.install(engine);
@@ -84,8 +90,14 @@ async function boot() {
   // Central Beijing from OSM by default; ?world=yard is the M0 driving-school yard (handling sandbox).
   const worldName = new URLSearchParams(location.search).get('world') ?? 'city';
   if (worldName === 'city') await city.install(engine); else { await readyBodies(); await world.install(engine); }
+  // a logged-in player's newer cloud save, before any system reads its save (the vehicle on); started alongside the
+  // city, so it has usually answered by now
+  await cloudReady;
   bootBar.stage(0.96, 0.97, 'boot.cars', 2);
   await bodies;
+  // the cloud save's own car may be a body not fetched yet
+  const later = savedBodies().filter((b) => !saved.includes(b));
+  if (later.length) await readyBodies(later);
   // the rest of the bodies now the spawn's tiles are in (traffic adds their cars as they arrive)
   void readyBodies();
   bootBar.stage(0.97, 0.995, 'boot.world', 2);
@@ -101,6 +113,7 @@ async function boot() {
   if (worldName === 'city') await voices.install(engine);
   feedback.install(engine);
   presence.install(engine);
+  cloud.install(engine);
   await ui.install(engine, container);
   if (worldName === 'city') { registerCityPoses(); registerTrafficPoses(); registerPeoplePoses(); registerCharacterPoses(); registerNavPoses(); registerPolicePoses(); registerVehiclePoses(); registerMissionPoses(); registerRacePoses(); registerParkPoses(); registerHomePoses(); registerTitlePose(); } else registerPoses();
   engine.resize();
