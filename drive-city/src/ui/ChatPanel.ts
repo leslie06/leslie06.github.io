@@ -1,27 +1,26 @@
 import type { Engine } from '../core/Engine';
-import { onLangChange, t, type TKey } from '../core/I18n';
+import { lang, onLangChange, t, type TKey } from '../core/I18n';
 import type { ChatApi, ChatMsg } from '../online/Chat';
 import { C, F, css, el } from './theme';
 
 css(`
-.chat-btn{position:absolute;left:38px;top:166px;z-index:6;pointer-events:auto;display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:16px;border:1px solid ${C.line};
-  background:rgba(14,17,20,.72);color:${C.paper};font:700 12px/1 ${F.ui};cursor:pointer;letter-spacing:.04em}
+/* under the minimap's column (route, best, F1) and the 附近冒险 button (adventure/Panel.ts: +62 px), the same look */
+.chat-btn{position:fixed;left:var(--hud-x,38px);top:calc(var(--mm-top,18px) + var(--mm-h,0px) + 114px);z-index:26;pointer-events:auto;display:flex;align-items:center;gap:7px;
+  min-height:44px;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid ${C.yellowDim};background:${C.inkGlass};color:${C.paper};font:700 13px/1.2 ${F.ui};cursor:pointer}
 .chat-btn b{min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#ff5a4a;color:#fff;font:800 10px/16px ${F.num};text-align:center}
 .chat-btn b[hidden]{display:none}
-body.dc-touch .chat-btn{left:12px;top:calc(132px + env(safe-area-inset-top,0px))}
 body.cmp-cine .chat-btn,body.cmp-cine .chat-feed{display:none}
-.chat-feed{position:absolute;left:38px;top:200px;z-index:6;width:min(360px,42vw);display:flex;flex-direction:column;gap:3px;pointer-events:none}
-body.dc-touch .chat-feed{left:12px;top:calc(166px + env(safe-area-inset-top,0px))}
+.chat-feed{position:fixed;left:var(--hud-x,38px);top:calc(var(--mm-top,18px) + var(--mm-h,0px) + 166px);z-index:26;width:min(360px,42vw);display:flex;flex-direction:column;gap:3px;pointer-events:none}
 .chat-feed .m{padding:4px 9px;border-radius:7px;background:rgba(8,10,12,.55);font:500 13px/1.45 ${F.ui};color:${C.paper};text-shadow:0 1px 3px rgba(0,0,0,.8);
   transition:opacity .6s;word-break:break-word}
 .chat-feed .m.old{opacity:0}
 .chat-feed .m i,.chat-panel .m i{font-style:normal;font-weight:800;color:#8fc7ff;margin-right:6px}
 .chat-feed .m i.g,.chat-panel .m i.g{color:#b9bfcc}
 .chat-feed .m i.me,.chat-panel .m i.me{color:${C.yellow}}
-.chat-panel{position:fixed;left:38px;top:200px;z-index:29;width:min(380px,calc(100vw - 32px));display:flex;flex-direction:column;border-radius:12px;background:rgba(14,17,20,.92);
+.chat-panel{position:fixed;left:var(--hud-x,38px);top:calc(var(--mm-top,18px) + var(--mm-h,0px) + 62px);z-index:29;width:min(380px,calc(100vw - 32px));display:flex;flex-direction:column;border-radius:12px;background:#15191c;
   border:1px solid ${C.line};box-shadow:0 14px 40px rgba(0,0,0,.45);font-family:${F.ui};color:${C.paper};overflow:hidden}
 .chat-panel[hidden]{display:none}
-body.dc-touch .chat-panel{left:12px;top:calc(56px + env(safe-area-inset-top,0px))}
+body.dc-touch .chat-panel{top:calc(8px + env(safe-area-inset-top,0px))}
 .chat-panel .top{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid ${C.line}}
 .chat-panel h3{margin:0;font:800 12px/1 ${F.num};letter-spacing:.22em;color:${C.yellow}}
 .chat-panel .x{background:transparent;border:0;color:${C.muted};font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
@@ -65,7 +64,8 @@ export class ChatPanel {
     this.badge = el('b', '', this.btn); this.badge.hidden = true;
     this.btn.addEventListener('click', () => this.toggle());
     this.feed = el('div', 'chat-feed', hud);
-    const p = this.panel = el('div', 'chat-panel', container);
+    // on the page itself, as the 附近冒险 button is (a child of the game's container stacks under it, whatever its z-index)
+    const p = this.panel = el('div', 'chat-panel', document.body);
     p.hidden = true;
     const top = el('div', 'top', p);
     const h = el('h3', '', top);
@@ -77,7 +77,7 @@ export class ChatPanel {
     this.go = el('button', 'go', send);
     this.err = el('div', 'err', p);
     this.who = el('div', 'who', p);
-    const labels = () => { label.textContent = t('chat.button'); h.textContent = t('chat.title'); this.input.placeholder = t('chat.placeholder'); this.go.textContent = t('chat.send'); this.renderList(); };
+    const labels = () => { label.textContent = `💬 ${t('chat.button')}`; h.textContent = t('chat.title'); this.input.placeholder = t('chat.placeholder'); this.go.textContent = t('chat.send'); this.renderList(); };
     labels(); onLangChange(labels);
     // typing stays in the chat (Input listens on window, bubbling): Enter sends, Esc closes
     p.addEventListener('keydown', (e) => {
@@ -121,7 +121,7 @@ export class ChatPanel {
     const d = el('div', 'm', parent);
     const n = el('i', m.mine ? 'me' : m.guest ? 'g' : '', d); n.textContent = m.name;
     d.append(document.createTextNode(m.text));
-    if (ts) { const s = el('span', 'ts', d); s.textContent = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    if (ts) { const s = el('span', 'ts', d); s.textContent = new Date(m.ts).toLocaleTimeString(lang() === 'zh' ? 'zh-CN' : 'en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }); }
     return d;
   }
   private renderList(): void {
