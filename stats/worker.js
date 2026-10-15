@@ -9,6 +9,7 @@
 //   GET  /?k=密钥      看板
 //   GET  /api?k=密钥   看板取数
 //   POST /acct/*、/save/*  账号（用户名 + 密码）和云存档，见下面「账号与云存档」
+//   POST /chat、GET /chat   游戏里的聊天，见下面「聊天」；/chat/admin?k=密钥 后台
 //
 // 部署见 stats/README.md。本地可以 `node stats/test.mjs` 跑一遍，不需要 Cloudflare 账号。
 
@@ -428,6 +429,97 @@ async function account(request, env, path) {
   return json({ error: 'path' }, 404);
 }
 
+// ---------------------------------------------------------------- 聊天
+// 在线玩家实时发言（游戏每隔几秒来取新的）。都是 text/plain 的 JSON，不触发跨域预检：
+//   POST /chat {g, text, p, t?}  发一条（p 随机玩家号；t 登录令牌，有就用账号名，没有就是「游客」+ 编号）-> {ok, msg}
+//   GET  /chat?g=&after=id       id 之后的新消息（after 不给就是最近 50 条）-> {msgs, last}
+//   GET  /chat/admin?k=密钥       后台页；/chat/list?k= 取数（含已删的），POST /chat/hide?k=&id=&h=1|0 删 / 恢复，
+//   POST /chat/ban?k=&id=&hours=  按这条消息禁言发言人（玩家号、账号、设备）几小时（0 = 解除）
+// 限制：每条 1-120 字；同一个人 3 秒一条、一分钟 15 条；30 秒内一字不差的重复不收；网址、QQ 号、微信号这类广告不收；
+// 脏话换成星号（CHAT_WORDS 是默认词表，自建服务器上 env.CHAT_WORDS 可以再加，一行一个）。
+export const CHAT_GAMES = new Set(['bcity']);
+const CHAT_MAX = 120, CHAT_GAP = 3000, CHAT_PER_MIN = 15, CHAT_PAGE = 50;
+const CHAT_WORDS = ['傻逼', '傻b', '煞笔', '沙比', '傻屌', '操你', '草你', '肏', '日你', '尼玛', '你妈的', '他妈的', '去你妈', '妈逼', '妈b', '狗日', '贱人', '婊子', '王八蛋', '滚蛋', '脑残', '弱智', 'sb', 'nmsl', 'cnm', 'fuck', 'shit', 'bitch'];
+const CHAT_AD = [/https?:|www\.|\.(com|cn|net|org|top|xyz|cc|vip)\b/i, /(qq|q群|vx|v信|微信|wx|加我|加群|代练|外挂|私聊)/i, /\d{7,}/];
+/** 游客编号：随机玩家号算出的 4 位数（同一台设备固定）。 */
+export async function guestNo(pid) { const h = await sha(`guest|${pid}`); return 1000 + (parseInt(h.slice(0, 8), 16) % 9000); }
+export function cleanChat(raw, extra = []) {
+  // NFC, not NFKC: NFKC turns Chinese full-width punctuation (，？！) into ASCII
+  let s = String(raw ?? '').normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e]/g, '').replace(/\s+/g, ' ').trim();
+  s = [...s].slice(0, CHAT_MAX).join('');
+  if (!s) return { error: 'empty' };
+  if (CHAT_AD.some((r) => r.test(s))) return { error: 'ad' };
+  for (const w of [...CHAT_WORDS, ...extra]) {
+    if (!w) continue;
+    const re = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    s = s.replace(re, (m) => '*'.repeat([...m].length));
+  }
+  return { text: s };
+}
+const CHSQL = {
+  put: 'INSERT INTO chat (game, ts, name, acct, pid, text, ip_hash) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
+  since: `SELECT id, ts, name, acct, pid, text FROM chat WHERE game = ? AND id > ? AND hidden = 0 ORDER BY id LIMIT 100`,
+  recent: `SELECT * FROM (SELECT id, ts, name, acct, pid, text FROM chat WHERE game = ? AND hidden = 0 ORDER BY id DESC LIMIT ${CHAT_PAGE}) ORDER BY id`,
+  lastBy: 'SELECT ts, text FROM chat WHERE (pid = ? OR ip_hash = ?) AND game = ? ORDER BY id DESC LIMIT 1',
+  perMin: 'SELECT COUNT(*) AS c FROM chat WHERE (pid = ? OR ip_hash = ?) AND ts > ?',
+  ban: 'SELECT until FROM chat_ban WHERE key = ? AND until > ?',
+  banPut: `INSERT INTO chat_ban (key, until, ts) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET until = excluded.until, ts = excluded.ts`,
+  get: 'SELECT * FROM chat WHERE id = ?',
+  hide: 'UPDATE chat SET hidden = ? WHERE id = ?',
+  list: 'SELECT id, game, ts, name, acct, pid, text, ip_hash, hidden FROM chat ORDER BY id DESC LIMIT ?',
+  bans: 'SELECT key, until FROM chat_ban WHERE until > ? ORDER BY until DESC',
+};
+const chatOut = (r) => ({ id: r.id, ts: r.ts, name: r.name, guest: r.acct === null || r.acct === undefined, text: r.text });
+async function chatPost(request, env) {
+  const b = await body(request);
+  if (!b || !CHAT_GAMES.has(b.g)) return json({ error: 'game' }, 400);
+  const pid = cleanPid(b.p);
+  if (!pid) return json({ error: 'pid' }, 400);
+  const extra = String(env.CHAT_WORDS ?? '').split('\n').map((w) => w.trim()).filter(Boolean);
+  const c = cleanChat(b.text, extra);
+  if (c.error) return json({ error: c.error }, 400);
+  const s = b.t ? await session(env, b.g, b.t) : null;
+  const dev = await deviceHash(request, env), now = Date.now();
+  for (const k of [`p:${pid}`, `d:${dev}`, ...(s ? [`a:${s.acct}`] : [])]) {
+    const r = await env.DB.prepare(CHSQL.ban).bind(k, now).first();
+    if (r) return json({ error: 'banned', until: r.until }, 403);
+  }
+  const last = await env.DB.prepare(CHSQL.lastBy).bind(pid, dev, b.g).first();
+  if (last && now - last.ts < CHAT_GAP) return json({ error: 'fast' }, 429);
+  if (last && last.text === c.text && now - last.ts < 30000) return json({ error: 'dup' }, 429);
+  const n = await env.DB.prepare(CHSQL.perMin).bind(pid, dev, now - 60000).first();
+  if ((n?.c ?? 0) >= CHAT_PER_MIN) return json({ error: 'fast' }, 429);
+  const name = s ? s.name : `游客${await guestNo(pid)}`;
+  const row = await env.DB.prepare(CHSQL.put).bind(b.g, now, name, s ? s.acct : null, pid, c.text, dev).first();
+  return json({ ok: true, msg: chatOut({ id: row.id, ts: now, name, acct: s ? s.acct : null, text: c.text }) });
+}
+async function chatGet(env, url) {
+  const g = url.searchParams.get('g');
+  if (!CHAT_GAMES.has(g)) return json({ error: 'game' }, 400);
+  const after = Math.max(0, Math.floor(+url.searchParams.get('after') || 0));
+  const rows = after ? await env.DB.prepare(CHSQL.since).bind(g, after).all() : await env.DB.prepare(CHSQL.recent).bind(g).all();
+  const msgs = rows.results.map(chatOut);
+  return json({ msgs, last: msgs.length ? msgs[msgs.length - 1].id : after });
+}
+async function chatAdmin(request, env, url) {
+  if (url.pathname === '/chat/admin') return new Response(CHATPAGE, { headers: { 'content-type': 'text/html;charset=utf-8', 'cache-control': 'no-store' } });
+  if (url.pathname === '/chat/list') {
+    const rows = await env.DB.prepare(CHSQL.list).bind(Math.min(Math.max(+url.searchParams.get('n') || 300, 1), 2000)).all();
+    const bans = await env.DB.prepare(CHSQL.bans).bind(Date.now()).all();
+    return json({ items: rows.results, bans: bans.results });
+  }
+  if (request.method !== 'POST') return new Response(null, { status: 405 });
+  const r = await env.DB.prepare(CHSQL.get).bind(+url.searchParams.get('id') || 0).first();
+  if (!r) return json({ error: 'id' }, 404);
+  if (url.pathname === '/chat/hide') { await env.DB.prepare(CHSQL.hide).bind(url.searchParams.get('h') === '0' ? 0 : 1, r.id).run(); return json({ ok: true }); }
+  if (url.pathname === '/chat/ban') {
+    const hours = Math.min(Math.max(+url.searchParams.get('hours') || 0, 0), 24 * 365), now = Date.now(), until = hours ? now + hours * 3600e3 : 0;
+    for (const k of [`p:${r.pid}`, `d:${r.ip_hash}`, ...(r.acct ? [`a:${r.acct}`] : [])]) await env.DB.prepare(CHSQL.banPut).bind(k, until, now).run();
+    return json({ ok: true, until });
+  }
+  return new Response('not found', { status: 404 });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -446,6 +538,13 @@ export default {
     }
     if ((url.pathname.startsWith('/acct/') || url.pathname.startsWith('/save/')) && request.method === 'POST') {
       try { return await account(request, env, url.pathname); } catch (e) { console.error('acct', e); return json({ error: 'server' }, 500); }
+    }
+    if (url.pathname === '/chat') {
+      try {
+        if (request.method === 'POST') return await chatPost(request, env);
+        if (request.method === 'GET') return await chatGet(env, url);
+        return new Response(null, { status: 405, headers: CORS });
+      } catch (e) { console.error('chat', e); return json({ error: 'server' }, 500); }
     }
     if (url.pathname === '/fb' && request.method === 'POST') {
       try { return await feedback(request, env); } catch (e) { console.error('fb', e); return json({ error: 'server' }, 500); }
@@ -480,6 +579,10 @@ export default {
       if (!ok) return new Response('unauthorized', { status: 401 });
       const days = Math.min(Math.max(+url.searchParams.get('days') || 14, 1), 365);
       return json(await api(env, days));
+    }
+    if (url.pathname.startsWith('/chat/')) {
+      if (!ok) return new Response('unauthorized', { status: 401 });
+      return await chatAdmin(request, env, url);
     }
     // 反馈：看（需要密钥）、取截图、标已读 / 已处理
     if (url.pathname === '/fb' || url.pathname.startsWith('/fb/')) {
@@ -695,4 +798,30 @@ document.getElementById('states').addEventListener('click', (e) => {
   load();
 });
 load();
+</script></body></html>`;
+
+const CHATPAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>聊天管理</title>
+<style>
+  body{margin:0;background:#07090f;color:#e6e8f0;font:14px/1.6 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;padding:clamp(14px,3vw,32px)}
+  h1{margin:0 0 4px;font-size:20px;letter-spacing:2px}.sub{color:#8d94ae;font-size:12px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse}td{padding:7px 8px;border-bottom:1px solid rgba(123,131,159,.2);vertical-align:top}
+  td.t{color:#8d94ae;white-space:nowrap;font-size:12px}td.n{white-space:nowrap;font-weight:700}tr.h td{opacity:.35;text-decoration:line-through}
+  button{background:#222838;color:#e6e8f0;border:1px solid rgba(123,131,159,.3);border-radius:5px;padding:3px 8px;cursor:pointer;margin:0 2px 2px 0;font-size:12px}
+  .guest{color:#8d94ae;font-weight:400;font-size:12px}.bans{margin:12px 0;color:#f5a33a;font-size:12px}
+</style></head><body><h1>聊天管理</h1><div class="sub">最近的消息（新的在上）。删除：玩家就看不到了；禁言：按这条消息的玩家号、账号和设备，一段时间不能发。</div>
+<div class="bans" id="bans"></div><table id="list"></table>
+<script>
+const k = new URLSearchParams(location.search).get('k');
+const fmt = (ts) => new Date(ts).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+async function act(path) { await fetch(path + '&k=' + encodeURIComponent(k), { method: 'POST' }); load(); }
+async function load() {
+  const j = await (await fetch('/chat/list?k=' + encodeURIComponent(k))).json();
+  document.getElementById('bans').textContent = j.bans.length ? '禁言中：' + j.bans.map((b) => b.key + ' 到 ' + fmt(b.until)).join('，') : '';
+  document.getElementById('list').innerHTML = j.items.map((r) => '<tr class="' + (r.hidden ? 'h' : '') + '"><td class="t">' + fmt(r.ts) + '</td><td class="n">' + esc(r.name) + (r.acct ? '' : ' <span class="guest">游客</span>') + '</td><td>' + esc(r.text) + '</td><td style="white-space:nowrap">'
+    + (r.hidden ? '<button onclick="act(\'/chat/hide?id=' + r.id + '&h=0\')">恢复</button>' : '<button onclick="act(\'/chat/hide?id=' + r.id + '\')">删除</button>')
+    + '<button onclick="act(\'/chat/ban?id=' + r.id + '&hours=24\')">禁言1天</button><button onclick="act(\'/chat/ban?id=' + r.id + '&hours=720\')">禁言30天</button><button onclick="act(\'/chat/ban?id=' + r.id + '&hours=0\')">解除</button></td></tr>').join('');
+}
+load(); setInterval(load, 10000);
 </script></body></html>`;

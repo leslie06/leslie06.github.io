@@ -101,3 +101,25 @@ CREATE TABLE IF NOT EXISTS acct_fail (
   ts  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS acct_fail_key ON acct_fail (key, ts);
+
+-- 游戏里的聊天（2026-10-15 起，b城追车在用）：在线玩家实时发言。登录的显示账号名，没登录的显示「游客」+ 编号（由随机玩家号算出，同一台设备固定）。
+-- 不存完整 IP：ip_hash 每天换盐，只用来限流和禁言；hidden = 1 是后台删掉的（不再给玩家看）。
+CREATE TABLE IF NOT EXISTS chat (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  game    TEXT    NOT NULL,
+  ts      INTEGER NOT NULL,
+  name    TEXT    NOT NULL,
+  acct    INTEGER,                      -- 登录的账号 id，游客为空
+  pid     TEXT    NOT NULL DEFAULT '',  -- 和排行榜同一个随机玩家号
+  text    TEXT    NOT NULL,
+  ip_hash TEXT    NOT NULL DEFAULT '',
+  hidden  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS chat_game ON chat (game, id);
+CREATE INDEX IF NOT EXISTS chat_pid ON chat (pid, ts);
+-- 禁言：key 是 p:玩家号 / a:账号 / d:设备哈希，到 until 为止不能发。
+CREATE TABLE IF NOT EXISTS chat_ban (
+  key   TEXT    PRIMARY KEY,
+  until INTEGER NOT NULL,
+  ts    INTEGER NOT NULL
+);

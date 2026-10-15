@@ -37,6 +37,8 @@ const DB = {
   },
 };
 const env = { DB, SALT: process.env.SALT ?? 'dev-salt', DASH_KEY: process.env.DASH_KEY ?? 'dev' };
+// 聊天的额外屏蔽词：CHAT_WORDS_FILE 指向的文本文件，一行一个（改了重启服务生效）
+if (process.env.CHAT_WORDS_FILE) { try { env.CHAT_WORDS = await readFile(process.env.CHAT_WORDS_FILE, 'utf8'); } catch { console.log('没读到屏蔽词文件', process.env.CHAT_WORDS_FILE); } }
 const port = +(process.env.PORT ?? 8787);
 const verbose = process.env.VERBOSE === '1';
 
