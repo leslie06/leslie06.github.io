@@ -103,7 +103,7 @@ async function convert(tag, box) {
 }
 
 // The Overpass chunks go aside, so the build reads only this extract.
-const old = fs.readdirSync(OUT).filter((f) => /^chunk-[a-z]?\d+-\d+\.json$/.test(f));
+const old = fs.readdirSync(OUT).filter((f) => /^chunk-[a-z]{0,2}\d+-\d+\.json$/.test(f));
 const head = (f) => { const fd = fs.openSync(path.join(OUT, f), 'r'), b = Buffer.alloc(200); fs.readSync(fd, b, 0, 200, 0); fs.closeSync(fd); return b.toString(); };
 if (old.some((f) => !head(f).includes('osmium extract'))) {
   const bak = path.resolve('.cache/osm-overpass');

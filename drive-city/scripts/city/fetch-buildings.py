@@ -1,20 +1,23 @@
-# Building footprints and heights beyond OSM, for Beijing inside the 4th Ring (and the corridors), into
+# Building footprints and heights beyond OSM, for Beijing inside the 5th Ring (since 2026-10-16; the 4th before), into
 # .cache/buildings/ for build.mjs:
 #   clsm.json    footprints OSM lacks: Overture's buildings theme minus its OSM features, i.e. the
 #                machine-learnt East-Asian footprints of Shi et al. 2023 (CLSM, doi:10.5281/zenodo.8174931,
 #                CC BY 4.0), already conflated against OSM by Overture.  {"p": [[lon, lat, ...], ...]}
-#   globfp.json  heights: 3D-GloBFP (Che et al. 2024, CC BY 4.0), tile 2292.  {"p": [[h, lon, lat, ...], ...]}
+#   globfp.json  heights: 3D-GloBFP (Che et al. 2024, CC BY 4.0), tiles 2292 (116.25-117.5 E, 38.75-40 N),
+#                2291 (west of 116.25: 石景山) and 2350 (north of 40: 清河、来广营).  {"p": [[h, lon, lat, ...], ...]}
 #   cmab.json    heights, function and age: CMAB (Zhang, Zhao & Long 2025, CC BY 4.0), Beijing.
 #                {"fn": [...], "p": [[h, fn, year, lon, lat, ...], ...]}  (year 1985 = 1985 or before, 2019 = after 2018)
 # All WGS-84 (checked: no GCJ-02 offset in any of them). Needs `python3 -m pip install --user duckdb` and
 #   data/3d-globfp-2292.zip   https://ndownloader.figshare.com/files/54101543 (232 MB)
+#   data/3d-globfp-2291.zip   https://ndownloader.figshare.com/files/54101528 (193 MB, 2026-10-16 for the 5th Ring)
+#   data/3d-globfp-2350.zip   https://ndownloader.figshare.com/files/54107210 (75 MB, same)
 #   data/cmab-beijing.zip     https://ndownloader.figshare.com/files/53666768 (249 MB)
 # Overture is read straight from its public S3 bucket (a bbox filter; ~3 min).
 # Usage: python3 scripts/city/fetch-buildings.py [overture|globfp|cmab ...]
 import json, os, sys, time, zipfile
 import duckdb
 
-W, S, E, N = 116.25, 39.805, 116.62, 40.01
+W, S, E, N = 116.19, 39.748, 116.62, 40.03
 OVERTURE = 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=buildings/type=building/*'
 OUT = '.cache/buildings'
 os.makedirs(OUT, exist_ok=True)
@@ -58,15 +61,17 @@ def shp_in(zip_path):
         return [n for n in z.namelist() if n.endswith('.shp')]
 
 
+GLOBFP = ['2292', '2291', '2350']
+
+
 def globfp():
-    zp = 'data/3d-globfp-2292.zip'
     out = []
-    for shp in shp_in(zp):
+    for zp, shp in [(zp, shp) for t in GLOBFP for zp in [f'data/3d-globfp-{t}.zip'] for shp in shp_in(zp)]:
         rows = db.sql(f"""
           SELECT Height, ST_AsGeoJSON(geom) FROM ST_Read('/vsizip/{zp}/{shp}')
           WHERE Height > 0 AND ST_XMin(geom) > {W} AND ST_XMax(geom) < {E} AND ST_YMin(geom) > {S} AND ST_YMax(geom) < {N}""").fetchall()
         out += [[round(h, 1)] + r for (h, g) in rows for r in rings(g)]
-    write('globfp.json', {'src': '3D-GloBFP tile 2292 (Che et al. 2024, CC BY 4.0)', 'p': out})
+    write('globfp.json', {'src': f'3D-GloBFP tiles {", ".join(GLOBFP)} (Che et al. 2024, CC BY 4.0)', 'p': out})
 
 
 FN = ['Residence', 'Office', 'Public service', 'Commerce', 'Industry', 'Others']

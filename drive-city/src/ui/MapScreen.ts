@@ -57,7 +57,8 @@ const OUTSIDE = '#0b0e10', GROUND = '#12171a', GREEN = '#182b20', WATER = '#1530
 const ROAD = ['#2c3439', '#3c454b', '#525b62', '#6c747a', '#9c7b47'];
 /** Road widths: metres at street zoom, and the thinnest they get in px. */
 const ROAD_M = [5, 8, 13, 20, 28], ROAD_MIN = [0.6, 0.9, 1.4, 2, 2.6];
-const S_MIN = 0.05, S_MAX = 5, S_OPEN = 0.42;
+// S_MIN 0.05 -> 0.025（2026-10-16）：地图扩到五环，东西 36 km、南北 31 km，0.05 时 1600x900 的屏幕留出图例后装不下。
+const S_MIN = 0.025, S_MAX = 5, S_OPEN = 0.42;
 /** The full map's labels: sizes and the zoom each kind shows from (px per m). */
 const LABELS: LabelStyle = {
   rankS: [0.05, 0.2, 0.5, 1.05], areaMax: 2.4, areas: true, roadS: [Infinity, 0.9, 0.42, 0.17, 0.05], shortBelow: 0.45, bridgeS: 0.17,

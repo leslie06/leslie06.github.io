@@ -2,7 +2,7 @@
 
 设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`。
 
-现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到四环、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，当前在做剧情战役（`campaign/`，第一至四章已完成，见 `docs/gta-plan.md` §5–8）和近战（`combat/`）。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
+现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到五环（2026-10-16 从四环扩出去）、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，当前在做剧情战役（`campaign/`，第一至四章已完成，见 `docs/gta-plan.md` §5–8）和近战（`combat/`）。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
 
 **详细笔记在 `docs/notes/`**（从本文件原样搬过去的：每个功能的设计、数字、坑和 probe 命令，带日期，「」里是用户的原话）。动某块之前先读对应文件；新的细节写到那里，不要写到这里——本文件只放每次会话都需要的内容。
 
@@ -37,7 +37,7 @@
 - 材质用 `userData.wet = 'ground' | 'surface' | true` 开启湿润效果；`uniforms.uNight` 驱动灯和窗户；`RenderSystem.prepare(root)` 在流式加载的分块加入场景前打补丁。
 
 ## 重建城市（改了 `scripts/city/` 或 OSM 数据之后）
-- `node scripts/city/extract-pbf.mjs`（需要 `brew install osmium-tool`；改了它的过滤条件后要删掉 `.cache/osm-pbf/filtered.osm.pbf`），然后 `node --max-old-space-size=12000 scripts/city/build.mjs`（约 65 秒；末尾会自动跑 signs、entrances、footbridges、railways、tunnels、shelters、metro、places、sites、netpack 这些步骤）。
+- `node scripts/city/extract-pbf.mjs`（需要 `brew install osmium-tool`；改了它的过滤条件后要删掉 `.cache/osm-pbf/filtered.osm.pbf`），然后 `node --max-old-space-size=12000 scripts/city/build.mjs`（约 6 分钟；末尾会自动跑 signs、entrances、footbridges、railways、tunnels、shelters、metro、places、sites、netpack 这些步骤）。
 - **重建后必须重启 Vite 开发服务器**：它可能对改写过的 `public/city/*.json` 返回 `index.html`（报 `SyntaxError: Unexpected token '<'`）。
 - 不要随便重跑 `Spots.gen`（会挪动所有坡道、打乱存档进度编号）。改了任何城市图层后，重跑 `jumpprobe`、`shortcutprobe`、`underprobe`（在 `.scratch/`）；改了道路或桥面还要跑 `roads-elevation.md` 里的审计脚本。
 

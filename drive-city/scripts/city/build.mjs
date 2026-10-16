@@ -21,7 +21,7 @@ const els = new Map();
 // The main box's chunks first (digits sort before the corridors' tags), and an element already read is
 // kept: a corridor fetched later may carry a newer edit of a way the main box has, and taking it would
 // move things in the city already built.
-for (const f of fs.readdirSync(RAW).filter((f) => /^chunk-[a-z]?\d+-\d+\.json$/.test(f)).sort()) {
+for (const f of fs.readdirSync(RAW).filter((f) => /^chunk-[a-z]{0,2}\d+-\d+\.json$/.test(f)).sort()) {
   for (const e of JSON.parse(fs.readFileSync(path.join(RAW, f), 'utf8')).elements) if (!els.has(e.type[0] + e.id)) els.set(e.type[0] + e.id, e);
 }
 const ways = [], rels = [], nodes = [];
@@ -217,7 +217,11 @@ function roadInfo(t) {
   if (!R || t.area === 'yes') return null;
   // Underpasses (下穿): a car road's tunnel is kept and sunk (see "underpasses" below); a path's, a
   // service road's (an underground car park's ramp) or a living street's is left out as before.
-  const tunnel = t.tunnel && t.tunnel !== 'no' && t.tunnel !== 'building_passage';
+  // 高速路堑（2026-10-16）：layer<0、不是桥的 motorway 也按下沉路处理。西五环在卢沟桥一带是 OSM 的 layer=-2
+  // 路堑，原来铺在地面上，跨过它的卢沟桥南路的桥只抬了 1-4 m，压在五环主路上（bridgeaudit 50 多个采样点）。
+  // 全图只有这一段是 motorway；layer<0 的普通路（西直门外大街、紫竹院路……）不动。
+  const cutting = cls === 'motorway' && Number(t.layer) < 0 && !(t.bridge && t.bridge !== 'no');
+  const tunnel = (t.tunnel && t.tunnel !== 'no' && t.tunnel !== 'building_passage') || cutting;
   const sunkOK = !NO_TUNNELS && CAR.has(cls) && cls !== 'service' && cls !== 'living_street';
   if (tunnel && !sunkOK) return null;
   if (Number(t.layer) < 0 && !(t.bridge && t.bridge !== 'no') && !sunkOK) return null;
@@ -225,7 +229,7 @@ function roadInfo(t) {
   const lanes = parseInt(t.lanes, 10);
   let w = parseLen(t.width);
   if (!(w > 1.5)) w = lanes > 0 && CAR.has(cls) ? lanes * 3.3 + (oneway ? 1 : 1.5) : R[oneway ? 0 : 1];
-  return { cls, w, oneway, lanes: lanes > 0 ? lanes : 0, car: CAR.has(cls), name: t.name || '', bridge: t.bridge && t.bridge !== 'no' ? 1 : 0, tunnel: tunnel ? 1 : 0, below: tunnel || (Number(t.layer) < 0 && !(t.bridge && t.bridge !== 'no')) ? 1 : 0 };
+  return { cls, w, oneway, lanes: lanes > 0 ? lanes : 0, car: CAR.has(cls), name: t.name || '', bridge: t.bridge && t.bridge !== 'no' ? 1 : 0, tunnel: tunnel ? 1 : 0, cut: cutting ? 1 : 0, below: tunnel || (Number(t.layer) < 0 && !(t.bridge && t.bridge !== 'no')) ? 1 : 0 };
 }
 const degAll = new Map(), degCar = new Map();
 for (const w of ways) {
@@ -1021,12 +1025,28 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
   if (gridded.size) console.log(`underpasses: ${gridded.size} short tunnels between junctions under a deck kept on the ground`);
   if (process.env.TUN_GRID) for (const w of gridded) console.log('GRID', w.id, w._road.cls, w.tags.name ?? '', 'at', Math.round(w._pts[0][0]), Math.round(w._pts[0][1]), 'L', Math.round(w._dense.at(-1).s));
   const active = new Set(tun.filter((w) => !gridded.has(w))), extra = new Map();   // extra: key -> the tunnel it hangs off
+  // 并进路堑的匝道（2026-10-16）：西五环的进出匝道从侧面并进路堑，按坡度下沉时并线处的沟底比主路高 1-2 m，平面上
+  // 又跟主路车道重叠，主路的车钻到匝道沟底下面卡住（fallbatch 两个方向都停在 y -5.8）。跟路堑车道重叠的匝道点
+  // 当作路堑的一部分，沉到同样的深度；离开主路以后再按坡度爬上来。只对路堑，隧道口照旧。
+  const tied = new Map();
+  for (const w of tun) {
+    if (!w._road.cut) continue;
+    const D = w._dense, hw = w._road.w / 2;
+    for (let i = 1; i < D.length; i++) {
+      const a = D[i - 1], b = D[i];
+      for (const [o, j] of segsNear((a.x + b.x) / 2, (a.z + b.z) / 2)) {
+        if (o === w || !o._road || o._road.tunnel || !/_link$/.test(o._road.cls)) continue;
+        for (const d of [o._dense[j - 1], o._dense[j]]) if (!tied.has(d.key) && (degCar.get(Number(d.key)) ?? 0) < 3 && segDist(d.x, d.z, a.x, a.z, b.x, b.z) < hw + o._road.w / 2 - 0.5) tied.set(d.key, w);
+      }
+    }
+  }
   let H = new Map(), src = new Map(), dropped = 0, passes = 0, flatDropped = 0;
   for (let pass = 0; pass < 60; pass++) {
     passes = pass + 1;
     const sinks = new Map();
     for (const w of active) for (const d of w._dense) sinks.set(d.key, w);
     for (const [k, w] of extra) if (active.has(w)) sinks.set(k, w);
+    for (const [k, w] of tied) if (active.has(w)) sinks.set(k, w);
     // held: a junction (on the ground) or a point the decks raised (at its height)
     const isPin = (k) => !sinks.has(k) && ((degCar.get(Number(k)) ?? 0) >= 3 || (HT.get(k) ?? 0) > 0.05);
     const down = new Map(), heap = new Heap((a, b) => a[1] < b[1]);
@@ -1050,7 +1070,8 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
     H = new Map();
     for (const [k, v] of down) { const h = Math.max(v, -(cap.get(k) ?? Infinity)); if (h < -0.02) H.set(k, h); }
     let changed = false;
-    for (const [k, w] of sinks) if ((H.get(k) ?? 0) > -TUN.CLEAR && active.has(w)) { active.delete(w); changed = true; dropped++; }
+    // 并线的匝道点（tied）沉不够深不连累路堑：照旧沉到能沉的深度
+    for (const [k, w] of sinks) if ((H.get(k) ?? 0) > -TUN.CLEAR && active.has(w) && !tied.has(k)) { active.delete(w); changed = true; dropped++; }
     if (changed) continue;
     // ground roads crossing over an open approach: covered there
     for (const w of allCar) {
@@ -1099,6 +1120,31 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
   }
   // the final heights
   for (const [k, v] of H) HT.set(k, v);
+  // 高速路堑（roadInfo 的 cut）是敞开的，只有别的路从上面跨过（不在它下面，也不是 3 m 以上的高架）的地方盖上：
+  // 那几段（前后各多一段）是有顶的，路面下面有地，横路的车不会掉进沟里。
+  const cutCov = new Map();
+  const coverCuts = () => {
+    for (const w of allCar) {
+      if (!w._road?.cut) continue;
+      const D = w._dense, cov = new Set();
+      for (let i = 1; i < D.length; i++) {
+        const a = D[i - 1], b = D[i];
+        for (const [o, j] of segsNear((a.x + b.x) / 2, (a.z + b.z) / 2)) {
+          if (o === w || !o._road || o._road.cut) continue;
+          const p = o._dense[j - 1], q = o._dense[j];
+          if ((H.get(p.key) ?? 0) < -0.3 || (H.get(q.key) ?? 0) < -0.3) continue;
+          if ((HT.get(p.key) ?? 0) > 3 && (HT.get(q.key) ?? 0) > 3) continue;
+          if (!cross(a.x, a.z, b.x, b.z, p.x, p.z, q.x, q.z)) continue;
+          for (const k of [i - 1, i, i + 1]) if (k >= 1 && k < D.length) cov.add(k);
+          break;
+        }
+      }
+      cutCov.set(w, cov);
+    }
+  };
+  coverCuts();
+  // a point is under a roof: a tunnel's (not a cutting's), an approach a road crosses over, or a cutting's covered stretch
+  const roofed = (w, i) => (w._road.cut ? cutCov.get(w)?.has(i) || cutCov.get(w)?.has(i + 1) : !!w._road.tunnel) || extra.has(w._dense[i].key);
   // An open trench must not stand in a ground carriageway beside it, and OSM often draws a 下穿 and the
   // road it runs beside closer than their widths (东四环中路's side roads 5.8 m from the main line,
   // 9 m of carriageway between them): the sunk points of an open stretch that overlap one are moved
@@ -1108,10 +1154,10 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
     const EASE = 30, want = new Map();
     const sunkKey = (k) => (H.get(k) ?? 0) < -0.3;
     for (const w of allCar) {
-      if (!w._road || w._road.tunnel) continue;
+      if (!w._road || (w._road.tunnel && !w._road.cut)) continue;
       const hw0 = w._road.w / 2;
-      for (const d of w._dense) {
-        if (!sunkKey(d.key) || extra.has(d.key)) continue;
+      for (const [di, d] of w._dense.entries()) {
+        if (!sunkKey(d.key) || roofed(w, di)) continue;
         let best = null;
         for (const [o, j] of segsNear(d.x, d.z)) {
           if (o === w || !o._road) continue;
@@ -1155,6 +1201,7 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
     if (!want.size) break;
   }
   // the sunk ways: covered and open stretches, half widths narrowed against what runs alongside
+  coverCuts();
   const sunkWays = allCar.filter((w) => w._road && w._dense.some((d) => (H.get(d.key) ?? 0) < -0.1));
   const sunkSet = new Set(sunkWays);
   let open = 0, covered = 0;
@@ -1184,7 +1231,7 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
           // - unless the two carriageways overlap at one level, where a ramp in a trench runs into a tunnel's mouth
           // (or out of it): the wall between them stood across the lanes there, and the drivability census's cars
           // stopped against it at 西直门外大街 (2026-10-03)
-          const mine = !!w._road.tunnel || extra.has(d.key), theirs = !!o._road.tunnel || (extra.has(p.key) && extra.has(q.key));
+          const mine = roofed(w, i), theirs = o._road.cut ? !!cutCov.get(o)?.has(j) : !!o._road.tunnel || (extra.has(p.key) && extra.has(q.key));
           if (mine !== theirs && !(dist < hw0 + ohw - 0.3 && Math.abs(ho - hd) < 0.6)) continue;
           if (left) { wallL = false; l = Math.max(l, dist - ohw + 0.3); } else { wallR = false; r = Math.max(r, dist - ohw + 0.3); }
         } else if ((HT.get(p.key) ?? 0) < 2) {
@@ -1196,7 +1243,7 @@ const TRENCH = { ways: [], holes: [], open: new Map() };
     }
     const cov = [], eL = [], eR = [];
     for (let i = 1; i < D.length; i++) {
-      const c = !!w._road.tunnel || (extra.has(D[i - 1].key) && extra.has(D[i].key));
+      const c = w._road.cut ? !!cutCov.get(w)?.has(i) : !!w._road.tunnel || (extra.has(D[i - 1].key) && extra.has(D[i].key));
       cov.push(c); eL.push(wl[i - 1] && wl[i]); eR.push(wr[i - 1] && wr[i]);
       const ha = H.get(D[i - 1].key) ?? 0, hb = H.get(D[i].key) ?? 0;
       if (Math.min(ha, hb) < -0.1) { if (c) covered += D[i].s - D[i - 1].s; else open += D[i].s - D[i - 1].s; }

@@ -20,6 +20,12 @@ function segDist(x: number, z: number, ax: number, az: number, bx: number, bz: n
   return Math.hypot(x - ax - vx * t, z - az - vz * t);
 }
 
+function inside(x: number, z: number, o: number[]): boolean {
+  let c = false;
+  for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) if ((o[i + 1] > z) !== (o[j + 1] > z) && x < o[i] + (z - o[i + 1]) * (o[j] - o[i]) / (o[j + 1] - o[i + 1])) c = !c;
+  return c;
+}
+
 describe('learnt buildings', () => {
   const all = [...tiles.values()].flatMap((t) => t.buildings.filter(learnt));
 
@@ -39,6 +45,8 @@ describe('learnt buildings', () => {
         let cx = 0, cz = 0;
         for (let i = 0; i < b.o.length; i += 2) { cx += b.o[i]; cz += b.o[i + 1]; }
         cx /= b.o.length / 2; cz /= b.o.length / 2;
+        // a U-shaped outline's centroid is in its courtyard, where a lane may end (五环西边 8000000018371)
+        if (!inside(cx, cz, b.o)) continue;
         const hit = roads.some((r) => { for (let i = 0; i + 3 < r.p.length; i += 2) if (segDist(cx, cz, r.p[i], r.p[i + 1], r.p[i + 2], r.p[i + 3]) < r.w / 2 - 0.5) return true; return false; });
         if (hit) { bad++; if (where.length < 5) where.push(`${b.i} @${cx.toFixed(0)},${cz.toFixed(0)}`); }
       }
