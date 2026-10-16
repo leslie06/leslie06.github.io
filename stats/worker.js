@@ -60,6 +60,21 @@ export const SQL = {
             SUM(CASE WHEN active >= ? THEN 1 ELSE 0 END) AS real_plays,
             CAST(ROUND(AVG(active)) AS INTEGER) AS avg_active
           FROM ev WHERE day >= ? GROUP BY day, game ORDER BY day`,
+  // 注册账号。时长、钱、章节从云存档里读（b城的存档键；别的游戏还没有云存档），是玩家最近一次同步时的数
+  acctSummary: `SELECT a.game, COUNT(*) AS total,
+                  SUM(CASE WHEN a.day >= ? THEN 1 ELSE 0 END) AS new_range,
+                  SUM(CASE WHEN a.day = ? THEN 1 ELSE 0 END)  AS new_today,
+                  SUM(CASE WHEN a.seen > ? THEN 1 ELSE 0 END) AS active7,
+                  COUNT(s.acct) AS saves,
+                  SUM(COALESCE(CAST(json_extract(s.data, '$."drivecity.playtime.v1"') AS INTEGER), 0)) AS play
+                FROM acct a LEFT JOIN save s ON s.acct = a.id GROUP BY a.game ORDER BY total DESC`,
+  acctDaily: 'SELECT day, game, COUNT(*) AS n FROM acct WHERE day >= ? GROUP BY day, game ORDER BY day',
+  acctList: `SELECT a.game, a.name, a.day, a.ts, a.seen, s.ts AS saved,
+               CAST(json_extract(s.data, '$."drivecity.playtime.v1"') AS INTEGER) AS play,
+               CAST(json_extract(s.data, '$."drivecity.cash"') AS INTEGER) AS cash,
+               CASE WHEN json_valid(json_extract(s.data, '$."drivecity.campaign.v1"'))
+                    THEN json_array_length(json_extract(s.data, '$."drivecity.campaign.v1"'), '$.done') END AS chapters
+             FROM acct a LEFT JOIN save s ON s.acct = a.id ORDER BY a.seen DESC LIMIT 200`,
 };
 
 // 北京时间的日期，跨天不会因为 UTC 差八小时错位
@@ -262,18 +277,23 @@ async function feedbackList(env, url) {
 
 async function api(env, days) {
   const since = daysAgo(days);
-  const [summary, median, daily, regions, recent] = await Promise.all([
+  const now = Date.now();
+  const [summary, median, daily, regions, recent, acctSum, acctDaily, acctList] = await Promise.all([
     env.DB.prepare(SQL.summary).bind(REAL_PLAY, since).all(),
     env.DB.prepare(SQL.median).bind(since).all(),
     env.DB.prepare(SQL.daily).bind(REAL_PLAY, since).all(),
     env.DB.prepare(SQL.regions).bind(REAL_PLAY, since).all(),
     env.DB.prepare(SQL.recent).bind(since).all(),
+    env.DB.prepare(SQL.acctSummary).bind(since, cnDay(now), now - 7 * 86400e3).all(),
+    env.DB.prepare(SQL.acctDaily).bind(since).all(),
+    env.DB.prepare(SQL.acctList).all(),
   ]);
   const med = Object.fromEntries(median.results.map(r => [r.game, r.median]));
   return {
-    since, days, realPlay: REAL_PLAY,
+    since, today: cnDay(now), days, realPlay: REAL_PLAY,
     games: summary.results.map(r => ({ ...r, median: med[r.game] ?? 0 })),
     daily: daily.results, regions: regions.results, recent: recent.results,
+    accounts: { games: acctSum.results, daily: acctDaily.results, list: acctList.results },
   };
 }
 
@@ -642,9 +662,19 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 </div>
 <div class="wrap"><table id="t"><thead><tr>
   <th>游戏</th><th>打开</th><th>设备</th><th>有效游玩</th><th>有效率</th>
-  <th>平均时长</th><th>中位时长</th><th>手机</th><th>从目录进</th><th>每日打开</th>
+  <th>平均时长</th><th>中位时长</th><th>总时长</th><th>手机</th><th>从目录进</th><th>每日打开</th>
 </tr></thead><tbody></tbody></table></div>
 <div class="empty" id="empty" hidden>还没有数据。打开一个游戏玩十几秒，刷新这一页。</div>
+
+<h2>注册账号</h2>
+<div class="wrap"><table id="at"><thead><tr>
+  <th>游戏</th><th>账号总数</th><th>期间新增</th><th>今天新增</th><th>7 天内登录过</th><th>有云存档</th><th>累计游戏时长</th><th>人均时长</th><th>每日注册</th>
+</tr></thead><tbody></tbody></table></div>
+<div class="empty" id="aempty" hidden>还没有人注册。</div>
+<h2 id="alh" style="margin-top:20px">账号列表 · 最近登录的在上（最多 200 个）</h2>
+<div class="wrap"><table id="al"><thead><tr>
+  <th>用户名</th><th>游戏</th><th>注册</th><th>最后登录</th><th>游戏时长</th><th>章节</th><th>钱</th><th>存档同步</th>
+</tr></thead><tbody></tbody></table></div>
 
 <h2>来自哪里</h2>
 <div class="wrap"><table id="rt"><thead><tr>
@@ -657,13 +687,17 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 </tr></thead><tbody></tbody></table></div>
 
 <p class="note">时间按北京时间。「有效游玩」= 活跃满 60 秒的会话；活跃只统计页面可见、且最近 30 秒内有过操作的时间，
-挂在后台不计。「设备」按当天的 IP+UA 哈希去重，跨天会重复计。<br>
+挂在后台不计。「设备」按当天的 IP+UA 哈希去重，跨天会重复计。「总时长」是期间所有会话的活跃时间加起来。<br>
+账号的「游戏时长」「章节」「钱」读自玩家的云存档，是他最近一次同步时的数（游戏里在城里开着、没挂机的时间，不含标题和暂停）；没有云存档的显示 –。
+账号总数和账号列表不受上面天数按钮影响，「期间新增」「每日注册」才按天数算。<br>
 IP 只存到网段（最后一段抹成 x），完整地址不落库；省份是拿网段查一次归属地缓存下来的，同一网段不会重复查。</p>
 <script>
 const key = new URLSearchParams(location.search).get('k') || '';
 document.getElementById('fblink').href = '/fb?k=' + encodeURIComponent(key);
 const fmt = (s) => s >= 60 ? Math.floor(s / 60) + '分' + String(s % 60).padStart(2, '0') + '秒' : s + '秒';
 const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '–';
+const fmtLong = (s) => s >= 3600 ? Math.floor(s / 3600) + '小时' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + '分' : fmt(s || 0);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';');
 function spark(days, vals) {
   if (!vals.length) return '';
   const max = Math.max(...vals, 1), w = 120, h = 26, bw = w / vals.length;
@@ -685,11 +719,32 @@ async function load(d) {
       '<td class="n big">' + g.sessions + '</td><td class="n">' + g.devices + '</td>' +
       '<td class="n">' + g.real_plays + '</td><td class="n">' + pct(g.real_plays, g.sessions) + '</td>' +
       '<td class="n">' + fmt(g.avg_active) + '</td><td class="n">' + fmt(g.median) + '</td>' +
+      '<td class="n">' + fmtLong(g.total_active) + '</td>' +
       '<td class="n">' + pct(g.mobile, g.sessions) + '</td><td class="n">' + pct(g.from_index, g.sessions) + '</td>' +
       '<td>' + spark(days, days.map(day => per[day] || 0)) + '</td></tr>';
   }).join('');
   document.getElementById('t').hidden = !data.games.length;
   document.getElementById('empty').hidden = !!data.games.length;
+
+  const acc = data.accounts, adays = [];
+  for (let t = Date.parse(data.since + 'T00:00:00Z'); ; t += 86400e3) { const d = new Date(t).toISOString().slice(0, 10); if (d > data.today) break; adays.push(d); }
+  document.querySelector('#at tbody').innerHTML = acc.games.map(a => {
+    const per = Object.fromEntries(acc.daily.filter(x => x.game === a.game).map(x => [x.day, x.n]));
+    return '<tr><td>' + esc(a.game) + '</td><td class="n big">' + a.total + '</td><td class="n">' + a.new_range + '</td>' +
+      '<td class="n">' + a.new_today + '</td><td class="n">' + a.active7 + '</td><td class="n">' + a.saves + '</td>' +
+      '<td class="n">' + fmtLong(a.play) + '</td><td class="n">' + (a.saves ? fmtLong(Math.round(a.play / a.saves)) : '–') + '</td>' +
+      '<td>' + spark(adays, adays.map(day => per[day] || 0)) + '</td></tr>';
+  }).join('');
+  document.getElementById('at').hidden = !acc.games.length;
+  document.getElementById('al').hidden = document.getElementById('alh').hidden = !acc.list.length;
+  document.getElementById('aempty').hidden = !!acc.games.length;
+  const ago = (ts) => { const m = Math.floor((Date.now() - ts) / 60000); return m < 1 ? '刚刚' : m < 60 ? m + ' 分钟前' : m < 1440 ? Math.floor(m / 60) + ' 小时前' : Math.floor(m / 1440) + ' 天前'; };
+  document.querySelector('#al tbody').innerHTML = acc.list.map(a =>
+    '<tr><td>' + esc(a.name) + '</td><td>' + esc(a.game) + '</td><td class="n">' + esc(a.day) + '</td>' +
+    '<td class="n">' + (a.seen ? ago(a.seen) : '–') + '</td>' +
+    '<td class="n' + (a.play >= 3600 ? ' big' : '') + '">' + (a.play == null ? '–' : fmtLong(a.play)) + '</td>' +
+    '<td class="n">' + (a.chapters ?? '–') + '</td><td class="n">' + (a.cash == null ? '–' : '¥' + a.cash) + '</td>' +
+    '<td class="n">' + (a.saved ? ago(a.saved) : '–') + '</td></tr>').join('');
 
   const total = data.regions.reduce((s, r) => s + r.sessions, 0);
   document.querySelector('#rt tbody').innerHTML = data.regions.map(r =>

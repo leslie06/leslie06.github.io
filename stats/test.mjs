@@ -216,6 +216,12 @@ ok('退出后令牌失效', (await ac('/save/get', { g: 'bcity', t: rs.body.toke
 let made = 0;
 for (let i = 0; i < 7; i++) if ((await ac('/acct/register', { g: 'bcity', name: 'bot' + i, pw: 'secret1' }, '3.3.3.3')).status === 200) made++;
 ok('同一台设备一天最多注册 5 个号', made === 5, `(${made})`);
+db.prepare('UPDATE save SET data = ?').run(JSON.stringify({ 'drivecity.cash': '100', 'drivecity.playtime.v1': '4000', 'drivecity.campaign.v1': JSON.stringify({ done: ['c1', 'c2'] }) }));
+const accts = (await (await worker.fetch(new Request('https://s/api?k=secret&days=7'), env)).json()).accounts;
+const ab = accts.games.find((g) => g.game === 'bcity'), fan = accts.list.find((a) => a.name === '陈野Fan'), bot = accts.list.find((a) => a.name === 'bot0');
+ok('看板：注册账号数、今天新增、有存档的、累计时长', ab?.total === 6 && ab.new_today === 6 && ab.new_range === 6 && ab.saves === 1 && ab.play === 4000, JSON.stringify(ab));
+ok('看板：账号列表带存档里的时长、钱、章节', fan?.play === 4000 && fan.cash === 100 && fan.chapters === 2 && fan.saved > 0 && bot && bot.play === null && bot.chapters === null, JSON.stringify([fan, bot]));
+ok('看板：每日注册', accts.daily.some((d) => d.game === 'bcity' && d.n === 6));
 
 // —— 聊天
 const chat = async (b, ip = '4.4.4.4') => { const r = await worker.fetch(new Request('https://s/chat', { method: 'POST', body: JSON.stringify({ g: 'bcity', ...b }), headers: { 'content-type': 'text/plain', 'user-agent': 'test-ua', 'cf-connecting-ip': ip } }), env); return { status: r.status, body: await r.json() }; };
