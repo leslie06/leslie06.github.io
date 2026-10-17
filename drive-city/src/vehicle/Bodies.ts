@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { MeshoptDecoder } from 'meshoptimizer';
+// three's copy of the decoder (the landmarks, people and clips load theirs through it): one decoder in the bundle,
+// and not the package's index, which pulls in its encoder, clusterizer and tangents too (2026-10-17)
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { addModel, unpackModel, clamp, curve, F_CUTOUT, LAMP, latheX, Mesher, smooth, surf, TONE_FIXED, TONE_LOWER, TONE_UPPER, type Model, type Surf } from './Mesher';
 import { Shell, type CapFace, type ShellDef, type WallFace, type WallRow } from './Shell';
 import { uv } from './Atlas';

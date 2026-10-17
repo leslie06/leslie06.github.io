@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MeshoptSimplifier } from 'meshoptimizer';
+import { MeshoptSimplifier } from 'meshoptimizer/simplifier';
 
 /**
  * The traffic kits' lighter geometry (2026-09-27): the procedural mesher's 'low' body is a dense grid

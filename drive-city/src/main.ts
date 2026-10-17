@@ -1,6 +1,6 @@
 import { Engine } from './core/Engine';
 import { t } from './core/I18n';
-import { boot as bootBar } from './core/Boot';
+import { afterTitle, boot as bootBar } from './core/Boot';
 import { installShotMode, shotMode } from './debug/ShotMode';
 import { Diagnostics } from './debug/Diagnostics';
 import { registerPoses } from './debug/ShotPoses';
@@ -102,8 +102,8 @@ async function boot() {
   // the cloud save's own car may be a body not fetched yet
   const later = savedBodies().filter((b) => !saved.includes(b));
   if (later.length) await readyBodies(later);
-  // the rest of the bodies now the spawn's tiles are in (traffic adds their cars as they arrive)
-  void readyBodies();
+  // the rest of the bodies once the title is up (traffic adds their cars as they arrive)
+  void afterTitle.then(() => readyBodies());
   bootBar.stage(0.97, 0.995, 'boot.world', 2);
   await vehicle.install(engine);
   await player.install(engine);
@@ -137,6 +137,7 @@ async function boot() {
   bootBar.stage(1, 1, 'boot.ready', 0);
   funnel.markTitle();
   loading?.remove();
+  bootBar.titleShown();
 }
 
 boot().catch((e) => { console.error(e); document.body.innerHTML = `<pre style="color:#f66;padding:20px;white-space:pre-wrap">${String(e?.stack ?? e)}</pre>`; });

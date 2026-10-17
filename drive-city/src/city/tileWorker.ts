@@ -41,7 +41,9 @@ function pack(name: string, g: THREE.BufferGeometry | null, out: PackedGeometry[
   out.push({ name, attrs, index });
 }
 
-self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][]; street?: number[][]; near?: RoadPiece[] }>) => {
+self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][]; street?: number[][]; near?: RoadPiece[] } | { ping: true }>) => {
+  // spawnTileWorkers: loaded, so the other workers will find this script in the cache
+  if ('ping' in ev.data) { (self as unknown as Worker).postMessage({ ping: true }); return; }
   const { key, url, footprints, clear = [], street: streetOnly = [], near = [] } = ev.data;
   try {
     const res = await fetch(url);

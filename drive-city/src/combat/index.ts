@@ -69,7 +69,10 @@ export async function install(engine: Engine): Promise<void> {
   /** The one fighter a press would finish now (with what behind him), refreshed each fixed step. */
   let fin: { f: Fighter; s: Finish } | null = null;
   let finHinted = false;
-  const thugModels = CAST_ON ? (await Promise.all(THUGS.map((id) => hasModel(id)))).map((ok, i) => (ok ? THUGS[i] : null)).filter((x): x is string => !!x) : [];
+  // Which thugs have a model: known once the cast list has come (not awaited here - the boot waited 9 s for this
+  // 2 KB on a slow link, 2026-10-17); a fight before that dresses its thugs in the crowd's bodies.
+  let thugModels: string[] = [];
+  if (CAST_ON) void Promise.all(THUGS.map((id) => hasModel(id))).then((ok) => { thugModels = THUGS.filter((_, i) => ok[i]); });
 
   const gangLook = (): Look => {
     const l = randomLook(rnd);

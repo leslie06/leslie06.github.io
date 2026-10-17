@@ -1,4 +1,4 @@
-import { boot } from '../core/Boot';
+import { afterTitle, boot } from '../core/Boot';
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
@@ -298,7 +298,7 @@ export async function install(engine: Engine): Promise<void> {
     scene.add(sky.mesh);
     sky.setDetailed(streamer.loadedKeys);
   };
-  const streamer = new CityStreamer(engine, manifest, mats, env, footprints, tileWorkers, clear, landmarkTrees);
+  const streamer = new CityStreamer(engine, manifest, mats, env, footprints, await tileWorkers, clear, landmarkTrees);
   streamer.setNetwork(network);
   streamer.streetClear = [...(footbridges ? footbridgeZones(footbridges) : []), ...(rail ? railZones(rail) : [])];
   // nothing stands in a trench: no tree, lamp, bin or building
@@ -331,14 +331,17 @@ export async function install(engine: Engine): Promise<void> {
   const hx = Math.sin(sp.yaw), hz = Math.cos(sp.yaw);
   boot.stage(0.86, 0.96, 'boot.tiles', 6);
   await streamer.preload(sp.x, sp.z, (f) => boot.sub(f));
-  openGate();
-  // the far skyline right after the spawn's tiles (the title's view shows it)
-  if (!skyline) void loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline).then(putSky, () => {});
+  // What the boot does not need goes once the title is up (shot mode waits for all of it, at once).
+  const later = (f: () => void) => { if (DEFER_EXTRAS) void afterTitle.then(f); else f(); };
+  later(openGate);
+  // the far skyline (the title's view shows it: it rises behind the attract drive a few seconds in on a slow link)
+  if (!skyline) later(() => void loadCity<Skyline | SkylinePack>('skyline.json').then(unpackSkyline).then(putSky, () => {}));
   // The extras the boot did not wait for (DEFER_EXTRAS): the railways' street clearing reaches the tiles
   // already built by building them again (CityStreamer.addStreetClear).
   const extrasLoaded = !DEFER_EXTRAS ? Promise.resolve() : (async () => {
-    // not while the boot still downloads: when the player starts, or 20 s on (the title's attract drive)
-    await new Promise<void>((r) => { const off = engine.events.on('game:start', () => { off?.(); r(); }); setTimeout(r, 20000); });
+    // not while the boot still downloads: when the player starts, or 20 s into the title's attract drive (20 s from
+    // here was before the title on a slow link, and signs.json alone is 2 MB)
+    await new Promise<void>((r) => { const off = engine.events.on('game:start', () => { off?.(); r(); }); void afterTitle.then(() => setTimeout(r, 20000)); });
     const [sg, rl] = await Promise.all([
       loadCity<{ signs: GuideSign[]; closures: Closure[] }>('signs.json').catch(() => null),
       RAIL_ON ? loadCity<RailFileV2>('rail.json').catch(() => null) : null,
@@ -346,7 +349,7 @@ export async function install(engine: Engine): Promise<void> {
     putSigns(sg);
     if (rl) { streamer.addStreetClear(railZones(rl)); placeRailways(engine, rl, footprints); if (TRAINS_ON) placeTrains(engine, decodeRail(rl), env); }
   })();
-  streamer.loadTrees();
+  later(() => streamer.loadTrees());
   const path = routes.ahead(sp.x, sp.z, hx, hz, 3500);
 
   const api: WorldApi & { manifest: Manifest; routes: Routes; streamer: CityStreamer; landmarksLoaded: Promise<void>; extrasLoaded: Promise<void> } = {

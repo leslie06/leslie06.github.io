@@ -103,8 +103,25 @@ class InstancePool {
  * resolved, and then trickled in behind 10 MB of images - 42 s for 42 KB, with the whole boot
  * waiting on it, because no tile can be meshed without a worker (`.scratch/waterfall.mjs`).
  */
-export function spawnTileWorkers(n = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 2))): Worker[] {
-  return Array.from({ length: n }, () => new Worker(new URL('./tileWorker.ts', import.meta.url), { type: 'module' }));
+const workerCount = () => Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 2));
+// Always written out in full: Vite only bundles a worker from `new Worker(new URL('…', import.meta.url))` as one
+// expression (taken apart, it shipped tileWorker.ts as a plain file and no tile was ever built).
+const newTileWorker = () => new Worker(new URL('./tileWorker.ts', import.meta.url), { type: 'module' });
+function newTileWorkers(n = workerCount()): Worker[] { return Array.from({ length: n }, newTileWorker); }
+export async function spawnTileWorkers(n = workerCount()): Promise<Worker[]> {
+  // One first, the rest once it answers a ping: four started together each downloaded the script (4 x 59 KB before
+  // the title, 2026-10-17); started after, they read it from the HTTP cache (Pages sends max-age=600).
+  const first = newTileWorker();
+  if (n > 1) {
+    await new Promise<void>((r) => {
+      first.onmessage = () => r();
+      first.onerror = () => r();
+      setTimeout(r, 15000);
+      first.postMessage({ ping: true });
+    });
+    first.onmessage = first.onerror = null;
+  }
+  return [first, ...newTileWorkers(n - 1)];
 }
 
 /**
@@ -223,7 +240,7 @@ export class CityStreamer implements System {
     const tier = engine.quality.tier;
     this.radius = tier === 'low' ? 2 : tier === 'medium' ? 3 : 4;
     this.vegRadius = tier === 'low' ? 1 : tier === 'medium' ? 2 : 3;
-    for (const w of workers ?? spawnTileWorkers()) {
+    for (const w of workers ?? newTileWorkers()) {
       w.onmessage = (ev: MessageEvent<TileResult>) => this.done.push(ev.data);
       this.workers.push(w);
     }
