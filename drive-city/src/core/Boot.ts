@@ -1,4 +1,5 @@
 import { t, type TKey } from './I18n';
+import { stat } from '../online/Funnel';
 
 /**
  * The loading screen's progress bar (index.html draws it from the first byte as `window.__boot`; 2026-10-12,
@@ -10,6 +11,6 @@ interface BootUi { stage(from: number, to: number, label?: string, secs?: number
 const ui = (): BootUi | undefined => (typeof window !== 'undefined' ? (window as unknown as { __boot?: BootUi }).__boot : undefined);
 
 export const boot = {
-  stage(from: number, to: number, label: TKey, secs: number): void { ui()?.stage(from, to, t(label), secs); },
+  stage(from: number, to: number, label: TKey, secs: number): void { stat.mark('b_' + label.replace(/^boot\./, '')); ui()?.stage(from, to, t(label), secs); },
   sub(f: number): void { ui()?.sub(f); },
 };

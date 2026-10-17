@@ -43,6 +43,7 @@ import * as dialogue from './dialogue';
 import * as story from './story';
 import * as adventure from './adventure';
 import * as resume from './resume';
+import * as funnel from './online/Funnel';
 import * as leaderboard from './online/Leaderboard';
 import * as feedback from './online/Feedback';
 import * as presence from './online/Presence';
@@ -66,6 +67,7 @@ import * as ui from './ui';
  * A module's install may only `engine.get` modules earlier in this list.
  */
 async function boot() {
+  funnel.stat.mark('js');
   const container = document.getElementById('app')!;
   const loading = document.getElementById('loading');
   if (loading) loading.querySelector('b')!.textContent = t('title.loading');
@@ -117,6 +119,7 @@ async function boot() {
   feedback.install(engine);
   presence.install(engine);
   cloud.install(engine);
+  if (worldName === 'city') funnel.install(engine);
   if (worldName === 'city') chat.install(engine);
   await ui.install(engine, container);
   if (worldName === 'city') { registerCityPoses(); registerTrafficPoses(); registerPeoplePoses(); registerCharacterPoses(); registerNavPoses(); registerPolicePoses(); registerVehiclePoses(); registerMissionPoses(); registerRacePoses(); registerParkPoses(); registerHomePoses(); registerTitlePose(); } else registerPoses();
@@ -132,6 +135,7 @@ async function boot() {
   if (shotMode) installShotMode(engine);
   else engine.start();
   bootBar.stage(1, 1, 'boot.ready', 0);
+  funnel.markTitle();
   loading?.remove();
 }
 
