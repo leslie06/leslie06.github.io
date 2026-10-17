@@ -64,6 +64,8 @@ export interface VehicleApi extends System {
   /** Player input reaches the car only when true (off behind menus). */
   inputEnabled: boolean;
   reset(pos?: THREE.Vector3Like, yaw?: number): void;
+  /** Where R would put the car near (x, y, z): the nearest free lane within 40 m on that level, facing along it; null if none. */
+  roadPoseNear?(x: number, y: number, z: number): { pos: { x: number; y: number; z: number }; yaw: number } | null;
 }
 
 export type CameraMode = 'chase' | 'far' | 'near' | 'hood';

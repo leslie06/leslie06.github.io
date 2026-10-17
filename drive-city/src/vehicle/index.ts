@@ -75,10 +75,10 @@ export async function install(engine: Engine): Promise<void> {
    * same level - a deck or the road under it), facing along it; or where it is, if there is none (the
    * yard). A car wedged against a pier or a parapet got nowhere by being set upright in place.
    */
-  const backOnRoad = (): { pos: { x: number; y: number; z: number }; yaw: number } | null => {
+  const backOnRoad = (p: THREE.Vector3Like = car.pos): { pos: { x: number; y: number; z: number }; yaw: number } | null => {
     const g = engine.get<{ name: string; graph: LaneGraph }>('traffic')?.graph;
     if (!g) return null;
-    const p = car.pos, at = { x: 0, z: 0, dx: 0, dz: 0 };
+    const at = { x: 0, z: 0, dx: 0, dz: 0 };
     // In a dead-end branch, face the way out (「进了死胡同，开不出去了」): the lane heading out wins,
     // and a one-way heading in is taken backwards.
     const dead = engine.get<DeadEndApi>('deadEnds');
@@ -143,6 +143,7 @@ export async function install(engine: Engine): Promise<void> {
       if (drift.active) bank(true);
       return prev;
     },
+    roadPoseNear: (x, y, z) => backOnRoad({ x, y, z }),
     get controls() { return filter.out; },
     get nitroActive() { return nitroOn; },
     autopilot: null as PathPilot | null,
