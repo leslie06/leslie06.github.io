@@ -49,7 +49,11 @@ const isLink = (c: string) => c.endsWith('_link');
 const MAIN = new Set(['motorway', 'trunk']);
 /** Plate bottom over the road (the city's decks are 6.5 m apart; everything else drives under 4.5 m). */
 export const CLEARANCE = 5.5;
-export const PLATE = { cross: [4.4, 2.5], exit: [4.8, 2.2], ahead: [4.8, 2.7] } as const;
+/**
+ * Plate sizes, metres. A quarter over the real ones (4.4 x 2.5 for a cross sign): a game's camera is further back
+ * and lower than a driver's eye, and a phone draws a plate 35 m off ~70 px wide (2026-10-17, 「远点看不清晰」).
+ */
+export const PLATE = { cross: [5.5, 3.1], exit: [6.0, 2.75], ahead: [6.0, 3.4] } as const;
 
 const COMPASS = (dx: number, dz: number) => (Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? '东' : '西') : dz > 0 ? '南' : '北');
 /** 东四环中路 -> 东四环: a ring road is signed by its ring, not its section; OSM's 京通快速 / 京通快速道路 are 京通快速路. */

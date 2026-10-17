@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../../core/Engine';
 import { CG, groups } from '../../core/Physics';
-import type { EnvUniforms } from '../../game/Contracts';
+import type { EnvUniforms, PlayerApi, VehicleApi } from '../../game/Contracts';
 import type { Closure, GuideSign, SignLine } from '../Signs';
 import { CJK } from '../landmarks/kit/tex';
+import { lang, onLangChange } from '../../core/I18n';
 
 /**
  * The guide signs (`city/Signs.ts`, placed at build time into signs.json) drawn and made solid.
@@ -25,6 +26,8 @@ const BG = { blue: '#1c4e9e', green: '#0b6b3b' } as const;
 const SWATCH = { blue: 0, green: 1, back: 2 } as const;
 const CLOSURE_BOARD = { x: 256, y: 0, w: 256, h: 154, mw: 2.0, mh: 1.2 };
 const LATIN = '600 {px}px system-ui, "Helvetica Neue", Arial, sans-serif';
+/** Texture LOD bias on the faces (`?signbias=` to try others). */
+const MIP_BIAS = Number(new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('signbias') ?? -0.7);
 
 interface SignsFile { signs: GuideSign[]; closures: Closure[] }
 
@@ -49,9 +52,39 @@ function fitText(g: CanvasRenderingContext2D, text: string, x: number, y: number
   g.textAlign = align;
   g.fillText(text, x, y);
 }
+/** Generic endings a long name breaks before (王府井|大街, 工人体育场|北路). */
+const SUFFIX = /(东|西|南|北|中)?(大街|大道|胡同|快速路|高速|北路|南路|东路|西路|中路|路|街|桥|巷|里)$/;
+/**
+ * A road name in big characters, centred on (x, y), within maxW: on one line if it fits at `px`, else (four
+ * characters or more) on two at up to 0.8 px, broken before its generic ending or in the middle. Returns the
+ * height it took, so an English line can go under it.
+ */
+function bigName(g: CanvasRenderingContext2D, name: string, x: number, y: number, maxW: number, px: number, align: CanvasTextAlign = 'center'): number {
+  g.font = `700 ${px}px ${CJK}`;
+  const chars = [...name];
+  if (g.measureText(name).width <= maxW || chars.length < 4) { fitText(g, name, x, y, maxW, px, 'cjk', align); return px; }
+  const m = name.match(SUFFIX);
+  let cut = m && m.index! >= 2 && chars.length - [...m[0]].length >= 2 ? [...name.slice(0, m.index)].length : Math.ceil(chars.length / 2);
+  if (cut >= chars.length - 1 || cut < 2) cut = Math.ceil(chars.length / 2);
+  const a = chars.slice(0, cut).join(''), b = chars.slice(cut).join('');
+  // Both lines at one size: the longer one decides it.
+  const p2 = Math.round(px * 0.8);
+  g.font = `700 ${p2}px ${CJK}`;
+  const size = Math.max(8, Math.min(p2, Math.floor(p2 * maxW / Math.max(g.measureText(a).width, g.measureText(b).width))));
+  const gap = size * 1.08;
+  fitText(g, a, x, y - gap / 2, maxW, size, 'cjk', align);
+  fitText(g, b, x, y + gap / 2, maxW, size, 'cjk', align);
+  return gap + size;
+}
+/**
+ * A sign line: the name big; its English under it only when the game is in English (in Chinese the pinyin line
+ * took a third of the height and every character was half the size it could be: 「远点看不清晰」, 2026-10-17).
+ */
 function name2(g: CanvasRenderingContext2D, l: SignLine, x: number, y: number, maxW: number, px: number, align: CanvasTextAlign = 'center') {
-  fitText(g, l.name, x, y, maxW, px, 'cjk', align);
-  if (l.en) fitText(g, l.en, x, y + px * 0.62, maxW, Math.round(px * 0.42), 'latin', align);
+  if (lang() === 'en' && l.en) {
+    const h = bigName(g, l.name, x, y - px * 0.3, maxW, Math.round(px * 0.8), align);
+    fitText(g, l.en, x, y - px * 0.3 + h / 2 + px * 0.34, maxW, Math.round(px * 0.46), 'latin', align);
+  } else bigName(g, l.name, x, y, maxW, px, align);
 }
 /** A white arrow shaft from (x0, y0) to (x1, y1) with its head at the end. */
 function arrow(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, t: number, head: number) {
@@ -64,57 +97,75 @@ function arrow(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, 
   g.closePath(); g.fill();
 }
 
-/** Draw a sign's face into (0, 0, W, H) of `g`. */
-function drawFace(g: CanvasRenderingContext2D, s: GuideSign, W: number, H: number) {
-  g.clearRect(0, 0, SLOT_W, SLOT_H);
+/**
+ * Draw a sign's face into (0, 0, W, H) of `g` (a SLOT_W x SLOT_H canvas, or the HUD card's at any scale).
+ * The names take most of the plate: at 35 m a plate is ~70 px wide on a phone, so every pixel of character
+ * height counts; the arrows are only as big as they need to be to read.
+ */
+export function drawFace(g: CanvasRenderingContext2D, s: GuideSign, W: number, H: number) {
+  g.clearRect(0, 0, g.canvas.width, g.canvas.height);
   g.fillStyle = '#f2f4f6'; round(g, 0, 0, W, H, 14); g.fill();
   g.fillStyle = BG[s.colour]; round(g, 5, 5, W - 10, H - 10, 10); g.fill();
   g.fillStyle = '#f2f4f6'; g.strokeStyle = '#f2f4f6'; g.textBaseline = 'middle';
   if (s.kind === 'cross') {
-    const cx = W / 2, cy = H * 0.6, t = 22, head = 30;
-    const by = H - 16;
+    // The straight-on road across the top; the junction low in the middle with short arms, its side roads either side.
     const arm = (d: string) => s.lines.find((l) => l.dir === d);
     const L = arm('L'), S = arm('S'), R = arm('R');
-    g.fillRect(cx - t / 2, cy - t / 2, t, by - cy + t / 2);
-    if (S) arrow(g, cx, cy, cx, H * 0.3, t, head); else g.fillRect(cx - t / 2, cy - t / 2, t, t);
-    if (L) arrow(g, cx, cy, W * 0.36, cy, t, head);
-    if (R) arrow(g, cx, cy, W * 0.64, cy, t, head);
-    if (S) name2(g, S, cx, H * 0.14, W * 0.62, 30);
-    if (L) name2(g, L, W * 0.19, cy - 12, W * 0.31, 28);
-    if (R) name2(g, R, W * 0.81, cy - 12, W * 0.31, 28);
+    const cx = W / 2, cy = H * 0.7, t = 15, head = 22, reach = 52;
+    g.fillRect(cx - t / 2, cy - t / 2, t, H - 14 - cy + t / 2);
+    if (S) arrow(g, cx, cy, cx, H * 0.4, t, head); else g.fillRect(cx - t / 2, cy - t / 2, t, t);
+    if (L) arrow(g, cx, cy, cx - reach, cy, t, head);
+    if (R) arrow(g, cx, cy, cx + reach, cy, t, head);
+    if (S) {
+      name2(g, S, cx, H * 0.19, W - 36, 50);
+      const side = cx - reach - 22;   // each side road's column
+      if (L) name2(g, L, 12 + side / 2, cy - 4, side - 6, 46);
+      if (R) name2(g, R, W - 12 - side / 2, cy - 4, side - 6, 46);
+    } else if (L && R) {
+      // A T from its stem: the top is free, each side road over its own half.
+      name2(g, L, W / 4 + 6, H * 0.3, W / 2 - 24, 50);
+      name2(g, R, W * 3 / 4 - 6, H * 0.3, W / 2 - 24, 50);
+    } else if (L || R) name2(g, (L ?? R)!, cx, H * 0.3, W - 36, 52);
   } else if (s.kind === 'exit') {
-    // 出口 EXIT tag, the interchange big, and the road the slip road leads to with its arrow.
-    g.fillStyle = '#f2f4f6'; round(g, 16, 16, 122, 50, 6); g.fill();
+    // 出口 tag, the interchange big, and the road the slip road leads to with its arrow.
+    const en = lang() === 'en';
+    g.fillStyle = '#f2f4f6'; round(g, 16, 16, en ? 122 : 84, 48, 6); g.fill();
     g.fillStyle = BG[s.colour];
-    fitText(g, '出口', 50, 42, 60, 28, 'cjk'); fitText(g, 'EXIT', 106, 42, 50, 18, 'latin');
+    if (en) { fitText(g, '出口', 50, 41, 60, 28, 'cjk'); fitText(g, 'EXIT', 106, 41, 50, 18, 'latin'); } else fitText(g, '出口', 58, 41, 66, 34, 'cjk');
     g.fillStyle = '#f2f4f6';
     const [first, second] = s.lines;
     const dir = (second ?? first).dir;
-    name2(g, first, W / 2 + 40, H * 0.36, W - 200, 46);
-    if (second) name2(g, second, W / 2, H * 0.74, W - 150, 32);
-    // The arrow slants the way the slip road leaves.
-    const ax = dir === 'L' ? 46 : W - 46, ay = H * 0.78;
+    name2(g, first, W / 2 + 50, H * 0.3, W - 190, 58);
+    // The arrow slants the way the slip road leaves; the road it leads to beside it.
+    const ax = dir === 'L' ? 46 : W - 46, ay = H * 0.74;
     arrow(g, ax + (dir === 'L' ? 22 : -22), ay + 26, ax + (dir === 'L' ? -14 : 14), ay - 28, 16, 24);
+    if (second) name2(g, second, W / 2, H * 0.73, W - 150, 46);
   } else {
     // ahead: up arrow, the road in a white box and its direction; the next interchanges with distances.
     const [road, ...next] = s.lines;
-    const colW = W * 0.3;
-    arrow(g, colW / 2, H - 22, colW / 2, H * 0.52, 24, 34);
-    g.fillStyle = '#f2f4f6'; round(g, 16, 18, colW - 22, 70, 8); g.fill();
+    const colW = W * 0.3, en = lang() === 'en';
+    arrow(g, colW / 2, H - 18, colW / 2, H * 0.6, 20, 30);
+    g.fillStyle = '#f2f4f6'; round(g, 14, 16, colW - 18, 78, 8); g.fill();
     g.fillStyle = BG[s.colour];
-    fitText(g, road.name, 16 + (colW - 22) / 2, 44, colW - 34, 32, 'cjk');
-    if (road.en) fitText(g, road.en, 16 + (colW - 22) / 2, 73, colW - 34, 14, 'latin');
+    if (en && road.en) { fitText(g, road.name, 14 + (colW - 18) / 2, 44, colW - 30, 34, 'cjk'); fitText(g, road.en, 14 + (colW - 18) / 2, 76, colW - 30, 15, 'latin'); }
+    else fitText(g, road.name, 14 + (colW - 18) / 2, 56, colW - 28, 44, 'cjk');
     g.fillStyle = '#f2f4f6';
-    if (s.heading) fitText(g, s.heading, colW / 2, H * 0.43, 60, 26, 'cjk');
+    if (s.heading) fitText(g, s.heading, colW / 2, H * 0.48, 60, 36, 'cjk');
     g.fillRect(colW, 18, 2, H - 36);
-    const rowH = (H - 30) / Math.max(3, next.length);
+    const rowH = (H - 24) / Math.max(3, next.length);
     next.forEach((l, i) => {
-      const y = 15 + rowH * (i + 0.42);
-      fitText(g, l.name, colW + 18, y, W - colW - 130, 32, 'cjk', 'left');
-      if (l.en) fitText(g, l.en, colW + 18, y + 22, W - colW - 130, 14, 'latin', 'left');
-      if (l.km !== undefined) fitText(g, `${l.km < 1 ? Math.round(l.km * 1000) + ' m' : l.km.toFixed(1) + ' km'}`, W - 22, y + 4, 100, 26, 'latin', 'right');
+      const y = 12 + rowH * (i + 0.5);
+      if (en && l.en) { fitText(g, l.name, colW + 16, y - 9, W - colW - 120, 34, 'cjk', 'left'); fitText(g, l.en, colW + 16, y + 20, W - colW - 120, 15, 'latin', 'left'); }
+      else fitText(g, l.name, colW + 16, y, W - colW - 120, 46, 'cjk', 'left');
+      if (l.km !== undefined) fitText(g, `${l.km < 1 ? Math.round(l.km * 1000) + ' m' : l.km.toFixed(1) + ' km'}`, W - 16, y, 100, 34, 'latin', 'right');
     });
   }
+}
+
+/** A plate's face in atlas pixels: the slot, fitted to the plate's shape. */
+export function faceSize(s: GuideSign): [number, number] {
+  const a = s.w / s.h;
+  return a >= SLOT_W / SLOT_H ? [SLOT_W, Math.round(SLOT_W / a)] : [Math.round(SLOT_H * a), SLOT_H];
 }
 
 /** Slot 0: the swatches and the closure board (前方道路封闭, red border on white). */
@@ -145,7 +196,15 @@ export interface GuideSignApi extends System {
   readonly closures: readonly Closure[];
   /** Signs with their face drawn right now (for probes). */
   readonly live: () => number;
+  /**
+   * The sign the player is driving up to and has not passed yet (the HUD's card shows it, `ui/SignCard.ts`):
+   * within AHEAD m ahead on the same level, facing the car, roughly over its road. Null on foot.
+   */
+  readonly ahead: GuideSign | null;
 }
+
+/** How far ahead a sign is shown on the HUD card, and how far to the side of the car's line it may stand. */
+const AHEAD = 170, AHEAD_SIDE = 26;
 
 export function placeGuideSigns(engine: Engine, data: SignsFile, env: EnvUniforms): GuideSignApi {
   const { signs, closures } = data;
@@ -178,10 +237,6 @@ export function placeGuideSigns(engine: Engine, data: SignsFile, env: EnvUniform
   for (let k = 1; k <= FACES; k++) blit(k);
   uploaded = true;
 
-  const faceSize = (s: GuideSign): [number, number] => {
-    const a = s.w / s.h;
-    return a >= SLOT_W / SLOT_H ? [SLOT_W, Math.round(SLOT_W / a)] : [Math.round(SLOT_H * a), SLOT_H];
-  };
 
   // --- materials
   const metal = new THREE.MeshStandardMaterial({ color: '#a3aab0', metalness: 0.55, roughness: 0.42 });
@@ -198,8 +253,12 @@ export function placeGuideSigns(engine: Engine, data: SignsFile, env: EnvUniform
       .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\n  vMapUv = uv.x < -0.5 ? vec2(${((back[0] + back[2]) / 2).toFixed(5)}, ${((back[1] + back[3]) / 2).toFixed(5)}) : mix(aFace.xy, aFace.zw, uv);\n#endif`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uSignGlow;')
+      // A sharper mip than the screen size asks for: a plate is small on screen and its text is all edges, so the
+      // default level smudged the characters a hundred metres before they were too small to read.
+      .replace('#include <map_fragment>', '#ifdef USE_MAP\n  diffuseColor *= texture2D(map, vMapUv, SIGN_MIP_BIAS);\n#endif')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uSignGlow;');
   };
+  plateMat.defines = { SIGN_MIP_BIAS: MIP_BIAS.toFixed(2) };
   plateMat.customProgramCacheKey = () => 'guide-sign-plate';
   const barrierMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0 });
   barrierMat.userData.wet = 'surface';
@@ -350,17 +409,51 @@ export function placeGuideSigns(engine: Engine, data: SignsFile, env: EnvUniform
     if (changed) writeFaces();
   };
 
+  // --- the sign ahead of the player (the HUD card)
+  let ahead: GuideSign | null = null;
+  /** Where a sign's plate hangs and how it lies relative to the car: metres ahead, to the side, and facing. */
+  const relate = (s: GuideSign, p: THREE.Vector3Like, fx: number, fz: number) => {
+    const c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
+    const rx = s.x - s.reach * c - p.x, rz = s.z + s.reach * sn - p.z;
+    // The plate faces (sin yaw, cos yaw): towards a car coming at it that is -1.
+    return { along: rx * fx + rz * fz, side: Math.abs(rx * fz - rz * fx), facing: sn * fx + c * fz };
+  };
+  const pickAhead = () => {
+    const pl = engine.get<PlayerApi>('player'), v = engine.get<VehicleApi>('vehicle');
+    if (!pl || !v || pl.mode !== 'driving') { ahead = null; return; }
+    const car = v.car, p = car.pos;
+    const fl = Math.hypot(car.fwd.x, car.fwd.z) || 1, fx = car.fwd.x / fl, fz = car.fwd.z / fl;
+    // Keep the one on the card until the car is under it (or has turned off).
+    if (ahead) {
+      const r = relate(ahead, p, fx, fz);
+      if (r.along > -2 && r.along < AHEAD + 30 && r.side < AHEAD_SIDE + 10 && r.facing < -0.5) return;
+      ahead = null;
+    }
+    let best = AHEAD;
+    for (const i of drawn) {
+      const s = signs[i];
+      if (Math.abs(s.y - p.y) > 4) continue;
+      const r = relate(s, p, fx, fz);
+      if (r.along < 12 || r.along > best || r.side > AHEAD_SIDE || r.facing > -0.75) continue;
+      best = r.along; ahead = s;
+    }
+  };
+
+  // The English lines come and go with the language: draw every face again.
+  onLangChange(() => { for (const [i, slot] of [...slotOf]) { slotOf.delete(i); owner[slot] = -1; free.push(slot); } writeFaces(); tick = 0; });
+
   const sys: GuideSignApi = {
     name: 'guideSigns',
     signs, closures,
     live: () => slotOf.size,
+    get ahead() { return ahead; },
     update(dt: number) {
       // Retroreflective sheeting: a faint glow at night (the night exposure is 6.5; 0.3 washed the faces out white).
       glow.value = 0.02 * env.uNight.value;
       const c = engine.camera.position;
       if (Math.abs(c.x - packX) > REPACK || Math.abs(c.z - packZ) > REPACK) repack(c.x, c.z);
       tick -= dt;
-      if (tick <= 0) { tick = 0.2; assign(); }
+      if (tick <= 0) { tick = 0.2; assign(); pickAhead(); }
     },
   };
   engine.add(sys);

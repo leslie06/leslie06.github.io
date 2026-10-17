@@ -4,6 +4,7 @@ import { onLangChange, t } from '../core/I18n';
 import type { CameraApi, HudApi, PlayerApi, VehicleApi, WorldApi, ParkApi } from '../game/Contracts';
 import { C, F, css, el } from './theme';
 import { L } from './lang';
+import { SignCard } from './SignCard';
 
 css(`
 /* One margin for every corner of the HUD. The speedo used max(24px,3vw) while the wanted stars,
@@ -113,6 +114,8 @@ export class Hud implements HudApi {
   private shown = { kmh: -1, rpm: -1, red: false, gear: '', best: '', score: -1, mult: -1, angle: -1, n2o: -2, n2oOn: false };
   private bestEl: HTMLElement;
   private streetEl: HTMLDivElement;
+  /** The guide sign ahead, big (ui/SignCard). */
+  private signCard: SignCard;
   private street = '';
   private streetT = 0;
   private streetPoll = 0;
@@ -156,6 +159,7 @@ export class Hud implements HudApi {
     const hint = this.hintEl = el('div', 'hint', root); hint.appendChild(L('hud.helpHint'));
     this.toastEl = el('div', 'toast', root);
     this.streetEl = el('div', 'street', root);
+    this.signCard = new SignCard(engine, root);
     this.promptEl = el('div', 'prompt', root);
     this.promptEl.hidden = true;
     this.rideEl = el('div', 'prompt', root);
@@ -276,6 +280,7 @@ export class Hud implements HudApi {
     }
     this.streetT -= dt;
     this.streetEl.classList.toggle('on', this.streetT > 0);
+    this.signCard.update(this.engine.get<PlayerApi>('player')?.mode !== 'onfoot');
     const pl = this.engine.get<PlayerApi>('player');
     const onFoot = pl?.mode === 'onfoot';
     this.speedoEl.hidden = onFoot;
