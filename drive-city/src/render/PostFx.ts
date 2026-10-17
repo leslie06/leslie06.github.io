@@ -6,6 +6,7 @@ import type { VehicleApi } from '../game/Contracts';
 import type { Look } from './TimeOfDay';
 import { AtmosphereEffect } from './effects/Atmosphere';
 import { CloudsEffect } from './effects/Clouds';
+import { FiniteEffect, guardBloom } from './effects/Finite';
 import { GradeEffect } from './effects/Grade';
 import { LensEffect } from './effects/Lens';
 import { MotionBlurEffect } from './effects/MotionBlur';
@@ -17,7 +18,7 @@ import { SunShaftsEffect } from './effects/SunShafts';
  *
  *   1. RenderPass              scene (sky dome at depth 1, rain, particles)
  *   2. N8AOPostPass            tier 1: half-res; tier 2: full-res (none on low)
- *   3. EffectPass "scene"      MotionBlur (car-aware) -> Clouds -> Atmosphere (height fog + aerial
+ *   3. EffectPass "scene"      Finite (NaN/Inf out) -> MotionBlur (car-aware) -> Clouds -> Atmosphere (height fog + aerial
  *                              perspective from the sky LUT) -> SunShafts -> Bloom -> ToneMapping
  *                              (AgX; `?tm=aces|neutral`) -> Grade
  *   4. EffectPass "aa"         SMAA, plus the lens stage (vignette, grain) when it does not sample
@@ -81,13 +82,15 @@ export class PostFx {
       this.ao = ao;
     }
 
-    const sceneFx: Effect[] = [];
+    // NaN/Inf from the scene never reach the chain: the bloom would grow one into a black box (effects/Finite).
+    const sceneFx: Effect[] = [new FiniteEffect()];
     if (q.motionBlurSamples > 0 && !off.has('mb')) { this.motionBlur = new MotionBlurEffect(cam, q.motionBlurSamples); sceneFx.push(this.motionBlur); }
     if (q.cloudSteps > 0 && !off.has('clouds')) { this.clouds = new CloudsEffect(cam, q.cloudSteps); sceneFx.push(this.clouds); }
     this.atmosphere = new AtmosphereEffect(cam, skyLut);
     if (!off.has('atmo')) sceneFx.push(this.atmosphere);
     if (q.sunShafts && !off.has('shafts')) { this.shafts = new SunShaftsEffect(cam, { samples: q.tier === 'high' ? 20 : 14, resolutionScale: 0.25 }); sceneFx.push(this.shafts); }
     this.bloom = new BloomEffect({ intensity: 0.25, luminanceThreshold: 1.2, luminanceSmoothing: 0.45, mipmapBlur: true, radius: 0.75, levels: q.bloomLevels });
+    guardBloom(this.bloom);
     if (!off.has('bloom')) sceneFx.push(this.bloom);
     this.tone = new ToneMappingEffect({ mode });
     sceneFx.push(this.tone);

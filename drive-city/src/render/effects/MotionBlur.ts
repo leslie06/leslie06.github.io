@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Effect, EffectAttribute, BlendFunction } from 'postprocessing';
+import { FINITE_GLSL, IMAGE_CAP } from './Finite';
 
 /**
  * Camera motion blur (ported from gunFight), with the player's car handled as a moving object.
@@ -15,7 +16,7 @@ import { Effect, EffectAttribute, BlendFunction } from 'postprocessing';
  * Samples much nearer than the centre pixel are skipped, so the car's paint does not bleed into
  * the road blurring behind its silhouette. Velocity is normalised to 60 Hz.
  */
-const frag = /* glsl */`
+const frag = /* glsl */`${FINITE_GLSL}
 uniform mat4 uInvProj;
 uniform mat4 uCamWorld;
 uniform mat4 uPrevVP;
@@ -58,7 +59,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     vec2 suv = uv + vel * t;
     if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) continue;
     if (mbViewZ(readDepth(suv)) < cz * 0.7 - 0.4) continue;
-    sum += texture2D(inputBuffer, suv); w += 1.0;
+    vec4 s = texture2D(inputBuffer, suv);
+    sum += vec4(finiteRgb(s.rgb, ${IMAGE_CAP}), s.a); w += 1.0;
   }
   outputColor = sum / w;
 }
