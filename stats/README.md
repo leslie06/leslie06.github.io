@@ -59,6 +59,17 @@ console.table(db.prepare(\"SELECT day,game,active,ip_masked FROM ev ORDER BY ts 
 
 服务器上建表不用手动：`server.mjs` 启动时会执行 `schema.sql`（`CREATE TABLE IF NOT EXISTS`）。所以按上面「改完代码怎么更新服务器」把 `worker.js`、`schema.sql` 传上去重启就行。
 
+## 漏斗（2026-10-17 起，b城追车）
+
+只看「玩了多久」不知道玩家卡在哪一步，所以 b城追车自己在 `window.__stat` 里记下每一步是打开后第几秒走到的（`drive-city/src/online/Funnel.ts`，`drive-city/index.html` 在程序下载前就建好），打点片段（`apply.mjs`）每次心跳把它作为 `m` 一起带上。别的游戏没有 `__stat`，心跳和以前一样。
+
+- 存：`fn` 表，一次打开一行（`day, game, sid` 和 `ev` 对得上），`data` 是 JSON。键是小写短名、值是数（秒）或短字符串，最多 48 个键、2 KB（`cleanMarks`）；后报的是先报的超集，乱序时留长的那份。
+- 步骤（`worker.js` 的 `FUNNEL`，按先后）：`js` 程序下载完开始运行 → `b_city` 下载城市数据 → `b_tiles` 加载出生点街区 → `title` 标题画面 → `start` 点「进入城市」→ `move` 开出 30 米 → `p1m` / `p3m` / `p10m` / `p30m` 玩满 1 / 3 / 10 / 30 分钟（标题、暂停、切后台不算）。
+- 进城后做过的事（第一次的时间）：`fare` 接客、`adv` 小飞龙的冒险、`ch` 开始主线章节、`chpass` 通过一章、`foot` 下车、`jack` 抢车、`fight` 打架、`wanted` 被通缉、`busted` 被捕、`map` 大地图、`race` 比赛 / 计时赛、`acct` 登录了账号。
+- 环境：`q` 画质档、`gpu` 显卡名、`dlkb` 到标题画面前下载了多少 KB、`kbps` 第一次下载（超过 1.5 MB 才算，缓存过的不算）的速度、`fps` / `fpslo` 进城后第一分钟的帧率中位和最慢 10%、`lost` WebGL 上下文丢失、`err` / `e` 页面报错次数和第一条、`rerr` / `re` 资源下载失败次数和第一个文件、`ret` 这台浏览器以前玩过、`touch` 触屏。不记位置、名字和输入的内容。
+- 看：看板的「b城追车 · 漏斗」，可按全部 / 手机 / 电脑 / 第一次来 / 来过的分开看：每一步走到的会话数、占打开、比上一步、打开后第几秒（中位和 25%–75%）、「最远到这一步」；下面是进城以后做了什么、下载速度、帧率、显卡、报错。
+- 测：`node stats/test.mjs`（漏斗 10 条）；端到端 `DB_FILE=/tmp/x.sqlite PORT=8788 node stats/server.mjs &` 然后 `node drive-city/.scratch/funnelprobe.mjs http://127.0.0.1:8788 65`（真实帧循环从标题进城玩 65 秒，把 `__stat` 当心跳发过去；`TOUCH=1 ... 8 844 390` 模拟手机），`node drive-city/.scratch/dashshot.mjs http://127.0.0.1:8788 out.png` 截看板的漏斗那块。
+
 ## 玩家反馈（2026-10-11 起，b城追车在用）
 
 游戏标题页和暂停页有「意见反馈」按钮：选类型（遇到问题 / 建议 / 好评 / 其他）、写内容、选填联系方式，默认附上打开面板那一刻的游戏画面（JPEG，最宽 960 像素）。游戏还会一起带上版本、画质、帧率、设备和屏幕、语言、在城里的位置和道路、开车还是步行、通缉星数、游戏里的钟点、这次玩了多久。

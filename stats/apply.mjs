@@ -15,7 +15,8 @@ const START = '<!-- STATS_START 匿名统计，由 stats/apply.mjs 生成，不�
 const END = '<!-- STATS_END -->';
 const PLACEHOLDER = 'https://STATS-ENDPOINT/e';
 
-// 活跃时长的三条规矩：页面可见才算、最近 30 秒有操作才算、每 15 秒报一次防丢包
+// 活跃时长的三条规矩：页面可见才算、最近 30 秒有操作才算、每 15 秒报一次防丢包。
+// 游戏自己在 window.__stat 里记的漏斗节点（b城追车，2026-10-17）跟着心跳一起报；没有就不带。
 const snippet = (game, api) => `${START}
 <script>
 (() => {
@@ -32,7 +33,7 @@ const snippet = (game, api) => `${START}
   const send = () => {
     try {
       navigator.sendBeacon(API, new Blob(
-        [JSON.stringify({ g: GAME, s: sid, a: active, w: innerWidth, r: document.referrer })],
+        [JSON.stringify({ g: GAME, s: sid, a: active, w: innerWidth, r: document.referrer, m: window.__stat })],
         { type: 'text/plain' }));   // text/plain 不触发跨域预检
     } catch (e) {}
   };

@@ -23,6 +23,10 @@ export const SQL = {
   upsert: `INSERT INTO ev (day, game, sid, active, mobile, from_index, country, ip_hash, ip_masked, ts, seen)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(day, game, sid) DO UPDATE SET active = max(ev.active, excluded.active), seen = max(ev.seen, excluded.seen)`,
+  // 漏斗：后报的是先报的超集（游戏只往里加），乱序到达时留更长的那份
+  fnPut: `INSERT INTO fn (day, game, sid, mobile, data, ts) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(day, game, sid) DO UPDATE SET data = CASE WHEN length(excluded.data) >= length(fn.data) THEN excluded.data ELSE fn.data END`,
+  fnRows: 'SELECT mobile, data FROM fn WHERE game = ? AND day >= ? ORDER BY ts DESC LIMIT 50000',
   // 在线：最近 ONLINE_MS 里有过心跳的会话（游戏开着的页面每 15 秒一跳，后台标签页被浏览器压到一分钟一跳，就掉出去了）
   online: 'SELECT COUNT(*) AS c FROM ev WHERE game = ? AND seen > ?',
   todayDevices: 'SELECT COUNT(DISTINCT ip_hash) AS c FROM ev WHERE game = ? AND day = ?',
@@ -115,11 +119,81 @@ async function ingest(request, env) {
       day, b.g, sid, active, width && width <= 820 ? 1 : 0, fromIndex,
       request.cf?.country ?? 'XX', await hash(ip, ua, day, env.SALT ?? 'salt'), masked, Date.now(), Date.now(),
     ).run();
+    const marks = cleanMarks(b.m);
+    if (marks) await env.DB.prepare(SQL.fnPut).bind(day, b.g, sid, width && width <= 820 ? 1 : 0, marks, Date.now()).run();
     // Cloudflare 自带地域信息；自建服务器上这里没有，交给后台任务去查
     if (masked && request.cf?.region) {
       await env.DB.prepare(SQL.geoPut).bind(masked, request.cf.region, request.cf.city ?? '', '', Date.now()).run();
     }
   } catch { /* 静默丢弃 */ }
+}
+
+/**
+ * 漏斗打点（b.m）：键是小写字母开头的短名字，值是数（秒，留一位小数）或短字符串（出错信息、显卡名）。
+ * 最多 48 个键、整份不超过 2 KB；不认识的形状整个丢掉。
+ */
+export function cleanMarks(m) {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
+  const out = {};
+  let n = 0;
+  for (const [k, v] of Object.entries(m)) {
+    if (n >= 48 || !/^[a-z][a-z0-9_]{0,15}$/.test(k)) continue;
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.round(Math.min(Math.max(v, -1e7), 1e7) * 10) / 10;
+    else if (typeof v === 'string' && v) out[k] = v.slice(0, 160);
+    else continue;
+    n++;
+  }
+  const j = JSON.stringify(out);
+  return n && j.length <= 2048 ? j : null;
+}
+
+/**
+ * b城追车的漏斗：一次打开会走过的步骤，按先后。每一步的值是「打开后第几秒走到的」（drive-city/src/online/Funnel.ts）。
+ * 看板按这个顺序数每一步还剩多少会话，以及每次打开最远走到哪一步。
+ */
+export const FUNNEL = [
+  ['js', '程序下载完、开始运行'],
+  ['b_city', '开始下载城市数据'],
+  ['b_tiles', '加载出生点街区'],
+  ['title', '到标题画面'],
+  ['start', '点「进入城市」'],
+  ['move', '开出 30 米'],
+  ['p1m', '玩满 1 分钟'],
+  ['p3m', '玩满 3 分钟'],
+  ['p10m', '玩满 10 分钟'],
+  ['p30m', '玩满 30 分钟'],
+];
+
+async function funnel(env, since) {
+  const rows = (await env.DB.prepare(SQL.fnRows).bind('bcity', since).all()).results;
+  const segs = { all: [], mobile: [], desktop: [], fresh: [], back: [] };
+  for (const r of rows) {
+    let d;
+    try { d = JSON.parse(r.data); } catch { continue; }
+    segs.all.push(d);
+    (r.mobile ? segs.mobile : segs.desktop).push(d);
+    (d.ret ? segs.back : segs.fresh).push(d);
+  }
+  const q = (a, p) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
+  const agg = (list) => {
+    const num = {}, str = {}, last = {};
+    for (const d of list) {
+      for (const [k, v] of Object.entries(d)) {
+        if (typeof v === 'number') (num[k] ??= []).push(v);
+        else { const m = (str[k] ??= {}); m[v] = (m[v] ?? 0) + 1; }
+      }
+      // 最远走到的一步（一步都没到的记 none）
+      let far = 'none';
+      for (const [k] of FUNNEL) if (typeof d[k] === 'number') far = k;
+      last[far] = (last[far] ?? 0) + 1;
+    }
+    return {
+      n: list.length, last,
+      num: Object.fromEntries(Object.entries(num).map(([k, a]) => { a.sort((x, y) => x - y); return [k, { c: a.length, p25: q(a, 0.25), p50: q(a, 0.5), p75: q(a, 0.75) }]; })),
+      str: Object.fromEntries(Object.entries(str).map(([k, m]) => [k, Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 12)])),
+    };
+  };
+  return { steps: FUNNEL, segs: Object.fromEntries(Object.entries(segs).map(([k, l]) => [k, agg(l)])) };
 }
 
 // ---------------------------------------------------------------- 排行榜
@@ -278,7 +352,7 @@ async function feedbackList(env, url) {
 async function api(env, days) {
   const since = daysAgo(days);
   const now = Date.now();
-  const [summary, median, daily, regions, recent, acctSum, acctDaily, acctList] = await Promise.all([
+  const [summary, median, daily, regions, recent, acctSum, acctDaily, acctList, fun] = await Promise.all([
     env.DB.prepare(SQL.summary).bind(REAL_PLAY, since).all(),
     env.DB.prepare(SQL.median).bind(since).all(),
     env.DB.prepare(SQL.daily).bind(REAL_PLAY, since).all(),
@@ -287,6 +361,7 @@ async function api(env, days) {
     env.DB.prepare(SQL.acctSummary).bind(since, cnDay(now), now - 7 * 86400e3).all(),
     env.DB.prepare(SQL.acctDaily).bind(since).all(),
     env.DB.prepare(SQL.acctList).all(),
+    funnel(env, since),
   ]);
   const med = Object.fromEntries(median.results.map(r => [r.game, r.median]));
   return {
@@ -294,6 +369,7 @@ async function api(env, days) {
     games: summary.results.map(r => ({ ...r, median: med[r.game] ?? 0 })),
     daily: daily.results, regions: regions.results, recent: recent.results,
     accounts: { games: acctSum.results, daily: acctDaily.results, list: acctList.results },
+    funnel: fun,
   };
 }
 
@@ -676,6 +752,20 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
   <th>用户名</th><th>游戏</th><th>注册</th><th>最后登录</th><th>游戏时长</th><th>章节</th><th>钱</th><th>存档同步</th>
 </tr></thead><tbody></tbody></table></div>
 
+<h2>b城追车 · 漏斗</h2>
+<div class="bar" id="fseg">
+  <button data-s="all" aria-pressed="true">全部</button><button data-s="mobile">手机</button><button data-s="desktop">电脑</button>
+  <button data-s="fresh">第一次来</button><button data-s="back">来过的</button>
+</div>
+<div class="wrap"><table id="ft"><thead><tr>
+  <th>步骤</th><th>走到</th><th>占打开</th><th>比上一步</th><th>打开后第几秒（中位）</th><th>25%–75%</th><th>最远到这一步</th>
+</tr></thead><tbody></tbody></table></div>
+<div class="empty" id="fempty" hidden>还没有漏斗数据（2026-10-17 之后部署的版本才报）。</div>
+<h2 style="margin-top:20px">进城以后做了什么（占点了「进入城市」的）</h2>
+<div class="wrap"><table id="fa"><thead><tr><th>做过</th><th>会话</th><th>占进城</th><th>打开后第几秒（中位）</th></tr></thead><tbody></tbody></table></div>
+<h2 style="margin-top:20px">设备和出错</h2>
+<div class="wrap"><table id="fe"><thead><tr><th>项目</th><th>情况</th></tr></thead><tbody></tbody></table></div>
+
 <h2>来自哪里</h2>
 <div class="wrap"><table id="rt"><thead><tr>
   <th>省份</th><th>打开</th><th>设备</th><th>有效游玩</th><th>平均时长</th><th>占比</th>
@@ -690,6 +780,7 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 挂在后台不计。「设备」按当天的 IP+UA 哈希去重，跨天会重复计。「总时长」是期间所有会话的活跃时间加起来。<br>
 账号的「游戏时长」「章节」「钱」读自玩家的云存档，是他最近一次同步时的数（游戏里在城里开着、没挂机的时间，不含标题和暂停）；没有云存档的显示 –。
 账号总数和账号列表不受上面天数按钮影响，「期间新增」「每日注册」才按天数算。<br>
+漏斗：一次打开算一行，「打开后第几秒」从页面开始加载算起；「最远到这一步」= 走到了这一步、没走到下一步的打开次数（就是在这一步之后离开的）。「来过的」= 这台浏览器以前玩过（本地有存档）。<br>
 IP 只存到网段（最后一段抹成 x），完整地址不落库；省份是拿网段查一次归属地缓存下来的，同一网段不会重复查。</p>
 <script>
 const key = new URLSearchParams(location.search).get('k') || '';
@@ -746,6 +837,8 @@ async function load(d) {
     '<td class="n">' + (a.chapters ?? '–') + '</td><td class="n">' + (a.cash == null ? '–' : '¥' + a.cash) + '</td>' +
     '<td class="n">' + (a.saved ? ago(a.saved) : '–') + '</td></tr>').join('');
 
+  funnelData = data.funnel; drawFunnel();
+
   const total = data.regions.reduce((s, r) => s + r.sessions, 0);
   document.querySelector('#rt tbody').innerHTML = data.regions.map(r =>
     '<tr><td>' + r.province + '</td><td class="n big">' + r.sessions + '</td><td class="n">' + r.devices + '</td>' +
@@ -763,6 +856,51 @@ async function load(d) {
     '<td class="n' + (r.active >= data.realPlay ? ' big' : '') + '">' + fmt(r.active) + '</td>' +
     '<td>' + (r.mobile ? '手机' : '电脑') + '</td><td>' + (r.from_index ? '目录页' : '直接进') + '</td></tr>').join('');
 }
+let funnelData = null, funnelSeg = 'all';
+const ACTS = [['fare', '接过乘客'], ['adv', '开始小飞龙的冒险'], ['ch', '开始主线章节'], ['chpass', '通过一章主线'], ['foot', '下车走路'],
+  ['jack', '抢车'], ['fight', '打架'], ['wanted', '被通缉'], ['busted', '被捕'], ['map', '打开大地图'], ['race', '比赛 / 计时赛'], ['acct', '登录账号']];
+function drawFunnel() {
+  const f = funnelData, g = f && f.segs[funnelSeg];
+  document.getElementById('fempty').hidden = !!(g && g.n);
+  for (const id of ['ft', 'fa', 'fe']) document.getElementById(id).hidden = !(g && g.n);
+  if (!g || !g.n) return;
+  const sec = (v) => v == null ? '–' : v >= 60 ? fmt(Math.round(v)) : v.toFixed(1) + '秒';
+  let prev = g.n;
+  const rows = ['<tr><td>打开页面</td><td class="n big">' + g.n + '</td><td class="n">100%</td><td class="n">–</td><td class="n">0</td><td class="n">–</td>' +
+    '<td class="n">' + (g.last.none || 0) + (g.last.none ? '<span style="color:#535a72"> 程序都没下载完</span>' : '') + '</td></tr>'];
+  for (const [k, label] of f.steps) {
+    const st = g.num[k], c = st ? st.c : 0;
+    rows.push('<tr><td>' + esc(label) + '</td><td class="n big">' + c + '</td><td class="n">' + pct(c, g.n) + '</td><td class="n">' + pct(c, prev) + '</td>' +
+      '<td class="n">' + sec(st && st.p50) + '</td><td class="n">' + (st ? sec(st.p25) + ' – ' + sec(st.p75) : '–') + '</td>' +
+      '<td class="n">' + (g.last[k] || 0) + '</td></tr>');
+    prev = c;
+  }
+  document.querySelector('#ft tbody').innerHTML = rows.join('');
+  const started = g.num.start ? g.num.start.c : 0;
+  document.querySelector('#fa tbody').innerHTML = ACTS.map(([k, label]) => {
+    const st = g.num[k];
+    return '<tr><td>' + label + '</td><td class="n">' + (st ? st.c : 0) + '</td><td class="n">' + pct(st ? st.c : 0, started) + '</td><td class="n">' + sec(st && st.p50) + '</td></tr>';
+  }).join('');
+  const top = (k, n = 6) => (g.str[k] || []).slice(0, n).map(([v, c]) => esc(v) + ' <span style="color:#535a72">×' + c + '</span>').join('<br>') || '–';
+  const num = (k) => g.num[k];
+  const range = (k, unit) => { const st = num(k); return st ? st.p50 + unit + '（25%–75%：' + st.p25 + '–' + st.p75 + '，' + st.c + ' 次）' : '–'; };
+  const errs = num('err');
+  document.querySelector('#fe tbody').innerHTML = [
+    ['第一次下载的速度', range('kbps', ' KB/s') + '<br><span style="color:#535a72">到标题画面前下载的量 ÷ 用时；浏览器缓存过的不算</span>'],
+    ['到标题画面前下载', range('dlkb', ' KB')],
+    ['帧率（进城后第一分钟）', range('fps', ' fps') + '<br>最慢的 10% 帧：' + range('fpslo', ' fps')],
+    ['画质档', top('q')],
+    ['显卡', top('gpu')],
+    ['页面报错', errs ? errs.c + ' 次打开有报错（占 ' + pct(errs.c, g.n) + '）<br>' + top('e', 8) : '没有'],
+    ['资源下载失败', num('rerr') ? num('rerr').c + ' 次打开<br>' + top('re', 6) : '没有'],
+    ['显卡崩溃（WebGL 上下文丢失）', num('lost') ? num('lost').c + ' 次，打开后第 ' + sec(num('lost').p50) + '（中位）' : '没有'],
+  ].map(([a, b]) => '<tr><td>' + a + '</td><td style="text-align:left;white-space:normal">' + b + '</td></tr>').join('');
+}
+document.getElementById('fseg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  for (const x of document.querySelectorAll('#fseg button')) x.setAttribute('aria-pressed', String(x === b));
+  funnelSeg = b.dataset.s; drawFunnel();
+});
 document.getElementById('days').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   for (const x of document.querySelectorAll('#days button')) x.setAttribute('aria-pressed', String(x === b));

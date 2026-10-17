@@ -123,3 +123,17 @@ CREATE TABLE IF NOT EXISTS chat_ban (
   until INTEGER NOT NULL,
   ts    INTEGER NOT NULL
 );
+
+-- 漏斗（2026-10-17 起，b城追车）：一次打开一行。游戏自己记下的关键节点——打开后第几秒走到的（下载完程序、
+-- 到标题画面、点进入城市、第一次开动、玩满 1 分钟……），以及几项环境（画质、显卡、帧率、下载量、出错信息），
+-- 一个 JSON。随心跳一起报，后报的是先报的超集，所以留更长的那份。看板的「b城追车 · 漏斗」按它汇总。
+CREATE TABLE IF NOT EXISTS fn (
+  day    TEXT    NOT NULL,
+  game   TEXT    NOT NULL,
+  sid    TEXT    NOT NULL,              -- 和 ev.sid 同一个会话号
+  mobile INTEGER NOT NULL DEFAULT 0,
+  data   TEXT    NOT NULL DEFAULT '{}',
+  ts     INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, game, sid)
+);
+CREATE INDEX IF NOT EXISTS fn_day ON fn (game, day);

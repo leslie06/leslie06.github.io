@@ -257,5 +257,26 @@ ok('换个玩家号同一台设备也不行', (await chat({ p: 'guestpid9', text
 await admin('/chat/ban?id=' + c1.body.msg.id + '&hours=0', { method: 'POST' });
 ok('解除禁言后能发', (await chat({ p: 'guestpid1', text: '解封了' })).status === 200);
 
+// —— 漏斗（b城追车）
+const fnRows = () => db.prepare("SELECT * FROM fn WHERE game = 'bcity'").all();
+await beat({ g: 'bcity', s: 'fun1', a: 3, w: 1440, m: { v: 1, js: 4.2, b_city: 6, title: 20.5, dlkb: 6800, kbps: 330, q: 'high', gpu: 'Apple M2' } });
+ok('带漏斗的心跳写进 fn', fnRows().length === 1 && JSON.parse(fnRows()[0].data).title === 20.5);
+await beat({ g: 'bcity', s: 'fun1', a: 70, w: 1440, m: { v: 1, js: 4.2, b_city: 6, title: 20.5, dlkb: 6800, kbps: 330, q: 'high', gpu: 'Apple M2', start: 25, move: 31.04, p1m: 88 } });
+ok('后来的超集替换先前的', JSON.parse(fnRows()[0].data).p1m === 88 && JSON.parse(fnRows()[0].data).move === 31);
+await beat({ g: 'bcity', s: 'fun1', a: 70, w: 1440, m: { v: 1, js: 4.2 } });
+ok('乱序到的旧心跳不会覆盖', JSON.parse(fnRows()[0].data).p1m === 88);
+await beat({ g: 'bcity', s: 'fun2', a: 0, w: 390, m: { v: 1, ret: 1, js: 9, e: 'TypeError: x is undefined', err: 2, 'Bad Key': 1, big: 'x'.repeat(500), obj: { a: 1 } } });
+const f2 = JSON.parse(fnRows().find((r) => r.sid === 'fun2').data);
+ok('坏键和对象丢掉、长串截断', !('Bad Key' in f2) && !('obj' in f2) && f2.big.length === 160 && f2.err === 2);
+ok('手机标记', fnRows().find((r) => r.sid === 'fun2').mobile === 1);
+await beat({ g: 'bcity', s: 'fun3', a: 0, w: 1440, m: [1, 2] });
+await beat({ g: 'bcity', s: 'fun4', a: 0, w: 1440 });
+ok('数组和没带 m 的不写 fn', fnRows().length === 2);
+const fun = (await (await worker.fetch(new Request('https://s/api?days=7&k=secret'), env)).json()).funnel;
+ok('看板：漏斗步骤和分组', fun.steps[0][0] === 'js' && fun.segs.all.n === 2 && fun.segs.mobile.n === 1 && fun.segs.back.n === 1 && fun.segs.fresh.n === 1);
+ok('看板：每步人数和中位', fun.segs.all.num.js.c === 2 && fun.segs.all.num.title.c === 1 && fun.segs.all.num.title.p50 === 20.5);
+ok('看板：最远到哪一步', fun.segs.all.last.p1m === 1 && fun.segs.all.last.js === 1);
+ok('看板：出错信息汇总', fun.segs.all.str.e[0][0] === 'TypeError: x is undefined' && fun.segs.all.str.e[0][1] === 1);
+
 console.log(failed ? `\n${failed} 条没过` : '\n全过');
 process.exit(failed ? 1 : 0);
