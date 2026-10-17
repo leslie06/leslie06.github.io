@@ -9,9 +9,15 @@ export class Routes {
     net.edges.forEach((e, i) => {
       this.out[e.a].push(i);
       if (!e.o) this.out[e.b].push(-i - 1);   // negative = traversed b -> a
+      // Every cell a segment passes through, not only its ends: an expressway's points can be hundreds of metres
+      // apart, and the middle of 东五环 had no name (2026-10-17).
       for (let k = 0; k < e.p.length; k += 2) {
-        const key = `${Math.floor(e.p[k] / 64)}_${Math.floor(e.p[k + 1] / 64)}`;
-        const l = this.grid.get(key) ?? []; if (l[l.length - 1] !== i) l.push(i); this.grid.set(key, l);
+        const ax = k ? e.p[k - 2] : e.p[k], az = k ? e.p[k - 1] : e.p[k + 1], bx = e.p[k], bz = e.p[k + 1];
+        const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 24));
+        for (let j = k ? 1 : n; j <= n; j++) {
+          const key = `${Math.floor((ax + (bx - ax) * j / n) / 64)}_${Math.floor((az + (bz - az) * j / n) / 64)}`;
+          const l = this.grid.get(key) ?? []; if (l[l.length - 1] !== i) l.push(i); this.grid.set(key, l);
+        }
       }
     });
   }

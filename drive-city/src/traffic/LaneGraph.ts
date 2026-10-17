@@ -83,11 +83,18 @@ export class LaneGraph {
   private add(l: Link): void {
     this.links.push(l);
     this.out[l.from].push(l.id);
-    for (let k = 0; k < l.pts.length; k += 2) {
-      const key = `${Math.floor(l.pts[k] / 64)}_${Math.floor(l.pts[k + 1] / 64)}`;
-      const list = this.grid.get(key) ?? [];
-      if (list[list.length - 1] !== l.id) list.push(l.id);
-      this.grid.set(key, list);
+    // Every cell a segment passes through (an expressway's points can be hundreds of metres apart; with only the
+    // points indexed, `near` on the middle of 东五环 found the side streets and not the road itself).
+    const p = l.pts;
+    for (let k = 0; k < p.length; k += 2) {
+      const ax = k ? p[k - 2] : p[k], az = k ? p[k - 1] : p[k + 1], bx = p[k], bz = p[k + 1];
+      const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 24));
+      for (let j = k ? 1 : n; j <= n; j++) {
+        const key = `${Math.floor((ax + (bx - ax) * j / n) / 64)}_${Math.floor((az + (bz - az) * j / n) / 64)}`;
+        const list = this.grid.get(key) ?? [];
+        if (list[list.length - 1] !== l.id) list.push(l.id);
+        this.grid.set(key, list);
+      }
     }
   }
 
