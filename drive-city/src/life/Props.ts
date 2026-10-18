@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { EnvUniforms } from '../game/Contracts';
 import { CG, groups } from '../core/Physics';
-import PROPS from './props.json';
+import { late } from '../core/Late';
 
 /** The street life's things (scripts/blender/props/life.py -> props.json). */
 export type PropKind = 'stool' | 'chess' | 'cart' | 'grill' | 'lantern' | 'speaker' | 'cage' | 'table' | 'broom' | 'flag' | 'guitar' | 'erhu' | 'bow' | 'cord';
@@ -23,7 +23,7 @@ const LOOK: Record<string, [string, number]> = {
 };
 
 type Model = Record<string, { p: number[]; n: number[]; i: number[] }>;
-function geometry(kind: PropKind): THREE.BufferGeometry {
+function geometry(kind: PropKind, PROPS: Record<string, Model>): THREE.BufferGeometry {
   // A cord (a bird cage's, from a branch): 1 m hanging down from its origin, stretched by the y scale.
   if (kind === 'cord') {
     const g = new THREE.CylinderGeometry(0.006, 0.006, 1, 4, 1, true).translate(0, -0.5, 0).toNonIndexed();
@@ -33,7 +33,7 @@ function geometry(kind: PropKind): THREE.BufferGeometry {
     g.setAttribute('aGlow', new THREE.BufferAttribute(new Float32Array(n), 1));
     return g;
   }
-  const model = (PROPS as unknown as Record<string, Model>)[kind];
+  const model = PROPS[kind];
   const parts = Object.entries(model).map(([mat, g]) => {
     const [hex, glow] = LOOK[mat] ?? ['#ff00ff', 0];
     const geo = new THREE.BufferGeometry(), n = g.p.length / 3, c = new THREE.Color(hex), cols = new Float32Array(n * 3);
@@ -65,8 +65,9 @@ export class LifeProps {
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vGlow * (0.15 + 0.85 * uNight);');
     };
     mat.customProgramCacheKey = () => 'life-props';
+    // props.json comes after the title (core/Late): the meshes start empty (nothing drawn) and take their geometry then
     for (const k of KINDS) {
-      const m = new THREE.InstancedMesh(geometry(k), mat, CAP[k]);
+      const m = new THREE.InstancedMesh(new THREE.BufferGeometry(), mat, CAP[k]);
       m.name = `life:${k}`;
       m.frustumCulled = false;
       m.castShadow = SHADOW.has(k); m.receiveShadow = true;
@@ -74,6 +75,10 @@ export class LifeProps {
       scene.add(m);
       this.meshes.set(k, m);
     }
+    void late(() => import('./props.json'), (j) => {
+      const models = j.default as unknown as Record<string, Model>;
+      for (const k of KINDS) { const m = this.meshes.get(k)!; m.geometry.dispose(); m.geometry = geometry(k, models); }
+    });
   }
 
   begin(): void { for (const k of KINDS) this.n.set(k, 0); }

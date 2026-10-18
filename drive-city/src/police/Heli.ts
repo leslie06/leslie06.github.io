@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import HELI_MODEL from './heli.json';
+import { late } from '../core/Late';
 
 /** Cruising height over the street, and how far above a roof it keeps. */
 const ALT = 58, ROOF_CLEAR = 26;
@@ -13,9 +13,11 @@ export const HELI_SIGHT = 170;
 const COLOURS: Record<string, string> = { white: '#f2f3f1', blue: '#1c47a8', dark: '#1b1d20', grey: '#8a8e92', glass: '#0d1a24' };
 type Part = { p: number[]; n: number[]; i: number[] };
 
+type HeliModel = Record<string, Record<string, Part>>;
+
 /** One group of the model (hull, rotor, fan) as a vertex-coloured geometry, moved by (dx, dy, dz); glass apart. */
-function group(name: 'hull' | 'rotor' | 'fan', dx = 0, dy = 0, dz = 0): { paint: THREE.BufferGeometry; glass: THREE.BufferGeometry | null } {
-  const parts = (HELI_MODEL as unknown as Record<string, Record<string, Part>>)[name];
+function group(model: HeliModel, name: 'hull' | 'rotor' | 'fan', dx = 0, dy = 0, dz = 0): { paint: THREE.BufferGeometry; glass: THREE.BufferGeometry | null } {
+  const parts = model[name];
   const out: THREE.BufferGeometry[] = [], glass: THREE.BufferGeometry[] = [];
   for (const [mat, g] of Object.entries(parts)) {
     const geo = new THREE.BufferGeometry();
@@ -84,19 +86,27 @@ export class PoliceHeli {
   constructor(scene: THREE.Scene) {
     // The body modelled in Blender (scripts/blender/vehicles/heli.py -> scripts/vehicles/import.mjs --group):
     // fuselage and glazing, cowling, boom, fenestron, stabiliser, skids, searchlight pod, 警察 POLICE.
+    // heli.json comes after the title (core/Late): the meshes start empty and take their geometry then.
     const paint = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.2 });
-    const hull = group('hull');
-    const hullMesh = new THREE.Mesh(hull.paint, paint);
+    const hullMesh = new THREE.Mesh(new THREE.BufferGeometry(), paint);
     hullMesh.castShadow = true;
-    const glass = new THREE.Mesh(hull.glass!, new THREE.MeshStandardMaterial({ color: '#0d1a24', roughness: 0.08, metalness: 0.6 }));
+    const glass = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: '#0d1a24', roughness: 0.08, metalness: 0.6 }));
     // The rotor (four twisted blades and the hub) and the fenestron's fan, moved to their own pivots and spun there.
-    this.rotor = new THREE.Mesh(group('rotor', 0, -2.85, 0).paint, paint);
+    this.rotor = new THREE.Mesh(new THREE.BufferGeometry(), paint);
     this.rotor.position.set(0, 2.85, 0);
     this.rotor.castShadow = true;
     this.disc = new THREE.Mesh(new THREE.CircleGeometry(5.2, 32).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: '#202326', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
     this.disc.position.set(0, 2.84, 0);
-    this.tail = new THREE.Mesh(group('fan', 0, -2.25, 6.05).paint, paint);
+    this.tail = new THREE.Mesh(new THREE.BufferGeometry(), paint);
+    void late(() => import('./heli.json'), (m) => {
+      const model = m.default as unknown as HeliModel;
+      const hull = group(model, 'hull');
+      hullMesh.geometry = hull.paint;
+      if (hull.glass) glass.geometry = hull.glass;
+      this.rotor.geometry = group(model, 'rotor', 0, -2.85, 0).paint;
+      this.tail.geometry = group(model, 'fan', 0, -2.25, 6.05).paint;
+    });
     this.tail.position.set(0, 2.25, -6.05);
     this.beaconR = new THREE.MeshBasicMaterial({ color: '#ff2020' });
     this.beaconB = new THREE.MeshBasicMaterial({ color: '#2050ff' });

@@ -5,7 +5,8 @@ import { t } from '../core/I18n';
 import type { Blip, HudApi, MissionApi, NavApi, PlayerApi, WantedApi } from '../game/Contracts';
 import type { RenderSystem } from '../render/RenderSystem';
 import { AT, U, toLocal, toWorld } from './Layout';
-import { propGeometry, propMaterials, propMeshes } from '../stunts/Props';
+import { loadPropModels, propGeometry, propMaterials, propMeshes } from '../stunts/Props';
+import { late } from '../core/Late';
 
 /** The bag at the back of the hall, once. */
 export const STASH = 500;
@@ -35,14 +36,17 @@ export async function install(engine: Engine): Promise<void> {
 
   const D = U.depth, len = U.ramp + U.hall, hw = U.hallW / 2, rw = U.rampW / 2;
   // --- model: Blender's (stunts/Props.ts 'carpark', in this local frame), the lamps always lit -------------------
-  const g = propGeometry('carpark');
   const model = new THREE.Group();
   model.name = 'underground';
-  for (const mesh of propMeshes('underground', g.matte ? [g.matte] : [], g.metal ? [g.metal] : [], propMaterials(env, 'underground', 1.0, 0.5))) model.add(mesh);
   model.position.set(AT.x, 0.03, AT.z);
   model.rotation.y = AT.yaw;
   engine.scene.add(model);
-  queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(model));
+  // the look after the title (core/Late); the colliders below now
+  void late(loadPropModels, () => {
+    const g = propGeometry('carpark');
+    for (const mesh of propMeshes('underground', g.matte ? [g.matte] : [], g.metal ? [g.metal] : [], propMaterials(env, 'underground', 1.0, 0.5))) model.add(mesh);
+    engine.get<RenderSystem>('render')?.prepare?.(model);
+  });
   const pillars: [number, number][] = [];
   for (const px of [-7.5, 7.5]) for (let k = 1; k <= 3; k++) pillars.push([px, U.ramp + k * 10]);
 

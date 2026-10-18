@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import RABBIT_MODEL from './rabbit.json';
+import { late } from '../core/Late';
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
 import type { Blip, HudApi, MissionApi, NavApi, PlayerApi } from '../game/Contracts';
@@ -54,7 +54,7 @@ export async function install(engine: Engine): Promise<void> {
     mouth: ['#e04a6a', 0], eyes: ['#1a1a1a', 0], wood: ['#6b4a2a', 0], plume: ['#d81e1e', 0.3],
     flag1: ['#2c6fd6', 0.3], flag2: ['#2a9d5a', 0.3], flag3: ['#e2b13c', 0.3], flag4: ['#c8231d', 0.3],
   };
-  const figure = mergeGeometries(Object.entries(RABBIT_MODEL as Record<string, { p: number[]; n: number[]; i: number[] }>).map(([name, g]) => {
+  const figureOf = (model: Record<string, { p: number[]; n: number[]; i: number[] }>) => mergeGeometries(Object.entries(model).map(([name, g]) => {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(g.p, (v) => v / 1000), 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(g.n, (v) => v / 100), 3));
@@ -62,6 +62,8 @@ export async function install(engine: Engine): Promise<void> {
     const [hex, glow] = LOOK[name] ?? ['#ff00ff', 0];
     return part(geo, hex, glow);
   }))!;
+  // the figure's model after the title (core/Late): until then the instances draw nothing
+  const figure = new THREE.BufferGeometry();
   const env = engine.get<RenderSystem>('render')?.uniforms;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.1 });
   // A soft self-glow (more at night), so a figure reads in a dark lane.
@@ -74,6 +76,7 @@ export async function install(engine: Engine): Promise<void> {
   mat.customProgramCacheKey = () => 'rabbit';
   const n = RABBITS.length;
   const mesh = new THREE.InstancedMesh(figure, mat, n);
+  void late(() => import('./rabbit.json'), (m) => { mesh.geometry = figureOf(m.default as Record<string, { p: number[]; n: number[]; i: number[] }>); figure.dispose(); });
   mesh.name = 'rabbits'; mesh.castShadow = true; mesh.frustumCulled = false;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   const ringMat = new THREE.MeshBasicMaterial({ color: '#ffb3c8', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });

@@ -7,7 +7,8 @@ import type { Blip, HudApi, MissionApi, NavApi, PlayerApi, VehicleApi } from '..
 import type { RenderSystem } from '../render/RenderSystem';
 import { JUMPS, OVERPASSES } from './spots';
 import { OVERPASS } from './Structures';
-import { propGeometry, propMaterials, propMeshes } from './Props';
+import { loadPropModels, propGeometry, propMaterials, propMeshes } from './Props';
+import { late } from '../core/Late';
 
 /** Ramp: run along its heading, height at the lip, width. 12.5 degrees. */
 export const RAMP = { len: 9, h: 2, w: 5 };
@@ -57,7 +58,10 @@ export function installJumps(engine: Engine): void {
    * the ten ramps, three overpasses and their mounds were drawn from anywhere (34k triangles in a low-tier frame).
    */
   const sites: { g: THREE.Group; x: number; z: number }[] = [];
-  const place = (name: string, m: THREE.Matrix4) => {
+  // The models come after the title (core/Late); the colliders below are built now.
+  const todo: [string, THREE.Matrix4][] = [];
+  const place = (name: string, m: THREE.Matrix4) => { todo.push([name, m.clone()]); };
+  const put = (name: string, m: THREE.Matrix4) => {
     const g = propGeometry(name), site = new THREE.Group();
     for (const mesh of propMeshes('stunt-ramps', g.matte ? [g.matte.applyMatrix4(m)] : [], g.metal ? [g.metal.applyMatrix4(m)] : [], mats)) {
       mesh.geometry.computeBoundingSphere();
@@ -115,7 +119,10 @@ export function installJumps(engine: Engine): void {
   }
 
   engine.scene.add(stunts);
-  queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(stunts));
+  void late(loadPropModels, () => {
+    for (const [name, m] of todo) put(name, m);
+    engine.get<RenderSystem>('render')?.prepare?.(stunts);
+  });
 
   /** Where a flight starts: the launch zone along the heading, how wide, how high off the ground at least, the lip. */
   interface Launcher { id: number; x: number; z: number; yaw: number; from: number; to: number; w: number; minY: number; lip: number; prize: number; over: boolean }

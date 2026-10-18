@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { propGeometry } from './Props';
+import { loadPropModels, propGeometry } from './Props';
+import { late } from '../core/Late';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Engine, System } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
@@ -84,7 +85,7 @@ export function installShortcuts(engine: Engine): void {
   };
   // One small mesh per mouth, shown within GATE_DRAW of the camera: merged into one mesh for the
   // whole city, all 22 gates were drawn from anywhere (4% of a low-tier frame's triangles).
-  const mouths: { x: number; z: number; parts: THREE.BufferGeometry[] }[] = [];
+  const mouths: { x: number; z: number; parts: THREE.BufferGeometry[]; lanterns: [number, number][] }[] = [];
   let posts: THREE.BufferGeometry[] = [];
   const { R, world } = engine.physics;
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
@@ -94,15 +95,15 @@ export function installShortcuts(engine: Engine): void {
     // Set a couple of metres into the path, so the gate stands at its mouth rather than on the street.
     const cx = e.x + e.dx * 2, cz = e.z + e.dz * 2;
     posts = [];
-    mouths.push({ x: cx, z: cz, parts: posts });
+    mouths.push({ x: cx, z: cz, parts: posts, lanterns: [] });
     for (const s of [-1, 1]) {
       const x = cx + lx * s * GATE, z = cz + lz * s * GATE;
       posts.push(part(new THREE.CylinderGeometry(0.09, 0.11, 2.9, 6).translate(x, 1.45, z), '#5a3522'));
       posts.push(part(new THREE.BoxGeometry(0.06, 0.06, 0.5).translate(0, 0, 0.25).rotateY(Math.atan2(-lx * s, -lz * s)).translate(x, 2.75, z), '#5a3522'));
       const hx = x - lx * s * 0.45, hz = z - lz * s * 0.45;
-      // the lantern: Blender's (stunts/Props.ts), ribbed, gilt caps and a tassel, hanging from the arm
-      const lan = propGeometry('lantern').matte!;
-      posts.push(lan.translate(hx, 2.3, hz).toNonIndexed());
+      // the lantern: Blender's (stunts/Props.ts), ribbed, gilt caps and a tassel, hanging from the arm (merged in
+      // once the models are in, below)
+      mouths[mouths.length - 1].lanterns.push([hx, hz]);
       const c = world.createCollider(R.ColliderDesc.cylinder(1.45, 0.12).setTranslation(x, 1.45, z).setCollisionGroups(groups(CG.WORLD, CG.ALL)), body);
       engine.physics.tag(c, { surface: 'concrete', tag: 'lantern' });
     }
@@ -128,6 +129,18 @@ export function installShortcuts(engine: Engine): void {
   });
   engine.scene.add(gates);
   queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(gates));
+  // The lanterns after the title (core/Late): each gate's mesh again, with its two lanterns.
+  void late(loadPropModels, () => {
+    const lan = propGeometry('lantern').matte!;
+    mouths.forEach((mo, i) => {
+      const geo = mergeGeometries([...mo.parts, ...mo.lanterns.map(([x, z]) => lan.clone().translate(x, 2.3, z).toNonIndexed())]);
+      if (!geo) return;
+      const mesh = gateMeshes[i].mesh;
+      mesh.geometry.dispose();
+      mesh.geometry = geo;
+    });
+    lan.dispose();
+  });
 
   // --- going through ---------------------------------------------------------------------------------
   /** Arc length along path `i` nearest (x, z), and how far off the line. */

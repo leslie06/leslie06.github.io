@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { EnvUniforms } from '../game/Contracts';
-import MODELS from './models.json';
+import { once } from '../core/Late';
 
 /**
  * The stunt structures' looks, modelled in Blender (scripts/blender/props/stunts.py -> models.json, per thing, per material
@@ -20,13 +20,17 @@ const LOOK: Record<string, [string, boolean, number]> = {
 };
 
 type Model = Record<string, { p: number[]; n: number[]; i: number[] }>;
+let MODELS: Record<string, Model> | null = null;
+/** models.json, a chunk of its own (106 KB gzipped): call `propGeometry` only once this has resolved (core/Late's `late`). */
+export const loadPropModels = once(() => import('./models.json').then((m) => { MODELS = m.default as unknown as Record<string, Model>; }));
 const cache = new Map<string, { matte: THREE.BufferGeometry | null; metal: THREE.BufferGeometry | null }>();
 
 /** A thing's geometry (colour and `aGlow` per vertex), matte and metal parts apart; copies, so callers may transform them. */
 export function propGeometry(name: string): { matte: THREE.BufferGeometry | null; metal: THREE.BufferGeometry | null } {
   let c = cache.get(name);
   if (!c) {
-    const model = (MODELS as unknown as Record<string, Model>)[name];
+    if (!MODELS) throw new Error('stunt props: models.json not loaded yet (loadPropModels)');
+    const model = MODELS[name];
     if (!model) throw new Error(`stunt prop: no model "${name}"`);
     const matte: THREE.BufferGeometry[] = [], metal: THREE.BufferGeometry[] = [];
     for (const [mat, g] of Object.entries(model)) {
