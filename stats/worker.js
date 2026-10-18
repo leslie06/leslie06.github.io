@@ -860,7 +860,7 @@ async function load(d) {
     '<td>' + (r.mobile ? '手机' : '电脑') + '</td><td>' + (r.from_index ? '目录页' : '直接进') + '</td></tr>').join('');
 }
 let funnelData = null, funnelSeg = 'all';
-const ACTS = [['fare', '接过乘客'], ['adv', '开始小飞龙的冒险'], ['ch', '开始主线章节'], ['chpass', '通过一章主线'], ['foot', '下车走路'],
+const ACTS = [['fare', '接过乘客'], ['adv', '开始小飞龙的冒险'], ['call', '主线来电'], ['callgo', '来电时选「这就过去」'], ['ch', '开始主线章节'], ['chpass', '通过一章主线'], ['foot', '下车走路'],
   ['jack', '抢车'], ['fight', '打架'], ['wanted', '被通缉'], ['busted', '被捕'], ['map', '打开大地图'], ['race', '比赛 / 计时赛'], ['acct', '登录账号']];
 function drawFunnel() {
   const f = funnelData, g = f && f.segs[funnelSeg];

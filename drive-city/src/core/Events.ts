@@ -23,6 +23,8 @@ export interface GameEvents {
   'story:done': { chapter: string; who: string };
   /** A main-story chapter passed (campaign/), with its medal. */
   'campaign:passed': { id: string; medal: string };
+  /** The next chapter's giver called: `go` is 「现在过去」. */
+  'campaign:call': { id: string; go: boolean };
   /** A hailer is getting into the taxi (missions/): which one (`MissionApi.hailers`). */
   'taxi:board': { id: number };
   /** A taxi fare was paid (missions/). */

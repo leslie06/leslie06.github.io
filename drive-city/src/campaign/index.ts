@@ -20,6 +20,8 @@ import { chapter5 } from './missions/m5';
 const START_R = 4, START_R_CAR = 6.5;
 /** Near enough to the start to be told to step in. */
 const NEAR_R = 45;
+/** Seconds in the city before the next chapter's giver calls (once a session). */
+const CALL_AFTER = 6;
 
 /**
  * The main story as missions (docs/gta-plan.md §4): system `campaign`. The next chapter's start is a gold corona, a
@@ -78,6 +80,9 @@ export function install(engine: Engine): void {
   /** The chapters already pointed out this session, and the one the player was told to step into. */
   const nudged = new Set<string>();
   let nearNudged = '';
+  /** The chapters whose giver has called this session, and the seconds played in the city so far. */
+  const called = new Set<string>();
+  let played = 0;
   let save: Save = { done: [], best: {} };
   try { save = { ...save, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') as Save }; } catch { /* fresh */ }
   const write = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* private mode */ } };
@@ -130,6 +135,23 @@ export function install(engine: Engine): void {
     runner = null; def = null; cool = 8;
   };
   const system: Speaker = { name: '', color: '#ff5a4a' };
+  /**
+   * The next chapter's giver rings (2026-10-18, 埋点：进城的 32 个会话只有 2 个开始了主线；老K 在出生点 2.2 公里外，
+   * 黄线还被开局冒险占着): 「现在过去」 starts it on the spot (its first cutscene puts the player at the start, as the
+   * chapter select does), 「等会儿」 or no answer leaves the GPS's yellow route and the nudge to lead them there.
+   */
+  const call = (c: Chapter<unknown>) => {
+    const head = t('cmp.nudge.head', { kick: c.kick, title: c.title });
+    const later = () => nudge.show(c.glyph, head, t('cmp.nudge.go', { who: c.giver }));
+    env.dialogue?.ask({ name: t('cmp.call.who', { who: c.giver }), color: '#f3b50f' }, c.id === 'm1' ? t('cmp.call.m1') : t('cmp.call.text'),
+      [t('cmp.call.go'), t('cmp.call.later')], (i) => {
+        engine.events.emit('campaign:call', { id: c.id, go: i === 0 });
+        if (i !== 0 || runner) { later(); return; }
+        const why = busyWith();
+        if (why) { env.hud?.toast(t('cmp.sel.notCalm', { why })); later(); return; }
+        begin(c);
+      }, { prio: 4, timeout: 25, fallback: 1 });
+  };
 
   const api: CampaignApi = {
     name: 'campaign',
@@ -220,7 +242,9 @@ export function install(engine: Engine): void {
           const inGame = engine.get<{ name: string; state: string }>('ui')?.state === 'playing';
           const quiet = inGame && calm() && cool <= 0 && !env.dialogue?.busy;
           const head = t('cmp.nudge.head', { kick: c.kick, title: c.title });
-          if (quiet && !nudged.has(c.id) && d > NEAR_R) { nudged.add(c.id); nudge.show(c.glyph, head, t('cmp.nudge.go', { who: c.giver })); }
+          if (inGame) played += dt;
+          // far off: the giver calls (the nudge comes with 「等会儿」); near, the nudge below says to step in
+          if (quiet && !called.has(c.id) && d > NEAR_R && played > CALL_AFTER) { called.add(c.id); nudged.add(c.id); call(c); }
           if (d < NEAR_R && nearNudged !== c.id && inGame && calm()) { nearNudged = c.id; nudged.add(c.id); nudge.show(c.glyph, head, t('cmp.nudge.here'), 6); }
           if (d > NEAR_R * 2 && nearNudged === c.id) nearNudged = '';
           if (d < (onFoot ? START_R : START_R_CAR) && slow && cool <= 0) {

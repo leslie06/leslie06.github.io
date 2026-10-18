@@ -7,8 +7,8 @@ import type { TrafficApi } from '../traffic';
 import type { NavSystem } from '../nav';
 import type { ContactsApi } from '../contacts';
 import type { DamageApi } from '../damage';
-import type { UiApi } from '../ui';
 import type { StoryApi } from '../story';
+import type { CampaignApi } from '../campaign';
 import { Vehicle } from '../vehicle/Vehicle';
 import { TAXI } from '../vehicle/Spec';
 import { ControlFilter } from '../vehicle/ControlFilter';
@@ -38,7 +38,6 @@ export async function install(engine: Engine): Promise<void> {
   const rng = new Rng(1047), random = () => rng.next();
   const v = () => engine.get<VehicleApi>('vehicle')!;
   const damage = () => engine.get<DamageApi>('damage')!;
-  const ui = () => engine.get<UiApi>('ui');
   const dialogue = () => engine.get<DialogueApi>('dialogue');
   const toast = (key: TKey, params?: Record<string, string | number>) => engine.get<HudApi>('hud')?.toast(t(key, params));
   let state: Save;
@@ -74,7 +73,7 @@ export async function install(engine: Engine): Promise<void> {
   const kit = new CarKit(engine.scene, 1, LIVERY), filter = new ControlFilter(), driver = new Pursuit();
   const look: CarLook = { upper: new THREE.Color(LIVERY.upper), lower: new THREE.Color(LIVERY.lower), taxi: false, body: 'sedan', parked: true, livery: LIVERY };
   const previous = new THREE.Vector3(), current = new THREE.Vector3(), pq = new THREE.Quaternion(), cq = new THREE.Quaternion(), rendered = new THREE.Vector3(), rq = new THREE.Quaternion();
-  let initialized = false, started = false, wait = 14, clock = 0, saveClock = 0, lastDamage = -10;
+  let initialized = false, started = false, clock = 0, saveClock = 0, lastDamage = -10;
   let closeTime = 0, stopped = 0, motionStall = 0, alert = 0, parkingNotified = false, pendingMethod: Method = 'tail';
   let race: Race | null = null, returningToYard = false, repairRequested = false;
   let lastObjective: string | null = null;
@@ -145,7 +144,8 @@ export async function install(engine: Engine): Promise<void> {
     return !!(engine.get<MissionApi>('missions')?.busy || heist && heist !== 'off'
       || engine.get<{ name: string; active: boolean }>('races')?.active
       || engine.get<{ name: string; active: unknown }>('npc')?.active
-      || engine.get<{ name: string; active: unknown }>('events')?.active);
+      || engine.get<{ name: string; active: unknown }>('events')?.active
+      || engine.get<CampaignApi>('campaign')?.running);
   };
   const start = () => {
     if (state.phase === 'returned' || state.phase === 'borrowed') return;
@@ -279,7 +279,7 @@ export async function install(engine: Engine): Promise<void> {
       state = { ...fresh(), layout, rewarded: state.rewarded };
       race = null; returningToYard = false; pendingMethod = 'tail'; parkingNotified = false;
       companion.mode = 'base'; companion.car = null; repairRequested = false;
-      setPose(layout.source); damage().repair(car); wait = 14; persist();
+      setPose(layout.source); damage().repair(car); persist();
     } });
     if (state.tracking && (api.active || state.phase === 'available')) a.push({ label: t('adv.defer'), run: () => {
       if (race) { race = null; state.phase = 'parked'; returningToYard = true; driver.reset(); }
@@ -315,7 +315,9 @@ export async function install(engine: Engine): Promise<void> {
       if (!started || !initialized) return;
       clock += dt; saveClock += dt;
       if (saveClock > 1) { saveClock = 0; persist(); }
-      if (state.phase === 'available' && state.tracking && ui()?.state === 'playing') { wait -= dt; if (wait <= 0) { start(); wait = 8; } }
+      // No start by itself (2026-10-18): it began 14 s into every new game, took the GPS's route away from 老K's
+      // first chapter and kept it - 30 of 32 sessions in the city had it on, 2 started a chapter. Like GTA's side
+      // jobs it waits to be picked up: 小飞龙 at the kerb (F), or the Nearby panel.
       if (v().car !== car) {
         previous.copy(car.pos); pq.copy(car.quat);
         const moving = state.phase === 'search' || returningToYard || race?.running;
@@ -407,7 +409,8 @@ export async function install(engine: Engine): Promise<void> {
       panel.update(nearbyCard);
       if (!started || !initialized) { paper.visible = keys.visible = tool.visible = garageSign.visible = yardSign.visible = paperRing.visible = false; return; }
       const m = engine.get<MissionApi>('missions');
-      if (m && api.active) m.story = lastObjective = objective();
+      // a chapter running owns the objective line (it went on showing the adventure's over 老K's errand)
+      if (m && api.active && !engine.get<CampaignApi>('campaign')?.running) m.story = lastObjective = objective();
       else if (m && lastObjective && m.story === lastObjective) { m.story = null; lastObjective = null; }
       if (v().car !== car) { rendered.lerpVectors(previous, current, alpha); rq.slerpQuaternions(pq, cq, alpha); kit.set(0, rendered, rq, car, look.upper, look.lower, false); }
       kit.commit(v().car === car ? 0 : 1);

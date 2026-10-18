@@ -65,6 +65,7 @@ export function install(engine: Engine): void {
   });
   ev.on('taxi:board', () => stat.mark('fare'));
   ev.on('campaign:passed', () => stat.mark('chpass'));
+  ev.on('campaign:call', (e) => { stat.mark('call'); if (e.go) stat.mark('callgo'); });
   ev.on('player:mode', (e) => { if (e.mode === 'onfoot') stat.mark('foot'); if (e.carjacked) stat.mark('jack'); });
   ev.on('combat:swing', () => stat.mark('fight'));
   ev.on('wanted:level', (e) => { if (e.up && e.level > 0) stat.mark('wanted'); });
