@@ -22,8 +22,22 @@ const mb = (p) => {
 };
 
 execFileSync('npm', ['run', 'build'], { cwd: root, stdio: 'inherit' });
+// The last deploy's program files stay one more round. Pages caches index.html for up to 10 minutes, so a visitor can
+// get the old page after a deploy, and it asks for the old hashed bundles: deleted, the game died on a 404 before the
+// loading bar moved (2026-10-18, the funnel's 「资源下载失败」 on index-VEDhqTrW.js). `deploy-assets.json` lists a
+// deploy's own files, so only one generation is carried, not every one since.
+const assetsOut = path.join(out, 'assets'), genFile = path.join(out, 'deploy-assets.json');
+const carried = new Map();
+if (fs.existsSync(assetsOut)) {
+  const mine = fs.existsSync(genFile) ? JSON.parse(fs.readFileSync(genFile, 'utf8')) : fs.readdirSync(assetsOut);
+  for (const f of mine) { const p = path.join(assetsOut, f); if (fs.existsSync(p)) carried.set(f, fs.readFileSync(p)); }
+}
 fs.rmSync(out, { recursive: true, force: true });
 fs.cpSync(dist, out, { recursive: true });
+fs.writeFileSync(genFile, JSON.stringify(fs.readdirSync(assetsOut)));
+let kept = 0;
+for (const [f, b] of carried) if (!fs.existsSync(path.join(assetsOut, f))) { fs.writeFileSync(path.join(assetsOut, f), b); kept++; }
+if (kept) console.log(`kept ${kept} files of the last deploy in assets/ for cached pages`);
 const before = mb(out);
 
 // Shrink the textures and drop the maps the loader never asks for.
