@@ -32,6 +32,15 @@ if (fs.existsSync(assetsOut)) {
   const mine = fs.existsSync(genFile) ? JSON.parse(fs.readFileSync(genFile, 'utf8')) : fs.readdirSync(assetsOut);
   for (const f of mine) { const p = path.join(assetsOut, f); if (fs.existsSync(p)) carried.set(f, fs.readFileSync(p)); }
 }
+// 线上那一版也留着（2026-10-18）：本地连着部署两次、中间没推送时，「上一次部署」是没上线的那次，线上页面正在用的
+// 程序文件就被当成上上版删了。线上的 = git 里提交过的 bcity/deploy-assets.json，文件从 git 里取。
+try {
+  const repo = path.resolve(root, '..');
+  const live = JSON.parse(execFileSync('git', ['show', 'HEAD:bcity/deploy-assets.json'], { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
+  for (const f of live) if (!carried.has(f)) {
+    try { carried.set(f, execFileSync('git', ['show', `HEAD:bcity/assets/${f}`], { cwd: repo, maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', 'ignore'] })); } catch { /* not committed */ }
+  }
+} catch { /* no git history for bcity */ }
 fs.rmSync(out, { recursive: true, force: true });
 fs.cpSync(dist, out, { recursive: true });
 fs.writeFileSync(genFile, JSON.stringify(fs.readdirSync(assetsOut)));
@@ -73,3 +82,16 @@ const api = site.match(/const API = '([^']+)', GAME = 'index'/)?.[1];
 if (api && !api.includes('STATS-ENDPOINT')) execFileSync('node', [path.resolve(root, '..', 'stats', 'apply.mjs'), api, 'bcity'], { stdio: 'inherit' });
 else console.log('stats are off on the site: bcity deployed without them');
 console.log(`deployed to ${out}: ${before} MB -> ${mb(out)} MB`);
+
+// 国内镜像（2026-10-18）：同一份构建传到阿里云服务器的 /srv/bcity（Caddy 在 https://stats.fishai.asia/bcity/
+// 提供，见 docs/notes/hosting-phones.md），中国时区的玩家从那儿下载（index.html 开头的 <base>）。要在推送 GitHub
+// 之前传完：新的 index.html 一上线就会去镜像取新文件。--delete 和本地的 bcity 对齐，上一版的程序文件上面已经留着。
+// NO_MIRROR=1 跳过（例如没有服务器的 ssh 权限），这时国内玩家取不到新文件会自动换回 GitHub。
+if (process.env.NO_MIRROR) console.log('NO_MIRROR: 没有同步国内镜像');
+else {
+  const host = 'root@47.95.248.104';
+  const t0 = Date.now();
+  execFileSync('rsync', ['-az', '--delete', `${out}/`, `${host}:/srv/bcity/`], { stdio: 'inherit' });
+  execFileSync('ssh', [host, 'chmod -R a+rX /srv/bcity'], { stdio: 'inherit' });
+  console.log(`国内镜像已同步（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`);
+}

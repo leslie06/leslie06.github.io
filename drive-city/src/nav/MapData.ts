@@ -93,7 +93,7 @@ export class MapData {
         else { w.terminate(); this.worker = null; this.done(); if (m.failed) console.warn(`[nav] ${m.failed} map blocks failed to load`); }
       };
       w.onerror = (e) => { console.warn('[nav] map worker', e.message); this.done(); };
-      const msg: MapWorkerIn = { blocks: keys.map(({ k }) => [k, new URL(`${BASE}city/map/m_${k}.json`, location.href).href]), concurrency, tile: T };
+      const msg: MapWorkerIn = { blocks: keys.map(({ k }) => [k, new URL(`${BASE}city/map/m_${k}.json`, document.baseURI).href]), concurrency, tile: T };
       w.postMessage(msg);
     } catch (e) { console.warn('[nav] no map worker', e); this.done(); }
   }

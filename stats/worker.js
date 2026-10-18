@@ -166,13 +166,15 @@ export const FUNNEL = [
 
 async function funnel(env, since) {
   const rows = (await env.DB.prepare(SQL.fnRows).bind('bcity', since).all()).results;
-  const segs = { all: [], mobile: [], desktop: [], fresh: [], back: [] };
+  // cn / gh：从国内镜像还是 GitHub 下载的（drive-city/index.html 的 window.__host，2026-10-18 起才有；之前的会话两边都不算）
+  const segs = { all: [], mobile: [], desktop: [], fresh: [], back: [], cn: [], gh: [] };
   for (const r of rows) {
     let d;
     try { d = JSON.parse(r.data); } catch { continue; }
     segs.all.push(d);
     (r.mobile ? segs.mobile : segs.desktop).push(d);
     (d.ret ? segs.back : segs.fresh).push(d);
+    if (d.host === 'cn') segs.cn.push(d); else if (d.host) segs.gh.push(d);
   }
   const q = (a, p) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
   const agg = (list) => {
@@ -756,6 +758,7 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <div class="bar" id="fseg">
   <button data-s="all" aria-pressed="true">全部</button><button data-s="mobile">手机</button><button data-s="desktop">电脑</button>
   <button data-s="fresh">第一次来</button><button data-s="back">来过的</button>
+  <button data-s="cn">国内镜像</button><button data-s="gh">GitHub</button>
 </div>
 <div class="wrap"><table id="ft"><thead><tr>
   <th>步骤</th><th>走到</th><th>占打开</th><th>比上一步</th><th>打开后第几秒（中位）</th><th>25%–75%</th><th>最远到这一步</th>

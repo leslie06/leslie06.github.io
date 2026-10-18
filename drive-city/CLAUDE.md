@@ -46,6 +46,7 @@
 - shot mode（`?shot=1`）会关掉很多系统（story、campaign、npc、life、standers、contacts、打卡、intro、延后加载的内容），要用得传对应参数（`?campaign=1`、`?contacts=1`、`?checkin=1`……）。
 - 普通开发服务器上跑长时间 probe 时不要改 `src/`（HMR 会在中途重载页面）；长测用 `FROZEN=1 npx vite --port 5198`，改代码或重建城市后要重启它。
 - **高架和桥面的碰撞体只在镜头附近才建**：任务里的脚本车（`ScriptCar`）开到离镜头几百米外的高架上会穿过桥面掉下去（第五章车队就这样掉到了桥下）。远处的任务车要放在地面路段，或者像 `m5.ts` 的 `deckGuard` 那样托住。
+- **资源地址只能用相对路径**：拼地址用 `import.meta.env.BASE_URL` 或 `new URL(…, document.baseURI)`，**不能用 `location.href`**；`<audio>`、`<img>` 这类元素要设 `crossOrigin = 'anonymous'`。国内玩家的页面带一个指向阿里云镜像的 `<base>`（见 `hosting-phones.md`「国内镜像」）。`npm run deploy` 会同步镜像，所以要有服务器的 ssh 权限，没有就设 `NO_MIRROR=1`。
 - `world.contactPairsWith` 返回的是 broad-phase 配对：说"碰到了"之前要确认 manifold 里真有接触点。
 - `render/Lighting` 串联 `onBeforeCompile` 钩子，并在第一次打补丁时冻结材质的 program key——永远不要覆盖钩子（否则人群全部塌回绑定姿势），也不要事后改 shader define（会复用旧 program）。
 - 人爬楼梯靠的是 walk-only 坡道（`walkOnly`）：用盒子拼的台阶能站不能走；而人能走的坡车也能开，所以坡道的碰撞过滤去掉了 CAR，另外再配一个只挡车的块（`CarStops`）。有楼梯的地标必须传 `colliders`。详见 `landmarks.md` / `home-park.md`。

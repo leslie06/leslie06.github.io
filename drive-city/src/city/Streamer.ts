@@ -396,7 +396,7 @@ export class CityStreamer implements System {
       return b[2] > x0 && b[0] < x1 && b[3] > z0 && b[1] < z1;
     };
     const R = 120, roads = this.roadsNear(ix * T - R, iz * T - R, (ix + 1) * T + R, (iz + 1) * T + R);
-    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, location.href).href, footprints: this.footprints.filter(near), clear: this.clear.filter(near), street: this.streetClear.filter(near), near: roads });
+    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, document.baseURI).href, footprints: this.footprints.filter(near), clear: this.clear.filter(near), street: this.streetClear.filter(near), near: roads });
   }
 
   private build(res: TileResult): void {

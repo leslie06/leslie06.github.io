@@ -21,6 +21,8 @@
 | `/etc/ai-games-stats/env` | `DASH_KEY` / `SALT` / `DB_FILE` / `PORT`，权限 600 |
 | `/etc/systemd/system/ai-games-stats.service` | 常驻服务，挂了自动重启，只能写数据目录 |
 | `/etc/caddy/Caddyfile` | 追加了 `stats.fishai.asia → localhost:8787`，证书 Caddy 自动管；改前的备份是 `Caddyfile.bak-*` |
+| `/etc/caddy/Caddyfile`（2026-10-18） | `stats.fishai.asia` 下加了 `handle_path /bcity/*` → `/srv/bcity`：b城追车的国内镜像（静态文件，`Access-Control-Allow-Origin: *`），由 `drive-city/scripts/deploy.mjs` 用 rsync 同步；其余路径照旧反代到 8787。备份 `Caddyfile.bak-20261018` |
+| `/srv/bcity` | b城追车构建的完整副本（约 400 MB） |
 
 Cloudflare 上那个 Worker + D1 留着当备份，没在用（国内连不上）。
 

@@ -25,9 +25,31 @@ function rapierWasmFile(): Plugin {
   };
 }
 
+/**
+ * 国内镜像（index.html 开头的脚本插 <base>）：浏览器的预加载扫描器在那段脚本跑之前就按页面原地址把 Vite 注入的程序入口
+ * 和 modulepreload 下了一份，国内玩家白从 GitHub 下约 0.9 MB。构建时把这两种标签换成 <template data-boot>（扫描器不碰
+ * template 里的东西），开头的脚本选好地址后再把它们原样插回 <head>，这时相对地址就按 <base> 解析了。
+ */
+function bootTagsLate(): Plugin {
+  return {
+    name: 'boot-tags-late',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const tags: string[] = [];
+        const out = html.replace(/[ \t]*<(script type="module"[^>]*src="[^"]+"[^>]*><\/script|link rel="modulepreload"[^>]*)>\n?/g, (m) => { tags.push(m.trim()); return ''; });
+        if (!tags.some((t) => t.startsWith('<script'))) throw new Error('boot-tags-late: no entry script in index.html');
+        const at = out.lastIndexOf('</head>');
+        return `${out.slice(0, at)}<template data-boot>${tags.join('')}</template>\n<script>window.__bootTags && window.__bootTags();</script>\n${out.slice(at)}`;
+      },
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [rapierWasmFile()],
+  plugins: [rapierWasmFile(), bootTagsLate()],
   // FROZEN=1 (a second server for long probes, port 5198): no hot reload and no file watching, so
   // editing src/ does not reload a page in the middle of a measurement.
   server: process.env.FROZEN ? { port: 5198, open: false, host: '127.0.0.1', hmr: false, watch: null } : { port: 5195, open: false, host: '127.0.0.1' },

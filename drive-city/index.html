@@ -2,6 +2,64 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<script>
+// 国内镜像（2026-10-18，埋点：国内从 GitHub Pages 下载中位数约 70 KB/s，第一次来的玩家一半停在下载城市数据）：
+// 页面还是 GitHub 上这份，在中国时区的浏览器里插一个 <base>，程序、城市数据、模型、配音这些相对地址就都从阿里云
+// 服务器上的同一份构建取（scripts/deploy.mjs 用 rsync 传上去）。?cn=1 强制用镜像，?cn=0 不用。
+// 程序文件取不到（镜像挂了、网络抖）时去掉 <base> 换回 GitHub 再取一次；本来就在 GitHub 上的，带个参数重取一次。
+(function () {
+  var CN = 'https://stats.fishai.asia/bcity/';
+  var q = new URLSearchParams(location.search).get('cn'), tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* old browser */ }
+  var use = q === '1' || (q !== '0' && /\.github\.io$/.test(location.hostname) && /^Asia\/(Shanghai|Chongqing|Chungking|Harbin|Urumqi)$/.test(tz));
+  window.__host = use ? 'cn' : 'gh';
+  // 构建时 Vite 注入的程序入口和 modulepreload 被收进 <template data-boot>（vite.config.ts 的 bootTagsLate），
+  // 在 head 的末尾调这个把它们插回来：<base> 已经插好，相对地址按它解析
+  window.__bootTags = function () {
+    var t = document.querySelector('template[data-boot]');
+    if (!t) return;
+    var els = t.content.children;
+    for (var i = 0; i < els.length; i++) {
+      var e = document.createElement(els[i].tagName.toLowerCase());
+      for (var j = 0; j < els[i].attributes.length; j++) e.setAttribute(els[i].attributes[j].name, els[i].attributes[j].value);
+      document.head.appendChild(e);
+    }
+  };
+  if (!use) return;
+  var base = document.createElement('base');
+  base.href = CN;
+  document.head.appendChild(base);
+  // 跨域的地址建不了 Worker：包一层同源的 blob，里面再 import 镜像上的脚本（城市分块和地图的 worker）
+  var W = window.Worker;
+  if (W) {
+    var Wrapped = function (url, opts) {
+      var u = new URL(String(url), document.baseURI);
+      if (u.origin !== location.origin) {
+        var src = opts && opts.type === 'module' ? 'import ' + JSON.stringify(u.href) + ';' : 'importScripts(' + JSON.stringify(u.href) + ');';
+        url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      }
+      return new W(url, opts);
+    };
+    Wrapped.prototype = W.prototype;
+    window.Worker = Wrapped;
+  }
+})();
+// 程序入口（Vite 注入的 assets/index-*.js）加载失败：镜像上的换回 GitHub，GitHub 上的带参数重取，最多两次
+(function () {
+  var tries = 0;
+  addEventListener('error', function (ev) {
+    var el = ev.target;
+    if (!el || el.tagName !== 'SCRIPT' || !/assets\/index-[^/]*\.js/.test(el.src || '') || tries >= 2) return;
+    tries++;
+    var b = document.querySelector('base');
+    if (b) { b.parentNode.removeChild(b); window.__host = 'cn>gh'; if (window.__stat) window.__stat.host = 'cn>gh'; }
+    var s = document.createElement('script');
+    s.type = 'module'; s.crossOrigin = 'anonymous';
+    s.src = el.getAttribute('src').replace(/\?.*$/, '') + (b ? '' : '?r=' + tries);
+    setTimeout(function () { document.head.appendChild(s); }, b ? 0 : 1500);
+  }, true);
+})();
+</script>
 <title>b城追车</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="description" content="b城追车: a GTA-style open world city, built with three.js.">
@@ -29,6 +87,7 @@
 // the program itself downloads, so a download that fails or a page closed during it still says how far it got.
 (function () {
   var s = window.__stat = { v: 1 };
+  if (window.__host) s.host = window.__host;   // 从哪儿下载的：cn 国内镜像、gh GitHub、cn>gh 镜像失败换回
   try { for (var i = 0; i < localStorage.length; i++) if (/^drivecity\./.test(localStorage.key(i) || '')) { s.ret = 1; break; } } catch (e) { /* private mode */ }
   try { if (matchMedia('(pointer: coarse)').matches) s.touch = 1; } catch (e) { /* old browser */ }
   var t = function () { return Math.round(performance.now() / 100) / 10; };

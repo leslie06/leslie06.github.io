@@ -190,7 +190,9 @@ export class Radio {
   private custom(want: boolean): void {
     if (!this.playlist.length) return;
     if (!this.el) {
-      const el = new Audio(); el.preload = 'auto';
+      // crossOrigin: the files can come from the mirror in China (index.html's <base>), and a cross-origin element
+      // without it plays silence through createMediaElementSource
+      const el = new Audio(); el.crossOrigin = 'anonymous'; el.preload = 'auto';
       el.addEventListener('ended', () => { this.track = (this.track + 1) % this.playlist.length; this.load(); if (this.audible) void el.play().catch(() => {}); });
       this.ctx.createMediaElementSource(el).connect(this.customBus);
       this.el = el;
