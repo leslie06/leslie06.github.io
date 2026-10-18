@@ -17,8 +17,8 @@ import { retry } from '../core/Retry';
  * a full-detail car and CarKit into instanced traffic. Node-safe: no DOM here.
  */
 
-export type BodyType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'moto' | 'bike' | 'ebike';
-export const BODY_TYPES: readonly BodyType[] = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'moto', 'bike', 'ebike'];
+export type BodyType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'moto' | 'bike' | 'ebike' | 'coupe' | 'limo';
+export const BODY_TYPES: readonly BodyType[] = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'moto', 'bike', 'ebike', 'coupe', 'limo'];
 export type Detail = 'high' | 'low';
 
 /** What the livery adds to the geometry. */
@@ -790,6 +790,8 @@ export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, 
     case 'bus': return OLD_CARS || !MODEL_DATA.bus ? buildBus(spec, opts, detail) : buildModelBody('bus', spec, opts, detail);
     case 'truck': return OLD_CARS || !MODEL_DATA.truck ? buildTruck(spec, opts, detail) : buildModelBody('truck', spec, opts, detail);
     case 'moto': case 'bike': case 'ebike': return buildTwoWheeler(type, spec, detail);
+    // the luxury bodies (2026-10-18) have no procedural version: a saloon's stands in until theirs has loaded
+    case 'coupe': case 'limo': return OLD_CARS || !MODEL_DATA[type] ? buildCarBody(type, sedanParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
     default: return OLD_CARS || !MODEL_DATA.sedan ? buildCarBody(type, sedanParams(spec), spec, opts, detail) : buildModelBody('sedan', spec, opts, detail);
   }
 }
@@ -797,7 +799,7 @@ export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, 
 /** `?cars=old` in a page: the procedural bodies for the types that have a Blender model (A/B). */
 const OLD_CARS = typeof location !== 'undefined' && new URLSearchParams(location.search).get('cars') === 'old';
 
-type CarModelType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck';
+type CarModelType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'coupe' | 'limo';
 
 /** Where each Blender car body's roof sign and light bar stand (z), and which atlas graphics it wears. */
 interface ModelInfo {
@@ -812,11 +814,13 @@ const MODELS: Record<CarModelType, ModelInfo> = {
   mpv: { zRoof: -1.23, zBar: -1.16, style: { grille: 'grilleWave', head: 'head', tail: 'tail2' } },
   bus: { zRoof: -1, zBar: -1, style: undefined, steel: true, dual: 0.3, head: 'busHead' },
   truck: { zRoof: -1, zBar: -1, style: { grille: 'grilleBars', head: 'head', tail: 'tail' }, steel: true, dual: 0.24 },
+  coupe: { zRoof: -0.5, zBar: -0.45, style: { grille: 'grilleSlim', head: 'head2', tail: 'tail2' } },
+  limo: { zRoof: -0.6, zBar: -0.52, style: { grille: 'grilleBars', head: 'head', tail: 'tail' } },
 };
 
 /** The bodies' geometry, packed files under public/models/vehicles (~135 KB gzipped each): `readyBodies()` fills this. */
 const MODEL_DATA: Partial<Record<CarModelType | 'wheels', Record<string, Model>>> = {};
-const SOURCES = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'wheels'] as const;
+const SOURCES = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'coupe', 'limo', 'wheels'] as const;
 
 /** A packed model (public/models/vehicles/<name>.bin, scripts/vehicles/pack.mjs): fetched in a page, read from disk in Node. */
 async function loadPacked(name: string): Promise<Record<string, Model>> {

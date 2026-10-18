@@ -29,6 +29,9 @@ const EXPECT: Record<BodyType, { v: number; within: number; brakeFrom: number; s
   moto: { v: 100, within: 8, brakeFrom: 60, stop: 20, topMin: 160 },
   bike: { v: 25, within: 10, brakeFrom: 25, stop: 9, topMin: 30, stopMin: 2, lane: 25 },
   ebike: { v: 40, within: 10, brakeFrom: 40, stop: 14, topMin: 42, stopMin: 4, lane: 35 },
+  // the luxury cars (2026-10-18): clearly quicker than the taxi, or buying one is pointless
+  coupe: { v: 100, within: 5, brakeFrom: 60, stop: 19, topMin: 260 },
+  limo: { v: 100, within: 7, brakeFrom: 60, stop: 21, topMin: 230 },
 };
 
 const rigFor = (t: BodyType) => Rig.create({ spec: SPEC_OF[t], at: { x: 0, y: SPEC_OF[t].wheelRadius + 0.05, z: 0 } });
@@ -145,5 +148,48 @@ describe.each(BODY_TYPES)('%s', (t) => {
       put(t, 'kit draw calls', calls);
       expect(calls).toBeLessThanOrEqual(8);
     }
+  });
+});
+
+// The luxury cars are much faster than anything else: the taxi's high-speed probes (Handling.test.ts), on them too.
+describe.each(['coupe', 'limo'] as const)('%s at speed', (t) => {
+  it('nervous key taps at 120 km/h keep it on its line', async () => {
+    const rig = await rigFor(t); rig.settle(0.5); rig.launch(120 / KMH);
+    const hold = () => (rig.car.forwardSpeed * KMH < 120 ? 1 : 0);
+    for (let i = 0; i < 30; i++) rig.stepInput(input({ forward: hold(), analog: false }));
+    const x0 = rig.car.pos.x;
+    let minX = Infinity, maxX = -Infinity, maxSlip = 0;
+    for (let fr = 0; fr < 60 * 7; fr++) {
+      const steer = fr < 240 && fr % 10 < 4 ? (Math.floor(fr / 10) % 2 ? 1 : -1) : 0;
+      rig.stepInput(input({ steer, forward: hold(), analog: false }));
+      if (fr > 60 && fr < 240) { minX = Math.min(minX, rig.car.pos.x - x0); maxX = Math.max(maxX, rig.car.pos.x - x0); }
+      maxSlip = Math.max(maxSlip, Math.abs(rig.car.bodySlip));
+    }
+    put(t, 'taps120.lateral pk-pk m', maxX - minX); put(t, 'taps120.max slip deg', deg(maxSlip));
+    expect(maxX - minX).toBeLessThan(1);
+    expect(deg(maxSlip)).toBeLessThan(3);
+  });
+
+  it('full lock at 150 km/h slides but does not roll', async () => {
+    const rig = await rigFor(t); rig.settle(); rig.launch(150 / KMH);
+    let minUp = 1;
+    for (let s = 0; s < 4; s += DT) { rig.stepInput(input({ steer: 1, forward: 1, analog: false })); minUp = Math.min(minUp, rig.car.up.y); }
+    put(t, 'fulllock150.min up', minUp);
+    expect(minUp).toBeGreaterThan(0.85);
+  });
+
+  it('flies off a ramp at 80 km/h and lands on its wheels', async () => {
+    const rig = await Rig.create({ spec: SPEC_OF[t], at: { x: 0, y: SPEC_OF[t].wheelRadius + 0.05, z: 0 }, ramps: [{ x: 0, z: 40, yaw: 0, length: 7, width: 5, height: 1.4 }] });
+    rig.settle(); rig.launch(80 / KMH);
+    let air = 0, maxAir = 0, minUp = 1;
+    for (let s = 0; s < 6; s += DT) {
+      rig.stepInput(input({ forward: 0.6 }));
+      air = rig.car.grounded === 0 ? air + DT : 0;
+      maxAir = Math.max(maxAir, air); minUp = Math.min(minUp, rig.car.up.y);
+    }
+    put(t, 'jump.air s', maxAir); put(t, 'jump.min up', minUp);
+    expect(maxAir).toBeGreaterThan(0.3);
+    expect(minUp).toBeGreaterThan(0.8);
+    expect(rig.car.wheels.every((w) => w.contact)).toBe(true);
   });
 });

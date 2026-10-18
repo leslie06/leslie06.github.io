@@ -89,6 +89,11 @@ const BUS_LOWER = ['#c3232b', '#c3232b', '#c3232b', '#2f7d4f'];
  * buses (main roads only) and light box trucks. Shares of the car pool; the rest are saloons.
  */
 const MIX: [BodyType, number][] = [['suv', 0.16], ['hatch', 0.14], ['mpv', 0.08], ['bus', 0.09], ['truck', 0.07]];
+/**
+ * Now and then a 豪华轿车 or a 跑车 drives by (2026-10-18), on high only: one of each in the pool costs two kits, ~40 draw
+ * calls a frame with their shadows (536 -> 579 at the spawn). The other tiers see them parked round 国贸 and 三里屯 (parking/).
+ */
+const MIX_HIGH: [BodyType, number][] = [['limo', 0.025], ['coupe', 0.02]];
 /** Electric scooters: mostly white, black, red and blue, a few silver and pastel. */
 const EBIKE_BODY = ['#f0f0ec', '#f0f0ec', '#18191a', '#18191a', '#b3242a', '#2a5bb0', '#b9bcbf', '#9ec9d6', '#e3b8c4'];
 /** The delivery companies' colours (美团 yellow, 饿了么 blue), on the box, the jacket and the helmet. */
@@ -134,7 +139,8 @@ export async function install(engine: Engine): Promise<void> {
   // How many of each body the pool holds, and one instanced kit per body (each its own livery).
   const counts = new Map<BodyType, number>();
   let rest = max;
-  for (const [b, share] of MIX) { const n = Math.min(rest, Math.round(max * share)); counts.set(b, n); rest -= n; }
+  const mix = tier === 'high' ? [...MIX, ...MIX_HIGH] : MIX;
+  for (const [b, share] of mix) { const n = Math.min(rest, Math.round(max * share)); counts.set(b, n); rest -= n; }
   counts.set('sedan', Math.max(0, rest));
   const kits = new Map<BodyType, CarKit>();
   const kitFor = (b: BodyType): CarKit => {

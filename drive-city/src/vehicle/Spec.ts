@@ -271,6 +271,90 @@ export const SUV: VehicleSpec = {
   assists: { ...TAXI.assists, donut: { ...TAXI.assists.donut } },
 };
 
+/**
+ * 跑车 (2026-10-18, 「车太次了 没有豪车」): a two-door sports coupe (911 / AMG GT class, ~450 hp, rear drive) - low,
+ * wide, stiff and grippy, twice the taxi's torque, a 285 km/h limiter. The one to buy when the taxi feels slow.
+ */
+export const COUPE: VehicleSpec = {
+  name: 'coupe',
+  mass: 1550,
+  com: [0, 0.0, 0.05],
+  inertia: [2500, 2400, 620],
+  chassis: [
+    { half: [0.9, 0.31, 2.2], at: [0, 0.14, 0.02], round: 0.1 },
+    { half: [0.7, 0.2, 0.85], at: [0, 0.78, -0.45], round: 0.12 },
+  ],
+  wheels: [
+    { x: 0.8, z: 1.4, front: true },
+    { x: -0.8, z: 1.4, front: true },
+    { x: 0.8, z: -1.36, front: false },
+    { x: -0.8, z: -1.36, front: false },
+  ],
+  wheelRadius: 0.34,
+  wheelWidth: 0.26,
+  mountY: 0.205,
+  suspension: {
+    restLength: 0.27, stiffnessFront: 60000, stiffnessRear: 52000,
+    bump: 2600, rebound: 4400, travel: 0.17,
+    antiRollFront: 26000, antiRollRear: 20000,
+  },
+  tire: { ...TAXI.tire, muLat: 1.25, muLong: 1.3, forceHeight: 0.18 },
+  steer: { ...TAXI.steer, lock: 0.7, rate: 3.6 },
+  engine: {
+    idle: 900, redline: 7800,
+    torque: [[1000, 330], [2500, 520], [4000, 560], [5500, 560], [7000, 500], [7800, 450]],
+    gears: [3.1, 2.1, 1.55, 1.22, 1.0, 0.82], reverse: 3.2, final: 3.8, efficiency: 0.9,
+    shiftUp: 7400, shiftDown: 3200, shiftTime: 0.1,
+    frontShare: 0, engineBrake: 0.3,
+    limiterKmh: 285, reverseKmh: 35, launchRpm: 4000,
+  },
+  brakes: { force: 24000, frontBias: 0.64 },
+  aero: { drag: 0.34, downforce: 1.6 },
+  assists: { ...TAXI.assists, donut: { ...TAXI.assists.donut } },
+};
+
+/**
+ * 豪华轿车 (2026-10-18): a long-wheelbase luxury saloon (S-class / 红旗 H9 class, V8, rear-biased AWD) - heavy, soft and
+ * quiet, a lot of torque low down, 250 km/h. Fast in a straight line, calm rather than sharp in the corners.
+ */
+export const LIMO: VehicleSpec = {
+  name: 'limo',
+  mass: 2150,
+  com: [0, 0.1, 0.05],
+  inertia: [3800, 4100, 1000],
+  chassis: [
+    { half: [0.9, 0.37, 2.58], at: [0, 0.18, -0.01], round: 0.12 },
+    { half: [0.74, 0.3, 1.35], at: [0, 0.88, -0.15], round: 0.14 },
+  ],
+  wheels: [
+    { x: 0.8, z: 1.58, front: true },
+    { x: -0.8, z: 1.58, front: true },
+    { x: 0.8, z: -1.62, front: false },
+    { x: -0.8, z: -1.62, front: false },
+  ],
+  wheelRadius: 0.35,
+  wheelWidth: 0.245,
+  mountY: 0.225,
+  suspension: {
+    restLength: 0.33, stiffnessFront: 50000, stiffnessRear: 46000,
+    bump: 2600, rebound: 4600, travel: 0.22,
+    antiRollFront: 22000, antiRollRear: 18000,
+  },
+  tire: { ...TAXI.tire, muLat: 1.1, muLong: 1.15, forceHeight: 0.26 },
+  steer: { ...TAXI.steer, lock: 0.66, rate: 3.0 },
+  engine: {
+    idle: 700, redline: 6500,
+    torque: [[1000, 320], [2000, 500], [4000, 540], [5500, 500], [6500, 430]],
+    gears: [4.4, 2.8, 1.9, 1.4, 1.1, 0.9, 0.75], reverse: 3.4, final: 2.9, efficiency: 0.88,
+    shiftUp: 5900, shiftDown: 2200, shiftTime: 0.14,
+    frontShare: 0.35, engineBrake: 0.3,
+    limiterKmh: 250, reverseKmh: 35, launchRpm: 2500,
+  },
+  brakes: { force: 26000, frontBias: 0.65 },
+  aero: { drag: 0.38, downforce: 0.8 },
+  assists: { ...TAXI.assists, donut: { ...TAXI.assists.donut } },
+};
+
 /** MPV (Buick GL8 class, 2.0T, front drive): long, heavy, comfortable. */
 export const MPV: VehicleSpec = {
   name: 'mpv',
@@ -542,4 +626,4 @@ export const EBIKE: VehicleSpec = {
   brakes: { force: 1300, frontBias: 0.6 },
 };
 
-export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE, ebike: EBIKE };
+export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE, ebike: EBIKE, coupe: COUPE, limo: LIMO };

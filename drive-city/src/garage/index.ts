@@ -6,15 +6,16 @@ import type { CarLook, HudApi, MissionApi, PlayerApi, TrafficCars, VehicleApi } 
 import type { DamageApi } from '../damage';
 import type { UiApi } from '../ui';
 import { ANCHOR, DRIVE, GARAGE, PARK_AT } from '../home/Layout';
-import { bodyOfSpec, type BodyType } from '../vehicle/Bodies';
+import { bodyOfSpec, bodySettled, readyBodies, type BodyType } from '../vehicle/Bodies';
 import { SPEC_OF, TAXI } from '../vehicle/Spec';
 import { Vehicle } from '../vehicle/Vehicle';
 import { GarageMenu } from './GarageMenu';
 
-import { ENGINE, FINE, NITRO, PRICE, TYRES } from './Parts';
-export { ENGINE, FINE, NITRO, PAINTS, PRICE, TYRES } from './Parts';
+import { DEALER, ENGINE, FINE, isLuxury, NITRO, PRICE, TRANSFER, TYRES, type LuxuryBody } from './Parts';
+export { DEALER, ENGINE, FINE, NITRO, PAINTS, PRICE, TYRES } from './Parts';
 
 const KEY = 'drivecity.garage.v1';
+const isCarItem = (i: string): i is `car:${LuxuryBody}` => i.startsWith('car:');
 
 /** Your car: which body, its paint, what has been done to it, and whether the police have it. */
 export interface Profile { body: BodyType; upper: string; lower: string; taxi: boolean; engine: number; tyres: number; nitro: number; impounded: boolean }
@@ -32,7 +33,7 @@ export interface GarageApi extends System {
   show(): void;
   /** Give the player the car they are sitting in as theirs, with these upgrades (the intro's getaway car). */
   adopt(levels: { engine: number; tyres: number; nitro: number }): void;
-  debug: { buy(item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam', paint?: string): boolean };
+  debug: { buy(item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam' | 'transfer' | `car:${LuxuryBody}`, paint?: string): boolean };
 }
 
 /**
@@ -99,6 +100,12 @@ export async function install(engine: Engine): Promise<void> {
 
   const inGarage = (x: number, z: number) => { const lx = x - ax, lz = z - az; return lx > GARAGE.x0 && lx < GARAGE.x1 && lz > GARAGE.z0 && lz < GARAGE.z1; };
 
+  /** The car in the garage is a luxury car off the street, not yet through the books (过户). */
+  const stolenHere = (): LuxuryBody | null => {
+    const v = vehicle(), b = v.look.body ?? bodyOfSpec(v.car.spec);
+    return isLuxury(b) && !(owned && v.car === owned) ? b : null;
+  };
+
   const refresh = () => {
     const v = vehicle(), car = v.car, dmg = engine.get<DamageApi>('damage');
     const mine = !!owned && car === owned;
@@ -111,12 +118,51 @@ export async function install(engine: Engine): Promise<void> {
       taxi: v.look.taxi,
       dashcam: !!engine.get<{ name: string; dashcam: boolean }>('npc')?.dashcam,
       discount: contacts()?.discount ?? 0,
+      stolen: stolenHere(),
+      ownBody: profile?.body ?? null,
     });
   };
 
-  const buy = (item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam', paint?: string): boolean => {
+  /**
+   * A new luxury car from the 车行: it rolls into the garage stock, in its own paint, and is your car; the one you came
+   * in goes out on the drive, an ordinary parked car (your old car, if it was, is yours no more).
+   */
+  const buyCar = (body: LuxuryBody): boolean => {
+    const d = DEALER.find((x) => x.body === body)!;
+    if ((profile?.body === body && !profile.impounded) || cashOf() < d.price) return false;
+    // the model comes after the title; if it is somehow not in yet, fetch it and ask again
+    if (!bodySettled(body)) { void readyBodies([body]); toast(t('garage.carLoading')); return false; }
+    pay(d.price);
+    const v = vehicle(), cur = v.car, curLook = { ...v.look, upper: v.look.upper.clone(), lower: v.look.lower.clone(), parked: true };
+    const car = new Vehicle(engine.physics, SPEC_OF[body], { x: 0, y: -600, z: 0 }, 0);
+    car.reset({ x: ax + PARK_AT.x, y: 0.03 + car.spec.wheelRadius + 0.1, z: az + PARK_AT.z }, PARK_AT.yaw);
+    cur.reset({ x: ax + (DRIVE.in.x0 + DRIVE.in.x1) / 2, y: 0.03 + cur.spec.wheelRadius + 0.1, z: az + (DRIVE.in.z0 + DRIVE.in.z1) / 2 }, -Math.PI / 2);
+    const paint = new THREE.Color(d.paint);
+    const prev = v.swapCar(car, { upper: paint, lower: paint.clone(), taxi: false, parked: true, body });
+    if (owned && owned !== cur) stash(owned);
+    stock(prev.car);
+    engine.get<TrafficCars>('traffic')?.parkCar(prev.car, curLook);
+    owned = car;
+    profile = { body, upper: d.paint, lower: d.paint, taxi: false, engine: 0, tyres: 0, nitro: 0, impounded: false };
+    apply(car, profile);
+    save();
+    engine.get<DamageApi>('damage')?.repair(car);
+    toast(t('garage.bought.car', { car: t(`car.${body}`) }));
+    return true;
+  };
+
+  const buy = (item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam' | 'transfer' | `car:${LuxuryBody}`, paint?: string): boolean => {
     const v = vehicle();
-    if (item === 'dashcam') {
+    if (isCarItem(item)) {
+      if (!buyCar(item.slice(4) as LuxuryBody)) return false;
+    } else if (item === 'transfer') {
+      const b = stolenHere();
+      if (!b) return false;
+      const fee = Math.round(DEALER.find((x) => x.body === b)!.price * TRANSFER);
+      if (!pay(fee)) return false;
+      own();
+      toast(t('garage.transferred', { car: t(`car.${b}`) }));
+    } else if (item === 'dashcam') {
       const npc = engine.get<{ name: string; dashcam: boolean }>('npc');
       if (!npc || npc.dashcam || !pay(PRICE.dashcam)) return false;
       npc.dashcam = true; toast(t('garage.bought.dashcam'));
@@ -145,7 +191,7 @@ export async function install(engine: Engine): Promise<void> {
       profile.impounded = false; apply(owned, profile); owned.nitroFill = owned.tune.nitro > 0 ? 1 : 0; save();
       toast(t('garage.back'));
     } else {
-      if (profile?.impounded) return false;
+      if (profile?.impounded || stolenHere()) return false;
       const have = owned === v.car && profile ? profile[item] : (profile?.[item] ?? 0);
       const prices = PRICE[item];
       if (have >= prices.length || !pay(priced(prices[have]))) return false;

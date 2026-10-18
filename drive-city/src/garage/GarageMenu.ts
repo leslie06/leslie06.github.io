@@ -1,6 +1,6 @@
 import { t } from '../core/I18n';
 import { C, F, css, el } from '../ui/theme';
-import { NITRO, PAINTS, PRICE } from './Parts';
+import { DEALER, NITRO, PAINTS, PRICE, TRANSFER, type LuxuryBody } from './Parts';
 
 css(`
 .garage{position:fixed;inset:0;z-index:25;display:grid;place-items:center;font-family:${F.ui};color:${C.paper};
@@ -35,7 +35,7 @@ css(`
 }
 `);
 
-type Item = 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam';
+type Item = 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam' | 'transfer' | `car:${LuxuryBody}`;
 export interface GarageView {
   cash: number;
   /** The car in the garage is your car (the upgrades are on it). */
@@ -52,6 +52,10 @@ export interface GarageView {
   discount: number;
   /** A dashcam is fitted (the player's, whatever car: npc/'s scammers run from it). */
   dashcam: boolean;
+  /** The car in the garage is a luxury car taken off the street: nothing is done to it before 过户. */
+  stolen: LuxuryBody | null;
+  /** Your car's body (the 车行 marks the one you have). */
+  ownBody: string | null;
 }
 
 const pips = (n: number, of: number) => '●'.repeat(n) + '○'.repeat(Math.max(0, of - n));
@@ -82,6 +86,11 @@ export class GarageMenu {
     el('div', 'cash', top).textContent = `¥${v.cash.toLocaleString('en-US')}`;
     const sub = el('div', 'sub', p);
     sub.textContent = v.mine ? t('garage.yours') : v.hasProfile ? t('garage.moveParts') : t('garage.firstCar');
+    if (v.stolen) {
+      const d = DEALER.find((x) => x.body === v.stolen)!, fee = Math.round(d.price * TRANSFER);
+      el('div', 'note', p).textContent = t('garage.stolen');
+      this.row(p, t('garage.transfer'), t('garage.transferWhat', { car: t(`car.${d.body}`) }), fee, v.cash >= fee, () => this.onBuy('transfer'));
+    }
     if (v.impounded) {
       el('div', 'note', p).textContent = t('garage.pound', { n: PRICE.impound });
       this.row(p, t('garage.impound'), t('garage.impoundWhat'), PRICE.impound, v.cash >= PRICE.impound, () => this.onBuy('impound'));
@@ -91,7 +100,7 @@ export class GarageMenu {
     const stage = (key: 'engine' | 'tyres' | 'nitro', of: number, what: string) => {
       const have = lv[key], base = PRICE[key][have], price = base === undefined ? undefined : Math.round(base * (1 - v.discount));
       const label = price === undefined ? t('garage.max') : key === 'nitro' && have === 0 ? t('garage.fit') : t('garage.upgrade');
-      this.row(p, t(`garage.${key}` as 'garage.engine'), `${pips(have, of)} ${what}`, price, price !== undefined && v.cash >= price && !v.impounded, () => this.onBuy(key), label);
+      this.row(p, t(`garage.${key}` as 'garage.engine'), `${pips(have, of)} ${what}`, price, price !== undefined && v.cash >= price && !v.impounded && !v.stolen, () => this.onBuy(key), label);
     };
     stage('engine', 3, t('garage.engineWhat'));
     stage('tyres', 2, t('garage.tyresWhat'));
@@ -111,6 +120,12 @@ export class GarageMenu {
       b.addEventListener('click', () => this.onBuy('paint', c));
     }
     el('div', 'what', r).textContent = `¥${PRICE.paint}${v.taxi ? ' · ' + t('garage.paintTaxi') : ''}`;
+    // 车行: the luxury cars, new; the one you own is marked.
+    el('div', 'sub', p).textContent = t('garage.dealer');
+    for (const d of DEALER) {
+      const have = v.ownBody === d.body && !v.impounded;
+      this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }), have ? undefined : d.price, !have && v.cash >= d.price, () => this.onBuy(`car:${d.body}`), have ? t('garage.carHave') : t('garage.buy'));
+    }
     const leave = el('button', 'leave', p);
     leave.textContent = t('garage.leave');
     leave.addEventListener('click', () => this.onClose());

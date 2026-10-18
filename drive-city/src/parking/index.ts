@@ -6,13 +6,28 @@ import type { CarLook, PlayerApi, VehicleApi, WantedApi } from '../game/Contract
 import type { CityStreamer } from '../city/Streamer';
 import { PARK_BODIES, PARK_HALF, STRIDE } from '../city/visual/Parking';
 import { PARK_W } from '../traffic/Lanes';
+import { project } from '../city/Geo';
 import { CarKit } from '../traffic/CarKit';
 import { PRIVATE, type ExternalCars, type TrafficApi } from '../traffic';
 import { Vehicle } from '../vehicle/Vehicle';
 import { SPEC_OF } from '../vehicle/Spec';
 import { bodySettled, specLength } from '../vehicle/Bodies';
 
-type BodyType = (typeof PARK_BODIES)[number];
+type BodyType = (typeof PARK_BODIES)[number] | 'coupe' | 'limo';
+
+/**
+ * Where the money parks (2026-10-18, 「车太次了 没有豪车」): within this many metres of these places some of the kerb's
+ * cars are 跑车 and 豪华轿车 - a coupe in a saloon, SUV or hatchback's place, a limo (5.2 m) only in an MPV's, so it fits
+ * the gap the tile left. Which slots, from their position: the same car every visit, there to be taken.
+ */
+const LUXURY_AT: [number, number, number][] = [
+  [39.9087, 116.4590, 900],   // 国贸 CBD
+  [39.9365, 116.4547, 700],   // 三里屯
+  [39.9150, 116.3590, 800],   // 金融街
+  [39.9497, 116.4610, 600],   // 燕莎 / 亮马桥
+  [39.9142, 116.4110, 500],   // 王府井
+];
+const LUXURY_SHARE = { coupe: 0.05, limo: 0.5 };
 import { defaultLivery } from '../vehicle/CarModel';
 import { ControlFilter } from '../vehicle/ControlFilter';
 
@@ -89,15 +104,25 @@ export async function install(engine: Engine): Promise<void> {
   const stats = { kept: 0, rejected: 0, promoted: 0, pending: 0, drawnNear: 0, drawnFar: 0, knocked: 0 };
   let time = 0, statT = 0;
 
+  const luxPlaces = LUXURY_AT.map(([lat, lon, r]) => { const [x, z] = project(lat, lon); return { x, z, r }; });
+  /** The luxury car standing in this slot instead, if any (a hash of the slot's place: the same one every time). */
+  const luxuryAt = (x: number, z: number, body: BodyType): 'coupe' | 'limo' | null => {
+    if (!luxPlaces.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) return null;
+    const u = ((Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1 + 1) % 1;
+    if (body === 'mpv') return u < LUXURY_SHARE.limo ? 'limo' : null;
+    return u < LUXURY_SHARE.coupe ? 'coupe' : null;
+  };
   const onParked = (key: string, park: number[] | null) => {
     const old = tiles.get(key);
     if (old) dropTile(old);
     if (!park) return;
     const t: Tile = { key, recs: [], born: time, checked: false, body: null };
     for (let i = 0; i < park.length; i += STRIDE) {
-      const body = PARK_BODIES[park[i + 3]] ?? 'sedan', h = park[i + 2];
+      let body: BodyType = PARK_BODIES[park[i + 3]] ?? 'sedan', hl = PARK_HALF[park[i + 3]] ?? 2.4;
+      const h = park[i + 2], lux = luxuryAt(park[i], park[i + 1], body);
+      if (lux) { body = lux; hl = specLength(SPEC_OF[lux]) / 2 + 0.15; }
       const spec = SPEC_OF[body];
-      t.recs.push({ tile: t, body, heading: h, hl: PARK_HALF[park[i + 3]] ?? 2.4, state: 0, cols: [],
+      t.recs.push({ tile: t, body, heading: h, hl, state: 0, cols: [],
         pos: new THREE.Vector3(park[i], 0.03 + spec.wheelRadius, park[i + 1]), quat: new THREE.Quaternion().setFromAxisAngle(_up, h),
         colour: new THREE.Color(PRIVATE[park[i + 4] % PRIVATE.length]) });
     }
