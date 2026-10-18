@@ -15,6 +15,8 @@ import type { UiApi } from '../ui';
  *   fare adv ch chpass foot jack fight wanted busted map race acct    the first time each happened
  *   q gpu dlkb kbps fps fpslo lost    tier, GPU, KB downloaded before the title and at what rate, frame rate in the
  *                               first minute of play (median and slowest tenth), WebGL context lost
+ *   cpu lite                    第一分钟每帧 JS 时间的中位数（ms，`engine.cpuMs`：接近帧间隔就是 CPU 不够），省电档打开的时间
+ *                               （开局就是省电档的记 0；2026-10-18）
  */
 type Stat = Record<string, number | string>;
 const S = (): Stat | null => (typeof window !== 'undefined' ? (window as unknown as { __stat?: Stat }).__stat ?? null : null);
@@ -74,7 +76,9 @@ export function install(engine: Engine): void {
   // Wall-clock time, not the engine's dt: dt is capped per frame, so on a slow device game time runs behind the
   // clock (minutes of play would come late) and 1/dt would read a 10 fps phone as 20.
   let played = 0, poll = 0, last = performance.now();
-  const fps: number[] = [];
+  const fps: number[] = [], cpu: number[] = [];
+  if (engine.lite) stat.set('lite', 0);
+  engine.events.on('quality:lite', ({ on }) => { if (on) stat.mark('lite'); });
   const sys: System = {
     name: 'funnel',
     update() {
@@ -86,12 +90,13 @@ export function install(engine: Engine): void {
       if (!from || ui?.state !== 'playing' || document.hidden) return;
       played += dt;
       // The first minute of play's frame rate: every frame's, then the median and the slowest tenth.
-      if (fps.length < 7200 && dt > 0) fps.push(1 / dt);
+      if (fps.length < 7200 && dt > 0) { fps.push(1 / dt); cpu.push(engine.cpuMs); }
       if (played >= 60 && !stat.has('p1m')) {
         stat.mark('p1m');
         const a = [...fps].sort((x, y) => x - y);
         if (a.length) { stat.set('fps', Math.round(a[a.length >> 1])); stat.set('fpslo', Math.round(a[Math.floor(a.length * 0.1)])); }
-        fps.length = 0;
+        if (cpu.length) { cpu.sort((x, y) => x - y); stat.set('cpu', Math.round(cpu[cpu.length >> 1] * 10) / 10); }
+        fps.length = 0; cpu.length = 0;
       }
       if (played >= 180) stat.mark('p3m');
       if (played >= 600) stat.mark('p10m');

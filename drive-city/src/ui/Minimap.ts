@@ -158,7 +158,8 @@ export class Minimap implements System {
     const want = pl?.mode === 'onfoot' ? 170 : Math.min(720, 250 + kmh * 3.4);
     this.span += (want - this.span) * (1 - Math.exp(-dt * 1.2));
     const now = performance.now();
-    if (!this.shot && now - this.last < 1000 / 30 - 3) return;
+    // 省电档（弱手机，`engine.lite`）15 Hz：一次重画在 CPU 降速 4 倍时约 0.8 ms
+    if (!this.shot && now - this.last < 1000 / (this.engine.lite ? 15 : 30) - 3) return;
     this.last = now;
     this.draw(nav, now / 1000);
     this.updateBar(nav);

@@ -760,7 +760,8 @@ export async function install(engine: Engine): Promise<void> {
       spawnT -= dt;
       hotT -= dt;
       if (hotT <= 0) { hotT = 2; refreshHot(); }
-      if (spawnT <= 0) { spawnT = 0.05; if (active < cap - actorsOn) trySpawn(active < cap * 0.35); }
+      // 省电档（`engine.lite`）只少生成三成路人：走远的照常回收，人群慢慢稀下来
+      if (spawnT <= 0) { spawnT = 0.05; const c = engine.lite ? Math.round(cap * 0.65) : cap; if (active < c - actorsOn) trySpawn(active < c * 0.35); }
       const v = vehicle(), pc = v.car;
       const horn = v.occupied && v.inputEnabled && engine.input.state.horn;
       const foot = pl.foot;

@@ -75,6 +75,7 @@
 ## 约定
 - 物理和玩法逻辑放在 `fixedUpdate`/`postStep`，画面放在 `update`（用 `alpha` 插值；`VehicleApi.renderPos/renderQuat`）。
 - 重复的东西用实例化；刹车印和烟各只占一次 draw call。
+- **省电档 `engine.lite`**：弱手机在最低画质下自动打开，CPU 是瓶颈。新功能如果按数量花 CPU（车、人、每帧重画的界面），要在省电档下减量（读 `engine.lite`，或者听 `'quality:lite'` 事件）。看手机帧率用 `.scratch/phone/` 里的探针（见 `hosting-phones.md`「手机帧率」）。
 - macOS 文件系统不区分大小写：不要建两个只有大小写不同的文件（`poses.ts` 曾覆盖掉 `Poses.ts`）。
 - 新功能的说明：在对应的 `docs/notes/` 文件里加一条带日期的条目，「」里写用户原话，用中文写（代码标识符、命令保持原样）；只有跨模块的规则才写到这里。`docs/notes/` 里现有的英文笔记按需翻译：改到哪块功能，就把那块的条目顺手翻成中文。
 - 提交信息用中文，前缀 `driveCity：`，用户要求时才提交。

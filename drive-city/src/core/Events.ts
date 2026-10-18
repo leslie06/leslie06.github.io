@@ -75,6 +75,8 @@ export interface GameEvents {
   'phone:sms': { from: string };
   'game:start': Record<string, never>;
   'game:pause': { paused: boolean };
+  /** 省电档开了（core/Engine.ts 的 `lite`）：交通、行人、小地图跟着减量。 */
+  'quality:lite': { on: boolean };
   /** The GPU dropped the WebGL context (driver reset / out of memory). Nothing renders after this. */
   'renderer:contextlost': Record<string, never>;
   'renderer:contextrestored': Record<string, never>;

@@ -63,6 +63,13 @@ export class Lighting {
     const r = engine.renderer;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
+    // 省电档（`engine.lite`，弱手机）不画阴影：阴影那一遍在 CPU 降速 6 倍时每帧约 5 ms。不能关 shadowMap.enabled
+    // 或 castShadow（材质要换 program，而 program key 在第一次打补丁时就冻结了），所以停掉阴影贴图的更新，
+    // setKey 再把 shadow.intensity 这个 uniform 设成 0：留下的旧贴图不显示。**坑**：一次都没画过的阴影贴图没有渲染目标，
+    // 阴影采样器绑上的是空贴图，WebGL 拒绝所有受光材质的 draw（画面只剩天空），所以停之前先让它画一次（needsUpdate）。
+    const lite = (on: boolean) => { r.shadowMap.autoUpdate = !on; if (on) r.shadowMap.needsUpdate = true; };
+    lite(engine.lite);
+    engine.events.on('quality:lite', ({ on }) => lite(on));
     Lighting.patchPcf(q.shadowPcfTaps);
     this.hemi = new THREE.HemisphereLight(0xb8c8e0, 0x5a5048, 0.3);
     engine.scene.add(this.hemi);
@@ -155,6 +162,7 @@ export class Lighting {
    */
   setKey(dir: THREE.Vector3, color: THREE.Color, intensity: number, shadowIntensity: number, softness: number): void {
     this.keyDir.copy(dir).normalize();
+    if (this.engine.lite) shadowIntensity = 0;
     if (this.csm) {
       this.csm.lightDirection.copy(this.keyDir).negate();
       for (const l of this.csm.lights) { l.color.copy(color); l.intensity = intensity; l.shadow.intensity = shadowIntensity; }

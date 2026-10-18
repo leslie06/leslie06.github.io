@@ -8,6 +8,7 @@ import { newGovernor, step as governorStep, type GovernorConfig, type GovernorSt
 
 /** Frames the resolution governor ignores at boot (shader compiles, first uploads). */
 const WARMUP_FRAMES = 180;
+const LITE_KEY = 'drivecity.lite.v1';
 
 /** A system gets a fixed-step tick (60Hz, physics/gameplay) and a per-frame update (render/visuals). */
 export interface System {
@@ -59,6 +60,22 @@ export class Engine {
   contextLost = false;
   /** Mean frame interval (ms) over the last half second, for the diagnostics panel. */
   frameMs = 16.7;
+  /**
+   * JS time of the last frame (ms): input, fixed steps, updates and the render's draw submission, but not the GPU's
+   * own work, which runs after. Close to the frame interval = the CPU is the limit; far under it = the GPU (or vsync).
+   */
+  cpuMs = 0;
+  /**
+   * 省电档（2026-10-18，埋点：两台 Mali-G76 安卓手机在最低画质下只有 19 和 25 帧）：模拟手机分辨率、CPU 降速 6 倍时
+   * 每帧 47 ms 几乎全是 CPU，降分辨率没用。最低画质下进城后实测帧率中位数连续两段（各约 240 帧）低于 40 帧就打开，
+   * 记在本机，下次进游戏直接用：交通车和骑手少一半、行人少三成、小地图隔帧画（各模块读这个字段或听 'quality:lite'）。
+   * `?lite=1` 强制打开、`?lite=0` 关掉、清掉本机的记录并且这次不自动打开；只在 low 档生效，菜单里选了中、高画质就没有它。
+   */
+  lite = false;
+  private liteAuto = false;
+  private liteArmed = false;
+  private liteWin: number[] = [];
+  private liteSlow = 0;
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement('canvas');
@@ -79,6 +96,23 @@ export class Engine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.info.autoReset = false;
+    {
+      const q = new URLSearchParams(location.search).get('lite');
+      let saved = false;
+      try { if (q === '0') localStorage.removeItem(LITE_KEY); saved = localStorage.getItem(LITE_KEY) === '1'; } catch { /* private mode */ }
+      const low = this.quality.tier === 'low';
+      this.lite = q === '1' || (q !== '0' && low && saved);
+      this.liteAuto = q === null && low && !this.lite;
+      this.events.on('game:start', () => { this.liteArmed = true; });
+    }
+    // 实例数为 0 的实例化网格不画（2026-10-18，手机帧率）：three 照样切着色器、传 uniform、绑缓冲区，最后画 0 个。
+    // 车辆按车身和 LOD 各有一份实例化网格，没用上的那几份一帧 410 次绘制里占了 151 次（主画面 93、阴影 58），
+    // 中端安卓手机上 CPU 是瓶颈，这些都是白花的。three 对 drawCount 为 0 的几何体也是这样直接返回。
+    const direct = this.renderer.renderBufferDirect.bind(this.renderer);
+    this.renderer.renderBufferDirect = (camera, scene, geometry, material, object, group) => {
+      if ((object as THREE.InstancedMesh).isInstancedMesh && (object as THREE.InstancedMesh).count === 0) return;
+      direct(camera, scene, geometry, material, object, group);
+    };
     this.assets.anisotropy = Math.min(this.quality.anisotropy, this.renderer.capabilities.getMaxAnisotropy());
     this.assets.maxTextureSize = this.quality.textureRes;
     this.assets.maxCanvasSize = this.quality.canvasTextureRes;
@@ -183,10 +217,30 @@ export class Engine {
     }
     this.renderer.info.reset();
     this.renderFrame(dt);
+    this.cpuMs = performance.now() - now;
+    if (this.liteAuto && this.liteArmed && !this.paused && !forcedDt && interval > 0 && interval < 0.5) this.watchLite(interval * 1000);
     if (this.quality.adaptiveResolution && !forcedDt) {
       const next = governorStep(this.governor, interval * 1000, this.governorCfg);
       if (next !== null) { this.renderScale = next; this.resize(); }
     }
+  }
+
+  /** 省电档的自动判断：攒满一段算中位数，慢的段连着两段就打开（一段快的清零，偶尔一卡不算）。 */
+  private watchLite(ms: number): void {
+    this.liteWin.push(ms);
+    if (this.liteWin.length < 240) return;
+    const a = this.liteWin.sort((x, y) => x - y), med = a[a.length >> 1];
+    this.liteWin.length = 0;
+    this.liteSlow = med > 25 ? this.liteSlow + 1 : 0;
+    if (this.liteSlow >= 2) this.setLite(true);
+  }
+
+  setLite(on: boolean): void {
+    if (this.lite === on) return;
+    this.lite = on;
+    this.liteAuto = false;
+    try { if (on) localStorage.setItem(LITE_KEY, '1'); else localStorage.removeItem(LITE_KEY); } catch { /* private mode */ }
+    this.events.emit('quality:lite', { on });
   }
 
   /** Run the fixed-step systems + physics for `dt` seconds of game time (no rendering). */

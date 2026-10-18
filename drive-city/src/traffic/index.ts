@@ -21,6 +21,8 @@ import { SEAT } from '../vehicle/TwoWheelers';
 
 interface Npc {
   car: Vehicle;
+  /** Seconds a parked one has stood still (it is put to sleep after one: `nap`). */
+  rest?: number;
   driver: AiDriver | null;
   filter: ControlFilter;
   active: boolean;
@@ -137,6 +139,12 @@ export async function install(engine: Engine): Promise<void> {
    * (a yellow or blue box, jacket and helmet) and everyone else. Same physics as the player's scooter.
    */
   const RIDERS = max === 0 ? 0 : tier === 'low' ? 4 : tier === 'medium' ? 7 : 10;
+  /**
+   * 省电档（`engine.lite`，弱手机）：路上的车和骑手少一半。每辆车每个固定步要打 4 条车轮射线，帧率越低每帧补跑的固定步
+   * 越多，模拟 CPU 降速 6 倍时交通占了每帧 47 ms 里的约 15 ms。只管生成：多出来的车开远了照常回收。
+   */
+  const carCap = () => (engine.lite ? Math.ceil(max / 2) : max);
+  const riderCap = () => (engine.lite ? Math.ceil(RIDERS / 2) : RIDERS);
   const crowdOf = () => engine.get<PlayerApi>('player')?.crowd;
   const riderMotion: Motion = { speed: 0, action: 'ride', t: 0, ride: 'ebike', lean: 0 };
   const seatAt = new THREE.Vector3(), seatFwd = new THREE.Vector3();
@@ -212,6 +220,21 @@ export async function install(engine: Engine): Promise<void> {
     }
   }
   if (sedanExtra) fill('sedan', sedanExtra);
+  /**
+   * 路边停着的车和摩托（2026-10-18，手机帧率）：原来每个固定步都跑完整的车辆物理（4 条车轮射线加轮胎模型），低画质下
+   * 路边最多 6 辆车加 5 辆摩托，占交通载具的一半。站稳一秒后让刚体睡下、不再 step；撞上来、推一下，Rapier 自己把它
+   * 叫醒（`isSleeping` 变 false），下一步照常跑物理。冲量和 reset 都带 wake，所以抢车、回收再用都不受影响。
+   */
+  const nap = (n: Npc, dt: number): boolean => {
+    const b = n.car.body;
+    if (b.isSleeping()) return true;
+    // 水平速度：靠冲量托着的车静止时竖直速度报 -0.375·g·dt（约 0.06），`speed` 永远到不了 0
+    if (Math.hypot(n.car.vel.x, n.car.vel.z) < 0.05 && n.car.grounded === 4) {
+      n.rest = (n.rest ?? 0) + dt;
+      if (n.rest > 1) { n.rest = 0; b.sleep(); return true; }
+    } else n.rest = 0;
+    return false;
+  };
   const driving = () => { let k = 0; for (const n of pool) if (n.active && !n.parked && !n.rider) k++; return k; };
   const riding = () => { let k = 0; for (const n of pool) if (n.active && n.rider) k++; return k; };
   const parkedInput = { forward: 0, back: 0, steer: 0, analog: true, handbrake: true };
@@ -247,7 +270,7 @@ export async function install(engine: Engine): Promise<void> {
     return { body, upper: n.upper, lower: n.lower, taxi: n.taxi };
   };
   const adoptGhost = (h: Handover): boolean => {
-    if (driving() >= max) return false;
+    if (driving() >= carCap()) return false;
     const n = pool.find((p) => !p.active && !p.parked && p.body === h.body);
     if (!n) return false;
     const l = g.links[h.link];
@@ -272,7 +295,7 @@ export async function install(engine: Engine): Promise<void> {
 
   const spawn = () => {
     let n = pool.find((p) => !p.active && !p.parked && p.body !== 'ebike');
-    if (!n) { if (driving() >= max) return; n = makeNpc(newCar('sedan'), 'sedan'); pool.push(n); }
+    if (!n) { if (driving() >= carCap()) return; n = makeNpc(newCar('sedan'), 'sedan'); pool.push(n); }
     const len = specLength(n.car.spec);
     const cam = engine.camera.position;
     engine.camera.getWorldDirection(camDir);
@@ -603,7 +626,7 @@ export async function install(engine: Engine): Promise<void> {
           }
         }
       }
-      if (spawnT <= 0) { spawnT = 0.2; if (driving() < max && !ghosts?.adoptWaiting(engine.camera.position)) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < RIDERS) spawnRider(); }
+      if (spawnT <= 0) { spawnT = 0.2; if (driving() < carCap() && !ghosts?.adoptWaiting(engine.camera.position)) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < riderCap()) spawnRider(); }
       // Buses look for a shelter ahead on their side once a second (at the kerb of the link they are on).
       busT -= dt;
       if (busT <= 0) {
@@ -620,6 +643,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       for (const n of pool) {
         if (!n.active) continue;
+        if (n.parked && nap(n, dt)) continue;
         const inp = n.parked || n.held ? parkedInput : n.driver!.update(n.car, dt, t, leaderFor(n));
         const c = n.filter.update(inp, n.car.forwardSpeed, dt);
         n.prevPos.copy(n.curPos); n.prevQuat.copy(n.curQuat);
@@ -680,7 +704,7 @@ export async function install(engine: Engine): Promise<void> {
         const ds = ghosts.drivers;
         ds.length = 0;
         for (const n of pool) if (n.active && n.driver && !n.parked) ds.push(n.driver.link, n.driver.s, n.driver.lane, Math.max(0, n.car.forwardSpeed), specLength(n.car.spec));
-        ghosts.update(_dt, t, engine.camera.position, camDir.set(0, 0, -1).applyQuaternion(engine.camera.quaternion), (engine.get<RenderApi>('render')?.night ?? 0) > 0.35, driving() < max);
+        ghosts.update(_dt, t, engine.camera.position, camDir.set(0, 0, -1).applyQuaternion(engine.camera.quaternion), (engine.get<RenderApi>('render')?.night ?? 0) > 0.35, driving() < carCap());
       }
       const night = (engine.get<RenderApi>('render')?.night ?? 0) > 0.35;
       for (const [b, kit] of kits) { kit.commit(written.get(b) ?? 0); kit.setHeadlights(night); }
