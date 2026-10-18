@@ -1398,6 +1398,286 @@
    "instructEn": "Stammering, spilling everything."
   },
   {
+   "id": "cmp.m5.b1",
+   "archetype": "baoge",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "陈野！三年前那场车祸没要了你的命，今天我亲手送你走！",
+   "instruct": "对讲机里，暴怒，咬牙切齿。",
+   "textEn": "Chen Ye! Three years ago that crash didn't finish you. Tonight I'll do it myself.",
+   "instructEn": "On the radio, furious, spitting the words."
+  },
+  {
+   "id": "cmp.m5.b2",
+   "archetype": "baoge",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老K，你一个开茶摊的，也来蹚这浑水？",
+   "instruct": "阴阳怪气，冷笑。",
+   "textEn": "Old K. A man who runs a tea stall, sticking his nose in this?",
+   "instructEn": "Sneering, a cold laugh."
+  },
+  {
+   "id": "cmp.m5.b3",
+   "archetype": "baoge",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "陈野，三年前你就该躺在那儿，别起来。",
+   "instruct": "狠狠地，带着恨。",
+   "textEn": "Chen Ye. Three years ago you should have stayed down.",
+   "instructEn": "Vicious, full of hate."
+  },
+  {
+   "id": "cmp.m5.b4",
+   "archetype": "baoge",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……给我上！",
+   "instruct": "沉默一瞬，暴喝。",
+   "textEn": "...Get him!",
+   "instructEn": "A beat of silence, then a roar."
+  },
+  {
+   "id": "cmp.m5.b5",
+   "archetype": "baoge",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "……老周那个软骨头。",
+   "instruct": "趴在地上，恨恨地骂。",
+   "textEn": "...Zhou. That spineless...",
+   "instructEn": "Face down, cursing bitterly."
+  },
+  {
+   "id": "cmp.m5.c1",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "撞不停，就跳上去。",
+   "instruct": "淡淡地，不当回事。",
+   "textEn": "Can't ram it - then I jump on.",
+   "instructEn": "Flat, as if it were nothing."
+  },
+  {
+   "id": "cmp.m5.c2",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "走。",
+   "instruct": "一个字，干脆。",
+   "textEn": "Let's go.",
+   "instructEn": "One word, decisive."
+  },
+  {
+   "id": "cmp.m5.c3",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "铁皮的……只能跳。",
+   "instruct": "撞了一下，咬牙自语。",
+   "textEn": "Steel... it'll have to be the jump.",
+   "instructEn": "After a hit, muttering through his teeth."
+  },
+  {
+   "id": "cmp.m5.c4",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这车货，我收了。",
+   "instruct": "冷冷地，不慌不忙。",
+   "textEn": "I'll take the load.",
+   "instructEn": "Cold, unhurried."
+  },
+  {
+   "id": "cmp.m5.c5",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "三年前那笔账，今晚一起算。",
+   "instruct": "低沉，压着火，一字一句。",
+   "textEn": "Three years ago. We settle that tonight too.",
+   "instructEn": "Low, holding his anger, word by word."
+  },
+  {
+   "id": "cmp.m5.c6",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我起来了。",
+   "instruct": "平静，淡淡的。",
+   "textEn": "I got up.",
+   "instructEn": "Calm, matter-of-fact."
+  },
+  {
+   "id": "cmp.m5.c7",
+   "archetype": "chenye",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "老K，那份人情……算还上了？",
+   "instruct": "迟疑一下，低声问。",
+   "textEn": "Old K. The debt - are we square?",
+   "instructEn": "A moment of hesitation, quietly."
+  },
+  {
+   "id": "cmp.m5.d1",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "三辆车。前头一辆探路的，中间是货车——车厢包了铁皮，撞不停。",
+   "instruct": "粗声粗气，掰着手指头数。",
+   "textEn": "Three cars. A scout up front, the truck in the middle - they've plated the box with steel, you won't ram it to a stop.",
+   "instructEn": "Gruff, counting on his fingers."
+  },
+  {
+   "id": "cmp.m5.d2",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "后头那辆黑色大轿车，豹哥自己坐着。",
+   "instruct": "压低声音，咬牙。",
+   "textEn": "The big black saloon at the back - that's Panther himself.",
+   "instructEn": "Lowering his voice, through his teeth."
+  },
+  {
+   "id": "cmp.m5.d3",
+   "archetype": "daliu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "开这辆。从黑豹手里扣下的跑车，氮气给你灌满了。",
+   "instruct": "拍拍车顶，带点儿得意。",
+   "textEn": "Take this one. A sports car we took off Panther's people - I filled the nitro.",
+   "instructEn": "Patting the roof, a little proud."
+  },
+  {
+   "id": "cmp.m5.g1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "你疯了吧！",
+   "instruct": "惊慌失措地大叫。",
+   "textEn": "You're insane!",
+   "instructEn": "Panicked yelling."
+  },
+  {
+   "id": "cmp.m5.k1",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "礼拜五了。豹哥的车队，十点从东郊出发，走京哈高速出京。",
+   "instruct": "夜里，压低声音，沉稳交底。",
+   "textEn": "It's Friday. Panther's convoy leaves the east side at ten and takes the Jingha expressway out of Beijing.",
+   "instructEn": "At night, low and steady, laying it out."
+  },
+  {
+   "id": "cmp.m5.k2",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "白鹿收费站那头，我打了招呼。我和大刘在那儿等你。货车你拿下，给我们开过来。",
+   "instruct": "慢条斯理，胸有成竹。",
+   "textEn": "I've had a word at the Bailu toll gate. Big Liu and I will be waiting there. You take the truck and bring it to us.",
+   "instructEn": "Unhurried, sure of himself."
+  },
+  {
+   "id": "cmp.m5.k3",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "看见你了。开过来，路已经堵上了。",
+   "instruct": "电话里，沉稳，让人安心。",
+   "textEn": "We can see you. Bring it in - the road's blocked.",
+   "instructEn": "On the phone, steady and reassuring."
+  },
+  {
+   "id": "cmp.m5.k4",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这条路，是我们这些人跑了一辈子跑出来的。你想把它变成你的——不行。",
+   "instruct": "平静，字字有分量。",
+   "textEn": "People like us spent our whole lives driving this road. You want to make it yours - no.",
+   "instructEn": "Calm, every word weighing."
+  },
+  {
+   "id": "cmp.m5.k5",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "东郊这条路，干净了。",
+   "instruct": "长出一口气，感慨。",
+   "textEn": "The road out east is clean.",
+   "instructEn": "A long breath out, moved."
+  },
+  {
+   "id": "cmp.m5.k6",
+   "archetype": "laok",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "还什么还。明天来喝茶。",
+   "instruct": "笑骂，温和。",
+   "textEn": "Square? Don't be daft. Come for tea tomorrow.",
+   "instructEn": "A fond scolding, warm."
+  },
+  {
+   "id": "cmp.m5.w1",
+   "archetype": "wang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "豹哥，账本、老周、这一车货——够你在里头说好些年了。",
+   "instruct": "公事公办，带点儿解气。",
+   "textEn": "Panther. The ledger, Zhou, and a truck full of goods - you'll have plenty to talk about inside.",
+   "instructEn": "Businesslike, with some satisfaction."
+  },
+  {
+   "id": "cmp.m5.w2",
+   "archetype": "wang",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "陈野，这回算你帮了忙。下回……别让我在高速上追你。",
+   "instruct": "半开玩笑，半认真警告。",
+   "textEn": "Chen Ye, you did us a favour this time. Next time... don't make me chase you down an expressway.",
+   "instructEn": "Half joking, half a real warning."
+  },
+  {
+   "id": "cmp.m5.y1",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥，车队就在你前面，三辆，往东去了。",
+   "instruct": "电话里，紧张又兴奋。",
+   "textEn": "Brother, the convoy's right ahead of you. Three cars, heading east.",
+   "instructEn": "On the phone, tense and excited."
+  },
+  {
+   "id": "cmp.m5.y2",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "他们发现你了！后头那辆大轿车在减速——小心！",
+   "instruct": "电话里，急促地大喊。",
+   "textEn": "They've seen you! The big saloon's dropping back - watch it!",
+   "instructEn": "On the phone, urgent shouting."
+  },
+  {
+   "id": "cmp.m5.y3",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哥！你没事吧？找辆车接着追！",
+   "instruct": "电话里，吓了一跳，着急。",
+   "textEn": "Brother! Are you OK? Grab a car and get after them!",
+   "instructEn": "On the phone, startled and worried."
+  },
+  {
+   "id": "cmp.m5.y4",
+   "archetype": "xiaoyu",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "离收费站还有三公里，老K和大刘到了！",
+   "instruct": "电话里，激动地报信。",
+   "textEn": "Three kilometres to the gate - Old K and Big Liu are there!",
+   "instructEn": "On the phone, excited news."
+  },
+  {
    "id": "con.daliu.chat1",
    "archetype": "daliu",
    "trigger": "dialogue",

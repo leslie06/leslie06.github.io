@@ -2,6 +2,11 @@ import { t } from '../core/I18n';
 import { C, F, css, el } from '../ui/theme';
 
 css(`
+.cmp-fade{position:fixed;inset:0;z-index:28;pointer-events:none;background:#000;opacity:0;transition:opacity .6s ease,background-color .9s ease}
+.cmp-fade.on{opacity:1}
+.cmp-fade .cap{position:fixed;left:0;right:0;bottom:22vh;text-align:center;font:800 20px/1.4 ${F.ui};letter-spacing:.2em;color:${C.paper};opacity:0;transition:opacity .6s}
+.cmp-fade.on .cap{opacity:0}.cmp-fade.captioned .cap{opacity:1;transition-delay:.2s}
+.cmp-fade.captioned{opacity:1;background:transparent}
 .cmp-bars{position:fixed;inset:0;z-index:25;pointer-events:none}
 .cmp-bars>i{position:absolute;left:0;right:0;height:0;background:#000;transition:height .45s ease}
 .cmp-bars>i:first-child{top:0}.cmp-bars>i:last-child{bottom:0}
@@ -58,6 +63,25 @@ export class Letterbox {
   private hint: HTMLElement;
   constructor() { el('i', '', this.root); this.hint = el('div', 'skip', this.root); el('i', '', this.root); }
   show(on: boolean): void { this.hint.textContent = t('cmp.skip'); this.root.classList.toggle('on', on); }
+}
+
+/**
+ * A cut to black and back (2026-10-18, chapter 5's 「晚上十点 · 京哈高速」): the chapter jumps the player across town
+ * between scenes. `to(true)` fades out, `to(false)` back in with the caption (time and place) for a few seconds.
+ */
+export class Fade {
+  private root = el('div', 'cmp-fade', document.body);
+  private cap = el('div', 'cap', this.root);
+  private timer = 0;
+  constructor() { this.root.hidden = true; }
+  to(black: boolean, caption?: string): void {
+    clearTimeout(this.timer);
+    if (black) { this.cap.textContent = ''; this.root.hidden = false; requestAnimationFrame(() => this.root.classList.add('on')); return; }
+    this.cap.textContent = caption ?? '';
+    this.root.classList.remove('on');
+    this.root.classList.toggle('captioned', !!caption);
+    this.timer = window.setTimeout(() => { this.root.hidden = true; this.root.classList.remove('captioned'); }, caption ? 3600 : 700);
+  }
 }
 
 export type Medal = 'gold' | 'silver' | 'bronze';

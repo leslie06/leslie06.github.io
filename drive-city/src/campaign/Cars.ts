@@ -95,13 +95,18 @@ export class ScriptCar {
     this.kit.commit(1);
   }
 
-  /** Drive at the player with `Pursuit`: `ram` straight through them, else box in. */
-  chase(nav: NavApi | undefined, target: () => { x: number; z: number; vx: number; vz: number }, opts: { ram?: boolean; top?: number } = {}): void {
+  /**
+   * Drive at the player with `Pursuit`: `ram` straight through them, else box in. `top` may change as it goes (read
+   * each step after `target`: chapter 5's escorts slow to let the truck catch up instead of turning round for it).
+   */
+  chase(nav: NavApi | undefined, target: () => { x: number; z: number; vx: number; vz: number }, opts: { ram?: boolean; top?: number | (() => number) } = {}): void {
     const pursuit = new Pursuit();
-    pursuit.topSpeed = opts.top ?? 30;
+    const top = opts.top ?? 30;
+    pursuit.topSpeed = typeof top === 'number' ? top : 30;
     const route = nav ? (a: number, b: number, c: number, d: number, e: number) => nav.route(a, b, c, d, e) : null;
     this.driver = (dt) => {
       const g = target(), d = Math.hypot(g.x - this.car.pos.x, g.z - this.car.pos.z);
+      if (typeof top === 'function') pursuit.topSpeed = top();
       return pursuit.update(this.car, g, d < 45, dt, route, false, !!opts.ram && d < 45, !opts.ram && d < 30);
     };
   }

@@ -211,7 +211,8 @@ export async function install(engine: Engine): Promise<void> {
       let resolve: (r: 'won' | 'lost' | 'fled') => void = () => {};
       const done = new Promise<'won' | 'lost' | 'fled'>((r) => { resolve = r; });
       const b: Brawl = { fighters: [], resolve, over: false, wonT: 0 };
-      const tough: Tough = { ...TOUGH, hp: TOUGH.hp * (opts?.tough ?? 1), dmg: TOUGH.dmg * Math.sqrt(opts?.tough ?? 1), windup: TOUGH.windup / Math.sqrt(opts?.tough ?? 1) };
+      const toughOf = (k: number): Tough => ({ ...TOUGH, hp: TOUGH.hp * k, dmg: TOUGH.dmg * Math.sqrt(k), windup: TOUGH.windup / Math.sqrt(k) });
+      const tough = toughOf(opts?.tough ?? 1), boss = opts?.boss;
       for (let i = 0; i < n; i++) {
         // spread round (x, z), each spot in the open (a ray from the middle reaches it)
         let sx = x, sz = z;
@@ -221,13 +222,16 @@ export async function install(engine: Engine): Promise<void> {
           const hit = engine.physics.raycast({ x, y: 1, z }, { x: (tx - x) / r, y: 0, z: (tz - z) / r }, r + 0.5, slamGroups, true);
           if (!hit) { sx = tx; sz = tz; break; }
         }
-        const look = gangLook();
+        const isBoss = !!boss && i === 0;
+        const look = isBoss ? boss.look : gangLook();
         const actor = people.spawnActor!(sx, sz, { look, yaw: rnd() * 6.28, seed: rnd() });
         if (!actor) continue;
         actor.fair = true;
-        const f: Fighter = { brain: new Brain(sx, sz, tough), actor, brawl: b, koT: -1, detour: 0, side: 0 };
+        const f: Fighter = { brain: new Brain(sx, sz, isBoss ? toughOf(boss.tough) : tough), actor, brawl: b, koT: -1, detour: 0, side: 0 };
         b.fighters.push(f); fighters.push(f);
-        if (thugModels.length) {
+        if (isBoss) {
+          void castModel(engine, boss.id, look).then((h) => { if (actor.alive) actor.model = h; else h.hide(); }).catch(() => {});
+        } else if (thugModels.length) {
           const id = thugModels[(fighters.length - 1) % thugModels.length];
           void castModel(engine, id, look).then((h) => { if (actor.alive) actor.model = h; else h.hide(); }).catch(() => {});
         }

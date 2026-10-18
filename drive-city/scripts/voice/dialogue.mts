@@ -103,6 +103,16 @@ const INSTRUCT: Record<string, string> = {
   'cmp.m4.z8': '结结巴巴，竹筒倒豆子。', 'cmp.m4.c8': '淡淡地，带着狠劲儿。', 'cmp.m4.y7': '电话里，紧张地催。',
   'cmp.m4.y8': '电话里，松了口气。', 'cmp.m4.k5': '电话里，慢悠悠，听不出喜怒。', 'cmp.m4.c9': '简短，笃定。',
   'cmp.m4.k6': '电话里，沉吟片刻，然后果断。',
+  'cmp.m5.k1': '夜里，压低声音，沉稳交底。', 'cmp.m5.d1': '粗声粗气，掰着手指头数。', 'cmp.m5.d2': '压低声音，咬牙。',
+  'cmp.m5.c1': '淡淡地，不当回事。', 'cmp.m5.k2': '慢条斯理，胸有成竹。', 'cmp.m5.d3': '拍拍车顶，带点儿得意。',
+  'cmp.m5.c2': '一个字，干脆。', 'cmp.m5.y1': '电话里，紧张又兴奋。', 'cmp.m5.y2': '电话里，急促地大喊。',
+  'cmp.m5.c3': '撞了一下，咬牙自语。', 'cmp.m5.y3': '电话里，吓了一跳，着急。', 'cmp.m5.g1': '惊慌失措地大叫。',
+  'cmp.m5.c4': '冷冷地，不慌不忙。', 'cmp.m5.b1': '对讲机里，暴怒，咬牙切齿。', 'cmp.m5.c5': '低沉，压着火，一字一句。',
+  'cmp.m5.y4': '电话里，激动地报信。', 'cmp.m5.k3': '电话里，沉稳，让人安心。', 'cmp.m5.b2': '阴阳怪气，冷笑。',
+  'cmp.m5.k4': '平静，字字有分量。', 'cmp.m5.b3': '狠狠地，带着恨。', 'cmp.m5.c6': '平静，淡淡的。',
+  'cmp.m5.b4': '沉默一瞬，暴喝。', 'cmp.m5.w1': '公事公办，带点儿解气。', 'cmp.m5.b5': '趴在地上，恨恨地骂。',
+  'cmp.m5.w2': '半开玩笑，半认真警告。', 'cmp.m5.k5': '长出一口气，感慨。', 'cmp.m5.c7': '迟疑一下，低声问。',
+  'cmp.m5.k6': '笑骂，温和。',
   // street events and life
   'event.blackShout': '探出车窗吆喝揽客。',
   'life.bbq.buy': '吆喝着应声。', 'life.bbq.toast': '举杯，豪爽地。', 'life.busker.thanks': '开心地道谢。', 'life.chess.none': '头也不抬，不耐烦。',
@@ -189,6 +199,16 @@ const INSTRUCT_EN: Record<string, string> = {
   'cmp.m4.z8': 'Stammering, spilling everything.', 'cmp.m4.c8': 'Quiet, with an edge.', 'cmp.m4.y7': 'On the phone, tense and hurrying.',
   'cmp.m4.y8': 'On the phone, relieved.', 'cmp.m4.k5': 'On the phone, unhurried, giving nothing away.', 'cmp.m4.c9': 'Short and certain.',
   'cmp.m4.k6': 'On the phone, a pause, then decisive.',
+  'cmp.m5.k1': 'At night, low and steady, laying it out.', 'cmp.m5.d1': 'Gruff, counting on his fingers.', 'cmp.m5.d2': 'Lowering his voice, through his teeth.',
+  'cmp.m5.c1': 'Flat, as if it were nothing.', 'cmp.m5.k2': 'Unhurried, sure of himself.', 'cmp.m5.d3': 'Patting the roof, a little proud.',
+  'cmp.m5.c2': 'One word, decisive.', 'cmp.m5.y1': 'On the phone, tense and excited.', 'cmp.m5.y2': 'On the phone, urgent shouting.',
+  'cmp.m5.c3': 'After a hit, muttering through his teeth.', 'cmp.m5.y3': 'On the phone, startled and worried.', 'cmp.m5.g1': 'Panicked yelling.',
+  'cmp.m5.c4': 'Cold, unhurried.', 'cmp.m5.b1': 'On the radio, furious, spitting the words.', 'cmp.m5.c5': 'Low, holding his anger, word by word.',
+  'cmp.m5.y4': 'On the phone, excited news.', 'cmp.m5.k3': 'On the phone, steady and reassuring.', 'cmp.m5.b2': 'Sneering, a cold laugh.',
+  'cmp.m5.k4': 'Calm, every word weighing.', 'cmp.m5.b3': 'Vicious, full of hate.', 'cmp.m5.c6': 'Calm, matter-of-fact.',
+  'cmp.m5.b4': 'A beat of silence, then a roar.', 'cmp.m5.w1': 'Businesslike, with some satisfaction.', 'cmp.m5.b5': 'Face down, cursing bitterly.',
+  'cmp.m5.w2': 'Half joking, half a real warning.', 'cmp.m5.k5': 'A long breath out, moved.', 'cmp.m5.c7': 'A moment of hesitation, quietly.',
+  'cmp.m5.k6': 'A fond scolding, warm.',
   'event.blackShout': 'Leaning out of a car window, touting for fares.',
   'life.bbq.buy': 'Calling back cheerfully.', 'life.bbq.toast': 'Raising a glass, hearty.', 'life.busker.thanks': 'Happy thanks.', 'life.chess.none': "Without looking up, impatient.",
   'life.dance.bad': 'Kind reassurance.', 'life.dance.good': 'Happy praise.', 'life.dance.join': 'Warm invitation.', 'life.dance.scatter1': 'Startled, complaining loudly.', 'life.dance.scatter2': 'Still shaken, hand on her chest.',
@@ -235,8 +255,8 @@ const voicesOf = (key: string) => {
   if (key.startsWith('npc.foreigner.')) return ['xm'];
   // Panther's thugs (the street brawl's taunts) in one voice, the one chapter 2's thugs speak in
   if (key.startsWith('npc.gang.')) return ['mm'];
-  const story = /^cmp\.m\d+\.([kycdbgz])\d+$/.exec(key);
-  if (story) return [{ k: 'laok', y: 'xiaoyu', c: 'chenye', d: 'daliu', b: 'baoge', g: 'mm', z: 'laozhou' }[story[1]]!];
+  const story = /^cmp\.m\d+\.([kycdbgzw])\d+$/.exec(key);
+  if (story) return [{ k: 'laok', y: 'xiaoyu', c: 'chenye', d: 'daliu', b: 'baoge', g: 'mm', z: 'laozhou', w: 'wang' }[story[1]]!];
   return GENERAL;
 };
 

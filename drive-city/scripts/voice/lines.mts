@@ -59,7 +59,7 @@ const SPOKEN_EN: Record<string, string> = {
 };
 
 // the main story's spoken lines (campaign/: 老K k, Xiaoyu y, Chen Ye c, 大刘 d, 豹哥 b, Panther's thugs g), not its HUD text
-const STORY = /^cmp\.m\d+\.[kycdbgz]\d+$/;
+const STORY = /^cmp\.m\d+\.[kycdbgzw]\d+$/;
 const keys = new Set<string>([...Object.keys(NPC_ZH), ...Object.keys(CAMPAIGN_ZH).filter((k) => STORY.test(k)), ...Object.keys(STRINGS.zh).filter((k) => k.startsWith('shout.'))]);
 const out: { key: string; text: string; textEn: string }[] = [];
 for (const key of [...keys].sort()) {

@@ -270,7 +270,11 @@ export interface CombatApi extends System {
    * `n` gang members round (x, z), coming for the player. Resolves the brawl: 'won' when all are down for good,
    * 'lost' (the player wasted), 'fled' (the player more than 60 m off).
    */
-  brawl(x: number, z: number, n: number, opts?: { tough?: number }): { done: Promise<'won' | 'lost' | 'fled'>; end(): void; readonly actors: readonly Actor[] };
+  /**
+   * `boss` (2026-10-18, chapter 5's 豹哥): the first of them is this one - a cast model (`id`), a look, and his own
+   * toughness - and the brawl is won only when he is down too.
+   */
+  brawl(x: number, z: number, n: number, opts?: { tough?: number; boss?: { id: string; look: Look; tough: number } }): { done: Promise<'won' | 'lost' | 'fled'>; end(): void; readonly actors: readonly Actor[] };
 }
 
 export interface WantedApi extends System {

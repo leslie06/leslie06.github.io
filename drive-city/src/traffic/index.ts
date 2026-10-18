@@ -76,6 +76,11 @@ export interface TrafficApi extends TrafficCars {
    * `car` is not a driven traffic car (parked, a scooter, a getaway car, the police).
    */
   hold?(car: Vehicle, on: boolean): boolean;
+  /**
+   * Take the driven traffic within `r` of (x, z) off the road at once (chapter 5's toll gate, a scene played on an
+   * expressway): returns how many. Parked cars and riders stay.
+   */
+  clearNear?(x: number, z: number, r: number): number;
 }
 
 // Beijing traffic: white, black and silver dominate, then grey, dark blue, red, champagne.
@@ -500,6 +505,16 @@ export async function install(engine: Engine): Promise<void> {
       // The Vehicle now belongs to the player; its pool slot gets another of the same kind.
       pool[i] = makeNpc(newCar(n.body), n.body);
       return look;
+    },
+    clearNear(x, z, r) {
+      let k = 0;
+      for (const n of pool) {
+        if (!n.active || n.parked || n.rider) continue;
+        if (Math.hypot(n.car.pos.x - x, n.car.pos.z - z) > r) continue;
+        if (engine.get<VehicleApi>('vehicle')?.car === n.car) continue;
+        despawn(n); k++;
+      }
+      return k;
     },
     hold(car, on) {
       const n = pool.find((p) => p.active && p.car === car);

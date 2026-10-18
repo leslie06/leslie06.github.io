@@ -9,7 +9,7 @@ import type { TrafficApi } from '../traffic';
 import { css } from '../ui/theme';
 import { ScriptCar } from './Cars';
 import type { MissionDef, Step, StepCtx, StepResult } from './Runner';
-import { Card, Letterbox } from './Screens';
+import { Card, Fade, Letterbox } from './Screens';
 
 css(`body.cmp-cine .hud>:not(.dlg),body.cmp-cine .touch,body.cmp-cine .phone{opacity:0!important;pointer-events:none!important;transition:opacity .3s}
 body.cmp-cine .hud .dlg{bottom:calc(11vh + 12px);z-index:27}
@@ -39,6 +39,7 @@ export interface Line { who: Speaker; text: string }
 export class Env {
   readonly bars = new Letterbox();
   readonly card = new Card();
+  readonly fade = new Fade();
   readonly markers: Marker[];
   /** The mission's blips this frame (the steps push theirs; cleared each frame). */
   readonly blips: Blip[] = [];
@@ -270,4 +271,36 @@ export class Gang {
   }
   get wrecked(): number { return this.cars.filter((c) => c.wreck >= 0).length; }
   remove(): void { for (const c of this.cars) { c.remove(); this.env.cars.delete(c); } this.cars.length = 0; }
+}
+
+/**
+ * A cut across town (2026-10-18): fade to black, load the streets at `to`, the player in `car` there, fade back in with
+ * `caption` (「晚上十点 · 京哈高速」). Input is off until the picture is back.
+ */
+export function jump<S>(env: Env, o: { id: string; checkpoint?: boolean; restore?(ctx: StepCtx<S>): void; to(ctx: StepCtx<S>): { x: number; z: number; yaw: number }; car(): ScriptCar; caption: string; then?(ctx: StepCtx<S>): void }): Step<S> {
+  let ready = false, shown = -1;
+  return {
+    id: o.id, checkpoint: o.checkpoint, restore: o.restore,
+    enter(ctx) {
+      ready = false; shown = -1;
+      env.v.inputEnabled = false;
+      env.objective(null);
+      env.fade.to(true);
+      const p = o.to(ctx), world = env.engine.get<{ name: string; preload?(x: number, z: number): Promise<void> }>('world');
+      // the fade's 0.6 s first, then the streets
+      void new Promise((r) => setTimeout(r, 700)).then(() => world?.preload?.(p.x, p.z)).then(() => {
+        env.putIn(o.car(), p.x, p.z, p.yaw);
+        env.cam.snap();
+        o.then?.(ctx);
+        ready = true;
+      });
+      ctx.step.defer(() => { env.v.inputEnabled = true; });
+    },
+    update(ctx) {
+      if (!ready) { env.v.inputEnabled = false; return ctx.t > 60 ? 'done' : 'run'; }
+      if (shown < 0) { shown = ctx.t; env.fade.to(false, o.caption); }
+      env.v.inputEnabled = true;
+      return ctx.t - shown > 0.8 ? 'done' : 'run';
+    },
+  };
 }

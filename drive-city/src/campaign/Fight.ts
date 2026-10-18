@@ -1,4 +1,5 @@
 import type { Actor, Blip, CombatApi } from '../game/Contracts';
+import type { Look } from '../character/Body';
 import type { Step, StepCtx } from './Runner';
 
 /** What a fight needs of the campaign's Env (kept apart from Kit.ts, which touches the DOM: `Fight.test.ts`). */
@@ -16,6 +17,8 @@ export interface FightEnv {
 export function fight<S>(env: FightEnv, o: {
   id: string; checkpoint?: boolean; restore?(ctx: StepCtx<S>): void; line: string;
   at(ctx: StepCtx<S>): { x: number; z: number }; n: number; tough?: number; fled: string;
+  /** The first of them a named boss (combat/ `brawl`'s `boss`). */
+  boss?: { id: string; look: Look; tough: number };
   enter?(ctx: StepCtx<S>): void; ko?(ctx: StepCtx<S>, n: number): void;
 }): Step<S> {
   let res: 'won' | 'lost' | 'fled' | null = null, actors: readonly Actor[] = [], down = 0, wait = 0, serial = 0;
@@ -24,7 +27,7 @@ export function fight<S>(env: FightEnv, o: {
   const begin = (ctx: StepCtx<S>) => {
     const c = env.combat, p = o.at(ctx);
     if (!c) { res = 'won'; actors = []; return; }
-    const b = c.brawl(p.x, p.z, o.n, { tough: o.tough });
+    const b = c.brawl(p.x, p.z, o.n, { tough: o.tough, boss: o.boss });
     if (!b.actors.length) { b.end(); return; }
     actors = b.actors;
     // only this brawl's outcome counts (one dropped for want of people resolves too: 'won', its people all gone)

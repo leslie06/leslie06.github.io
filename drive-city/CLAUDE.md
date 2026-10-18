@@ -2,7 +2,7 @@
 
 设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`。
 
-现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到五环（2026-10-16 从四环扩出去）、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，当前在做剧情战役（`campaign/`，第一至四章已完成，见 `docs/gta-plan.md` §5–8）和近战（`combat/`）。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
+现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到五环（2026-10-16 从四环扩出去）、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，剧情战役（`campaign/`）第一幕五章已完成（见 `docs/gta-plan.md` §5–9），近战在 `combat/`。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
 
 **详细笔记在 `docs/notes/`**（从本文件原样搬过去的：每个功能的设计、数字、坑和 probe 命令，带日期，「」里是用户的原话）。动某块之前先读对应文件；新的细节写到那里，不要写到这里——本文件只放每次会话都需要的内容。
 
@@ -45,6 +45,7 @@
 - **瞬移车辆或手动 tick 的 probe 测不出真实帧循环里的 bug。** 单行道尽头的游戏卡死、开局卡在「准备中」、别墅车道和大门卡车，用这种 probe 都没发现。玩家报告的问题，一律从标题画面开始跑真实帧循环来测（参考 `introlive.mjs`、`homefreeze.mjs`、`nightreal.mjs` 的写法）。`stepFixed` 不会跑 `update`，也不会调 `input.poll()`。
 - shot mode（`?shot=1`）会关掉很多系统（story、campaign、npc、life、standers、contacts、打卡、intro、延后加载的内容），要用得传对应参数（`?campaign=1`、`?contacts=1`、`?checkin=1`……）。
 - 普通开发服务器上跑长时间 probe 时不要改 `src/`（HMR 会在中途重载页面）；长测用 `FROZEN=1 npx vite --port 5198`，改代码或重建城市后要重启它。
+- **高架和桥面的碰撞体只在镜头附近才建**：任务里的脚本车（`ScriptCar`）开到离镜头几百米外的高架上会穿过桥面掉下去（第五章车队就这样掉到了桥下）。远处的任务车要放在地面路段，或者像 `m5.ts` 的 `deckGuard` 那样托住。
 - `world.contactPairsWith` 返回的是 broad-phase 配对：说"碰到了"之前要确认 manifold 里真有接触点。
 - `render/Lighting` 串联 `onBeforeCompile` 钩子，并在第一次打补丁时冻结材质的 program key——永远不要覆盖钩子（否则人群全部塌回绑定姿势），也不要事后改 shader define（会复用旧 program）。
 - 人爬楼梯靠的是 walk-only 坡道（`walkOnly`）：用盒子拼的台阶能站不能走；而人能走的坡车也能开，所以坡道的碰撞过滤去掉了 CAR，另外再配一个只挡车的块（`CarStops`）。有楼梯的地标必须传 `colliders`。详见 `landmarks.md` / `home-park.md`。
