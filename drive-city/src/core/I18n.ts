@@ -39,6 +39,7 @@ const EN = {
   'boot.engine': 'Starting the engine', 'boot.city': 'Downloading the map', 'boot.build': 'Laying out the city',
   'boot.tiles': 'Building the streets', 'boot.cars': 'Bringing in the cars', 'boot.world': 'Waking the city up', 'boot.ready': 'Ready',
   'title.note': 'Explore the streets, follow clues and choose your approach. Open Nearby on your phone to find an adventure; get out to investigate and meet people.',
+  'title.touch': 'Drag anywhere on the left half to steer · gas and brake at the bottom right · F to get in and out',
   'title.controls': 'CONTROLS',
 
   'ctl.drive': 'Accelerate / brake · reverse',
@@ -506,6 +507,7 @@ const ZH: Record<TKey, string> = {
   'boot.engine': '启动引擎', 'boot.city': '下载地图数据', 'boot.build': '布置城市',
   'boot.tiles': '搭建街区', 'boot.cars': '开来车辆', 'boot.world': '唤醒城市', 'boot.ready': '准备就绪',
   'title.note': '探索街头，查找线索，自己选择办法。打开手机里的「附近」找冒险，下车调查、与人交涉。',
+  'title.touch': '左半屏任意位置按住拖动转向 · 右下角油门、刹车 · F 上车下车',
   'title.controls': '操作',
 
   'ctl.drive': '油门 / 刹车 · 倒车',

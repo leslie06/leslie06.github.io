@@ -38,6 +38,13 @@ css(`
 .menu .progress{font:700 13px/1.9 ${F.ui};color:${C.paper};letter-spacing:.04em;white-space:pre-line}
 .menu .progress[hidden]{display:none}
 @media (max-width: 820px){.menu{grid-template-columns:1fr;align-items:end}.menu .card{display:none}}
+/* 手机（2026-10-18，埋点：手机到了标题却不进城）：851x393 这种横屏宽过 820，键盘操作卡片还在，782px 高的卡片把菜单
+   撑高，「进入城市」掉到屏幕下面，要在菜单里往下滑才看得到。触屏用不上键盘，矮屏放不下卡片，都不显示；触屏换成一行
+   触屏操作的提示（摇杆是隐形的，按下才出现）。 */
+.menu .touchhint{display:none;font:600 13px/1.5 ${F.ui};color:${C.yellow}}
+body.dc-touch .menu .touchhint{display:block}
+body.dc-touch .menu .card{display:none}
+body.dc-touch .menu{grid-template-columns:1fr}
 /* A phone held sideways is only ~390px tall: compact the title so the start button stays on screen. */
 @media (max-height: 470px){
   .menu{padding:12px 16px;gap:12px;align-items:center;overflow:auto}
@@ -45,6 +52,8 @@ css(`
   .menu h1{font-size:clamp(28px,7.5vh,52px)}
   .menu h1 .place{font-size:clamp(20px,5.5vh,38px);margin-top:2px}
   .menu .note{display:none}
+  .menu .card{display:none}
+  .menu{grid-template-columns:1fr}
   .menu .sub{font-size:14px}
   .menu .go{padding:11px 22px;font-size:15px}
 }
@@ -87,6 +96,7 @@ export class Menu {
     h1.appendChild(L('title.name'));
     this.subEl = el('div', 'sub', left); this.subEl.appendChild(L('title.sub'));
     this.noteEl = el('div', 'note', left); this.noteEl.appendChild(L('title.note'));
+    el('div', 'touchhint', left).appendChild(L('title.touch'));
     this.pauseHint = el('div', 'pausehint', left); this.pauseHint.appendChild(L('pause.hint'));
     this.progressEl = el('div', 'progress', left);
     this.progressEl.hidden = true;
