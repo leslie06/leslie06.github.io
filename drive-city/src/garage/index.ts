@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { project } from '../city/Geo';
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
-import type { CarLook, HudApi, MissionApi, PlayerApi, TrafficCars, VehicleApi } from '../game/Contracts';
+import type { CarLook, HudApi, MissionApi, NavApi, PlayerApi, TrafficCars, VehicleApi, WantedApi } from '../game/Contracts';
+import { CG, groups } from '../core/Physics';
+import type { TrafficApi } from '../traffic';
 import type { DamageApi } from '../damage';
 import type { UiApi } from '../ui';
 import { ANCHOR, DRIVE, GARAGE, PARK_AT } from '../home/Layout';
@@ -31,9 +33,11 @@ export interface GarageApi extends System {
   readonly profile: Profile | null;
   /** Open the garage screen now (the intro does, at the end of its drive). */
   show(): void;
+  /** Open the 车行 on the phone: a luxury car delivered to the kerb beside you. */
+  dealer(): void;
   /** Give the player the car they are sitting in as theirs, with these upgrades (the intro's getaway car). */
   adopt(levels: { engine: number; tyres: number; nitro: number }): void;
-  debug: { buy(item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam' | 'transfer' | `car:${LuxuryBody}`, paint?: string): boolean };
+  debug: { buy(item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam' | 'transfer' | `car:${LuxuryBody}`, paint?: string): boolean; order(body: LuxuryBody): boolean };
 }
 
 /**
@@ -53,6 +57,9 @@ export async function install(engine: Engine): Promise<void> {
   let profile = readProfile();
   let owned: Vehicle | null = null;
   let open = false, dismissed = false, impoundNext = false;
+  /** The phone's 车行 is up (the same screen, its dealer page), and the car it brought, until you are in it. */
+  let dealerOpen = false;
+  let delivered: Vehicle | null = null;
 
   const vehicle = () => engine.get<VehicleApi>('vehicle')!;
   /** 大刘's discount and 王队's word on the fine (contacts/). */
@@ -151,6 +158,77 @@ export async function install(engine: Engine): Promise<void> {
     return true;
   };
 
+  /**
+   * Where a delivered car can stop: the kerb (or the edge of the cars parked along it) of an ordinary street 7-30 m from
+   * you, on the flat, nothing standing there (a car, a lamp post, a parked car's box), as near 12 m as it gets; ahead of
+   * you before behind. Null when there is none (an expressway, a bridge, a courtyard).
+   */
+  const NO_DELIVERY = new Set(['motorway', 'motorway_link', 'trunk_link', 'service']);
+  const spot = (): { x: number; z: number; yaw: number } | null => {
+    const tr = engine.get<TrafficApi>('traffic');
+    if (!tr) return null;
+    const g = tr.graph, me = pl.position, v = vehicle();
+    const fwd = pl.mode === 'driving' ? v.car.fwd : engine.camera.getWorldDirection(new THREE.Vector3());
+    const { R, world } = engine.physics;
+    const box = new R.Cuboid(1.05, 0.6, 2.5);
+    const at = { x: 0, z: 0, dx: 0, dz: 0 };
+    let best: { x: number; z: number; yaw: number } | null = null, bestScore = Infinity;
+    const others = tr.cars();
+    for (const id of g.near(me.x, me.z, 45)) {
+      const l = g.links[id];
+      if (l.len < 12 || l.hmax > 0.3 || NO_DELIVERY.has(l.cls)) continue;
+      for (let s0 = 4; s0 < l.len - 4; s0 += 3) {
+        g.at(l, s0, -(l.kerbR - 1.15), at);
+        const d = Math.hypot(at.x - me.x, at.z - me.z);
+        if (d < 7 || d > 30) continue;
+        const behind = ((at.x - me.x) * fwd.x + (at.z - me.z) * fwd.z) < 0;
+        const score = Math.abs(d - 12) + (behind ? 6 : 0);
+        if (score >= bestScore) continue;
+        if (others.some((c) => Math.hypot(c.pos.x - at.x, c.pos.z - at.z) < 6) || Math.hypot(v.car.pos.x - at.x, v.car.pos.z - at.z) < 6) continue;
+        const yaw = Math.atan2(at.dx, at.dz);
+        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+        if (world.intersectionWithShape({ x: at.x, y: 0.95, z: at.z }, { x: q.x, y: q.y, z: q.z, w: q.w }, box, undefined, groups(CG.CAR, CG.ALL))) continue;
+        best = { x: at.x, z: at.z, yaw }; bestScore = score;
+      }
+    }
+    return best;
+  };
+
+  /**
+   * The phone's 车行 (2026-10-19, 「现在买车只能回家在车库买吗？感觉不方便」): the car is brought new to the kerb beside
+   * you, as if bought in the garage - your car, saved, the one you had yours no more (its upgrades gone) - and waits there
+   * with a flashing blip until you get in. Not while wanted, nor where nothing can stop.
+   */
+  const order = (body: LuxuryBody): boolean => {
+    const d = DEALER.find((x) => x.body === body)!;
+    if ((profile?.body === body && !profile.impounded) || cashOf() < d.price) return false;
+    if ((engine.get<WantedApi>('wanted')?.level ?? 0) > 0) { toast(t('garage.dealerWanted')); return false; }
+    if (!bodySettled(body)) { void readyBodies([body]); toast(t('garage.carLoading')); return false; }
+    const at = spot();
+    if (!at) { toast(t('garage.noSpot')); return false; }
+    pay(d.price);
+    const v = vehicle();
+    const car = new Vehicle(engine.physics, SPEC_OF[body], { x: 0, y: -600, z: 0 }, 0);
+    car.reset({ x: at.x, y: 0.03 + car.spec.wheelRadius + 0.1, z: at.z }, at.yaw);
+    const paint = new THREE.Color(d.paint);
+    if (owned && owned !== v.car) stash(owned);
+    else if (owned) stock(owned);
+    if (delivered && delivered !== v.car && delivered !== owned) stash(delivered);
+    owned = car;
+    profile = { body, upper: d.paint, lower: d.paint, taxi: false, engine: 0, tyres: 0, nitro: 0, impounded: false };
+    apply(car, profile);
+    save();
+    engine.get<TrafficCars>('traffic')?.parkCar(car, { upper: paint, lower: paint.clone(), taxi: false, parked: true, body });
+    delivered = car;
+    // which way, from where you look
+    const me = pl.position, cam = engine.camera.getWorldDirection(new THREE.Vector3());
+    const rx = at.x - me.x, rz = at.z - me.z, m = Math.round(Math.hypot(rx, rz));
+    const ahead = (rx * cam.x + rz * cam.z) / Math.max(1, m), side = (rx * cam.z - rz * cam.x) / Math.max(1, m);
+    const where = Math.abs(ahead) >= Math.abs(side) ? (ahead > 0 ? 'ahead' : 'behind') : (side > 0 ? 'left' : 'right');
+    toast(t('garage.delivered', { car: t(`car.${body}`), where: t(`garage.where.${where}` as 'garage.where.ahead'), m }));
+    return true;
+  };
+
   const buy = (item: 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam' | 'transfer' | `car:${LuxuryBody}`, paint?: string): boolean => {
     const v = vehicle();
     if (isCarItem(item)) {
@@ -221,8 +299,37 @@ export async function install(engine: Engine): Promise<void> {
     menu.hide();
     engine.get<UiApi>('ui')?.overlay(false);
   };
-  menu.onBuy = (item, paint) => { buy(item, paint); };
-  menu.onClose = hide;
+  const dealerView = () => ({ cash: cashOf(), ownBody: profile?.body ?? null, impounded: !!profile?.impounded, wanted: (engine.get<WantedApi>('wanted')?.level ?? 0) > 0 });
+  const dealer = () => {
+    if (open || dealerOpen) return;
+    const ui = engine.get<UiApi>('ui');
+    if (!ui || ui.state !== 'playing') return;
+    dealerOpen = true;
+    ui.overlay(true); engine.paused = true;
+    engine.events.emit('game:pause', { paused: true });
+    menu.renderDealer(dealerView());
+    menu.show();
+  };
+  const closeDealer = () => {
+    if (!dealerOpen) return;
+    dealerOpen = false;
+    menu.hide();
+    engine.paused = false;
+    engine.events.emit('game:pause', { paused: false });
+    engine.get<UiApi>('ui')?.overlay(false);
+  };
+  menu.onBuy = (item, paint) => {
+    if (!dealerOpen) { buy(item, paint); return; }
+    // ordered: back to the street to fetch it
+    if (isCarItem(item) && order(item.slice(4) as LuxuryBody)) closeDealer(); else menu.renderDealer(dealerView());
+  };
+  menu.onClose = () => { if (dealerOpen) closeDealer(); else hide(); };
+  // the delivered car flashes on the map until you are in it
+  engine.get<NavApi>('nav')?.addBlips(() => {
+    if (!delivered) return [];
+    if (vehicle().car === delivered) { delivered = null; return []; }
+    return [{ kind: 'car' as const, x: delivered.pos.x, z: delivered.pos.z, flash: true, label: t(`car.${profile?.body ?? 'coupe'}` as 'car.coupe') }];
+  });
 
   // A new session: your car, rebuilt from the save, where the taxi would have started.
   engine.events.on('game:start', () => {
@@ -271,6 +378,7 @@ export async function install(engine: Engine): Promise<void> {
     get owned() { return owned; },
     get profile() { return profile; },
     show,
+    dealer,
     adopt(levels) {
       own();
       profile!.engine = levels.engine; profile!.tyres = levels.tyres; profile!.nitro = levels.nitro;
@@ -278,7 +386,7 @@ export async function install(engine: Engine): Promise<void> {
       owned!.nitroFill = owned!.tune.nitro > 0 ? 1 : 0;
       save();
     },
-    debug: { buy },
+    debug: { buy, order },
     fixedUpdate() {
       const v = vehicle(), car = v.car;
       const inside = pl.mode === 'driving' && v.occupied && inGarage(car.pos.x, car.pos.z);
@@ -286,6 +394,8 @@ export async function install(engine: Engine): Promise<void> {
       if (!open && !dismissed && car.speed < 1.2) show();
     },
     update() {
+      // Esc closes the phone's 车行 (used up here, or the ui system would pause)
+      if (dealerOpen && engine.input.state.pausePressed) { engine.input.state.pausePressed = false; closeDealer(); }
       // Closed in the garage, stopped: F (the big button on a phone) opens it again (2026-10-19, 「关闭之后再没有按钮可以
       // 打开这个页面了」: it only opened by itself on the way in, so once closed you had to drive out and back)
       if (!open && dismissed) {

@@ -142,6 +142,27 @@ export class GarageMenu {
     leave.addEventListener('click', () => this.onClose());
   }
 
+  /**
+   * The 车行 on the phone (2026-10-19, 「现在买车只能回家在车库买吗？感觉不方便」): the luxury cars only, delivered to the
+   * kerb beside you. `wanted`: no delivery while the police are after you.
+   */
+  renderDealer(v: { cash: number; ownBody: string | null; impounded: boolean; wanted: boolean }): void {
+    const p = this.panel;
+    p.textContent = '';
+    const top = el('div', 'top', p);
+    el('h2', '', top).textContent = t('garage.dealerTitle');
+    el('div', 'cash', top).textContent = `¥${v.cash.toLocaleString('en-US')}`;
+    el('div', 'sub', p).textContent = t('garage.dealerSub');
+    if (v.wanted) el('div', 'note', p).textContent = t('garage.dealerWanted');
+    for (const d of DEALER) {
+      const have = v.ownBody === d.body && !v.impounded;
+      this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }), have ? undefined : d.price, !have && !v.wanted && v.cash >= d.price, () => this.onBuy(`car:${d.body}`), have ? t('garage.carHave') : t('garage.order'));
+    }
+    const leave = el('button', 'leave', p);
+    leave.textContent = t('garage.dealerClose');
+    leave.addEventListener('click', () => this.onClose());
+  }
+
   private row(parent: HTMLElement, name: string, what: string, price: number | undefined, can: boolean, go: () => void, label = t('garage.buy')): void {
     const r = el('div', 'row', parent);
     el('div', 'name', r).textContent = name;

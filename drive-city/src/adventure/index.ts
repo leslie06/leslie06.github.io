@@ -286,6 +286,8 @@ export async function install(engine: Engine): Promise<void> {
       state.tracking = false; nav.clearTarget('mission'); persist();
     } });
     a.push({ label: t('adv.messages'), run: () => engine.get<StoryApi>('story')?.phone.toggle() });
+    // the 车行 delivers wherever you are (garage/, 2026-10-19)
+    a.push({ label: t('garage.dealerApp'), run: () => engine.get<{ name: string; dealer(): void }>('garage')?.dealer() });
     return a;
   };
   const nearbyCard = () => {
