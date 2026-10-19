@@ -11,6 +11,7 @@ import { createCityMaterials } from './Materials';
 import { Routes } from './Routes';
 import { findDeadEnds } from './DeadEnds';
 import { carStops } from './landmarks/CarStops';
+import { glbTextureCap } from './landmarks/glb/Glb';
 import { placeDeadEndSigns } from './visual/DeadEndSigns';
 import { placeGuideSigns } from './visual/GuideSigns';
 import { decodeRail, placeRailways, railZones, type RailFileV2 } from './visual/Railways';
@@ -55,13 +56,18 @@ async function loadLandmarks(): Promise<LandmarkDef[]> {
  * instead of 48 (`.scratch/boottime.mjs`).
  */
 function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], gate: Promise<void>, from: [number, number]): { footprints: number[][]; areas: { id: string; rings: number[][]; height: number }[]; clear: number[][]; trees: number[]; loaded: Promise<void> } {
+  // The glb landmarks' pictures (glb/Glb.ts): a phone keeps them small (512, the night windows 256), a computer as its tier
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  glbTextureCap.max = touch ? 512 : engine.quality.textureRes;
+  glbTextureCap.night = touch ? 256 : glbTextureCap.max;
+  glbTextureCap.freeGeometry = touch;
   /** ?nostone skips the walkable stone colliders (for measuring what they cost). */
   const params = new URLSearchParams(location.search);
   const noStone = params.has('nostone');
   if (params.get('glb') === '0') defs = defs.filter((d) => !d.load);
   const { R, world } = engine.physics;
   const footprints: number[][] = [], clear: number[][] = [], trees: number[] = [], areas: { id: string; rings: number[][]; height: number }[] = [];
-  const jobs: { d: number; run: () => Promise<void> }[] = [];
+  const jobs: { x: number; z: number; d: number; run: () => Promise<void> }[] = [];
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
   /** Same world geometry, but invisible to cars: see ColliderSpec.walkOnly. */
@@ -138,7 +144,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
     if (def.load) {
       const placeholder = model.group, load = def.load;
       jobs.push({
-        d: Math.hypot(x - from[0], z - from[1]),
+        x, z, d: Math.hypot(x - from[0], z - from[1]),
         run: () => load(env).then((m) => {
           engine.get<RenderSystem>('render')?.prepare?.(m.group);
           engine.scene.remove(placeholder);
@@ -148,8 +154,30 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
     }
   }
   jobs.sort((a, b) => a.d - b.d);
-  const worker = async () => { for (let j = jobs.shift(); j; j = jobs.shift()) await j.run(); };
-  const loaded = gate.then(() => Promise.all([worker(), worker()])).then(() => {});
+  // A phone loads only the landmarks within `reach` of the camera, the nearest first, and the rest as it comes within
+  // reach (checked every 2 s); a computer all of them, nearest the spawn first. 2026-10-19 (an iPhone's crashed tab): all
+  // 69 came in a minute into every session, ~150 MB of geometry and most of a GB of pictures, wherever you were.
+  // `loaded`: everything within reach is in (everything, on a computer).
+  const reach = touch ? 2200 : Infinity;
+  const next = () => {
+    const c = engine.camera.position;
+    let bi = -1, bd = Infinity;
+    if (!Number.isFinite(reach)) bi = jobs.length ? 0 : -1;
+    else jobs.forEach((j, i) => { const d = Math.hypot(j.x - c.x, j.z - c.z); if (d < bd) { bd = d; bi = i; } });
+    return bi < 0 || bd > reach ? null : jobs.splice(bi, 1)[0];
+  };
+  let settle: () => void = () => {};
+  const settled = new Promise<void>((r) => { settle = r; });
+  const worker = async () => {
+    while (jobs.length) {
+      const j = next();
+      if (j) { await j.run(); continue; }
+      settle();
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    settle();
+  };
+  const loaded = gate.then(() => { void worker(); void worker(); return settled; });
   return { footprints, areas, clear, trees, loaded };
 }
 

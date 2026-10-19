@@ -17,6 +17,9 @@ import type { UiApi } from '../ui';
  *                               first minute of play (median and slowest tenth), WebGL context lost
  *   cpu lite                    第一分钟每帧 JS 时间的中位数（ms，`engine.cpuMs`：接近帧间隔就是 CPU 不够），省电档打开的时间
  *                               （开局就是省电档的记 0；2026-10-18）
+ *   died                        上一次会话是玩着玩着没了（页面被系统杀掉，多半是内存不够）：当时玩了多少秒（2026-10-19，iPhone
+ *                               「玩了一分钟就退到这个页面了」）。玩的时候每 5 秒在本地记一笔，正常离开或切到后台就擦掉；下次打开还在，
+ *                               就是没来得及擦——被杀了
  */
 type Stat = Record<string, number | string>;
 const S = (): Stat | null => (typeof window !== 'undefined' ? (window as unknown as { __stat?: Stat }).__stat ?? null : null);
@@ -74,6 +77,17 @@ export function install(engine: Engine): void {
   ev.on('trial:start', () => stat.mark('race'));
   ev.on('renderer:contextlost', () => stat.mark('lost'));
 
+  // Killed last time? (see `died` above) Then keep a mark while playing: every 5 s, wiped on leaving or going to the background.
+  const ALIVE = 'drivecity.alive.v1';
+  try {
+    const prev = localStorage.getItem(ALIVE);
+    if (prev) { const p = Number(JSON.parse(prev).p); if (Number.isFinite(p)) stat.set('died', p); localStorage.removeItem(ALIVE); }
+  } catch { /* private mode */ }
+  const wipe = () => { try { localStorage.removeItem(ALIVE); } catch { /* private mode */ } };
+  addEventListener('pagehide', wipe);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) wipe(); });
+  let aliveT = 0;
+
   // Wall-clock time, not the engine's dt: dt is capped per frame, so on a slow device game time runs behind the
   // clock (minutes of play would come late) and 1/dt would read a 10 fps phone as 20.
   let played = 0, poll = 0, last = performance.now();
@@ -99,6 +113,8 @@ export function install(engine: Engine): void {
         if (cpu.length) { cpu.sort((x, y) => x - y); stat.set('cpu', Math.round(cpu[cpu.length >> 1] * 10) / 10); }
         fps.length = 0; cpu.length = 0;
       }
+      aliveT -= dt;
+      if (aliveT <= 0) { aliveT = 5; try { localStorage.setItem(ALIVE, JSON.stringify({ p: Math.round(played) })); } catch { /* private mode */ } }
       if (played >= 180) stat.mark('p3m');
       if (played >= 600) stat.mark('p10m');
       if (played >= 1800) stat.mark('p30m');

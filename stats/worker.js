@@ -861,7 +861,7 @@ async function load(d) {
 }
 let funnelData = null, funnelSeg = 'all';
 const ACTS = [['fare', '接过乘客'], ['adv', '开始小飞龙的冒险'], ['call', '主线来电'], ['callgo', '来电时选「这就过去」'], ['ch', '开始主线章节'], ['chpass', '通过一章主线'], ['foot', '下车走路'],
-  ['jack', '抢车'], ['fight', '打架'], ['wanted', '被通缉'], ['busted', '被捕'], ['map', '打开大地图'], ['race', '比赛 / 计时赛'], ['acct', '登录账号']];
+  ['jack', '抢车'], ['fight', '打架'], ['wanted', '被通缉'], ['busted', '被捕'], ['map', '打开大地图'], ['race', '比赛 / 计时赛'], ['acct', '登录账号'], ['died', '上次玩着被系统杀掉（多半内存不够）']];
 function drawFunnel() {
   const f = funnelData, g = f && f.segs[funnelSeg];
   document.getElementById('fempty').hidden = !!(g && g.n);

@@ -117,7 +117,13 @@ const cityFiles = new Map<string, Promise<unknown>>();
  * A file of public/city, fetched once: the city and the far ground's road mask (Materials.ts) both read
  * network.json and manifest.json, and each fetched its own 1.6 MB copy at boot. A failed fetch is
  * forgotten, so a retry fetches again. Callers share the parsed object: treat it as read-only.
+ * Kept only `KEEP_MS` after it arrives (2026-10-19, an iPhone's crashed tab): the boot's readers have it by then, and
+ * held for good the raw files - the network's pack beside the network unpacked from it, the skyline's, the signs' -
+ * stayed in memory for the whole session after the city had built its own structures from them. Asked again later,
+ * a file is fetched again.
  */
+const KEEP_MS = 60000;
+const keepAwhile = (key: string, p: Promise<unknown>) => { p.then(() => setTimeout(() => { if (cityFiles.get(key) === p) cityFiles.delete(key); }, KEEP_MS), () => {}); };
 /**
  * The drivable network: network.pack.json (NetPack.ts, half the bytes on the wire) unpacked, else
  * network.json. Cached like any city file, so the city and the far road mask share one copy.
@@ -128,6 +134,7 @@ export function loadNetwork(): Promise<Network> {
     p = loadCity<NetworkPack>('network.pack.json').then(unpackNetwork, () => loadCity<Network>('network.json'));
     p.catch(() => cityFiles.delete('network'));
     cityFiles.set('network', p);
+    keepAwhile('network', p);
   }
   return p;
 }
@@ -142,6 +149,7 @@ export function loadCity<T>(file: string): Promise<T> {
     })();
     p.catch(() => cityFiles.delete(file));
     cityFiles.set(file, p);
+    keepAwhile(file, p);
   }
   return p as Promise<T>;
 }

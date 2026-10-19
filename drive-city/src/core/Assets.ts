@@ -175,7 +175,11 @@ export class Assets {
     const img = t.image as ImageSource | null;
     const isBitmap = typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap;
     const isCanvas = typeof HTMLCanvasElement !== 'undefined' && img instanceof HTMLCanvasElement;
-    if (!img || (!isBitmap && !isCanvas)) return;
+    // An <img> too (2026-10-19): Safari's GLTFLoader gives the landmarks' pictures as <img>, which were uploaded and kept,
+    // every picture twice on an iPhone (its decoded copy in the page, its texture on the GPU)
+    // (only those: a blob: URL, a glb's own picture - a page's own <img> textures may be uploaded again)
+    const isImage = typeof HTMLImageElement !== 'undefined' && img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0 && img.src.startsWith('blob:');
+    if (!img || (!isBitmap && !isCanvas && !isImage)) return;
     if (isCanvas && (img.width > this.maxCanvasSize || img.height > this.maxCanvasSize)) {
       const small = shrinkCanvas(img, img.width, img.height, this.maxCanvasSize);
       if (small) {
@@ -191,6 +195,12 @@ export class Assets {
     const src = t.image as ImageSource;
     if (src instanceof ImageBitmap) { this.stats.releasedPixels += src.width * src.height; src.close(); }
     else if (src instanceof HTMLCanvasElement) { this.stats.releasedPixels += src.width * src.height; src.width = src.height = 0; }
+    else if (src instanceof HTMLImageElement) {
+      // nothing to close: let go of it and of the blob URL the loader made, leave the size for anything that reads it
+      this.stats.releasedPixels += src.naturalWidth * src.naturalHeight;
+      URL.revokeObjectURL(src.src);
+      (t as unknown as { image: { width: number; height: number } }).image = { width: src.naturalWidth, height: src.naturalHeight };
+    }
     this.released.add(t.source);
     this.stats.released++;
   }

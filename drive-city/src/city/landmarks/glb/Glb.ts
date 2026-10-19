@@ -354,6 +354,61 @@ export function buildGlbModel(scene: THREE.Object3D, env: EnvUniforms, meta: Glb
 
 let loader: GLTFLoader | null = null;
 
+/**
+ * The largest edge a landmark's texture keeps (city/index.ts sets it from the device before the landmarks load), and the
+ * night atlases' (the lit windows, half the pictures and only seen after dark). 2026-10-19, 「我手机玩了一分钟就退到这个
+ * 页面了」(an iPhone's crashed-tab page): the 69 landmarks' 374 pictures came to ~1.1 GB decoded with their mipmaps, at
+ * full size on every device - the GLTFLoader's pictures never went through Assets' tier cap - and iOS kills a page at
+ * ~1.5 GB. Of 50 iPhone sessions one had played a minute.
+ */
+export const glbTextureCap = { max: Infinity, night: Infinity, freeGeometry: false };
+
+/**
+ * With `glbTextureCap.freeGeometry` (a phone): once a landmark's geometry is on the GPU its copy in the page goes - 146 MB
+ * for the city's landmarks (2026-10-19). Its bounds are worked out first (culling and the box queries read those); nothing
+ * reads a landmark's vertices after it is built (no three.js raycasts; a lost context asks for a reload).
+ */
+function freeAfterUpload(root: THREE.Object3D): void {
+  const drop = function (this: THREE.BufferAttribute) { (this as unknown as { array: ArrayLike<number> }).array = new (this.array.constructor as Float32ArrayConstructor)(0); };
+  const seen = new Set<THREE.BufferGeometry>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.geometry || seen.has(m.geometry)) return;
+    seen.add(m.geometry);
+    const g = m.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    if ((m as THREE.InstancedMesh).isInstancedMesh) { const im = m as THREE.InstancedMesh; if (!im.boundingSphere) im.computeBoundingSphere(); if (!im.boundingBox) im.computeBoundingBox(); }
+    for (const a of Object.values(g.attributes)) if ((a as THREE.BufferAttribute).isBufferAttribute) (a as THREE.BufferAttribute).onUpload(drop);
+    if (g.index) g.index.onUpload(drop);
+  });
+}
+
+/** Every picture of a loaded glb within the cap: resized by the browser's decoder, the full-size one let go. */
+async function capTextures(root: THREE.Object3D): Promise<void> {
+  if (!Number.isFinite(glbTextureCap.max) || typeof createImageBitmap !== 'function') return;
+  const seen = new Set<THREE.Texture>();
+  root.traverse((o) => {
+    const mats = (o as THREE.Mesh).material;
+    for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) for (const v of Object.values(m)) if (v instanceof THREE.Texture) seen.add(v);
+  });
+  await Promise.all([...seen].map(async (t) => {
+    const img = t.image as HTMLImageElement | ImageBitmap | null;
+    if (!img) return;
+    const w0 = (img as HTMLImageElement).naturalWidth || img.width, h0 = (img as HTMLImageElement).naturalHeight || img.height;
+    const max = /night/i.test(t.name) ? glbTextureCap.night : glbTextureCap.max;
+    if (!(w0 > max || h0 > max)) return;
+    const k = max / Math.max(w0, h0);
+    try {
+      // the picture's own orientation and alpha: the glTF textures are not flipped (flipY false) whichever path loaded them
+      const small = await createImageBitmap(img, { resizeWidth: Math.max(1, Math.round(w0 * k)), resizeHeight: Math.max(1, Math.round(h0 * k)), resizeQuality: 'high', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+      if (img instanceof ImageBitmap) img.close();
+      (t as unknown as { image: ImageBitmap }).image = small;
+      t.needsUpdate = true;
+    } catch { /* keep the full-size one */ }
+  }));
+}
+
 /** The LandmarkDef for one imported glb: the meta at boot, the model when it has loaded. */
 export function glbLandmark(meta: GlbMeta): LandmarkDef {
   const url = `${import.meta.env.BASE_URL}models/landmarks/${meta.file}?v=${meta.version}`;
@@ -368,7 +423,10 @@ export function glbLandmark(meta: GlbMeta): LandmarkDef {
       loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
       const l = loader;
       const gltf = await retry(`landmark ${meta.id}`, () => l.loadAsync(url));
-      return buildGlbModel(gltf.scene, env, meta);
+      await capTextures(gltf.scene);
+      const model = buildGlbModel(gltf.scene, env, meta);
+      if (glbTextureCap.freeGeometry) freeAfterUpload(model.group);
+      return model;
     },
   };
 }
