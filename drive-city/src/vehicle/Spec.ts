@@ -108,6 +108,13 @@ export interface VehicleSpec {
   brakes: { force: number; frontBias: number };
   aero: { drag: number; downforce: number };
   assists: {
+    /**
+     * How much traction control holds the drive to the grip cornering leaves over while the car grips (1, the default:
+     * full throttle mid-corner pushes wide). Under 1 the rest of the drive may go past it once the wheel is turned (from
+     * 0.3 to 0.8 of lock; straight, a launch still hooks up), so the throttle can step the rear out: 赤骏's 0.55
+     * (2026-10-19, 「调一下手感」: a mid-engined supercar should slide on the throttle).
+     */
+    tcMax?: number;
     /** Yaw damping once the body slip passes `spinAngle`, so an over-rotated slide stops short of a spin. */
     spinGuard: number;
     spinAngle: number;
@@ -274,15 +281,25 @@ export const SUV: VehicleSpec = {
 /**
  * 跑车 (2026-10-18, 「车太次了 没有豪车」): a two-door sports coupe (911 / AMG GT class, ~450 hp, rear drive) - low,
  * wide, stiff and grippy, twice the taxi's torque, a 285 km/h limiter. The one to buy when the taxi feels slow.
+ * Since 2026-10-19 it wears 赤骏, a mid-engined berlinetta (scripts/blender/vehicles/ai_car.py, from the user's AI
+ * model): the boxes follow that body - 4.55 m, its roof 0.75 m over the hubs (the old cabin box stood 0.23 m above it).
+ * And drives like one (「调一下手感」, .scratch/chijun/feel.test.ts): ~760 Nm and seven gears to 8500 rpm, 100 kg lighter
+ * with the weight rearward, stickier tyres (0-100 4.6 -> 3.6 s, 0-200 11.4 -> 7.8 s, 285 -> 320 km/h, 1.22 -> 1.39 g,
+ * 100-0 29 -> 25 m), more downforce, and a loose traction control once the wheel is turned (`tcMax`): full throttle at
+ * full lock from 45 km/h steps the rear out ~27 deg, and letting go it comes back straight in 1.3 s. Then 30% of the
+ * drive to the front (「起步太慢，破百得好几秒」: rear drive alone held the launch to ~0.8 g by grip, the rev limiter of the
+ * launch at 4500 all through first gear): 0-100 3.6 -> 2.3 s, 0-200 6.4 s; it still slides on the throttle (~35 deg),
+ * a handbrake turn rotates it a little less (103 -> 81 deg, the taxi 92). More air damping:
+ * the quicker car flew further off the 80 km/h ramp and landed nose-high (min up 0.78, the test wants 0.8; now 0.83).
  */
 export const COUPE: VehicleSpec = {
   name: 'coupe',
-  mass: 1550,
-  com: [0, 0.0, 0.05],
-  inertia: [2500, 2400, 620],
+  mass: 1450,
+  com: [0, 0.0, -0.08],
+  inertia: [2700, 2400, 620],
   chassis: [
-    { half: [0.9, 0.31, 2.2], at: [0, 0.14, 0.02], round: 0.1 },
-    { half: [0.7, 0.2, 0.85], at: [0, 0.78, -0.45], round: 0.12 },
+    { half: [0.92, 0.3, 2.22], at: [0, 0.13, 0.08], round: 0.1 },
+    { half: [0.62, 0.16, 0.95], at: [0, 0.58, -0.05], round: 0.12 },
   ],
   wheels: [
     { x: 0.8, z: 1.4, front: true },
@@ -298,19 +315,19 @@ export const COUPE: VehicleSpec = {
     bump: 2600, rebound: 4400, travel: 0.17,
     antiRollFront: 26000, antiRollRear: 20000,
   },
-  tire: { ...TAXI.tire, muLat: 1.25, muLong: 1.3, forceHeight: 0.18 },
-  steer: { ...TAXI.steer, lock: 0.7, rate: 3.6 },
+  tire: { ...TAXI.tire, muLat: 1.3, muLong: 1.5, forceHeight: 0.18 },
+  steer: { ...TAXI.steer, lock: 0.7, rate: 4.2 },
   engine: {
-    idle: 900, redline: 7800,
-    torque: [[1000, 330], [2500, 520], [4000, 560], [5500, 560], [7000, 500], [7800, 450]],
-    gears: [3.1, 2.1, 1.55, 1.22, 1.0, 0.82], reverse: 3.2, final: 3.8, efficiency: 0.9,
-    shiftUp: 7400, shiftDown: 3200, shiftTime: 0.1,
-    frontShare: 0, engineBrake: 0.3,
-    limiterKmh: 285, reverseKmh: 35, launchRpm: 4000,
+    idle: 1000, redline: 8500,
+    torque: [[1000, 420], [2500, 650], [4000, 730], [5500, 760], [7000, 720], [8500, 620]],
+    gears: [3.0, 2.15, 1.65, 1.32, 1.08, 0.9, 0.76], reverse: 3.2, final: 3.7, efficiency: 0.9,
+    shiftUp: 8100, shiftDown: 3600, shiftTime: 0.08,
+    frontShare: 0.3, engineBrake: 0.3,
+    limiterKmh: 320, reverseKmh: 35, launchRpm: 4500,
   },
-  brakes: { force: 24000, frontBias: 0.64 },
-  aero: { drag: 0.34, downforce: 1.6 },
-  assists: { ...TAXI.assists, donut: { ...TAXI.assists.donut } },
+  brakes: { force: 27000, frontBias: 0.62 },
+  aero: { drag: 0.31, downforce: 2.0 },
+  assists: { ...TAXI.assists, tcMax: 0.55, airDamping: 2.4, donut: { ...TAXI.assists.donut } },
 };
 
 /**

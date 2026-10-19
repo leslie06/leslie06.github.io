@@ -887,7 +887,9 @@ function buildModelBody(type: CarModelType, spec: VehicleSpec, opts: BodyOptions
   const bottom = y0 / 1000;
   m.shade = (_x, y) => 0.6 + 0.4 * smooth(bottom, bottom + 0.32, y);
   addModel(m, hi, surfs);
-  if (opts.doorText) addModel(m, model[opts.doorTextHigh ? 'doorHigh' : 'doorLow'], surfs);
+  // a model without the lettering strips (赤骏, made from an AI model by ai_car.py) wears none
+  const door = opts.doorText ? model[opts.doorTextHigh ? 'doorHigh' : 'doorLow'] : undefined;
+  if (door) addModel(m, door, surfs);
   m.shade = null;
   /** The roof's height on the centre line at z (the highest full-detail paint vertex near it: `lo` is too sparse). */
   const roofAt = (z: number) => {

@@ -234,7 +234,9 @@ BUS_TOP = [(0.96, 0.0), (0.93, 0.45), (0.87, 0.75), (0.79, 0.9), (0.68, 0.97), (
 
 def coupe():
     """跑车 (2026-10-18, 「车太次了 没有豪车」): a low two-door fastback - long bonnet, the cowl far back, a raked screen,
-    one long door and a small quarter light, wide rear haunches over big wheels, slim lamps and a ducktail on the deck."""
+    one long door and a small quarter light, wide rear haunches over big wheels, slim lamps and a ducktail on the deck.
+    No longer what the game wears: since 2026-10-19 public/models/vehicles/coupe.bin is 赤骏, made by ai_car.py from the
+    user's AI model (art/vehicles/ferrari-ai.glb). Building this type writes .scratch/blender/coupe.glb only."""
     zD, zRH, zH, zC = -1.55, -0.85, -0.15, 0.6
     return car(
         -2.25, 2.28, zD, zRH, zH, zC, [(-0.82, zC), (-1.3, -0.9)], [(-0.9, -0.82)],

@@ -300,7 +300,9 @@ export class Vehicle {
     // walking pace the body slip is ~20-30° by geometry alone while the tyres are gripping, and
     // treating that as a slide switched traction control off and let the throttle spin the rear.
     const rearSlip = Math.max(Math.abs(this.wheels[2].slipAngle), Math.abs(this.wheels[3].slipAngle));
-    let tc = this.tcOff <= 0 ? 1 - smoothstep(0.1, 0.22, rearSlip) : 0;
+    // A loose traction control (`assists.tcMax`) lets go only as the wheel turns: a launch in a straight line still hooks up.
+    const tcHold = 1 - (1 - (s.assists.tcMax ?? 1)) * smoothstep(0.3, 0.8, Math.abs(c.steer));
+    let tc = this.tcOff <= 0 ? tcHold * (1 - smoothstep(0.1, 0.22, rearSlip)) : 0;
     // Full lock + full throttle from a standstill is asking for a donut: let the rear go. Only
     // armed when the request starts below walking pace, or every slow full-lock corner (the yard's
     // right-angle turn at 15 km/h) would spin.

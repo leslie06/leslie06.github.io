@@ -10,7 +10,7 @@ import type { Vehicle } from './Vehicle';
 /**
  * Body lab (dev only, `/src/vehicle/lab.html`): the car models on a plain lot, without the city,
  * for fast iteration on shapes and materials. `?view=hero|rear|side|chase|top|lineup|lineupRear`,
- * `?type=sedan`, `?night=1`, `?livery=taxi|police|private`. Sets `window.__labReady` when drawn.
+ * `?type=sedan`, `?night=1`, `?livery=taxi|police|private` (`&paint=%23c41e1e` for the private colour). Sets `window.__labReady` when drawn.
  * The kit view takes `?lod=0` (the traffic kits unsimplified); any view takes `?cam=fx,fy,fz>tx,ty,tz`.
  */
 const q = new URLSearchParams(location.search);
@@ -51,7 +51,7 @@ for (let z = -40; z < 40; z += 6) {
 
 const liveryOf = (t: BodyType): Livery => {
   const l = q.get('livery');
-  return l === 'police' ? POLICE_LIVERY : l === 'taxi' ? TAXI_LIVERY : l === 'private' ? { ...defaultLivery('hatch'), upper: '#26344f', lower: '#26344f' } : defaultLivery(t);
+  return l === 'police' ? POLICE_LIVERY : l === 'taxi' ? TAXI_LIVERY : l === 'private' ? { ...defaultLivery('hatch'), upper: q.get('paint') ?? '#26344f', lower: q.get('paint') ?? '#26344f' } : defaultLivery(t);
 };
 const place = (t: BodyType, livery: Livery, x: number, z: number, yaw: number, taxi = true) => {
   const spec = SPEC_OF[t];
