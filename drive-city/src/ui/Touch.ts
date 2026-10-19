@@ -44,9 +44,11 @@ const SHEET = `
 .touch .rot{position:absolute;left:50%;top:46%;transform:translateX(-50%);padding:7px 14px;border-radius:6px;
   background:${C.inkGlass};font:700 13px/1 ${F.ui};color:${C.paper};display:none}
 @media (orientation:portrait){.touch .rot{display:block}}
-/* Narrow screens: shrink the dials so the pads and the radar have room. */
-body.dc-touch .hud .speedo{left:50%;right:auto;top:auto;bottom:calc(4px + env(safe-area-inset-bottom,0px));
-  transform:translateX(-50%) scale(.62);transform-origin:bottom center}
+/* Landscape: bottom centre the dial sat on the car (2026-10-19, 「手机版，会看到速度盘显示在车上面」), so it goes left of
+   the car, right of the radar's column (the radar, the objective and the best score stack there): 0.55 of 196 = 108 px,
+   at most 62 px left of the screen's centre (the car's half width, chase camera). */
+body.dc-touch .hud .speedo{left:min(calc(var(--mm-left) + var(--mm-w) + 14px),calc(50% - 170px));right:auto;top:auto;
+  bottom:calc(4px + env(safe-area-inset-bottom,0px));transform:scale(.55);transform-origin:bottom left}
 body.dc-touch .hud .hint{display:none}
 body.dc-touch .hud .prompt{display:none}
 /* Dialogue choices must receive taps above the full-screen touch surface. */
