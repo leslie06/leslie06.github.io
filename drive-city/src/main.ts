@@ -81,7 +81,7 @@ async function boot() {
   const savedBodies = () => {
     const out: BodySource[] = [];
     for (const [key, pick] of [['drivecity.garage.v1', (j: { body?: string }) => j.body], ['drivecity.home.v1', (j: { car?: { body?: string } }) => j.car?.body]] as const) {
-      try { const b = (pick as (j: unknown) => string | undefined)(JSON.parse(localStorage.getItem(key) ?? 'null') ?? {}); if (b && b !== 'sedan' && ['hatch', 'suv', 'mpv', 'bus', 'truck', 'coupe', 'limo'].includes(b)) out.push(b as BodySource); } catch { /* no save */ }
+      try { const b = (pick as (j: unknown) => string | undefined)(JSON.parse(localStorage.getItem(key) ?? 'null') ?? {}); if (b && b !== 'sedan' && ['hatch', 'suv', 'mpv', 'bus', 'truck', 'coupe', 'limo', 'super'].includes(b)) out.push(b as BodySource); } catch { /* no save */ }
     }
     return out;
   };

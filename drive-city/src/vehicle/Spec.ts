@@ -331,6 +331,52 @@ export const COUPE: VehicleSpec = {
 };
 
 /**
+ * 蛮牛 (2026-10-19, 「兰博基尼的模型好了…现在接入到游戏里」): the Lamborghini-flavoured one, from the user's AI model
+ * (scripts/blender/vehicles/ai_car.py; a wedge, Y-shaped lamps, a big wing). A V12 to 9300 rpm, 45% of the drive to the
+ * front, wider (its track as the model's), stickier and steadier than 赤骏: the quickest off the line and the fastest
+ * (0-100 2.2 s, 0-200 5.9 s, 340 km/h, 1.46 g, 100-0 23 m; .scratch/chijun/feel.test.ts), less willing to slide
+ * (traction control lets go less once the wheel is turned: full lock and throttle at 45 km/h ~13 deg, back in 0.4 s).
+ * Its tyres' muLong stays 1.55: at 1.7 it stopped from 60 in 7.5 m, under the body tests' plausible 8.
+ */
+export const SUPER: VehicleSpec = {
+  name: 'super',
+  mass: 1600,
+  com: [0, 0.0, -0.08],
+  inertia: [2900, 2700, 680],
+  chassis: [
+    { half: [0.98, 0.32, 2.38], at: [0, 0.08, -0.01], round: 0.1 },
+    { half: [0.65, 0.2, 1.0], at: [0, 0.6, -0.1], round: 0.12 },
+  ],
+  wheels: [
+    { x: 0.96, z: 1.38, front: true },
+    { x: -0.96, z: 1.38, front: true },
+    { x: 0.96, z: -1.32, front: false },
+    { x: -0.96, z: -1.32, front: false },
+  ],
+  wheelRadius: 0.36,
+  wheelWidth: 0.32,
+  mountY: 0.205,
+  suspension: {
+    restLength: 0.27, stiffnessFront: 64000, stiffnessRear: 56000,
+    bump: 2800, rebound: 4700, travel: 0.17,
+    antiRollFront: 28000, antiRollRear: 22000,
+  },
+  tire: { ...TAXI.tire, muLat: 1.38, muLong: 1.55, forceHeight: 0.18, rearGrip: 1.1 },
+  steer: { ...TAXI.steer, lock: 0.68, rate: 4.2 },
+  engine: {
+    idle: 1000, redline: 9300,
+    torque: [[1000, 500], [3000, 700], [5000, 790], [6750, 810], [8500, 770], [9300, 700]],
+    gears: [3.1, 2.2, 1.7, 1.36, 1.12, 0.94, 0.8], reverse: 3.2, final: 3.6, efficiency: 0.9,
+    shiftUp: 8900, shiftDown: 3800, shiftTime: 0.06,
+    frontShare: 0.45, engineBrake: 0.32,
+    limiterKmh: 340, reverseKmh: 35, launchRpm: 5000,
+  },
+  brakes: { force: 28000, frontBias: 0.62 },
+  aero: { drag: 0.3, downforce: 2.6 },
+  assists: { ...TAXI.assists, tcMax: 0.75, airDamping: 2.4, donut: { ...TAXI.assists.donut } },
+};
+
+/**
  * 豪华轿车 (2026-10-18): a long-wheelbase luxury saloon (S-class / 红旗 H9 class, V8, rear-biased AWD) - heavy, soft and
  * quiet, a lot of torque low down, 250 km/h. Fast in a straight line, calm rather than sharp in the corners.
  */
@@ -643,4 +689,4 @@ export const EBIKE: VehicleSpec = {
   brakes: { force: 1300, frontBias: 0.6 },
 };
 
-export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE, ebike: EBIKE, coupe: COUPE, limo: LIMO };
+export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE, ebike: EBIKE, coupe: COUPE, limo: LIMO, super: SUPER };

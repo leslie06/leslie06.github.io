@@ -19,6 +19,7 @@ export const PAINTS = ['#1c1d20', '#f2f2ef', '#b9bcbf', '#8c1d1d', '#1d49b5', '#
 export const DEALER = [
   { body: 'coupe', price: 30000, paint: '#8c1d1d', kmh: 320, to100: 2.3 },
   { body: 'limo', price: 60000, paint: '#161718', kmh: 250, to100: 5.0 },
+  { body: 'super', price: 80000, paint: '#9bd21c', kmh: 340, to100: 2.2 },
 ] as const;
 export const TRANSFER = 0.5;
 export type LuxuryBody = (typeof DEALER)[number]['body'];

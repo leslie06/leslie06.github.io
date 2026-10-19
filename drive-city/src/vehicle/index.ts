@@ -242,7 +242,7 @@ export async function install(engine: Engine): Promise<void> {
 
   // A test drive (2026-10-19, 「给我一个测试页面，我验证一下手感」): `?car=coupe` (any body type) puts the player in that car
   // as the game starts, where the taxi stood; `?world=yard&car=coupe` is the handling yard in it. Painted red if it is the
-  // coupe (赤骏), the body's own colours otherwise. The taxi is put away under the map; nothing is saved.
+  // coupe (赤骏), lime the super (蛮牛), the body's own colours otherwise. The taxi is put away under the map; nothing is saved.
   const testCar = new URLSearchParams(location.search).get('car') as BodyType | null;
   if (testCar && testCar !== 'sedan' && BODY_TYPES.includes(testCar) && SPEC_OF[testCar]) {
     const ready = ['moto', 'bike', 'ebike'].includes(testCar) ? Promise.resolve() : readyBodies([testCar as BodySource]);
@@ -251,8 +251,9 @@ export async function install(engine: Engine): Promise<void> {
       const cur = car, next = new Vehicle(engine.physics, SPEC_OF[testCar], { x: 0, y: -600, z: 0 }, 0);
       next.reset({ x: cur.pos.x, y: cur.pos.y + 0.1, z: cur.pos.z }, Math.atan2(cur.fwd.x, cur.fwd.z));
       const liv = defaultLivery(testCar);
-      const paint = new THREE.Color(testCar === 'coupe' ? '#c41e1e' : liv.upper);
-      const prev = api.swapCar(next, { upper: paint, lower: testCar === 'coupe' ? paint.clone() : new THREE.Color(liv.lower), taxi: false, body: testCar });
+      const own = testCar === 'coupe' ? '#c41e1e' : testCar === 'super' ? '#9bd21c' : null;
+      const paint = new THREE.Color(own ?? liv.upper);
+      const prev = api.swapCar(next, { upper: paint, lower: own ? paint.clone() : new THREE.Color(liv.lower), taxi: false, body: testCar });
       prev.car.body.setTranslation({ x: 0, y: -600, z: 0 }, false);
       prev.car.body.setEnabled(false);
     }));

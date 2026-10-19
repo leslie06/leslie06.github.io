@@ -100,11 +100,14 @@ const MIX: [BodyType, number][] = [['suv', 0.16], ['hatch', 0.14], ['mpv', 0.08]
  * 车流里的豪车（2026-10-18 只在高画质各一辆；2026-10-19 用户「做的豪车和跑车在哪，我怎么没有看见」：大多数玩家是手机、
  * 不是高画质，一辆也看不到），现在每档都有：跑车和豪华轿车各一辆，高画质跑车两辆。两套车模只在有豪车在近处时才画
  * （CarKit 空着就不画，不占绘制调用）。
+ * 2026-10-19 加了蛮牛（兰博基尼风格），每档一辆。
  */
-const LUX_POOL = (tier: string): [BodyType, number][] => [['coupe', tier === 'high' ? 2 : 1], ['limo', 1]];
+const LUX_POOL = (tier: string): [BodyType, number][] => [['coupe', tier === 'high' ? 2 : 1], ['limo', 1], ['super', 1]];
 /** 跑车的颜色要扎眼（普通私家车那套黑白灰太低调），豪华轿车还是黑、白、银、深蓝。 */
 const COUPE_PAINT = ['#c41e1e', '#c41e1e', '#8c1d1d', '#f0b400', '#e2571a', '#1d49b5', '#f2f2ef', '#161718'];
 const LIMO_PAINT = ['#161718', '#161718', '#161718', '#f2f2ef', '#b9bcbf', '#26344f'];
+/** 蛮牛（2026-10-19）的颜色更张扬：荧光绿、橙、黄、紫，加黑白。 */
+const SUPER_PAINT = ['#9bd21c', '#9bd21c', '#f07b12', '#f2c200', '#6a2c91', '#f2f2ef', '#161718'];
 /** Electric scooters: mostly white, black, red and blue, a few silver and pastel. */
 const EBIKE_BODY = ['#f0f0ec', '#f0f0ec', '#18191a', '#18191a', '#b3242a', '#2a5bb0', '#b9bcbf', '#9ec9d6', '#e3b8c4'];
 /** The delivery companies' colours (美团 yellow, 饿了么 blue), on the box, the jacket and the helmet. */
@@ -163,7 +166,7 @@ export async function install(engine: Engine): Promise<void> {
   const kitFor = (b: BodyType): CarKit => {
     let k = kits.get(b);
     // the luxury bodies have no slot body of their own on the kerb, but parking/ puts some in others' (LUXURY_AT): room for 16
-    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2 + (PARKED_BODIES.has(b) ? PARKED_DRAW : b === 'coupe' || b === 'limo' ? 16 : 0), defaultLivery(b), b); kits.set(b, k); }
+    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2 + (PARKED_BODIES.has(b) ? PARKED_DRAW : b === 'coupe' || b === 'limo' || b === 'super' ? 16 : 0), defaultLivery(b), b); kits.set(b, k); }
     return k;
   };
   const rng = new Rng(4242);
@@ -256,7 +259,7 @@ export async function install(engine: Engine): Promise<void> {
   const paint = (n: Npc) => {
     if (n.body === 'bus') { n.taxi = true; n.upper.set('#f2f1ea'); n.lower.set(BUS_LOWER[Math.floor(rnd() * BUS_LOWER.length)]); return; }
     if (n.body === 'truck') { n.taxi = true; n.upper.set(TRUCK_CAB[Math.floor(rnd() * TRUCK_CAB.length)]); n.lower.set(rnd() < 0.75 ? '#f2f3f2' : '#dde1e4'); return; }
-    if (n.body === 'coupe' || n.body === 'limo') { const c = n.body === 'coupe' ? COUPE_PAINT : LIMO_PAINT; n.taxi = false; n.upper.set(c[Math.floor(rnd() * c.length)]); n.lower.copy(n.upper); return; }
+    if (n.body === 'coupe' || n.body === 'limo' || n.body === 'super') { const c = n.body === 'coupe' ? COUPE_PAINT : n.body === 'super' ? SUPER_PAINT : LIMO_PAINT; n.taxi = false; n.upper.set(c[Math.floor(rnd() * c.length)]); n.lower.copy(n.upper); return; }
     n.taxi = n.body === 'sedan' && rnd() < 0.45;
     if (n.taxi) { n.upper.set('#f3b50f'); n.lower.set(TAXI_LOWER[Math.floor(rnd() * TAXI_LOWER.length)]); }
     else { n.upper.set(PRIVATE[Math.floor(rnd() * PRIVATE.length)]); n.lower.copy(n.upper); }

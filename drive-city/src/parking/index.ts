@@ -13,7 +13,7 @@ import { Vehicle } from '../vehicle/Vehicle';
 import { SPEC_OF } from '../vehicle/Spec';
 import { bodySettled, specLength } from '../vehicle/Bodies';
 
-type BodyType = (typeof PARK_BODIES)[number] | 'coupe' | 'limo';
+type BodyType = (typeof PARK_BODIES)[number] | 'coupe' | 'limo' | 'super';
 
 /**
  * Where the money parks (2026-10-18, 「车太次了 没有豪车」): within this many metres of these places some of the kerb's
@@ -108,11 +108,12 @@ export async function install(engine: Engine): Promise<void> {
 
   const luxPlaces = LUXURY_AT.map(([lat, lon, r]) => { const [x, z] = project(lat, lon); return { x, z, r }; });
   /** The luxury car standing in this slot instead, if any (a hash of the slot's place: the same one every time). */
-  const luxuryAt = (x: number, z: number, body: BodyType): 'coupe' | 'limo' | null => {
+  const luxuryAt = (x: number, z: number, body: BodyType): 'coupe' | 'limo' | 'super' | null => {
     const share = luxPlaces.some((c) => Math.hypot(x - c.x, z - c.z) < c.r) ? LUXURY_SHARE : LUXURY_ELSEWHERE;
     const u = ((Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1 + 1) % 1;
     if (body === 'mpv') return u < share.limo ? 'limo' : null;
-    return u < share.coupe ? 'coupe' : null;
+    // a third of the sports cars are 蛮牛 (2026-10-19), the rest 赤骏
+    return u < share.coupe / 3 ? 'super' : u < share.coupe ? 'coupe' : null;
   };
   const onParked = (key: string, park: number[] | null) => {
     const old = tiles.get(key);
