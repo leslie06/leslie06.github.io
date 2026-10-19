@@ -286,6 +286,12 @@ export async function install(engine: Engine): Promise<void> {
       if (!open && !dismissed && car.speed < 1.2) show();
     },
     update() {
+      // Closed in the garage, stopped: F (the big button on a phone) opens it again (2026-10-19, 「关闭之后再没有按钮可以
+      // 打开这个页面了」: it only opened by itself on the way in, so once closed you had to drive out and back)
+      if (!open && dismissed) {
+        const v = vehicle(), car = v.car;
+        if (pl.mode === 'driving' && v.occupied && inGarage(car.pos.x, car.pos.z) && car.speed < 1.2) pl.offer?.({ x: car.pos.x, z: car.pos.z, r: 4, label: t('garage.open'), use: show });
+      }
       if (!open) return;
       // Esc leaves the garage, and is used up here: the ui system would otherwise read it as a pause.
       if (engine.input.state.pausePressed) { engine.input.state.pausePressed = false; hide(); }

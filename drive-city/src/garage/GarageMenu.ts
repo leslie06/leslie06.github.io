@@ -3,7 +3,7 @@ import { C, F, css, el } from '../ui/theme';
 import { DEALER, NITRO, PAINTS, PRICE, TRANSFER, type LuxuryBody } from './Parts';
 
 css(`
-.garage{position:fixed;inset:0;z-index:25;display:grid;place-items:center;font-family:${F.ui};color:${C.paper};
+.garage{position:fixed;inset:0;z-index:31;display:grid;place-items:center;font-family:${F.ui};color:${C.paper};
   background:radial-gradient(ellipse at center,rgba(9,11,13,.55),rgba(9,11,13,.82));padding:16px;box-sizing:border-box}
 .garage[hidden]{display:none}
 .garage .panel{width:min(560px,100%);max-height:100%;overflow:auto;padding:20px 22px;border-radius:12px;background:${C.inkGlass};border:1px solid ${C.line};backdrop-filter:blur(8px)}
@@ -21,17 +21,24 @@ css(`
 .garage .paints button{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid rgba(244,241,232,.5)}
 .garage .leave{margin-top:14px;width:100%;background:rgba(244,241,232,.14);color:${C.paper}}
 .garage .note{font:600 13px/1.5 ${F.ui};color:${C.yellow};margin:0 0 8px}
+/* Always on screen, whatever the panel's scroll (2026-10-19, a phone on its side: 「打开这个页面没有关闭按钮」). The screen sits over
+   the map credit (z 30), which had covered the way out at the panel's foot. */
+.garage .x{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));z-index:1;
+  width:42px;height:42px;padding:0;border-radius:50%;font:700 22px/1 ${F.ui};background:rgba(244,241,232,.16);color:${C.paper};
+  border:1px solid ${C.line}}
 /* A phone on its side is ~340 CSS px tall: tighter rows, and the way out pinned to the panel's foot. */
 @media (max-height:470px){
   .garage{padding:6px}
-  .garage .panel{padding:8px 14px 0;max-height:calc(100vh - 12px)}
+  /* 100% of the screen's own height, not 100vh: on Android 100vh counts the strip the address bar covers, and the way
+     out pinned to the panel's foot sat below the screen (2026-10-19) */
+  .garage .panel{padding:8px 14px 0;max-height:100%}
   .garage h2{font-size:18px}.garage .cash{font-size:17px}
   .garage .sub{margin:2px 0 4px;font-size:11px}
   .garage .row{padding:3px 0;gap:8px}
   .garage .name{font-size:13px}.garage .what{font-size:11px}
   .garage button{padding:7px 10px;font-size:12px}
   .garage .paints{gap:6px}.garage .paints button{width:22px;height:22px}
-  .garage .leave{position:sticky;bottom:0;margin:6px 0 0;padding:9px;box-shadow:0 -8px 12px rgba(12,14,16,.8)}
+  .garage .leave{position:sticky;bottom:0;margin:6px 0 0;padding:9px;background:#2b2e31;box-shadow:0 -8px 12px rgba(12,14,16,.8)}
 }
 `);
 
@@ -71,6 +78,10 @@ export class GarageMenu {
     this.root = el('div', 'garage', document.body);
     this.root.hidden = true;
     this.panel = el('div', 'panel', this.root);
+    const x = el('button', 'x', this.root);
+    x.textContent = '×';
+    x.setAttribute('aria-label', t('garage.leave'));
+    x.addEventListener('click', () => this.onClose());
     // Taps must not fall through to the touch controls or the canvas behind.
     for (const ev of ['pointerdown', 'touchstart', 'mousedown'] as const) this.root.addEventListener(ev, (e) => e.stopPropagation());
   }
