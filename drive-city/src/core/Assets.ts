@@ -138,13 +138,21 @@ export class Assets {
    * Upload every bitmap/canvas texture reachable from `roots` and release its source (see the class
    * comment). Canvases wider than `maxCanvasSize` are shrunk first. Cheap enough to run every few
    * seconds: a traverse over a few hundred objects and a WeakSet check per texture.
+   * With `budgetMs`, it stops uploading once that much time has gone (after at least one upload) and returns false:
+   * call it again next frame. 2026-10-19: the landmarks round the spawn arrive under the title, and their twenty atlases
+   * went up in one frame two seconds into the drive, 0.7 s with the car frozen (「0-100 也不是2.3秒，感觉有延迟」).
    */
-  compact(renderer: THREE.WebGLRenderer, roots: THREE.Object3D[], extra: (THREE.Texture | null | undefined)[] = []): void {
+  compact(renderer: THREE.WebGLRenderer, roots: THREE.Object3D[], extra: (THREE.Texture | null | undefined)[] = [], budgetMs = Infinity): boolean {
     const seen = new Set<THREE.Texture>();
+    const t0 = performance.now();
+    let done = true;
     const visit = (t: unknown) => {
       if (!(t instanceof THREE.Texture) || seen.has(t)) return;
       seen.add(t);
+      if (!done || this.released.has(t.source)) return;
+      const n = this.stats.released;
       this.compactOne(renderer, t);
+      if (this.stats.released > n && performance.now() - t0 > budgetMs) done = false;
     };
     for (const root of roots) {
       root.traverse((o) => {
@@ -157,6 +165,7 @@ export class Assets {
       });
     }
     for (const t of extra) visit(t);
+    return done;
   }
 
   private compactOne(renderer: THREE.WebGLRenderer, t: THREE.Texture): void {

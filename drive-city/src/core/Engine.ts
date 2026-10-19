@@ -54,6 +54,7 @@ export class Engine {
   private governorCfg: GovernorConfig;
   renderScale = 1;
   private lastCompact = -Infinity;
+  private compactPending = false;
   readonly gpu: GpuInfo;
   frameCapMs = 0;
   private lastPresent = -1e9;
@@ -211,9 +212,11 @@ export class Engine {
     const alpha = this.accumulator / this.physics.fixedDt;
     this.time += dt; this.frame++;
     for (const s of this.systems) s.update?.(dt, alpha);
-    if (this.time - this.lastCompact >= 2 || this.frame === 1) {
-      this.lastCompact = this.time;
-      this.assets.compact(this.renderer, [this.scene], [this.scene.environment, this.scene.background as THREE.Texture | null]);
+    // Every 2 s of wall time (paused too: under the title is when the city's textures arrive), a few ms a frame at most
+    // until the new ones are all up (Assets.compact).
+    if (this.compactPending || now - this.lastCompact >= 2000 || this.frame === 1) {
+      if (!this.compactPending) this.lastCompact = now;
+      this.compactPending = !this.assets.compact(this.renderer, [this.scene], [this.scene.environment, this.scene.background as THREE.Texture | null], 6);
     }
     this.renderer.info.reset();
     this.renderFrame(dt);
