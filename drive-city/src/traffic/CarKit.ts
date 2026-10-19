@@ -219,7 +219,8 @@ export class CarKit {
   commit(_n: number): void {
     const n = this.kept;
     this.kept = 0;
-    for (const im of this.body) im.count = n;
+    // an empty kit draws nothing (three still issues its draw calls with 0 instances): the luxury bodies are often absent
+    for (const im of this.body) { im.count = n; im.visible = n > 0; }
     for (const a of [this.matrix, this.upper, this.lower, this.flags]) {
       a.clearUpdateRanges();
       if (n > 0) a.addUpdateRange(0, n * a.itemSize);
@@ -227,6 +228,7 @@ export class CarKit {
     }
     for (const ws of this.wheels) {
       ws.mesh.count = n * ws.perCar;
+      ws.mesh.visible = n > 0;
       ws.mesh.instanceMatrix.clearUpdateRanges();
       if (n > 0) ws.mesh.instanceMatrix.addUpdateRange(0, n * ws.perCar * 16);
       ws.mesh.instanceMatrix.needsUpdate = true;

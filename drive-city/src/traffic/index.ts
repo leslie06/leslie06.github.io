@@ -97,10 +97,14 @@ const BUS_LOWER = ['#c3232b', '#c3232b', '#c3232b', '#2f7d4f'];
  */
 const MIX: [BodyType, number][] = [['suv', 0.16], ['hatch', 0.14], ['mpv', 0.08], ['bus', 0.09], ['truck', 0.07]];
 /**
- * Now and then a 豪华轿车 or a 跑车 drives by (2026-10-18), on high only: one of each in the pool costs two kits, ~40 draw
- * calls a frame with their shadows (536 -> 579 at the spawn). The other tiers see them parked round 国贸 and 三里屯 (parking/).
+ * 车流里的豪车（2026-10-18 只在高画质各一辆；2026-10-19 用户「做的豪车和跑车在哪，我怎么没有看见」：大多数玩家是手机、
+ * 不是高画质，一辆也看不到），现在每档都有：跑车和豪华轿车各一辆，高画质跑车两辆。两套车模只在有豪车在近处时才画
+ * （CarKit 空着就不画，不占绘制调用）。
  */
-const MIX_HIGH: [BodyType, number][] = [['limo', 0.025], ['coupe', 0.02]];
+const LUX_POOL = (tier: string): [BodyType, number][] => [['coupe', tier === 'high' ? 2 : 1], ['limo', 1]];
+/** 跑车的颜色要扎眼（普通私家车那套黑白灰太低调），豪华轿车还是黑、白、银、深蓝。 */
+const COUPE_PAINT = ['#c41e1e', '#c41e1e', '#8c1d1d', '#f0b400', '#e2571a', '#1d49b5', '#f2f2ef', '#161718'];
+const LIMO_PAINT = ['#161718', '#161718', '#161718', '#f2f2ef', '#b9bcbf', '#26344f'];
 /** Electric scooters: mostly white, black, red and blue, a few silver and pastel. */
 const EBIKE_BODY = ['#f0f0ec', '#f0f0ec', '#18191a', '#18191a', '#b3242a', '#2a5bb0', '#b9bcbf', '#9ec9d6', '#e3b8c4'];
 /** The delivery companies' colours (美团 yellow, 饿了么 blue), on the box, the jacket and the helmet. */
@@ -152,13 +156,14 @@ export async function install(engine: Engine): Promise<void> {
   // How many of each body the pool holds, and one instanced kit per body (each its own livery).
   const counts = new Map<BodyType, number>();
   let rest = max;
-  const mix = tier === 'high' ? [...MIX, ...MIX_HIGH] : MIX;
-  for (const [b, share] of mix) { const n = Math.min(rest, Math.round(max * share)); counts.set(b, n); rest -= n; }
+  for (const [b, share] of MIX) { const n = Math.min(rest, Math.round(max * share)); counts.set(b, n); rest -= n; }
+  for (const [b, n] of LUX_POOL(tier)) { const k = Math.min(rest, n); counts.set(b, k); rest -= k; }
   counts.set('sedan', Math.max(0, rest));
   const kits = new Map<BodyType, CarKit>();
   const kitFor = (b: BodyType): CarKit => {
     let k = kits.get(b);
-    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2 + (PARKED_BODIES.has(b) ? PARKED_DRAW : 0), defaultLivery(b), b); kits.set(b, k); }
+    // the luxury bodies have no slot body of their own on the kerb, but parking/ puts some in others' (LUXURY_AT): room for 16
+    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2 + (PARKED_BODIES.has(b) ? PARKED_DRAW : b === 'coupe' || b === 'limo' ? 16 : 0), defaultLivery(b), b); kits.set(b, k); }
     return k;
   };
   const rng = new Rng(4242);
@@ -251,6 +256,7 @@ export async function install(engine: Engine): Promise<void> {
   const paint = (n: Npc) => {
     if (n.body === 'bus') { n.taxi = true; n.upper.set('#f2f1ea'); n.lower.set(BUS_LOWER[Math.floor(rnd() * BUS_LOWER.length)]); return; }
     if (n.body === 'truck') { n.taxi = true; n.upper.set(TRUCK_CAB[Math.floor(rnd() * TRUCK_CAB.length)]); n.lower.set(rnd() < 0.75 ? '#f2f3f2' : '#dde1e4'); return; }
+    if (n.body === 'coupe' || n.body === 'limo') { const c = n.body === 'coupe' ? COUPE_PAINT : LIMO_PAINT; n.taxi = false; n.upper.set(c[Math.floor(rnd() * c.length)]); n.lower.copy(n.upper); return; }
     n.taxi = n.body === 'sedan' && rnd() < 0.45;
     if (n.taxi) { n.upper.set('#f3b50f'); n.lower.set(TAXI_LOWER[Math.floor(rnd() * TAXI_LOWER.length)]); }
     else { n.upper.set(PRIVATE[Math.floor(rnd() * PRIVATE.length)]); n.lower.copy(n.upper); }
@@ -293,8 +299,16 @@ export async function install(engine: Engine): Promise<void> {
     tier === 'low' ? 140 : tier === 'medium' ? 260 : 420, tier === 'low' ? 450 : tier === 'medium' ? 600 : 750,
     new Set<BodyType>(tier === 'low' ? ['sedan', 'suv', 'bus'] : ['sedan', 'suv', 'hatch', 'mpv', 'bus', 'truck']), ghostPaint, adoptGhost) : null;
 
+  /** A free car of the pool, from a random place in it: from the front, the cars at its end (the saloons, the late-loaded
+   * luxury bodies) only drove when every other was out - on a 省电档 phone (half the cars) never. */
+  const idle = (ok: (p: Npc) => boolean): Npc | undefined => {
+    const k = Math.floor(rnd() * pool.length);
+    for (let i = 0; i < pool.length; i++) { const p = pool[(k + i) % pool.length]; if (!p.active && !p.parked && ok(p)) return p; }
+    return undefined;
+  };
   const spawn = () => {
-    let n = pool.find((p) => !p.active && !p.parked && p.body !== 'ebike');
+    // a kerbside motorcycle's freed slot only when no car is free, as before (they sit at the pool's end)
+    let n = idle((p) => p.body !== 'ebike' && p.body !== 'moto') ?? idle((p) => p.body !== 'ebike');
     if (!n) { if (driving() >= carCap()) return; n = makeNpc(newCar('sedan'), 'sedan'); pool.push(n); }
     const len = specLength(n.car.spec);
     const cam = engine.camera.position;
@@ -322,17 +336,60 @@ export async function install(engine: Engine): Promise<void> {
       if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < 25) continue;
       const lift = deckAt(l, s, tmp.x, tmp.z);
       if (Number.isNaN(lift)) continue;
-      n.car.body.setEnabled(true);
-      n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
-      n.car.setMoving(l.speed * (0.75 + 0.2 * rnd()));
-      n.driver = new AiDriver(g, sig, id, s, lane, rnd);
-      n.filter.reset();
-      paint(n);
-      n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
-      n.active = true; n.flipped = 0;
+      launch(n, id, s, lane, lift, l.speed * (0.75 + 0.2 * rnd()));
       return;
     }
   };
+  /** Car `n` driving off from `tmp` (the lane point at `s` on link `id`). */
+  const launch = (n: Npc, id: number, s: number, lane: number, lift: number, v: number) => {
+    n.car.body.setEnabled(true);
+    n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
+    n.car.setMoving(v);
+    n.driver = new AiDriver(g, sig, id, s, lane, rnd);
+    n.filter.reset();
+    paint(n);
+    n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
+    n.active = true; n.flipped = 0;
+  };
+  /**
+   * 进城几秒后一辆跑车从对面车道迎面开过来（2026-10-19，「做的豪车和跑车在哪，我怎么没有看见」：出生点的建国门外大街
+   * 没有路边车位，最近的豪车停在 110 多米外）：镜头前方 110-170 m、反方向的车道里离镜头那条线最近的一条，路面上的。
+   * 放得下就 true；跑车在近处开着、前面没有对向车道就 false（过一秒再试）。
+   */
+  const showcase = (): boolean => {
+    const cam = engine.camera.position;
+    // the pool's coupe often went out already (under the title screen): a far one, just driving, is called back
+    const n = idle((p) => p.body === 'coupe') ?? pool.find((p) => p.active && p.body === 'coupe' && p.driver && !p.parked && !p.runner && !p.held && !p.rider
+      && Math.hypot(p.car.pos.x - cam.x, p.car.pos.z - cam.z) > 120);
+    if (!n) return false;
+    engine.camera.getWorldDirection(camDir);
+    const fl = Math.hypot(camDir.x, camDir.z);
+    if (fl < 0.3) return false;
+    const fx = camDir.x / fl, fz = camDir.z / fl;
+    let best: { id: number; s: number; lane: number; side: number } | null = null;
+    for (const id of g.near(cam.x, cam.z, 200)) {
+      const l = g.links[id];
+      if (l.len < 24 || l.cls === 'service' || l.cls === 'living_street' || l.hmax > 0.3 || g.endsAfter(id)) continue;
+      for (let lane = 0; lane < Math.max(1, l.lanes); lane++) for (let s = 6; s < l.len - 6; s += 8) {
+        g.at(l, s, g.laneOffset(l, lane), tmp);
+        if ((tmp.dx * fx + tmp.dz * fz) / Math.hypot(tmp.dx, tmp.dz) > -0.85) continue;
+        const rx = tmp.x - cam.x, rz = tmp.z - cam.z, ahead = rx * fx + rz * fz, side = Math.abs(rx * fz - rz * fx);
+        if (ahead < 110 || ahead > 170 || side > 14 || (best && side >= best.side)) continue;
+        best = { id, s, lane, side };
+      }
+    }
+    if (!best) return false;
+    const l = g.links[best.id];
+    g.at(l, best.s, g.laneOffset(l, best.lane), tmp);
+    if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 14)) return false;
+    if (n.active) despawn(n);
+    launch(n, best.id, best.s, best.lane, 0, l.speed * 0.95);
+    n.upper.set(COUPE_PAINT[0]); n.lower.copy(n.upper);   // red, to be seen
+    return true;
+  };
+  /** 跑车迎面开来：进城后几秒；放不下就每秒再试，最多 30 次。每个页面一次。 */
+  let showT = -1, showTries = 0, shown = false;
+  if (max > 0 && !new URLSearchParams(location.search).has('shot')) engine.events.on('game:start', () => { if (!shown) { shown = true; showT = 4; } });
 
   /** A motorcycle left at a kerb 30-200 m from the camera, out of the road, for the player to take. */
   const spawnBike = () => {
@@ -611,6 +668,7 @@ export async function install(engine: Engine): Promise<void> {
     fixedUpdate(dt) {
       t += dt;
       spawnT -= dt;
+      if (showT > 0 && (showT -= dt) <= 0) showT = showcase() || ++showTries >= 30 ? -1 : 1;
       // Police with their sirens on: drivers they are coming up behind (or meeting head-on) pull over.
       const wanted = engine.get<WantedApi>('wanted');
       if (wanted && wanted.level > 0) {

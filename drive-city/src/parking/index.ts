@@ -27,7 +27,9 @@ const LUXURY_AT: [number, number, number][] = [
   [39.9497, 116.4610, 600],   // 燕莎 / 亮马桥
   [39.9142, 116.4110, 500],   // 王府井
 ];
-const LUXURY_SHARE = { coupe: 0.05, limo: 0.5 };
+const LUXURY_SHARE = { coupe: 0.12, limo: 0.5 };
+/** 商圈外也偶尔停一辆（2026-10-19，「做的豪车和跑车在哪，我怎么没有看见」）：轿车、SUV、两厢车位的 1.5% 是跑车，MPV 车位的 6% 是豪华轿车。 */
+const LUXURY_ELSEWHERE = { coupe: 0.015, limo: 0.06 };
 import { defaultLivery } from '../vehicle/CarModel';
 import { ControlFilter } from '../vehicle/ControlFilter';
 
@@ -107,10 +109,10 @@ export async function install(engine: Engine): Promise<void> {
   const luxPlaces = LUXURY_AT.map(([lat, lon, r]) => { const [x, z] = project(lat, lon); return { x, z, r }; });
   /** The luxury car standing in this slot instead, if any (a hash of the slot's place: the same one every time). */
   const luxuryAt = (x: number, z: number, body: BodyType): 'coupe' | 'limo' | null => {
-    if (!luxPlaces.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) return null;
+    const share = luxPlaces.some((c) => Math.hypot(x - c.x, z - c.z) < c.r) ? LUXURY_SHARE : LUXURY_ELSEWHERE;
     const u = ((Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1 + 1) % 1;
-    if (body === 'mpv') return u < LUXURY_SHARE.limo ? 'limo' : null;
-    return u < LUXURY_SHARE.coupe ? 'coupe' : null;
+    if (body === 'mpv') return u < share.limo ? 'limo' : null;
+    return u < share.coupe ? 'coupe' : null;
   };
   const onParked = (key: string, park: number[] | null) => {
     const old = tiles.get(key);
