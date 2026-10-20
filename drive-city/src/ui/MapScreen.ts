@@ -45,7 +45,7 @@ css(`
 .navmap kbd{display:inline-block;min-width:22px;padding:0 6px;margin-right:6px;border-radius:4px;border:1px solid ${C.line};background:rgba(244,241,232,.08);font:700 11px/22px ${F.mono};text-align:center;color:${C.paper}}
 .navmap .scale{position:absolute;left:max(28px,3vw);bottom:max(24px,3vh);font:700 11px/1 ${F.num};letter-spacing:.12em;color:${C.paper};pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.7)}
 .navmap .scale i{display:block;height:6px;margin-bottom:6px;border:2px solid ${C.paper};border-top:0;box-shadow:0 1px 4px rgba(0,0,0,.5)}
-.navmap .attr{position:absolute;right:max(28px,3vw);bottom:max(24px,3vh);text-align:right;font:500 11px/1.5 ${F.ui};color:${C.muted};pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.navmap .attr{position:absolute;right:max(28px,3vw);bottom:max(24px,3vh);max-width:min(560px,60vw);text-align:right;font:500 11px/1.5 ${F.ui};color:${C.muted};pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.8)}
 @media (max-width: 900px){.navmap .side .legend{display:none}.navmap .keys{gap:12px;font-size:12px}}
 body.dc-touch .navmap .keys{display:none}
 body.dc-touch .navmap .side{width:min(236px,45vw)}
@@ -239,8 +239,10 @@ export class MapScreen implements System {
     this.savedRender = this.engine.renderFrame;
     this.engine.renderFrame = this.noRender;
     this.drawn.version = -1;
-    // One ODbL credit on screen: the city's own sits above everything; show ours only without it.
-    this.attr.hidden = [...document.body.children].some((e) => !e.contains(this.root) && /OpenStreetMap/.test(e.textContent ?? '') && e.getClientRects().length > 0);
+    // One ODbL credit on screen: the city's own sits above everything; show ours only without it, and the whole list when
+    // the city's is cut short (a phone).
+    this.attr.textContent = this.nav?.attribution ?? '© OpenStreetMap contributors (ODbL)';
+    this.attr.hidden = [...document.querySelectorAll<HTMLElement>('body > *')].some((e) => !e.contains(this.root) && e.innerText?.includes(this.attr.textContent!) && e.getClientRects().length > 0);
     this.reservedT = 0;
     this.fit();
     nav.player(this.me);

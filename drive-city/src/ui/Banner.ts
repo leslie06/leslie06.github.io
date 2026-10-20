@@ -6,6 +6,12 @@ const CSS = `
 .dc-banner[hidden]{display:none}
 .dc-banner b{font:900 clamp(56px,10vw,140px)/1 ${F.ui};letter-spacing:.08em;color:#d9362d;text-shadow:0 6px 40px rgba(0,0,0,.7)}
 @keyframes dc-banner-in{from{opacity:0}to{opacity:1}}
+/* a phone on its side: a tag at the top instead of a darkened screen with a word across the road (2026-10-20, 「悬赏两个字也会遮住屏幕，影响视线」) */
+@media (max-height:470px){
+body.dc-touch .dc-banner{inset:auto;top:calc(4px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:none}
+body.dc-touch .dc-banner b{display:block;font-size:20px;letter-spacing:.12em;padding:5px 16px;border-radius:7px;background:rgba(14,16,18,.86);text-shadow:none;white-space:nowrap}
+body.dc-touch:has(.dc-banner:not([hidden])) .hud :is(.objective,.phone,.toast,.combo,.drift){visibility:hidden}
+}
 `;
 
 /** A full-screen word over the game (WASTED). */

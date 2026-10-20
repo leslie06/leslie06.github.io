@@ -400,7 +400,13 @@ export async function install(engine: Engine): Promise<void> {
 
   // ODbL attribution, always visible and out of the way.
   const credit = document.createElement('div');
-  credit.textContent = manifest.attribution;
+  // A phone's short screen shows a short line (2026-10-20: the whole list ran across the bottom under the car); the map
+  // screen shows the whole of it.
+  credit.className = 'dc-credit';
+  const full = document.createElement('span'), short = document.createElement('span');
+  full.className = 'f'; full.textContent = manifest.attribution;
+  short.className = 's'; short.textContent = '© OpenStreetMap contributors (ODbL) …'; short.style.display = 'none';
+  credit.append(full, short);
   credit.style.cssText = 'position:fixed;right:6px;bottom:2px;z-index:30;font:10px/1.4 system-ui,sans-serif;color:rgba(255,255,255,.55);pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.6)';
   document.body.appendChild(credit);
 }

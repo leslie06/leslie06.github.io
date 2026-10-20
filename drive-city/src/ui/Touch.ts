@@ -91,23 +91,73 @@ body.dc-touch .hud .objective{top:calc(10px + env(safe-area-inset-top,0px));font
   html body.dc-touch .minimap .bar{margin-top:4px;height:14px}
   html body.dc-touch .minimap .bar .d{font-size:13px}
   html body.dc-touch .hud .objective{top:calc(6px + env(safe-area-inset-top,0px));padding:5px 12px;font-size:12px;max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  html body.dc-touch .hud .phone{top:calc(36px + env(safe-area-inset-top,0px));width:min(300px,42vw)}
+  html body.dc-touch .hud .phone{top:calc(6px + env(safe-area-inset-top,0px));width:min(360px,calc(100vw - 430px))}
+  html body.dc-touch .hud:has(.objective:not([hidden])) .phone{top:calc(36px + env(safe-area-inset-top,0px))}
   html body.dc-touch .hud .phone .task{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding:3px 8px}
-  html body.dc-touch .hud .phone .sms .txt{font-size:11.5px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-  html body.dc-touch .hud .toast{top:calc(98px + env(safe-area-inset-top,0px));bottom:auto;padding:5px 12px;font-size:12px;letter-spacing:.04em;max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body.dc-touch .hud .toast{top:calc(6px + env(safe-area-inset-top,0px));bottom:auto;padding:5px 12px;font-size:12px;letter-spacing:.04em;max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   html body.dc-touch .hud .combo,html body.dc-touch .hud .drift{top:calc(2px + env(safe-area-inset-top,0px));transform:translateX(-50%) scale(.55);transform-origin:top center}
   html body.dc-touch .hud .combo .ln:nth-child(n+3){display:none}
-  html body.dc-touch .hud:has(.combo.on) .objective,html body.dc-touch .hud:has(.drift.on) .objective{visibility:hidden}
+  /* one row of text at the top (2026-10-20, 「有信息还是会遮挡屏幕」: the task line, a text under it and the toast at 98 px
+     stacked down to the middle of a 280 px screen): a text, a toast, a combo or a drift takes the row for its few seconds
+     and the objective and the task line step aside */
+  html body.dc-touch .hud:has(.combo.on) .objective,html body.dc-touch .hud:has(.drift.on) .objective,
+  html body.dc-touch .hud:has(.toast.on) .objective,html body.dc-touch .hud:has(.phone .sms:not([hidden])) .objective{visibility:hidden}
+  html body.dc-touch .hud:has(.combo.on) .phone .task,html body.dc-touch .hud:has(.drift.on) .phone .task,
+  html body.dc-touch .hud:has(.toast.on) .phone .task,html body.dc-touch .hud .phone:has(.sms:not([hidden])) .task{display:none}
+  html body.dc-touch .hud:has(.phone .sms:not([hidden])) .phone{top:calc(4px + env(safe-area-inset-top,0px))}
+  html body.dc-touch .hud:has(.phone .sms:not([hidden])) .toast{top:auto;bottom:calc(18px + env(safe-area-inset-bottom,0px))}
+  /* the street's name: a small line under the cash, not 22 px over the right of the road */
+  html body.dc-touch .hud .street{top:calc(68px + env(safe-area-inset-top,0px));bottom:auto;right:calc(14px + env(safe-area-inset-right,0px));font-size:13px;letter-spacing:.04em}
+  /* the best drift score under the radar stood over the road; the pause menu and the boards still have it */
+  html body.dc-touch .hud .best{display:none}
+  html body.dc-touch .hud .best[hidden] + .hint{top:calc(var(--mm-top) + var(--mm-h) + 10px)}
+  /* the other big words (2026-10-20, 「不光是悬赏，同类的大字都改下」), like the banner (ui/Banner.ts): a tag at the top, no
+     darkened screen. BUSTED; a chapter's title card and the failure card (the result card has a button and stays) */
+  html body.dc-touch .dc-busted{inset:auto;top:calc(4px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:none}
+  html body.dc-touch .dc-busted b{display:block;font-size:20px;letter-spacing:.12em;padding:5px 16px;border-radius:7px;border-bottom:3px solid ${C.yellow};background:rgba(14,16,18,.86);text-shadow:none;white-space:nowrap}
+  html body.dc-touch .cmp-card:not(.pass){inset:auto;top:calc(4px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);max-width:calc(100vw - 430px);
+    padding:5px 14px;border-radius:7px;background:rgba(14,16,18,.86);text-shadow:none}
+  html body.dc-touch .cmp-card:not(.pass) .kick{font-size:10px;letter-spacing:.2em;margin-bottom:3px}
+  html body.dc-touch .cmp-card:not(.pass) h1{font-size:18px;letter-spacing:.06em;text-shadow:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body.dc-touch .cmp-card:not(.pass) .who{margin-top:2px;font-size:11px;text-shadow:none}
+  html body.dc-touch:has(:is(.dc-busted,.cmp-card:not(.pass)):not([hidden])) .hud :is(.objective,.phone,.toast,.combo,.drift){visibility:hidden}
+  /* a time trial: one line where the objective was (it says the same) */
+  html body.dc-touch .dc-trial{top:calc(4px + env(safe-area-inset-top,0px));min-width:0;display:flex;align-items:baseline;gap:10px;padding:4px 12px;border-top:0;border-bottom:2px solid #5fd1ff;white-space:nowrap}
+  html body.dc-touch .dc-trial[hidden]{display:none}
+  html body.dc-touch .dc-trial .t{font-size:16px}
+  html body.dc-touch .dc-trial .n,html body.dc-touch .dc-trial .s{font-size:11px}
+  html body.dc-touch .dc-trial .s span + span{margin-left:6px}
+  html body.dc-touch:has(.dc-trial:not([hidden])) .hud .objective{visibility:hidden}
+  /* the story's nudge and its meter: the second row, one line each */
+  html body.dc-touch .cmp-nudge{top:calc(36px + env(safe-area-inset-top,0px));padding:3px 10px 3px 4px;gap:7px;max-width:calc(100vw - 430px)}
+  html body.dc-touch .cmp-nudge .g{width:20px;height:20px;font-size:12px;box-shadow:none}
+  html body.dc-touch .cmp-nudge > div{display:flex;gap:8px;align-items:baseline;min-width:0;white-space:nowrap}
+  html body.dc-touch .cmp-nudge .h{font-size:12px}
+  html body.dc-touch .cmp-nudge .s{font-size:11px;margin:0;overflow:hidden;text-overflow:ellipsis}
+  html body.dc-touch .cmp-meter{top:calc(38px + env(safe-area-inset-top,0px));width:min(200px,30vw)}
+  html body.dc-touch .cmp-meter .l{font-size:10px;margin-bottom:3px}
+  html body.dc-touch .cmp-meter .b{height:6px}
+  html body.dc-touch .cmp-meter .n{font-size:10px;margin-top:2px}
+  html body.dc-touch:has(:is(.cmp-nudge,.cmp-meter):not([hidden])) .hud .phone .task{display:none}
+  /* the map credit: the short line here, the whole list on the map screen */
+  html body.dc-touch .dc-credit .f{display:none}
+  html body.dc-touch .dc-credit .s{display:inline!important}
   /* a text message: no picture, small, two lines at most */
   html body.dc-touch .hud .phone .sms{grid-template-columns:1fr;padding:5px 10px;gap:0}
   html body.dc-touch .hud .phone .sms .av{display:none}
-  html body.dc-touch .hud .phone .who{font-size:10px;margin-bottom:1px}
+  html body.dc-touch .hud .phone .sms .who{display:inline;font-size:11px;margin:0 6px 0 0}
+  html body.dc-touch .hud .phone .sms .who span{display:none}
+  html body.dc-touch .hud .phone .sms .txt{display:inline}
+  html body.dc-touch .hud .phone .sms > div:last-child{font-size:11.5px;line-height:1.35;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
   /* a call or a choice: high up, its answers side by side (one above the other it stood 175 px tall over the road) */
-  html body.dc-touch .hud .dlg{top:calc(30px + env(safe-area-inset-top,0px));width:min(460px,52vw);grid-template-columns:26px 1fr;padding:6px 9px;gap:7px}
-  html body.dc-touch .hud .dlg .av{width:26px;height:26px;font-size:12px}
+  html body.dc-touch .hud .dlg{top:calc(4px + env(safe-area-inset-top,0px));width:min(460px,calc(100vw - 430px));grid-template-columns:1fr;padding:5px 9px;gap:0}
+  html body.dc-touch .hud .dlg .av{display:none}
+  html body.dc-touch .hud:has(.dlg:not(.off)) :is(.objective,.phone,.combo,.drift){visibility:hidden}
+  html body.dc-touch:has(.hud .dlg:not(.off)) .cmp-nudge{visibility:hidden}
+  html body.dc-touch:has(.hud .dlg:not(.off)) .cmp-meter{top:calc(100px + env(safe-area-inset-top,0px))}
   html body.dc-touch .hud .dlg .txt{font-size:12px;line-height:1.3}
-  html body.dc-touch .hud .dlg .opts{flex-direction:row;gap:6px;margin-top:5px}
-  html body.dc-touch .hud .dlg .opts button{flex:1 1 0;min-height:38px;padding:6px 8px;font-size:12px;line-height:1.2}
+  html body.dc-touch .hud .dlg .opts{flex-direction:row;gap:6px;margin-top:4px}
+  html body.dc-touch .hud .dlg .opts button{flex:1 1 0;min-height:32px;padding:4px 8px;font-size:12px;line-height:1.2}
 }
 `;
 
