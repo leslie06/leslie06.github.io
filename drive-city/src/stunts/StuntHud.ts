@@ -99,6 +99,7 @@ export class StuntHud {
     const on = c.count > 0 || !this.liveEl.hidden;
     if (this.resT > 0) this.resT -= dt;
     this.box!.style.opacity = on || this.resT > 0 ? '1' : '0';
+    this.box!.classList.toggle('on', on || this.resT > 0);   // a phone's top strip makes room for it (ui/Touch.ts)
     if (!on) {
       if (this.shown.total !== -1) { this.shown.total = -1; this.shown.mult = -1; this.head.textContent = ''; this.mult.hidden = true; this.lines.textContent = ''; this.bar.style.width = '0'; }
       return;

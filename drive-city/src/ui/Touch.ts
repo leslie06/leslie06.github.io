@@ -73,6 +73,42 @@ body.dc-touch .hud .street{bottom:calc(182px + env(safe-area-inset-bottom,0px))}
   .touch button.action{bottom:33vh}
 }
 body.dc-touch .hud .objective{top:calc(10px + env(safe-area-inset-top,0px));font-size:13px;max-width:52vw}
+/* A phone on its side (2026-10-20, 「汽车上面会有任务，得分，得金币的文字，挡住屏幕了…地图也有点大，占了三分之一的屏幕」): every word
+   goes to a strip along the top, over the sky, one small line each - the objective, the phone's task, a toast below
+   them, the combo and the drift score in the objective's place while they run - and nothing over the road ahead of the
+   car (the toast stood at the car's height, the combo over the road). The minimap is 124 px across and higher (the top
+   buttons 42 px), its turn bar lower.
+   "html" before each: the combo's, the phone's and the HUD's own sheets come later and would win a tie. */
+@media (max-height:470px){
+  body.dc-touch{--mm-w:124px;--mm-h:calc(var(--mm-w) / 1.58 + 20px);--mm-top:calc(60px + env(safe-area-inset-top,0px))}
+  html body.dc-touch .touch .top{gap:8px}
+  html body.dc-touch .touch .top button{width:42px;height:42px;font-size:11px}
+  html body.dc-touch .minimap .turn{height:28px;gap:6px;padding:0 7px}
+  html body.dc-touch .minimap .turn svg{width:18px;height:18px}
+  html body.dc-touch .minimap .turn .a{font-size:11px}
+  html body.dc-touch .minimap .turn .a b{font-size:12px;margin-right:4px}
+  html body.dc-touch .minimap .turn .r{font-size:9px}
+  html body.dc-touch .minimap .bar{margin-top:4px;height:14px}
+  html body.dc-touch .minimap .bar .d{font-size:13px}
+  html body.dc-touch .hud .objective{top:calc(6px + env(safe-area-inset-top,0px));padding:5px 12px;font-size:12px;max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body.dc-touch .hud .phone{top:calc(36px + env(safe-area-inset-top,0px));width:min(300px,42vw)}
+  html body.dc-touch .hud .phone .task{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding:3px 8px}
+  html body.dc-touch .hud .phone .sms .txt{font-size:11.5px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  html body.dc-touch .hud .toast{top:calc(98px + env(safe-area-inset-top,0px));bottom:auto;padding:5px 12px;font-size:12px;letter-spacing:.04em;max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body.dc-touch .hud .combo,html body.dc-touch .hud .drift{top:calc(2px + env(safe-area-inset-top,0px));transform:translateX(-50%) scale(.55);transform-origin:top center}
+  html body.dc-touch .hud .combo .ln:nth-child(n+3){display:none}
+  html body.dc-touch .hud:has(.combo.on) .objective,html body.dc-touch .hud:has(.drift.on) .objective{visibility:hidden}
+  /* a text message: no picture, small, two lines at most */
+  html body.dc-touch .hud .phone .sms{grid-template-columns:1fr;padding:5px 10px;gap:0}
+  html body.dc-touch .hud .phone .sms .av{display:none}
+  html body.dc-touch .hud .phone .who{font-size:10px;margin-bottom:1px}
+  /* a call or a choice: high up, its answers side by side (one above the other it stood 175 px tall over the road) */
+  html body.dc-touch .hud .dlg{top:calc(30px + env(safe-area-inset-top,0px));width:min(460px,52vw);grid-template-columns:26px 1fr;padding:6px 9px;gap:7px}
+  html body.dc-touch .hud .dlg .av{width:26px;height:26px;font-size:12px}
+  html body.dc-touch .hud .dlg .txt{font-size:12px;line-height:1.3}
+  html body.dc-touch .hud .dlg .opts{flex-direction:row;gap:6px;margin-top:5px}
+  html body.dc-touch .hud .dlg .opts button{flex:1 1 0;min-height:38px;padding:6px 8px;font-size:12px;line-height:1.2}
+}
 `;
 
 /**

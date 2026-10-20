@@ -241,6 +241,7 @@ export class Hud implements HudApi {
     const since = this.engine.time - d.lastAt;
     const showResult = !d.active && since < 2.2 && d.lastAt > 0;
     this.driftBox.style.opacity = d.active || showResult ? '1' : '0';
+    this.driftBox.classList.toggle('on', d.active || showResult);
     if (d.active) {
       const score = Math.round(d.score), ang = Math.round(d.angle);
       if (score !== sh.score) { sh.score = score; this.driftScore.textContent = score.toLocaleString(); }
