@@ -6,7 +6,7 @@ import type { Actor, AdventureApi, Blip, CarLook, DialogueApi, HudApi, MissionAp
 import type { TrafficApi } from '../traffic';
 import type { NavSystem } from '../nav';
 import type { ContactsApi } from '../contacts';
-import type { DamageApi } from '../damage';
+import { crashDamage, type DamageApi } from '../damage';
 import type { StoryApi } from '../story';
 import type { CampaignApi } from '../campaign';
 import { Vehicle } from '../vehicle/Vehicle';
@@ -403,7 +403,7 @@ export async function install(engine: Engine): Promise<void> {
     postStep(dt) {
       if (!initialized || v().car === car) return;
       car.afterStep(dt); current.copy(car.pos); cq.copy(car.quat);
-      if (car.impact > 8 && clock - lastDamage > .35) { lastDamage = clock; damage().setHealth(car, damage().health(car) - Math.min(20, car.impact - 8)); }
+      if (crashDamage(car.impact) > 0 && clock - lastDamage > .35) { lastDamage = clock; damage().setHealth(car, damage().health(car) - crashDamage(car.impact)); }
     },
     update(dt, alpha) {
       if (engine.input.state.phonePressed) { engine.input.state.phonePressed = false; panel.toggle(); }

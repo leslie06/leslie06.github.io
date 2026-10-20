@@ -13,6 +13,14 @@ export interface DamageApi extends System {
 }
 
 /**
+ * What one crash takes off a car's 100: nothing under 14 m/s of unexplained Δv (a 50 km/h knock), a quarter of a
+ * point a m/s over it, at most 4 a crash. Nearly unbreakable since 2026-10-20 (「大大提高汽车的耐撞性，让几乎撞不坏」):
+ * it was 1 a m/s over 8 up to 20, so ~10 hard knocks had it smoking; now the hardest crashes take ~19 to smoke it
+ * (under 25) and 25 to stop the engine, and everyday knocks take nothing.
+ */
+export const crashDamage = (strength: number): number => Math.min(4, Math.max(0, strength - 14) * 0.25);
+
+/**
  * Wear on the cars the player drives. Every hard hit takes health off that car (kept per car, so a
  * wreck left behind stays a wreck): below 25 it smokes, below 20 it loses power, at 0 the engine
  * dies and the player has to find another car. A respawn (a reset far from where the car was)
@@ -33,10 +41,7 @@ export async function install(engine: Engine): Promise<void> {
     // A collision fires an impact every step while the car is still scraping, so only the first of
     // a burst counts. Light knocks do nothing, and no single crash can total the car.
     if (clock - lastHit < 0.35) return;
-    // Sturdier since 2026-10-02 (「车撞几下就冒烟，发动机坏了」): it was (dv - 6) x 2.2 up to 30, so three
-    // 50 km/h knocks had it smoking. Now nothing under 8 m/s, one point a m/s over it, at most 20 a crash:
-    // ~10 hits at 50 km/h before it smokes, ~14 before the engine goes.
-    const before = get(car), dmg = Math.min(20, Math.max(0, e.strength - 8) * 1.0);
+    const before = get(car), dmg = crashDamage(e.strength);
     if (dmg <= 0) return;
     lastHit = clock;
     const after = Math.max(0, before - dmg);
