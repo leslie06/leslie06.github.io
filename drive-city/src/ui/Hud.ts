@@ -183,7 +183,7 @@ export class Hud implements HudApi {
     this.stuck = el('div', 'stuck', root); this.stuck.appendChild(L('hud.stuck')); this.stuck.hidden = true;
     this.help = el('div', 'help', root);
     this.help.hidden = true;
-    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.nitro'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['T', 'ctl.phone'], ['Esc', 'ctl.pause']];
+    const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.nitro'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['T', 'ctl.phone'], ['B', 'ctl.dealer'], ['Esc', 'ctl.pause']];
     for (const [k, key] of rows) {
       const r = el('div', 'row', this.help);
       const a = el('span', '', r);

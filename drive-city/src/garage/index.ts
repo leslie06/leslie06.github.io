@@ -11,6 +11,7 @@ import { ANCHOR, DRIVE, GARAGE, PARK_AT } from '../home/Layout';
 import { bodyOfSpec, bodySettled, readyBodies, type BodyType } from '../vehicle/Bodies';
 import { SPEC_OF, TAXI } from '../vehicle/Spec';
 import { Vehicle } from '../vehicle/Vehicle';
+import { BuyButton } from './BuyButton';
 import { GarageMenu } from './GarageMenu';
 
 import { DEALER, ENGINE, FINE, isLuxury, NITRO, PRICE, TRANSFER, TYRES, type LuxuryBody } from './Parts';
@@ -324,6 +325,30 @@ export async function install(engine: Engine): Promise<void> {
     if (isCarItem(item) && order(item.slice(4) as LuxuryBody)) closeDealer(); else menu.renderDealer(dealerView());
   };
   menu.onClose = () => { if (dealerOpen) closeDealer(); else hide(); };
+  // 「🚗 买车」 by the cash, B on a keyboard (2026-10-21, 「重新设计下买车的入口，现在不明显」)
+  const HINT_KEY = 'drivecity.dealerHint.v1';
+  let buyButton: BuyButton | null = null, hinted = (() => { try { return !!localStorage.getItem(HINT_KEY); } catch { return false; } })();
+  /** A car you do not own (or have lost to the pound) is within reach. */
+  const canAfford = () => DEALER.some((d) => (profile?.body !== d.body || profile.impounded) && cashOf() >= d.price);
+  const updateBuy = () => {
+    const ui = engine.get<UiApi>('ui');
+    const intro = engine.get<{ name: string; step: string }>('intro')?.step ?? 'off';
+    const playing = ui?.state === 'playing' && (intro === 'off' || intro === 'done');
+    if (playing && engine.input.state.dealerPressed) { engine.input.state.dealerPressed = false; dealer(); return; }
+    if (!buyButton) {
+      const hud = document.querySelector<HTMLElement>('.hud');
+      if (!hud) return;
+      buyButton = new BuyButton(hud, !!engine.input.touch, dealer);
+    }
+    const ready = playing && canAfford();
+    buyButton.update(playing, ready);
+    // the first time a car is affordable, say where to buy it
+    if (ready && !hinted) {
+      hinted = true;
+      try { localStorage.setItem(HINT_KEY, '1'); } catch { /* ignore */ }
+      toast(t(engine.input.touch ? 'garage.buyHint' : 'garage.buyHintKey'));
+    }
+  };
   // the delivered car flashes on the map until you are in it
   engine.get<NavApi>('nav')?.addBlips(() => {
     if (!delivered) return [];
@@ -394,6 +419,7 @@ export async function install(engine: Engine): Promise<void> {
       if (!open && !dismissed && car.speed < 1.2) show();
     },
     update() {
+      updateBuy();
       // Esc closes the phone's 车行 (used up here, or the ui system would pause)
       if (dealerOpen && engine.input.state.pausePressed) { engine.input.state.pausePressed = false; closeDealer(); }
       // Closed in the garage, stopped: F (the big button on a phone) opens it again (2026-10-19, 「关闭之后再没有按钮可以

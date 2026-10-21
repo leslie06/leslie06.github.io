@@ -53,6 +53,8 @@ export interface InputState {
   radioPressed: boolean;
   /** T: the phone (the story's text messages). */
   phonePressed: boolean;
+  /** B: the 车行 (garage/: buy a car, delivered to the kerb beside you). */
+  dealerPressed: boolean;
   diagPressed: boolean;
   /** Driving, held: nitro (Shift, gamepad B or LB, the touch button). On foot Shift is sprint. */
   nitro: boolean;
@@ -164,6 +166,7 @@ export class Input {
     s.mutePressed = p('KeyM');
     s.radioPressed = p('KeyN');
     s.phonePressed = p('KeyT');
+    s.dealerPressed = p('KeyB');
     s.diagPressed = p('F9');
     s.mapPressed = p('Tab');
     s.punchPressed = p('KeyE') || this.clicked;
@@ -242,6 +245,6 @@ export class Input {
 
   static empty(): InputState {
     return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, counterPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
-      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, phonePressed: false, diagPressed: false, nitro: false, choice: 0 };
+      cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, phonePressed: false, dealerPressed: false, diagPressed: false, nitro: false, choice: 0 };
   }
 }

@@ -156,7 +156,9 @@ export class GarageMenu {
     if (v.wanted) el('div', 'note', p).textContent = t('garage.dealerWanted');
     for (const d of DEALER) {
       const have = v.ownBody === d.body && !v.impounded;
-      this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }), have ? undefined : d.price, !have && !v.wanted && v.cash >= d.price, () => this.onBuy(`car:${d.body}`), have ? t('garage.carHave') : t('garage.order'));
+      // short of money: how much more, not a greyed-out price
+      const short = !have && v.cash < d.price;
+      this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }) + (short ? ` · ¥${d.price.toLocaleString('en-US')}` : ''), have || short ? undefined : d.price, !have && !v.wanted && !short, () => this.onBuy(`car:${d.body}`), have ? t('garage.carHave') : short ? t('garage.short', { n: (d.price - v.cash).toLocaleString('en-US') }) : t('garage.order'));
     }
     const leave = el('button', 'leave', p);
     leave.textContent = t('garage.dealerClose');
