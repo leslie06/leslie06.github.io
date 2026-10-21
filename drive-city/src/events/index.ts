@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
 import { Rng } from '../core/Rng';
-import type { Blip, HudApi, MissionApi, NavApi, PlayerApi, RaceApi, VehicleApi, WantedApi } from '../game/Contracts';
+import type { Blip, DialogueApi, HudApi, MissionApi, NavApi, NavTarget, PlayerApi, RaceApi, VehicleApi, WantedApi } from '../game/Contracts';
 import type { GarageApi } from '../garage';
 import type { IntroApi } from '../intro';
 import { pickAddress } from '../missions/Address';
@@ -32,7 +32,8 @@ const PIRATE = new THREE.Color('#2b2c2f');
 
 export interface EventsApi extends System {
   readonly active: Kind | null;
-  debug: { start(kind: Kind): boolean; wait(): number; state(): { black: { id: number; x: number; z: number; hits: number } | null; kind: Kind | null; hits: number; left: number; rivalLeft: number; playerLeft: number; runner: { x: number; z: number; yaw: number; speed: number } | null } };
+  /** `accept`: say yes to the street race on offer (the probes; players answer in the dialogue box). */
+  debug: { start(kind: Kind): boolean; accept(): boolean; wait(): number; state(): { black: { id: number; x: number; z: number; hits: number } | null; kind: Kind | null; hits: number; left: number; rivalLeft: number; playerLeft: number; runner: { x: number; z: number; yaw: number; speed: number } | null } };
 }
 
 /**
@@ -65,12 +66,19 @@ export async function install(engine: Engine): Promise<void> {
   /** 黑车抢客: the hailer it is going for, and how often the player has rammed it; the rival's paint; seconds it drives off for after. */
   let black: { id: number; x: number; z: number; hits: number } | null = null, shoutT = 0, leaving = 0;
   let paintU = RED, paintL = BLACK;
+  /**
+   * The GPS is the player's (2026-10-21, 「路上的随机任务会中断当前导航」: the street race set its finish the moment
+   * the red car honked, which also dropped the player's own waypoint, and every event's end cleared the mission
+   * target whoever had set it). Only a race the player said yes to takes it; the waypoint they had comes back after.
+   */
+  let ownsNav = false, savedWaypoint: NavTarget | null = null;
   const leaveGoal = new THREE.Vector3();
 
   const vehicle = () => engine.get<VehicleApi>('vehicle')!;
   const missions = () => engine.get<MissionApi>('missions');
   const nav = () => engine.get<NavApi>('nav');
   const toast = (s: string) => engine.get<HudApi>('hud')?.toast(s);
+  const dlg = () => engine.get<DialogueApi>('dialogue');
   const story = (s: string | null) => { const m = missions(); if (m) m.story = s; };
   const fmt = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
   const flash = (s: string, colour = '#ffc21f') => { banner.show(s, colour); setTimeout(() => banner.hide(), 1300); };
@@ -88,12 +96,16 @@ export async function install(engine: Engine): Promise<void> {
     if (msg) toast(msg);
     if (pay) missions()?.addCash(pay);
     if (runner) { runner.release(); runner = null; }
-    // The pirate cab drives off before it goes (it would vanish in plain view); the racer goes at once.
-    if (rivalOn && active === 'blackcab') { leaving = 10; leaveGoal.copy(rival.car.pos).addScaledVector(rival.car.fwd, 300); }
+    // The pirate cab and a racer turned down drive off before they go (they would vanish in plain view); a racer
+    // that raced goes at once.
+    if (rivalOn && (active === 'blackcab' || !racing)) { leaving = 10; leaveGoal.copy(rival.car.pos).addScaledVector(rival.car.fwd, 300); }
     else if (rivalOn) { rivalOn = false; rival.car.body.setTranslation({ x: 0, y: -700, z: 0 }, false); rival.car.body.setEnabled(false); kit.commit(0); }
     racing = false; finish = null; active = null; black = null;
     story(null);
-    nav()?.clearTarget('mission');
+    const n = nav();
+    if (ownsNav) n?.clearTarget('mission');
+    if (savedWaypoint && n && n.target?.kind !== 'waypoint') n.setTarget(savedWaypoint);
+    ownsNav = false; savedWaypoint = null;
     marker.hide();
     wait = GAP[0] + rnd() * (GAP[1] - GAP[0]);
   };
@@ -110,8 +122,8 @@ export async function install(engine: Engine): Promise<void> {
 
   /** A red saloon behind the player, matching their speed, racing them to an address ahead. */
   const startChallenge = (): boolean => {
-    const v = vehicle(), c = v.car, g = tr.graph, n = nav();
-    if (!n || c.speed < 3) return false;
+    const v = vehicle(), c = v.car, g = tr.graph, n = nav(), d = dlg();
+    if (!n || !d || d.busy || c.speed < 3 || leaving > 0) return false;
     const heading = Math.atan2(c.fwd.x, c.fwd.z);
     const dest = pickAddress(g, n, rnd, c.pos.x, c.pos.z, SPRINT[0], SPRINT[1]);
     if (!dest) return false;
@@ -129,14 +141,31 @@ export async function install(engine: Engine): Promise<void> {
     r.driver.reset(); r.filter.reset();
     r.path = route.pts; r.len = route.len;
     r.prevPos.copy(r.car.pos); r.curPos.copy(r.car.pos); r.prevQuat.copy(r.car.quat); r.curQuat.copy(r.car.quat);
-    rivalOn = true; racing = true;
+    rivalOn = true; racing = false; paintU = RED; paintL = BLACK;
     finish = dest;
     active = 'challenge'; clock = 0;
     engine.events.emit('traffic:horn', { x: spot.x, z: spot.z });
+    // Asked, not started: the race and its finish on the GPS only after a yes; no answer is a no.
+    d.ask({ name: t('event.racer'), color: '#e0352b', at: r.car.pos }, t('event.raceAsk', { place: dest.label, n: RACE_PRIZE }), [t('event.raceYes'), t('event.raceNo')], (i) => {
+      if (active !== 'challenge' || racing || finish !== dest) return;
+      if (i !== 0) end(null); else acceptRace();
+    }, { prio: 2, timeout: 10, fallback: 1 });
+    return true;
+  };
+  /** The player said yes: the race is on, and its finish takes the GPS (their waypoint comes back after). */
+  const acceptRace = (): boolean => {
+    if (active !== 'challenge' || racing || !finish) return false;
+    racing = true; clock = 0;
     flash(t('event.raceBanner'));
-    toast(t('event.race', { place: dest.label, n: RACE_PRIZE }));
-    n.setTarget({ x: dest.x, z: dest.z, kind: 'mission', label: t('event.finish') });
-    marker.show(dest.x, dest.z, '#ffc21f');
+    toast(t('event.race', { place: finish.label, n: RACE_PRIZE }));
+    const nv = nav();
+    if (nv) {
+      const tg = nv.target;
+      savedWaypoint = tg?.kind === 'waypoint' ? { ...tg } : null;
+      nv.setTarget({ x: finish.x, z: finish.z, kind: 'mission', label: t('event.finish') });
+      ownsNav = true;
+    }
+    marker.show(finish.x, finish.z, '#ffc21f');
     return true;
   };
 
@@ -222,6 +251,7 @@ export async function install(engine: Engine): Promise<void> {
     get active() { return active; },
     debug: {
       start: (kind) => start(kind),
+      accept: () => acceptRace(),
       wait: () => wait,
       state: () => {
         const c = vehicle().car;
@@ -291,6 +321,17 @@ export async function install(engine: Engine): Promise<void> {
         if (hits >= RAMS || stillT > 1.5) { end(t('event.caught', { n: BOUNTY }), BOUNTY); return; }
         if (clock > FUGITIVE_TIME || d > 450) { end(t('event.escaped')); return; }
         story(t('event.bountyLine', { time: fmt(FUGITIVE_TIME - clock), hits, of: RAMS }));
+      }
+      if (active === 'challenge' && finish && !racing) {
+        // Waiting for the answer: it keeps pace beside the player, heading the race's way.
+        const r = rival, rc = r.car;
+        if (clock > 20) { end(null); return; }
+        r.driver.topSpeed = Math.max(8, Math.min(30, c.forwardSpeed + 1));
+        r.prevPos.copy(r.curPos); r.prevQuat.copy(r.curQuat);
+        const n = nav();
+        const inp = r.driver.update(rc, { x: finish.x, z: finish.z, vx: 0, vz: 0 }, false, dt, n ? (a, b, cc, d, e) => n.route(a, b, cc, d, e) : null, false);
+        rc.step(r.filter.update(inp, rc.forwardSpeed, dt), dt);
+        return;
       }
       if (active === 'challenge' && finish) {
         const r = rival, rc = r.car;
