@@ -42,13 +42,19 @@ css(`
 }
 `);
 
-type Item = 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam' | 'transfer' | `car:${LuxuryBody}`;
+/** `call:i` / `fetch:i`: your car `i` brought to the kerb (the phone) or into the garage. */
+export type Item = 'engine' | 'tyres' | 'nitro' | 'repair' | 'paint' | 'impound' | 'dashcam' | 'transfer' | `car:${LuxuryBody}` | `call:${number}` | `fetch:${number}`;
 export interface GarageView {
   cash: number;
-  /** The car in the garage is your car (the upgrades are on it). */
+  /** The car in the garage is one of your cars (the upgrades are on it). */
   mine: boolean;
+  /** Not yours: the one of yours it would take the place of (its parts move across), if any. */
+  replaces: string | null;
   hasProfile: boolean;
-  impounded: boolean;
+  /** One of your cars is at the pound (its name). */
+  pound: string | null;
+  /** It would take the place of the car at the pound: nothing is done to it until that one is back. */
+  locked: boolean;
   /** Stages fitted to this car. */
   engine: number; tyres: number; nitro: number;
   /** Your parts (on your car), when you have a car: what buying moves onto this one. */
@@ -61,8 +67,18 @@ export interface GarageView {
   dashcam: boolean;
   /** The car in the garage is a luxury car taken off the street: nothing is done to it before 过户. */
   stolen: LuxuryBody | null;
-  /** Your car's body (the 车行 marks the one you have). */
-  ownBody: string | null;
+  /** Your cars' bodies (the 车行 marks the ones you have). */
+  ownBodies: string[];
+  /** Your other cars, free to swap into the garage. */
+  others: { i: number; name: string }[];
+}
+
+/** The phone's 车行: your cars (one sent for, for a fee) and the ones for sale. */
+export interface DealerView {
+  cash: number;
+  wanted: boolean;
+  mine: { i: number; name: string; levels: { engine: number; tyres: number; nitro: number }; state: 'pound' | 'driving' | 'call' }[];
+  ownBodies: string[];
 }
 
 const pips = (n: number, of: number) => '●'.repeat(n) + '○'.repeat(Math.max(0, of - n));
@@ -96,14 +112,14 @@ export class GarageMenu {
     el('h2', '', top).textContent = t('garage.title');
     el('div', 'cash', top).textContent = `¥${v.cash.toLocaleString('en-US')}`;
     const sub = el('div', 'sub', p);
-    sub.textContent = v.mine ? t('garage.yours') : v.hasProfile ? t('garage.moveParts') : t('garage.firstCar');
+    sub.textContent = v.mine ? t('garage.yours') : v.replaces ? t('garage.moveParts', { car: v.replaces }) : v.hasProfile ? t('garage.addCar') : t('garage.firstCar');
     if (v.stolen) {
       const d = DEALER.find((x) => x.body === v.stolen)!, fee = Math.round(d.price * TRANSFER);
       el('div', 'note', p).textContent = t('garage.stolen');
       this.row(p, t('garage.transfer'), t('garage.transferWhat', { car: t(`car.${d.body}`) }), fee, v.cash >= fee, () => this.onBuy('transfer'));
     }
-    if (v.impounded) {
-      el('div', 'note', p).textContent = t('garage.pound', { n: PRICE.impound });
+    if (v.pound) {
+      el('div', 'note', p).textContent = t('garage.pound', { car: v.pound, n: PRICE.impound });
       this.row(p, t('garage.impound'), t('garage.impoundWhat'), PRICE.impound, v.cash >= PRICE.impound, () => this.onBuy('impound'));
     }
     // Buying moves your parts onto this car: show the stages you own, not this car's stock ones.
@@ -111,7 +127,7 @@ export class GarageMenu {
     const stage = (key: 'engine' | 'tyres' | 'nitro', of: number, what: string) => {
       const have = lv[key], base = PRICE[key][have], price = base === undefined ? undefined : Math.round(base * (1 - v.discount));
       const label = price === undefined ? t('garage.max') : key === 'nitro' && have === 0 ? t('garage.fit') : t('garage.upgrade');
-      this.row(p, t(`garage.${key}` as 'garage.engine'), `${pips(have, of)} ${what}`, price, price !== undefined && v.cash >= price && !v.impounded && !v.stolen, () => this.onBuy(key), label);
+      this.row(p, t(`garage.${key}` as 'garage.engine'), `${pips(have, of)} ${what}`, price, price !== undefined && v.cash >= price && !v.locked && !v.stolen, () => this.onBuy(key), label);
     };
     stage('engine', 3, t('garage.engineWhat'));
     stage('tyres', 2, t('garage.tyresWhat'));
@@ -131,10 +147,15 @@ export class GarageMenu {
       b.addEventListener('click', () => this.onBuy('paint', c));
     }
     el('div', 'what', r).textContent = `¥${PRICE.paint}${v.taxi ? ' · ' + t('garage.paintTaxi') : ''}`;
-    // 车行: the luxury cars, new; the one you own is marked.
+    // Your other cars: one swapped into the garage, for nothing.
+    if (v.others.length) {
+      el('div', 'sub', p).textContent = t('garage.myCarsHome');
+      for (const o of v.others) this.row(p, o.name, t('garage.fetchWhat'), undefined, true, () => this.onBuy(`fetch:${o.i}`), t('garage.fetch'));
+    }
+    // 车行: the luxury cars, new; the ones you own are marked.
     el('div', 'sub', p).textContent = t('garage.dealer');
     for (const d of DEALER) {
-      const have = v.ownBody === d.body && !v.impounded;
+      const have = v.ownBodies.includes(d.body);
       this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }), have ? undefined : d.price, !have && v.cash >= d.price, () => this.onBuy(`car:${d.body}`), have ? t('garage.carHave') : t('garage.buy'));
     }
     const leave = el('button', 'leave', p);
@@ -143,10 +164,11 @@ export class GarageMenu {
   }
 
   /**
-   * The 车行 on the phone (2026-10-19, 「现在买车只能回家在车库买吗？感觉不方便」): the luxury cars only, delivered to the
-   * kerb beside you. `wanted`: no delivery while the police are after you.
+   * The 车行 on the phone (2026-10-19, 「现在买车只能回家在车库买吗？感觉不方便」): your cars, one sent for to the kerb
+   * beside you for `PRICE.call` (2026-10-21), and the luxury cars you do not have yet, delivered there new. `wanted`: no
+   * delivery while the police are after you.
    */
-  renderDealer(v: { cash: number; ownBody: string | null; impounded: boolean; wanted: boolean }): void {
+  renderDealer(v: DealerView): void {
     const p = this.panel;
     p.textContent = '';
     const top = el('div', 'top', p);
@@ -154,11 +176,22 @@ export class GarageMenu {
     el('div', 'cash', top).textContent = `¥${v.cash.toLocaleString('en-US')}`;
     el('div', 'sub', p).textContent = t('garage.dealerSub');
     if (v.wanted) el('div', 'note', p).textContent = t('garage.dealerWanted');
-    for (const d of DEALER) {
-      const have = v.ownBody === d.body && !v.impounded;
+    if (v.mine.length) {
+      el('div', 'sub', p).textContent = t('garage.myCars');
+      for (const m of v.mine) {
+        const lv = t('garage.levels', { e: pips(m.levels.engine, 3), t: pips(m.levels.tyres, 2), n: pips(m.levels.nitro, 3) });
+        if (m.state === 'call') {
+          const short = v.cash < PRICE.call;
+          this.row(p, m.name, lv, short ? undefined : PRICE.call, !v.wanted && !short, () => this.onBuy(`call:${m.i}`), short ? t('garage.short', { n: (PRICE.call - v.cash).toLocaleString('en-US') }) : t('garage.call'));
+        } else this.row(p, m.name, m.state === 'pound' ? t('garage.inPoundWhat', { n: PRICE.impound }) : lv, undefined, false, () => {}, m.state === 'pound' ? t('garage.inPound') : t('garage.driving'));
+      }
+    }
+    const sale = DEALER.filter((d) => !v.ownBodies.includes(d.body));
+    if (sale.length) el('div', 'sub', p).textContent = t('garage.forSale');
+    for (const d of sale) {
       // short of money: how much more, not a greyed-out price
-      const short = !have && v.cash < d.price;
-      this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }) + (short ? ` · ¥${d.price.toLocaleString('en-US')}` : ''), have || short ? undefined : d.price, !have && !v.wanted && !short, () => this.onBuy(`car:${d.body}`), have ? t('garage.carHave') : short ? t('garage.short', { n: (d.price - v.cash).toLocaleString('en-US') }) : t('garage.order'));
+      const short = v.cash < d.price;
+      this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }) + (short ? ` · ¥${d.price.toLocaleString('en-US')}` : ''), short ? undefined : d.price, !v.wanted && !short, () => this.onBuy(`car:${d.body}`), short ? t('garage.short', { n: (d.price - v.cash).toLocaleString('en-US') }) : t('garage.order'));
     }
     const leave = el('button', 'leave', p);
     leave.textContent = t('garage.dealerClose');
