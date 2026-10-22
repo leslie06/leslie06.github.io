@@ -2615,6 +2615,9 @@ console.log(`tiles ${Object.keys(index).length}, ${(bytes / 1e6).toFixed(1)} MB;
 console.log(`buildings ${buildings.length} (outlines kept ${kept.length}/${outlines.length}, parts ${parts.length})`, kinds);
 console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lamps ${nLamps} (${lampsCut} spots skipped), signals ${nSignals}, crossings ${nCross}, stops ${nStops}`);
 console.log('spawn', spawn);
+// The roads and hills west of the city (2026-10-22): appended to the network just written, before the signs see it
+// (阜石路 runs on into them instead of off the edge), and public/city/mountain.bin.
+execFileSync('node', ['scripts/city/mountain.mjs', '--no-signs'], { stdio: 'inherit' });
 // The guide signs are placed from the network just written (TypeScript shared with the game).
 execFileSync('npx', ['tsx', 'scripts/city/signs.mts'], { stdio: 'inherit' });
 // The network packed for the game's boot (src/city/NetPack.ts).

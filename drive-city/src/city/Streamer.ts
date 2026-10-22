@@ -449,13 +449,34 @@ export class CityStreamer implements System {
     this.onDetailChange?.(this.loadedKeys);
   }
 
-  private treeMatrices(trees: number[]): { m: Float32Array[]; c: Float32Array[] } {
+  /**
+   * Trees from outside the tiles (2026-10-22: the hills west of the city, mountain/): [x, y, z, type, scale] each, filed
+   * on the tile grid and drawn by the same pools and distance bands as the tiles' own.
+   */
+  addTrees(trees: Float32Array, tint = 1): void {
+    const per = new Map<string, number[]>();
+    for (let i = 0; i < trees.length; i += 5) {
+      const [ix, iz] = tileOf(trees[i], trees[i + 2]), k = `x${ix}_${iz}`;
+      (per.get(k) ?? per.set(k, []).get(k)!).push(trees[i], trees[i + 2], trees[i + 3], trees[i + 4], trees[i + 1]);
+    }
+    for (const [k, l] of per) {
+      const [ix, iz] = tileOf(l[0], l[1]);
+      const lists = this.treeMatrices(l, 5);
+      if (tint !== 1) for (const c of lists.c) for (let i = 0; i < c.length; i++) c[i] *= tint;
+      this.treeLists.set(k, lists);
+      this.extraTiles.set(k, { ix, iz, key: k });
+    }
+    this.vegKey = '';
+  }
+  private extraTiles = new Map<string, { ix: number; iz: number; key: string }>();
+
+  private treeMatrices(trees: number[], stride = 4): { m: Float32Array[]; c: Float32Array[] } {
     const per: number[][] = [[], [], [], []], col: number[][] = [[], [], [], []];
     const c = new THREE.Color();
-    for (let i = 0; i < trees.length; i += 4) {
-      const x = trees[i], z = trees[i + 1], type = trees[i + 2], s = trees[i + 3];
+    for (let i = 0; i < trees.length; i += stride) {
+      const x = trees[i], z = trees[i + 1], type = trees[i + 2], s = trees[i + 3], y = stride > 4 ? trees[i + 4] : 0;
       const h = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1, h2 = Math.abs(Math.sin(x * 4.1 + z * 9.7) * 23421.631) % 1;
-      this._m.compose(this._p.set(x, 0, z), this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), h * 6.283), this._s.set(s, s * (0.88 + 0.24 * h2), s));
+      this._m.compose(this._p.set(x, y, z), this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), h * 6.283), this._s.set(s, s * (0.88 + 0.24 * h2), s));
       if (!per[type]) continue;
       per[type].push(...this._m.elements);
       // Per-tree tint: a little lighter/darker, a little yellower/bluer.
@@ -653,8 +674,17 @@ export class CityStreamer implements System {
       (d <= 1 ? near : far).push(t.key);
       if (d <= 2) mid.push(t.key);
     }
+    // trees from outside the tiles (addTrees): trees only, no lamps or furniture
+    const tk: string[] = [], tnear: string[] = [];
+    for (const t of this.extraTiles.values()) {
+      const d = Math.max(Math.abs(t.ix - fx), Math.abs(t.iz - fz));
+      if (d > this.vegRadius) continue;
+      tk.push(t.key);
+      if (d <= 1) tnear.push(t.key);
+    }
+    tk.sort(); tnear.sort();
     vk.sort(); near.sort(); far.sort(); mid.sort();
-    const key = vk.join('|');
+    const key = vk.join('|') + (tk.length ? `|${tk.join('|')}` : '');
     const moved = Math.hypot(this.focus.x - this.vegAt.x, this.focus.z - this.vegAt.z) > 20;
     if (key !== this.vegKey || moved) {
       this.vegKey = key;
@@ -670,8 +700,9 @@ export class CityStreamer implements System {
         const k = vs.length === 1 ? keep : (x: number, z: number) => keep(x, z) && variantOf(x, z, vs.length) === v;
         pool.set(keys.map((kk) => T(kk).m[type]), keys.map((kk) => T(kk).c[type]), k);
       }));
-      fillV(this.treeNear, near, isNear);
-      fillV(this.treeMid, vk, isMid);
+      fillV(this.treeNear, tnear.length ? near.concat(tnear) : near, isNear);
+      fillV(this.treeMid, tk.length ? vk.concat(tk) : vk, isMid);
+      // the hills' trees stop at the mid band: their far cards read as white cut-outs against a backlit hillside
       fill(this.treeFar, vk, isFar);
       this.lampPool.set(mid.map((k) => this.lampLists.get(k)!), undefined, (x, z) => !isNear(x, z));
       this.lampHeads.set(vk.map((k) => this.lampLists.get(k)!));

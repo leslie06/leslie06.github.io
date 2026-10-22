@@ -323,7 +323,7 @@ export async function install(engine: Engine): Promise<void> {
     for (let attempt = 0; attempt < 14; attempt++) {
       const id = ids[Math.floor(rnd() * ids.length)];
       const l = g.links[id];
-      if (l.len < 24 || l.cls === 'service' || l.cls === 'living_street') continue;
+      if (l.len < 24 || l.cls === 'service' || l.cls === 'living_street' || g.avoid.has(id)) continue;
       // Not on a road that ends: the car would only drive to its end and stand there.
       if (g.endsAfter(id)) continue;
       if (n.body === 'bus' && !BUS_ROADS.has(l.cls)) continue;
@@ -450,7 +450,7 @@ export async function install(engine: Engine): Promise<void> {
     for (let attempt = 0; attempt < 10; attempt++) {
       const id = ids[Math.floor(rnd() * ids.length)];
       const l = g.links[id];
-      if (l.len < 24 || NO_RIDERS.has(l.cls) || g.endsAfter(id)) continue;
+      if (l.len < 24 || NO_RIDERS.has(l.cls) || g.endsAfter(id) || g.avoid.has(id)) continue;
       const s = 6 + rnd() * (l.len - 12);
       g.at(l, s, -l.kerbR + 0.8, tmp);   // inside the cars parked along the kerb, where there are any
       const d = Math.hypot(tmp.x - cam.x, tmp.z - cam.z);

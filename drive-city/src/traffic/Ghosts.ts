@@ -275,7 +275,7 @@ export class GhostTraffic {
     let total = 0;
     for (const id of ids) {
       const l = g.links[id], dens = DENSITY[l.cls];
-      if (!dens || l.len < 15) continue;
+      if (!dens || l.len < 15 || g.avoid.has(id)) continue;
       // Its share by the part of it in reach, in view and nearer (points every ~50 m along it: judged by its middle,
       // a long link starting by the camera got nothing - the lanes ahead stayed empty to 450 m).
       let pts = this.samples.get(id);

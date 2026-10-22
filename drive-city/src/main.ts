@@ -8,6 +8,7 @@ import * as render from './render';
 import * as weather from './weather';
 import * as world from './world';
 import * as city from './city';
+import * as mountain from './mountain';
 import { registerCityPoses } from './city/Poses';
 import { registerTrafficPoses } from './traffic/Poses';
 import * as vehicle from './vehicle';
@@ -95,6 +96,8 @@ async function boot() {
   // Central Beijing from OSM by default; ?world=yard is the M0 driving-school yard (handling sandbox).
   const worldName = new URLSearchParams(location.search).get('world') ?? 'city';
   if (worldName === 'city') await city.install(engine); else { await readyBodies(); await world.install(engine); }
+  // the roads and hills west of the city (mountain/): fetched when the camera comes near them
+  if (worldName === 'city') mountain.install(engine);
   // a logged-in player's newer cloud save, before any system reads its save (the vehicle on); started alongside the
   // city, so it has usually answered by now
   await cloudReady;

@@ -24,6 +24,7 @@ import { SkylineLod } from './Skyline';
 import { CityStreamer, spawnTileWorkers } from './Streamer';
 import { ShopFronts } from './visual/ShopFronts';
 import { undergroundHoles } from '../underground/Layout';
+import { mountainOn, WEST } from '../mountain/Data';
 import { shortcutClear, stuntClear } from '../stunts/Structures';
 import { overlaps } from './Clear';
 import { JUMPS, OVERPASSES, SHORTCUTS } from '../stunts/spots';
@@ -294,7 +295,11 @@ export async function install(engine: Engine): Promise<void> {
   // The plane: a hole for the car park's open ramp and for each trench. Shape space is (x, y) facing +z;
   // laid down with rotateX(-90°) its y becomes -z and it faces up, so outlines are given as (x, -z).
   const v = (x: number, z: number) => new THREE.Vector2(x, -z);
-  const shape = new THREE.Shape([v(cx - E, cz - E), v(cx + E, cz - E), v(cx + E, cz + E), v(cx - E, cz + E)]);
+  // a notch on the west for the hills (mountain/), from the edge of the data out
+  const W = mountainOn() && WEST.x1 > cx - E ? WEST : null;
+  const shape = new THREE.Shape(W
+    ? [v(cx - E, cz - E), v(cx + E, cz - E), v(cx + E, cz + E), v(cx - E, cz + E), v(cx - E, Math.max(W.z1, cz - E)), v(W.x1, Math.max(W.z1, cz - E)), v(W.x1, Math.min(W.z0, cz + E)), v(cx - E, Math.min(W.z0, cz + E))]
+    : [v(cx - E, cz - E), v(cx + E, cz - E), v(cx + E, cz + E), v(cx - E, cz + E)]);
   if (hole) { const o = hole.open; shape.holes.push(new THREE.Path([v(o.x0, o.z0), v(o.x0, o.z1), v(o.x1, o.z1), v(o.x1, o.z0)])); }
   for (const P of trenches) shape.holes.push(new THREE.Path(P.map(([x, z]) => v(x, z))));
   const pg = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2);

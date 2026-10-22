@@ -1,3 +1,4 @@
+import { NO_TRAFFIC_ROADS } from '../mountain/Data';
 import type { Network } from '../city/Data';
 import { laneLayout, laneOffsetOf, parkingLine } from './Lanes';
 
@@ -82,6 +83,7 @@ export class LaneGraph {
 
   private add(l: Link): void {
     this.links.push(l);
+    if (l.name && NO_TRAFFIC_ROADS.has(l.name)) this.avoid.add(l.id);
     this.out[l.from].push(l.id);
     // Every cell a segment passes through (an expressway's points can be hundreds of metres apart; with only the
     // points indexed, `near` on the middle of 东五环 found the side streets and not the road itself).
@@ -152,10 +154,14 @@ export class LaneGraph {
    * onto the next link", projected the car onto its end again, and went round forever: the hang of
    * 2026-09-23 (「游戏死机了」), the moment a car reached that end.
    */
+  /** Links the traffic never turns into while it has another way (NO_TRAFFIC_ROADS: the roads up 妙峰山). */
+  readonly avoid = new Set<number>();
+
   next(id: number, rnd: () => number): number {
     const l = this.links[id];
-    const cand = this.out[l.to].filter((c) => c !== l.rev);
-    const list = cand.length ? cand : this.out[l.to];
+    const cand = this.out[l.to].filter((c) => c !== l.rev && !this.avoid.has(c));
+    const open = cand.length ? cand : this.out[l.to].filter((c) => !this.avoid.has(c));
+    const list = open.length ? open : this.out[l.to];
     if (!list.length) return l.rev;
     let best = list[0], bs = -Infinity;
     for (const c of list) {
