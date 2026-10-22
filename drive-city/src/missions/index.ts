@@ -79,7 +79,7 @@ export interface MissionSystem extends MissionApi {
     startJob(kind: 'delivery' | 'chase' | 'trial'): boolean;
     job(): string | null;
     /** 送豆腐: its state (null before the first step), and starting it as if walked into. */
-    tofu(): { shop: { x: number; z: number }; stage: string; level: number; dest: { x: number; z: number; label: string } | null; left: number } | null;
+    tofu(): { shop: { x: number; z: number }; stage: string; level: number; dest: { x: number; z: number } | null; left: number; t: number; best: number } | null;
     startTofu(): boolean;
     ride(): { kind: PaxKind; smooth: number; viewers: number; heat: string; vomited: boolean; told: string[] } | null;
     state(): { stage: string; pickup: { x: number; z: number } | null; dest: { x: number; z: number; label: string } | null; limit: number; elapsed: number;
