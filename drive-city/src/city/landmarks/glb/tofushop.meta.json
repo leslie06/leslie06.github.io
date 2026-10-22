@@ -1,0 +1,45 @@
+{
+  "id": "tofushop",
+  "name": {
+    "zh": "藤原豆腐店",
+    "en": "Fujiwara Tofu Shop"
+  },
+  "lat": 39.9491164,
+  "lon": 116.4632233,
+  "headingDeg": -4.82,
+  "file": "tofushop.glb",
+  "version": "e43208eb",
+  "footprint": [
+    [-5.6, -1],
+    [2.9, -1],
+    [2.9, 12.4],
+    [-5.6, 12.4]
+  ],
+  "clear": [
+    [
+      [-6, -8],
+      [6.4, -8],
+      [6.4, 13.1],
+      [-6, 13.1]
+    ]
+  ],
+  "height": 6.56,
+  "farDistance": 260,
+  "stats": {
+    "triangles": 12060,
+    "farTriangles": 40,
+    "materials": 19,
+    "farMaterials": 4,
+    "colliders": {
+      "solid": 3,
+      "walk": 0,
+      "mesh": 0
+    },
+    "instancedMeshes": 0,
+    "textures": 6,
+    "maxTexture": 512,
+    "footprintArea": 114,
+    "bytes": 201064,
+    "source": "tofushop.glb"
+  }
+}
