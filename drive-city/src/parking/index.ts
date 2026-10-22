@@ -32,13 +32,14 @@ const LUXURY_SHARE = { coupe: 0.12, limo: 0.5 };
 const LUXURY_ELSEWHERE = { coupe: 0.015, limo: 0.06 };
 /**
  * Cars that always stand in one place (2026-10-22, 「头文字的AE86长这样，尽量还原」): the AE86 on the apron of 藤原豆腐店
- * (亮马桥, city/landmarks tofushop: 4.4 m out from the shop front, in front of the door and the window, its nose along
- * the street as in the film). Each is a tile of its own, made when the camera comes within `FIXED_IN` and dropped
+ * (亮马桥, city/landmarks tofushop: its side 0.8 m off the shop front, before the open shop, its nose along the street,
+ * as on the card the user sent). Each is a tile of its own, made when the camera comes within `FIXED_IN` and dropped
  * beyond `FIXED_OUT`, so it is back after the player has driven it off and gone; not made while the player is in one.
  */
 const FIXED: { key: string; body: BodyType; x: number; z: number; heading: number; colour: string }[] = [
-  // the shop's frame (landmarks/tofushop: origin 5606.10, -4484.66, heading -4.82 deg): local (4.4, -1.2), facing local +y
-  { key: 'fixed:ae86', body: 'ae86', x: 5610.59, z: -4483.83, heading: -3.0575, colour: '#f2f2ef' },
+  // the shop's frame (landmarks/tofushop: origin 5606.10, -4484.66, heading -4.82 deg): local (4.1, -2.53), facing local +y -
+  // as on the card (2026-10-22): before the open shop, its tail under the dry cleaner's sign
+  { key: 'fixed:ae86', body: 'ae86', x: 5610.4, z: -4482.48, heading: -3.0575, colour: '#f2f2ef' },
 ];
 const FIXED_IN = 300, FIXED_OUT = 400;
 import { defaultLivery } from '../vehicle/CarModel';
