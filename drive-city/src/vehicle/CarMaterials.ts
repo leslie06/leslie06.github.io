@@ -264,6 +264,8 @@ export function liveryAtlas(l: Livery): THREE.DataTexture {
   drawRearDoor(g, PX.rearDoor); opaque.push(PX.rearDoor);
   drawVent(g, PX.vent); opaque.push(PX.vent);
   drawMesh(g, PX.cabin, 5); opaque.push(PX.cabin);
+  drawTofu(g, m, PX.tofu);
+  drawPlateJ(g, PX.plateJ); opaque.push(PX.plateJ);
   const cd = g.getImageData(0, 0, ATLAS_W, ATLAS_H).data, md = m.getImageData(0, 0, ATLAS_W, ATLAS_H).data;
   const data = new Uint8Array(ATLAS_W * ATLAS_H * 4);
   const isOpaque = new Uint8Array(ATLAS_W * ATLAS_H);
@@ -591,6 +593,32 @@ function drawText(g: G, m: G, r: PxRect, text: string, color: string, weight: nu
     c.fillStyle = fill; c.textAlign = 'center'; c.textBaseline = 'middle';
     fit(c, text, r.w - 16, r.h * 0.8, weight);
     if (c === m) c.fillText(text, r.w / 2, r.h * 0.54);
+  });
+}
+
+/** 藤原とうふ店（自家用） (2026-10-22): the AE86's door lettering, black, the brackets small at the bottom right. */
+function drawTofu(g: G, m: G, r: PxRect): void {
+  for (const c of [g, m]) clip(c, r, () => {
+    c.fillStyle = c === g ? '#141414' : '#000'; c.fillRect(0, 0, r.w, r.h);
+    if (c === g) return;
+    c.fillStyle = '#fff'; c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+    c.font = `900 ${r.h * 0.92}px ${CJK}`;
+    const big = '藤原とうふ店', small = '(自家用)', w = c.measureText(big).width;
+    c.save(); c.scale(Math.min(1, (r.w * 0.81) / w), 1); c.fillText(big, 0, r.h * 0.86); c.restore();
+    c.font = `800 ${r.h * 0.34}px ${CJK}`;
+    c.fillText(small, r.w * 0.82, r.h * 0.86, r.w * 0.18);
+  });
+}
+
+/** The Gunma plate the film's car wears: 群馬 55 / お 13-954, green on white. */
+function drawPlateJ(g: G, r: PxRect): void {
+  clip(g, r, () => {
+    g.fillStyle = '#f4f4ef'; g.fillRect(0, 0, r.w, r.h);
+    g.strokeStyle = '#1d4a2c'; g.lineWidth = 2; g.strokeRect(3, 3, r.w - 6, r.h - 6);
+    g.fillStyle = '#1d4a2c'; g.textBaseline = 'middle'; g.textAlign = 'center';
+    g.font = `700 ${r.h * 0.26}px ${CJK}`; g.fillText('群馬 55', r.w * 0.5, r.h * 0.26);
+    g.font = `600 ${r.h * 0.26}px ${CJK}`; g.fillText('お', r.w * 0.14, r.h * 0.66);
+    g.font = `800 ${r.h * 0.5}px ${CJK}`; g.fillText('13-954', r.w * 0.58, r.h * 0.66, r.w * 0.76);
   });
 }
 

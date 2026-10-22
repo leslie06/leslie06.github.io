@@ -377,6 +377,51 @@ export const SUPER: VehicleSpec = {
 };
 
 /**
+ * AE86 (2026-10-22, 「头文字的AE86长这样，尽量还原」): the Sprinter Trueno GT-APEX of 藤原豆腐店 - light (940 kg and a
+ * driver), short (2.40 m wheelbase, the model's 1.44 m track), rear drive through the 4A-GE: 1.6 litres to 7600 rpm, its
+ * real five-speed and 4.3 final drive, a little more torque than the brochure's 149 N m so it is not the slowest car in
+ * town. Soft, a tail that comes round under power and on a lift (rear grip under the front's, traction control mostly
+ * off): the drifting car, not a fast one (0-100 ~8 s, 200 km/h).
+ */
+export const AE86: VehicleSpec = {
+  name: 'ae86',
+  mass: 1000,
+  com: [0, 0.05, 0.04],
+  inertia: [1300, 1400, 420],
+  chassis: [
+    { half: [0.8, 0.27, 2.05], at: [0, 0.15, 0], round: 0.1 },
+    { half: [0.64, 0.25, 1.1], at: [0, 0.68, -0.35], round: 0.12 },
+  ],
+  wheels: [
+    { x: 0.72, z: 1.26, front: true },
+    { x: -0.72, z: 1.26, front: true },
+    { x: 0.72, z: -1.14, front: false },
+    { x: -0.72, z: -1.14, front: false },
+  ],
+  wheelRadius: 0.29,
+  wheelWidth: 0.19,
+  mountY: 0.2,
+  suspension: {
+    restLength: 0.28, stiffnessFront: 30000, stiffnessRear: 25000,
+    bump: 1700, rebound: 2900, travel: 0.2,
+    antiRollFront: 14000, antiRollRear: 9000,
+  },
+  tire: { ...TAXI.tire, muLat: 1.08, muLong: 1.1, forceHeight: 0.2, rearGrip: 0.97 },
+  steer: { ...TAXI.steer, lock: 0.75, rate: 3.8 },
+  engine: {
+    idle: 900, redline: 7600,
+    torque: [[1000, 115], [3000, 145], [5000, 165], [6600, 158], [7600, 135]],
+    gears: [3.587, 2.022, 1.384, 1.0, 0.861], reverse: 3.48, final: 4.3, efficiency: 0.9,
+    shiftUp: 7300, shiftDown: 3600, shiftTime: 0.15,
+    frontShare: 0, engineBrake: 0.3,
+    limiterKmh: 200, reverseKmh: 35, launchRpm: 4500,
+  },
+  brakes: { force: 13000, frontBias: 0.64 },
+  aero: { drag: 0.36, downforce: 0.6 },
+  assists: { ...TAXI.assists, tcMax: 0.4, donut: { ...TAXI.assists.donut } },
+};
+
+/**
  * 豪华轿车 (2026-10-18): a long-wheelbase luxury saloon (S-class / 红旗 H9 class, V8, rear-biased AWD) - heavy, soft and
  * quiet, a lot of torque low down, 250 km/h. Fast in a straight line, calm rather than sharp in the corners.
  */
@@ -689,4 +734,4 @@ export const EBIKE: VehicleSpec = {
   brakes: { force: 1300, frontBias: 0.6 },
 };
 
-export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE, ebike: EBIKE, coupe: COUPE, limo: LIMO, super: SUPER };
+export const SPEC_OF: Record<import('./Bodies').BodyType, VehicleSpec> = { sedan: TAXI, hatch: HATCH, suv: SUV, mpv: MPV, bus: BUS, truck: TRUCK, moto: MOTO, bike: BIKE, ebike: EBIKE, coupe: COUPE, limo: LIMO, super: SUPER, ae86: AE86 };

@@ -13,7 +13,7 @@ import { Vehicle } from '../vehicle/Vehicle';
 import { SPEC_OF } from '../vehicle/Spec';
 import { bodySettled, specLength } from '../vehicle/Bodies';
 
-type BodyType = (typeof PARK_BODIES)[number] | 'coupe' | 'limo' | 'super';
+type BodyType = (typeof PARK_BODIES)[number] | 'coupe' | 'limo' | 'super' | 'ae86';
 
 /**
  * Where the money parks (2026-10-18, 「车太次了 没有豪车」): within this many metres of these places some of the kerb's
@@ -30,6 +30,17 @@ const LUXURY_AT: [number, number, number][] = [
 const LUXURY_SHARE = { coupe: 0.12, limo: 0.5 };
 /** 商圈外也偶尔停一辆（2026-10-19，「做的豪车和跑车在哪，我怎么没有看见」）：轿车、SUV、两厢车位的 1.5% 是跑车，MPV 车位的 6% 是豪华轿车。 */
 const LUXURY_ELSEWHERE = { coupe: 0.015, limo: 0.06 };
+/**
+ * Cars that always stand in one place (2026-10-22, 「头文字的AE86长这样，尽量还原」): the AE86 on the apron of 藤原豆腐店
+ * (亮马桥, city/landmarks tofushop: 4.4 m out from the shop front, in front of the door and the window, its nose along
+ * the street as in the film). Each is a tile of its own, made when the camera comes within `FIXED_IN` and dropped
+ * beyond `FIXED_OUT`, so it is back after the player has driven it off and gone; not made while the player is in one.
+ */
+const FIXED: { key: string; body: BodyType; x: number; z: number; heading: number; colour: string }[] = [
+  // the shop's frame (landmarks/tofushop: origin 5606.10, -4484.66, heading -4.82 deg): local (4.4, -1.2), facing local +y
+  { key: 'fixed:ae86', body: 'ae86', x: 5610.59, z: -4483.83, heading: -3.0575, colour: '#f2f2ef' },
+];
+const FIXED_IN = 300, FIXED_OUT = 400;
 import { defaultLivery } from '../vehicle/CarModel';
 import { ControlFilter } from '../vehicle/ControlFilter';
 
@@ -130,6 +141,18 @@ export async function install(engine: Engine): Promise<void> {
         colour: new THREE.Color(PRIVATE[park[i + 4] % PRIVATE.length]) });
     }
     tiles.set(key, t);
+  };
+
+  const fixedTiles = (cam: THREE.Vector3) => {
+    for (const f of FIXED) {
+      const t = tiles.get(f.key), d = Math.hypot(cam.x - f.x, cam.z - f.z);
+      if (t && d > FIXED_OUT) dropTile(t);
+      if (t || d > FIXED_IN || engine.get<VehicleApi>('vehicle')?.look.body === f.body) continue;
+      const spec = SPEC_OF[f.body], nt: Tile = { key: f.key, recs: [], born: time, checked: false, body: null };
+      nt.recs.push({ tile: nt, body: f.body, heading: f.heading, hl: specLength(spec) / 2 + 0.15, state: 0, cols: [],
+        pos: new THREE.Vector3(f.x, 0.03 + spec.wheelRadius, f.z), quat: new THREE.Quaternion().setFromAxisAngle(_up, f.heading), colour: new THREE.Color(f.colour) });
+      tiles.set(f.key, nt);
+    }
   };
 
   const dropTile = (t: Tile) => {
@@ -349,6 +372,7 @@ export async function install(engine: Engine): Promise<void> {
     },
     fixedUpdate(dt) {
       time += dt;
+      if (statT % 30 === 0) fixedTiles(engine.camera.position);
       for (const t of tiles.values()) if (!t.checked && time - t.born > CHECK_DELAY) check(t);
       // Whatever is moving and might reach a parked car in the next 0.4 s turns it into a Vehicle first.
       const pv = engine.get<VehicleApi>('vehicle');

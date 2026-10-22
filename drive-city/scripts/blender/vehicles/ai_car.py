@@ -11,6 +11,10 @@
 #   python scripts/blender/vehicles/ai_car.py -- art/vehicles/lamborghini-ai.glb .scratch/blender/manniu.glb
 #   node scripts/vehicles/import.mjs .scratch/blender/manniu.glb .scratch/manniu/manniu.json --group
 #   node scripts/vehicles/pack.mjs .scratch/manniu/manniu.json public/models/vehicles/super.bin
+#
+#   python scripts/blender/vehicles/ai_car.py -- art/vehicles/toyota_corolla_ae86_trueno.glb .scratch/blender/ae86.glb
+#   node scripts/vehicles/import.mjs .scratch/blender/ae86.glb .scratch/ae86/ae86.json --group
+#   node scripts/vehicles/pack.mjs .scratch/ae86/ae86.json public/models/vehicles/ae86.bin
 import math
 import os
 import sys
@@ -21,10 +25,12 @@ from common import args, material  # noqa: E402
 import bpy  # noqa: E402
 import bmesh  # noqa: E402
 from mathutils import Vector  # noqa: E402
+from mathutils.bvhtree import BVHTree  # noqa: E402
 
 argv = args()
 SRC, OUT = argv[0], argv[1]
-PROFILE = argv[argv.index("--profile") + 1] if "--profile" in argv else ("lambo" if "lamborghini" in os.path.basename(SRC) else "ferrari")
+_base = os.path.basename(SRC)
+PROFILE = argv[argv.index("--profile") + 1] if "--profile" in argv else ("lambo" if "lamborghini" in _base else "ae86" if "ae86" in _base else "ferrari")
 
 # ---- 赤骏（ferrari-ai.glb：333 个按零件分开的物体，车头朝 +Y） ----
 # 零件名开头 -> 处理：删掉的（轮子由游戏代码画、座椅头枕穿出车顶、法拉利的黄盾和马是商标；车头下面的薄板、车尾的黑色底座
@@ -46,7 +52,8 @@ MAT = dict(rosso_corsa="paintU", rosso_highlight="paintU", rosso_dark="paintL", 
 COLOURS = dict(paintU=("#c41e1e", 0.3, 0.0), paintL=("#c41e1e", 0.3, 0.0), glass=("#0a0f14", 0.05, 0.0), glassDark=("#07090b", 0.05, 0.0),
                black=("#111213", 0.5, 0.0), gloss=("#0a0b0c", 0.14, 0.2), satin=("#a9adb2", 0.32, 0.9), rubber=("#0d0d0e", 0.85, 0.0),
                head=("#e8ecf0", 0.08, 0.6), tail=("#a01010", 0.12, 0.1), brake=("#c01010", 0.15, 0.0), amber=("#e09020", 0.1, 0.2),
-               plateF=("#2050c0", 0.35, 0.1), plateR=("#2050c0", 0.35, 0.1), liner=("#070708", 1.0, 0.0))
+               plateF=("#2050c0", 0.35, 0.1), plateR=("#2050c0", 0.35, 0.1), liner=("#070708", 1.0, 0.0),
+               seam=("#050505", 0.85, 0.0), reverse=("#c9cdd1", 0.1, 0.2), plateJ=("#f2f2ef", 0.35, 0.1), tofu=("#111111", 0.4, 0.0))
 # 减面：大零件按比例（hi / lo），小于这么多三角面的不动
 SMALL = 300
 
@@ -67,6 +74,181 @@ ENDS = (  # from y, to y (the tip), floor z, top z, rake, taper, corner round, c
     (-1.8, -2.46, 0.15, 0.89, -0.28, 0.12, 0.24, 0.15, 0.05),
 )
 
+# ---- AE86（toyota_corolla_ae86_trueno.glb，Sketchfab：28 个物体，名字都是 Object_N，一个物体一种材质；车头朝 -Y，
+# 引擎盖是黑色碳纤维盖，翻灯是翻起来的） ----
+# 2026-10-22，用户「头文字的AE86长这样，尽量还原」（电影剧照：熊猫配色，白色引擎盖，翻灯合着，两边车门都有「藤原とうふ店（自家用）」）
+AE86_XC = 0.035                                                             # 模型的中线不在 x 0（车身 -1.81..1.88）
+AE86_TYRES = {"Object_15", "Object_19", "Object_23", "Object_27"}            # 轮胎（量轮位用），前轮是 y < 0 的两个
+AE86_WHEELS = {f"Object_{n}" for n in (14, 15, 16, 18, 19, 20, 22, 23, 24, 26, 27, 28)}
+MAT_AE86 = {"Material.001": "paintU", "Material.002": "gloss", "Material.005": "reverse", "Material.006": "tail", "Material.007": "amber",
+            "Material.010": "black", "Material.011": "glass", "Material.012": "head", "Material.013": "seam", "Material.014": "tail",
+            "Material.034": "black", "fpostersmallwall_textureproduct750x1000": "plateJ", "tofu_shop.002": "tofu",
+            "HOOD": "paintU", "REV": "reverse"}
+
+
+def pieces(bm):
+    """Connected pieces of a bmesh (by shared vertices), as lists of faces."""
+    seen, out = set(), []
+    for f0 in bm.faces:
+        if f0.index in seen:
+            continue
+        piece, stack = [], [f0]
+        seen.add(f0.index)
+        while stack:
+            f = stack.pop()
+            piece.append(f)
+            for v in f.verts:
+                for g in v.link_faces:
+                    if g.index not in seen:
+                        seen.add(g.index)
+                        stack.append(g)
+        out.append(piece)
+    return out
+
+
+def src_mat(name):
+    m = bpy.data.materials.get("src_" + name)
+    return m or bpy.data.materials.new("src_" + name)
+
+
+def fit_uv(o, faces=None, flip_v=False):
+    """The model's UVs point into its own textures; the game's atlas graphics take 0..1 over the part (`flip_v`: the
+    model's texture is stored upside down, its lettering would read upside down in the atlas's)."""
+    uv = o.data.uv_layers[0].data
+    loops = [li for p in o.data.polygons if faces is None or p.index in faces for li in p.loop_indices]
+    us, vs = [uv[li].uv[0] for li in loops], [uv[li].uv[1] for li in loops]
+    u0, u1, v0, v1 = min(us), max(us), min(vs), max(vs)
+    for li in loops:
+        v = (uv[li].uv[1] - v0) / max(1e-6, v1 - v0)
+        uv[li].uv = ((uv[li].uv[0] - u0) / max(1e-6, u1 - u0), 1 - v if flip_v else v)
+
+
+def ae86_edit(meshes):
+    """
+    In the model's own frame (front -Y, metres x ~2.3). The film's car, not this one's tuned look:
+    - the pop-up lamps go down: the raised pods and their lenses go, and a lid in the body colour closes each bay, its
+      top continuing the hood and the fender's top, its front edge black like the lip below it;
+    - the hood and the fenders' tops are white (the model's carbon hood is black, 「车前盖是黑色的，而且有点厚重」);
+    - 藤原とうふ店 on both doors (the model has it on one), the plates and lamps with their UVs over 0..1 for the atlas.
+    """
+    by = {o.name: o for o in meshes}
+    body, lens = by["Object_5"], by["Object_8"]
+    ax = lambda x: abs(x - AE86_XC)
+    # the pods: the housings, their caps and backs and sides (black), and the front lenses
+    def drop_pieces(o, test):
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        gone = []
+        for piece in pieces(bm):
+            vs = [v.co for f in piece for v in f.verts]
+            lo = Vector([min(v[i] for v in vs) for i in range(3)])
+            hi = Vector([max(v[i] for v in vs) for i in range(3)])
+            if test(lo, hi):
+                gone += piece
+                if os.environ.get("AE86_DEBUG"):
+                    print("  piece", len(piece), [round(c, 2) for c in (lo.x, hi.x, lo.y, hi.y, lo.z, hi.z)])
+        bmesh.ops.delete(bm, geom=gone, context="FACES")
+        bm.to_mesh(o.data)
+        bm.free()
+        print("ae86: dropped", len(gone), "faces of", o.name)
+    inbay = lambda lo, hi: (lo.x - AE86_XC) * (hi.x - AE86_XC) > 0 and min(ax(lo.x), ax(hi.x)) > 0.82 and max(ax(lo.x), ax(hi.x)) < 1.47
+    pod = lambda lo, hi: inbay(lo, hi) and hi.y < -3.7 and (lo.z > 0.4 and lo.y > -4.25 or hi.z > 0.75)
+    walls = lambda lo, hi: hi.x - lo.x < 0.03 and 0.82 < ax(lo.x) < 1.47 and hi.y < -3.7 and hi.z > 0.75
+    # the lamps' buckets in the bays: their rims stand above a closed lid
+    bucket = lambda lo, hi: inbay(lo, hi) and lo.y > -4.35 and hi.y < -3.75 and lo.z > 0.25 and hi.z < 0.72
+    drop_pieces(body, lambda lo, hi: pod(lo, hi) or walls(lo, hi) or bucket(lo, hi))
+    drop_pieces(lens, lambda lo, hi: hi.y < 0)
+
+    # the hood and the fenders' tops: upward faces ahead of the screen
+    hood = src_mat("HOOD")
+    body.data.materials.append(hood)
+    hi_idx = len(body.data.materials) - 1
+    n = 0
+    for p in body.data.polygons:
+        c = p.center
+        if p.normal.z > 0.3 and c.y < -1.62 and c.z > 0.45 and ax(c.x) < 1.6:
+            p.material_index = hi_idx
+            n += 1
+    print("ae86: hood faces", n)
+
+    # the lids: top from the fender's front edge (behind the bay) falling as the hood does, front face down to the lip
+    tb = bmesh.new()
+    tb.from_mesh(body.data)
+    tree = BVHTree.FromBMesh(tb)
+    def down(x, y):
+        hit = tree.ray_cast(Vector((x, y, 3.0)), Vector((0, 0, -1)))
+        return hit[0].z if hit[0] is not None else None
+    YB, YF, X0, X1, ZLIP = -3.79, -4.25, 0.835, 1.445, 0.31
+    hz = lambda y: down(AE86_XC + 0.77, y)
+    nx, ny = 5, 4
+    verts, faces, mats = [], [], []
+    for side in (1, -1):
+        b = len(verts)
+        for j in range(ny + 1):
+            y = YB + (YF - YB) * j / ny
+            for i in range(nx + 1):
+                x = X0 + (X1 - X0) * i / nx
+                zb = down(AE86_XC + x * side, YB + 0.03) or hz(YB)
+                verts.append((AE86_XC + x * side, y, zb + (hz(y) - hz(YB)) + 0.006))
+        for j in range(ny):
+            for i in range(nx):
+                a = b + j * (nx + 1) + i
+                q = [a, a + 1, a + nx + 2, a + nx + 1]
+                faces.append(q if side < 0 else q[::-1])
+                mats.append(0)
+        # front face: the top's front row down to the lip
+        f0 = b + ny * (nx + 1)
+        lb = len(verts)
+        for i in range(nx + 1):
+            x, y, z = verts[f0 + i]
+            verts.append((x, y - 0.004, ZLIP))
+        for i in range(nx):
+            q = [f0 + i, f0 + i + 1, lb + i + 1, lb + i]
+            faces.append(q if side > 0 else q[::-1])
+            mats.append(1)
+    me = bpy.data.meshes.new("lids")
+    me.from_pydata(verts, [], faces)
+    me.materials.append(hood)
+    me.materials.append(src_mat("Material.002"))
+    for p, m in zip(me.polygons, mats):
+        p.material_index = m
+    me.uv_layers.new()
+    lids = bpy.data.objects.new("lids", me)
+    bpy.context.scene.collection.objects.link(lids)
+
+    # the lettering on the other door too: mirrored, its faces turned and its u flipped so it reads
+    src = by["Object_38"]
+    me = src.data.copy()
+    for v in me.vertices:
+        v.co.x = 2 * AE86_XC - v.co.x
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.reverse_faces(bm, faces=list(bm.faces), flip_multires=False)
+    uvl = bm.loops.layers.uv.active
+    for f in bm.faces:
+        for l in f.loops:
+            l[uvl].uv.x = 1 - l[uvl].uv.x
+    bm.to_mesh(me)
+    bm.free()
+    door2 = bpy.data.objects.new("Object_38_mirror", me)
+    bpy.context.scene.collection.objects.link(door2)
+
+    # UVs over 0..1 for the atlas graphics: the plates, the lamps
+    for name in ("Object_7", "Object_10", "Object_6"):
+        fit_uv(by[name])
+    for name in ("Object_30", "Object_33", "Object_38"):
+        fit_uv(by[name], flip_v=True)
+    fit_uv(door2, flip_v=True)
+    # the tail lamps' inner sections are the reversing lamps, the outer ones red
+    o = by["Object_12"]
+    o.data.materials.append(src_mat("REV"))
+    for p in o.data.polygons:
+        if ax(p.center.x) < 1.0:
+            p.material_index = 1
+    fit_uv(o)
+    return [lids, door2]
+
+
 PROFILES = dict(
     ferrari=dict(
         forward="+y", wheels="1.40,-1.36,0.34",
@@ -84,6 +266,13 @@ PROFILES = dict(
         # the parts are merged by material, so the low blades at the ends (a splitter out in front, a toothed diffuser
         # behind: 「像推土机一样」 on 赤骏) go by place: black faces under 0.22 m, ahead of the nose's start or behind the tail's
         trim=lambda c, mat: mat == "black" and c.z < 0.22 and (c.y > 1.95 or c.y < -1.8)),
+    # AE86: a wheelbase of 2.40 m and the model's own 0.72 m half track; the plates are the model's (群馬55 お13-954)
+    ae86=dict(
+        forward="-y", wheels="1.26,-1.14,0.29",
+        tyre=lambda n: n in AE86_TYRES, front=lambda n: n in ("Object_23", "Object_27"),
+        drop=lambda n: n in AE86_WHEELS, detail=lambda n: n in ("Object_11", "Object_39", "Object_31", "Object_34"), mat=MAT_AE86,
+        ends=(), half_w=0.8, decimate=dict(hi=1.0, lo=0.55),
+        plate_r=None, plate_f=None, plate_size=(0.3, 0.15), well=(0.5, 0.78), trim=None, edit=ae86_edit, xc=AE86_XC),
 )
 P = PROFILES[PROFILE]
 ZF, ZR, RADIUS = (float(v) for v in (argv[argv.index("--wheels") + 1] if "--wheels" in argv else P["wheels"]).split(","))
@@ -128,11 +317,21 @@ M = {k: material(k, *v) for k, v in COLOURS.items()}
 meshes = [o for o in bpy.data.objects if o.type == "MESH"]
 # every mesh in the world frame, turned so the car faces +Y (Blender's +X is then its right)
 for o in meshes:
-    o.data.transform(o.matrix_world)
+    # (the AE86's parts hang under scaled empties: unparented, or the export puts the parents' scale on again)
+    mw = o.matrix_world.copy()
+    o.parent = None
+    o.data.transform(mw)
     o.matrix_world.identity()
+    o.data.update()
+if P.get("edit"):
+    meshes += P["edit"](meshes)
+for o in meshes:
     if P["forward"] == "-x":
         for v in o.data.vertices:
             v.co = Vector((v.co.y, -v.co.x, v.co.z))
+    elif P["forward"] == "-y":
+        for v in o.data.vertices:
+            v.co = Vector((-v.co.x, -v.co.y, v.co.z))
     o.data.update()
 
 # the model's own wheels: where they stand and how big, before they go
@@ -189,6 +388,8 @@ for o in meshes:
     for v in o.data.vertices:
         c = shape(v.co)
         v.co = Vector((c.x * s, (c.y - yR) * s + ZR, (c.z - hub) * s))
+        if P.get("xc"):  # the model's centre line onto x 0 (turned with the model: -y flips x)
+            v.co.x += P["xc"] * s * (1 if P["forward"] == "-y" else -1)
     o.data.update()
     for i, m in enumerate(o.data.materials):
         key = P["mat"].get(m.name[4:] if m else "", "black")
@@ -243,13 +444,13 @@ def surface(z, from_front):
     y0 = hi.y + 1 if from_front else lo.y - 1
     ok, loc, *_ = bpy.context.scene.ray_cast(dg, Vector((0, y0, z)), Vector((0, -1 if from_front else 1, 0)))
     return loc.y if ok else None
-zr = (P["plate_r"] - hub) * s
-yb = surface(zr, False)
+zr = ((P["plate_r"] or 0) - hub) * s
+yb = surface(zr, False) if P["plate_r"] else None
 if yb is not None:
     pw, ph = P["plate_size"]
     meshes.append(plate("plateR", "plateR", -pw / 2, pw / 2, zr - ph / 2, zr + ph / 2, yb - 0.03, -1))
-zf = (P["plate_f"] - hub) * s
-yf = surface(zf, True)
+zf = ((P["plate_f"] or 0) - hub) * s
+yf = surface(zf, True) if P["plate_f"] else None
 if yf is not None:
     meshes.append(plate("plateF", "plateF", -0.2, 0.2, zf - 0.055, zf + 0.055, yf + 0.008, 1))
 

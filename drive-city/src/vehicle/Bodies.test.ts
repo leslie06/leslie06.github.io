@@ -34,6 +34,8 @@ const EXPECT: Record<BodyType, { v: number; within: number; brakeFrom: number; s
   limo: { v: 100, within: 7, brakeFrom: 60, stop: 21, topMin: 230 },
   // 蛮牛 (2026-10-19): the quickest of all
   super: { v: 100, within: 3, brakeFrom: 60, stop: 17, topMin: 320 },
+  // AE86 (2026-10-22): light and lively, not fast
+  ae86: { v: 100, within: 9.5, brakeFrom: 60, stop: 22, topMin: 180 },
 };
 
 const rigFor = (t: BodyType) => Rig.create({ spec: SPEC_OF[t], at: { x: 0, y: SPEC_OF[t].wheelRadius + 0.05, z: 0 } });
@@ -156,7 +158,7 @@ describe.each(BODY_TYPES)('%s', (t) => {
 });
 
 // The luxury cars are much faster than anything else: the taxi's high-speed probes (Handling.test.ts), on them too.
-describe.each(['coupe', 'limo', 'super'] as const)('%s at speed', (t) => {
+describe.each(['coupe', 'limo', 'super', 'ae86'] as const)('%s at speed', (t) => {
   it('nervous key taps at 120 km/h keep it on its line', async () => {
     const rig = await rigFor(t); rig.settle(0.5); rig.launch(120 / KMH);
     const hold = () => (rig.car.forwardSpeed * KMH < 120 ? 1 : 0);

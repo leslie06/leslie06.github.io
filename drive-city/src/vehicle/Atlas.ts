@@ -35,6 +35,9 @@ export const PX = {
   grilleWave: { x: 512, y: 512, w: 256, h: 128 },
   head2: { x: 768, y: 512, w: 256, h: 128 },
   tail2: { x: 0, y: 640, w: 256, h: 128 },
+  // AE86 (2026-10-22): 藤原とうふ店（自家用） on the doors (black, cut out) and the Gunma plate
+  tofu: { x: 256, y: 640, w: 512, h: 64 },
+  plateJ: { x: 768, y: 640, w: 128, h: 64 },
 } as const satisfies Record<string, PxRect>;
 
 export type AtlasKey = keyof typeof PX;

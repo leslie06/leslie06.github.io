@@ -95,7 +95,7 @@ export async function install(engine: Engine): Promise<void> {
   const holder = (b: string) => fleet.find((m) => slotOf(m.p.body) === slotOf(b)) ?? null;
   const mineOf = (car: Vehicle) => fleet.find((m) => m.car === car) ?? null;
   const bodyHere = () => { const v = vehicle(); return v.look.body ?? bodyOfSpec(v.car.spec); };
-  const nameOf = (p: Profile) => p.body === 'coupe' || p.body === 'super' || p.body === 'limo' ? t(`car.${p.body}`) : p.taxi ? t('garage.kind.taxi') : t(`garage.kind.${p.body}` as 'garage.kind.sedan');
+  const nameOf = (p: Profile) => p.body === 'coupe' || p.body === 'super' || p.body === 'limo' || p.body === 'ae86' ? t(`car.${p.body}`) : p.taxi ? t('garage.kind.taxi') : t(`garage.kind.${p.body}` as 'garage.kind.sedan');
   /**
    * The Vehicle of one of yours, if it is still that car: the one you are in or got out of, one parked in the street (or
    * the pound's). The street may have taken one back since the last look (despawned, its Vehicle up for reuse).

@@ -17,8 +17,8 @@ import { retry } from '../core/Retry';
  * a full-detail car and CarKit into instanced traffic. Node-safe: no DOM here.
  */
 
-export type BodyType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'moto' | 'bike' | 'ebike' | 'coupe' | 'limo' | 'super';
-export const BODY_TYPES: readonly BodyType[] = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'moto', 'bike', 'ebike', 'coupe', 'limo', 'super'];
+export type BodyType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'moto' | 'bike' | 'ebike' | 'coupe' | 'limo' | 'super' | 'ae86';
+export const BODY_TYPES: readonly BodyType[] = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'moto', 'bike', 'ebike', 'coupe', 'limo', 'super', 'ae86'];
 export type Detail = 'high' | 'low';
 
 /** What the livery adds to the geometry. */
@@ -87,6 +87,9 @@ function palette(style: { grille: 'grille' | 'grilleBars' | 'grilleSlim' | 'gril
     door: surf('taxi', '#ffffff', 0.4, 0, LAMP.none, { rect: uv('door'), flags: F_CUTOUT }),
     sideText: surf('lamp', '#ffffff', 0.4, 0, LAMP.none, { rect: uv('side'), flags: F_CUTOUT }),
     badge: surf('trim', '#ffffff', 0.15, 0.9, 0, { rect: uv('badge') }),
+    // AE86 (2026-10-22): its own plate (the film's) and the door lettering, cut out like the taxi's
+    plateJ: surf('trim', '#ffffff', 0.35, 0.1, 0, { rect: uv('plateJ') }),
+    tofu: surf('lamp', '#ffffff', 0.4, 0, LAMP.none, { rect: uv('tofu'), flags: F_CUTOUT }),
   };
 }
 type Pal = ReturnType<typeof palette>;
@@ -759,14 +762,19 @@ const WHEEL_SURFS: Record<string, Surf> = {
 /** Each Blender wheel's nominal radius and width (what wheel.py models it at). */
 const WHEEL_SIZE = { alloy: [0.32, 0.21], steel: [0.48, 0.28] } as const;
 
+/** Black rims (the AE86's, 2026-10-22: the film's car has black wheels): the alloy, its lip and the cap. */
+const BLACK_RIMS: Record<string, Surf> = {
+  ...WHEEL_SURFS, alloy: surf('trim', '#161718', 0.38, 0.45), lip: surf('trim', '#2a2b2d', 0.22, 0.7), cap: surf('trim', '#1c1d1f', 0.3, 0.6),
+};
+
 /** A wheel: the Blender model of its style scaled to the spec's radius and width, else the code's. */
-function modelWheel(r: number, width: number, detail: Detail, style: WheelStyle): Mesher {
+function modelWheel(r: number, width: number, detail: Detail, style: WheelStyle, surfs = WHEEL_SURFS): Mesher {
   const kind = style.steel ? 'steel' : 'alloy';
   const data = MODEL_DATA.wheels?.[`${kind}_${detail === 'high' ? 'hi' : 'lo'}`];
   if (!data || OLD_CARS) return wheel(r, width, detail, style);
   const m = new Mesher();
   const [r0, w0] = WHEEL_SIZE[kind];
-  addModel(m, data, WHEEL_SURFS, new THREE.Matrix4().makeScale(width / w0, r / r0, r / r0));
+  addModel(m, data, surfs, new THREE.Matrix4().makeScale(width / w0, r / r0, r / r0));
   return m;
 }
 
@@ -791,7 +799,7 @@ export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, 
     case 'truck': return OLD_CARS || !MODEL_DATA.truck ? buildTruck(spec, opts, detail) : buildModelBody('truck', spec, opts, detail);
     case 'moto': case 'bike': case 'ebike': return buildTwoWheeler(type, spec, detail);
     // the luxury bodies (2026-10-18) have no procedural version: a saloon's stands in until theirs has loaded
-    case 'coupe': case 'limo': case 'super': return OLD_CARS || !MODEL_DATA[type] ? buildCarBody(type, sedanParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
+    case 'coupe': case 'limo': case 'super': case 'ae86': return OLD_CARS || !MODEL_DATA[type] ? buildCarBody(type, sedanParams(spec), spec, opts, detail) : buildModelBody(type, spec, opts, detail);
     default: return OLD_CARS || !MODEL_DATA.sedan ? buildCarBody(type, sedanParams(spec), spec, opts, detail) : buildModelBody('sedan', spec, opts, detail);
   }
 }
@@ -799,13 +807,15 @@ export function buildBody(type: BodyType, spec: VehicleSpec, opts: BodyOptions, 
 /** `?cars=old` in a page: the procedural bodies for the types that have a Blender model (A/B). */
 const OLD_CARS = typeof location !== 'undefined' && new URLSearchParams(location.search).get('cars') === 'old';
 
-type CarModelType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'coupe' | 'limo' | 'super';
+type CarModelType = 'sedan' | 'hatch' | 'suv' | 'mpv' | 'bus' | 'truck' | 'coupe' | 'limo' | 'super' | 'ae86';
 
 /** Where each Blender car body's roof sign and light bar stand (z), and which atlas graphics it wears. */
 interface ModelInfo {
   zRoof: number; zBar: number; style: Parameters<typeof palette>[0];
   /** Steel wheels, twin rear tyres this far apart (0: single), and the surface the headlamps are. */
   steel?: boolean; dual?: number; head?: string;
+  /** Black rims and no red callipers. */
+  blackRims?: boolean;
 }
 const MODELS: Record<CarModelType, ModelInfo> = {
   sedan: { zRoof: -0.46, zBar: -0.39, style: { grille: 'grille', head: 'head', tail: 'tail' } },
@@ -818,11 +828,14 @@ const MODELS: Record<CarModelType, ModelInfo> = {
   limo: { zRoof: -0.6, zBar: -0.52, style: { grille: 'grilleBars', head: 'head', tail: 'tail' } },
   // 蛮牛 (2026-10-19): the user's AI model through scripts/blender/vehicles/ai_car.py, no roof sign or light bar ever
   super: { zRoof: -0.1, zBar: -0.1, style: { grille: 'grilleSlim', head: 'head2', tail: 'tail2' } },
+  // AE86 (2026-10-22, 「头文字的AE86长这样，尽量还原」): a Sketchfab model through ai_car.py (pop-ups closed, white hood,
+  // lettering on both doors); the lamps that light at night are the bumper's
+  ae86: { zRoof: -0.1, zBar: -0.1, style: { grille: 'grilleSlim', head: 'head2', tail: 'tail' }, blackRims: true },
 };
 
 /** The bodies' geometry, packed files under public/models/vehicles (~135 KB gzipped each): `readyBodies()` fills this. */
 const MODEL_DATA: Partial<Record<CarModelType | 'wheels', Record<string, Model>>> = {};
-const SOURCES = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'coupe', 'limo', 'super', 'wheels'] as const;
+const SOURCES = ['sedan', 'hatch', 'suv', 'mpv', 'bus', 'truck', 'coupe', 'limo', 'super', 'ae86', 'wheels'] as const;
 
 /** A packed model (public/models/vehicles/<name>.bin, scripts/vehicles/pack.mjs): fetched in a page, read from disk in Node. */
 async function loadPacked(name: string): Promise<Record<string, Model>> {
@@ -873,7 +886,7 @@ export const bodySettled = (k: BodySource): boolean => settled.has(k);
  * the model has at `zRoof` / `zBar`; the wheels are the code's.
  */
 function buildModelBody(type: CarModelType, spec: VehicleSpec, opts: BodyOptions, detail: Detail): BodyParts {
-  const { style, steel, dual = 0, head = 'head', ...at } = MODELS[type];
+  const { style, steel, dual = 0, head = 'head', blackRims, ...at } = MODELS[type];
   const model = MODEL_DATA[type]!;
   const pal = palette(style);
   const surfs = pal as unknown as Record<string, Surf>;
@@ -881,6 +894,7 @@ function buildModelBody(type: CarModelType, spec: VehicleSpec, opts: BodyOptions
   const hi = model[detail === 'high' ? 'hi' : 'lo'];
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const k of ['paintU', 'paintL']) {
+    if (!hi[k]) continue;   // the AE86's black is trim, not a lower tone
     const p = hi[k].p;
     for (let i = 0; i < p.length; i += 3) {
       x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]); y0 = Math.min(y0, p[i + 1]); y1 = Math.max(y1, p[i + 1]); z0 = Math.min(z0, p[i + 2]); z1 = Math.max(z1, p[i + 2]);
@@ -912,9 +926,9 @@ function buildModelBody(type: CarModelType, spec: VehicleSpec, opts: BodyOptions
   const fw = spec.wheels[0].x;
   return {
     type, body: m,
-    wheel: modelWheel(spec.wheelRadius, spec.wheelWidth, detail, wheelStyle),
+    wheel: modelWheel(spec.wheelRadius, spec.wheelWidth, detail, wheelStyle, blackRims ? BLACK_RIMS : WHEEL_SURFS),
     wheelRear: null, dual,
-    calliper: detail === 'high' && !steel ? calliper(spec.wheelRadius, spec.wheelWidth) : null,
+    calliper: detail === 'high' && !steel && !blackRims ? calliper(spec.wheelRadius, spec.wheelWidth) : null,
     headlamps: [c.clone(), new THREE.Vector3(-c.x, c.y, c.z)],
     size: { length: (z1 - z0) / 1000, width: Math.max(2 * (fw + spec.wheelWidth / 2), (x1 - x0) / 1000), height: y1 / 1000 + spec.wheelRadius },
   };

@@ -251,7 +251,7 @@ export async function install(engine: Engine): Promise<void> {
       const cur = car, next = new Vehicle(engine.physics, SPEC_OF[testCar], { x: 0, y: -600, z: 0 }, 0);
       next.reset({ x: cur.pos.x, y: cur.pos.y + 0.1, z: cur.pos.z }, Math.atan2(cur.fwd.x, cur.fwd.z));
       const liv = defaultLivery(testCar);
-      const own = testCar === 'coupe' ? '#c41e1e' : testCar === 'super' ? '#9bd21c' : null;
+      const own = testCar === 'coupe' ? '#c41e1e' : testCar === 'super' ? '#9bd21c' : testCar === 'ae86' ? '#f2f2ef' : null;
       const paint = new THREE.Color(own ?? liv.upper);
       const prev = api.swapCar(next, { upper: paint, lower: own ? paint.clone() : new THREE.Color(liv.lower), taxi: false, body: testCar });
       prev.car.body.setTranslation({ x: 0, y: -600, z: 0 }, false);
