@@ -1,6 +1,6 @@
 import type { Engine, System } from '../core/Engine';
 import { lang, t, type TKey } from '../core/I18n';
-import type { VehicleApi, WorldApi } from '../game/Contracts';
+import type { MissionApi, VehicleApi, WorldApi } from '../game/Contracts';
 import type { NavSystem } from '../nav';
 import { TIERS, type AreaCell, type RoadCell } from '../nav/MapData';
 import { INK, drawBlip, drawPlayer, routeColor, screenAngle, type MarkKind } from '../nav/Draw';
@@ -36,6 +36,13 @@ css(`
 .navmap .dest .acts button{pointer-events:auto;cursor:pointer;min-height:40px;padding:8px 10px;border-radius:8px;text-align:left;
   font:700 13px/1.25 ${F.ui};color:${C.paper};background:rgba(243,181,15,.12);border:1px solid ${C.yellowDim}}
 .navmap .dest .acts button.back{background:${C.yellow};color:${C.ink};border-color:${C.yellow}}
+.navmap .go[hidden]{display:none}
+.navmap .go .acts{display:grid;gap:7px}
+.navmap .go .acts button{pointer-events:auto;cursor:pointer;min-height:40px;padding:8px 10px;border-radius:8px;text-align:left;
+  font:700 13px/1.25 ${F.ui};color:${C.paper};background:rgba(243,181,15,.12);border:1px solid ${C.yellowDim};touch-action:manipulation}
+.navmap .go .acts button:hover,.navmap .go .acts button:focus-visible{border-color:${C.yellow}}
+.navmap .go .why{margin-top:8px;font:600 12px/1.3 ${F.ui};color:${C.yellow}}
+.navmap .go .why:empty{display:none}
 .navmap .legend .row{display:flex;align-items:center;gap:10px;height:25px;font:500 13px/1 ${F.ui}}
 .navmap .legend canvas{width:22px;height:22px;flex:none}
 .navmap .keys{position:absolute;left:50%;bottom:max(20px,3vh);transform:translateX(-50%);display:flex;gap:20px;align-items:center;padding:10px 18px;border-radius:9px;
@@ -155,6 +162,29 @@ export class MapScreen implements System {
   private readonly tmp = { x: 0, z: 0, dx: 0, dz: 0 };
   /** Places and interchanges drawn in the last frame, for clicking one as the waypoint. */
   private readonly labels = new Labeller(LABELS);
+  private go!: HTMLDivElement;
+  private goList!: HTMLDivElement;
+  private goWhy!: HTMLDivElement;
+
+  /** The 快速前往 card: a button for each of missions' `travelSpots`, rebuilt on each opening (the labels follow the language). */
+  private buildGo(): void {
+    const m = this.engine.get<MissionApi>('missions');
+    const spots = m?.travelSpots?.() ?? [];
+    this.go.hidden = !spots.length;
+    this.goList.replaceChildren();
+    this.goWhy.textContent = '';
+    for (const s of spots) {
+      const b = el('button', '', this.goList);
+      b.type = 'button';
+      b.textContent = `→ ${s.label}`;
+      for (const event of ['pointerdown', 'pointerup', 'pointermove'] as const) b.addEventListener(event, (e) => e.stopPropagation());
+      b.addEventListener('click', () => {
+        const why = m?.travel?.(s.id) ?? null;
+        if (why) { this.goWhy.textContent = why; return; }
+        this.close();
+      });
+    }
+  }
 
   constructor(private engine: Engine, container: HTMLElement) {
     const root = this.root = el('div', 'navmap', container);
@@ -178,6 +208,12 @@ export class MapScreen implements System {
     for (const b of [this.backBtn, this.goalBtn]) for (const event of ['pointerdown', 'pointerup', 'pointermove'] as const) b.addEventListener(event, (e) => e.stopPropagation());
     this.backBtn.addEventListener('click', () => { this.clearWaypoint(); const g = this.nav?.goal; if (g) this.focus(g.x, g.z); this.drawn.version = -1; });
     this.goalBtn.addEventListener('click', () => { const g = this.nav?.goal; if (g) { this.focus(g.x, g.z, Math.max(this.s, 0.5)); this.drawn.version = -1; } });
+    // 快速前往 (2026-10-22, 「给个入口可以直接到藤原豆腐店或者妙峰山入口」): the starts of 送豆腐 (missions' `travelSpots`)
+    this.go = el('div', 'card go', side);
+    el('h2', '', this.go).appendChild(L('travel.title'));
+    this.goList = el('div', 'acts', this.go);
+    this.goWhy = el('div', 'why', this.go);
+    this.go.hidden = true;
     const legend = el('div', 'card legend', side);
     el('h2', '', legend).appendChild(L('map.legend'));
     const rows: [MarkKind | 'you' | 'route' | 'search', TKey][] = [['you', 'map.you'], ['waypoint', 'map.waypoint'], ['mission', 'map.mission'], ['story', 'map.story'], ['pickup', 'map.pickup'], ['dropoff', 'map.dropoff'],
@@ -236,6 +272,7 @@ export class MapScreen implements System {
     this.engine.input.exitLock();
     this.engine.events.emit('game:pause', { paused: true });
     this.root.hidden = false;
+    this.buildGo();
     this.savedRender = this.engine.renderFrame;
     this.engine.renderFrame = this.noRender;
     this.drawn.version = -1;

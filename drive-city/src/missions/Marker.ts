@@ -31,9 +31,10 @@ export class Marker {
     scene.add(this.group);
   }
 
-  /** `scale` shrinks the column and ring (a hailer on the kerb is a smaller mark than a destination). */
-  show(x: number, z: number, color: string, scale = 1): void {
-    this.group.position.set(x, 0, z);
+  /** `scale` shrinks the column and ring (a hailer on the kerb is a smaller mark than a destination); `y` the ground there
+   *  (妙峰山: 0 left the top's and the foot's lights buried in the hill). */
+  show(x: number, z: number, color: string, scale = 1, y = 0): void {
+    this.group.position.set(x, y, z);
     this.group.scale.setScalar(scale);
     this.col.uniforms.uColor.value.set(color);
     this.ring.color.set(color);

@@ -75,22 +75,24 @@ export async function install(engine: Engine): Promise<void> {
    * same level - a deck or the road under it), facing along it; or where it is, if there is none (the
    * yard). A car wedged against a pier or a parapet got nowhere by being set upright in place.
    */
-  const backOnRoad = (p: THREE.Vector3Like = car.pos): { pos: { x: number; y: number; z: number }; yaw: number } | null => {
+  /** Off the road down a hillside (妙峰山: a slide down from a hairpin can leave the nearest lane well over 40 m away), the search widens. */
+  const backOnRoad = (p: THREE.Vector3Like = car.pos): { pos: { x: number; y: number; z: number }; yaw: number } | null => roadWithin(p, 40) ?? roadWithin(p, 160);
+  const roadWithin = (p: THREE.Vector3Like, r: number): { pos: { x: number; y: number; z: number }; yaw: number } | null => {
     const g = engine.get<{ name: string; graph: LaneGraph }>('traffic')?.graph;
     if (!g) return null;
     const at = { x: 0, z: 0, dx: 0, dz: 0 };
     // In a dead-end branch, face the way out (「进了死胡同，开不出去了」): the lane heading out wins,
     // and a one-way heading in is taken backwards.
     const dead = engine.get<DeadEndApi>('deadEnds');
-    // Lane points every 4 m within 40 m, nearest (and nearest in height) first.
+    // Lane points every 4 m within `r`, nearest (and nearest in height) first.
     const cand: { score: number; x: number; h: number; z: number; yaw: number }[] = [];
-    for (const id of g.near(p.x, p.z, 40)) {
+    for (const id of g.near(p.x, p.z, r)) {
       const l = g.links[id];
       const inward = !!dead?.inward(l.from, l.to), flip = inward && l.rev < 0;
       for (let s = 2; s < l.len - 2; s += 4) {
         g.at(l, s, g.laneOffset(l, 0), at);
         const h = g.heightAt(l, s), d = Math.hypot(at.x - p.x, at.z - p.z);
-        if (d > 40) continue;
+        if (d > r) continue;
         cand.push({ score: d + Math.abs(h - (p.y - 0.4)) * 3 + (inward && !flip ? 12 : 0), x: at.x, h, z: at.z, yaw: Math.atan2(at.dx, at.dz) + (flip ? Math.PI : 0) });
       }
     }

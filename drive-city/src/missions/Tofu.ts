@@ -1,6 +1,6 @@
 import type { Engine } from '../core/Engine';
 import { t } from '../core/I18n';
-import type { Blip, CameraApi, NavApi, PlayerApi, RenderApi, VehicleApi } from '../game/Contracts';
+import type { Blip, CameraApi, NavApi, PlayerApi, RenderApi, VehicleApi, WorldApi } from '../game/Contracts';
 import type { ParkingApi } from '../parking';
 import type { MountainApi } from '../mountain';
 import { Fade } from '../campaign/Screens';
@@ -16,7 +16,8 @@ import { WaterCup } from './WaterCup';
  * foot of 妙峰山路 (the 25 km out of town are the cut, as in the film), a cup of water on the dashboard (WaterCup,
  * CupHud). Up: the tofu to the top (the turning circle past the 牌楼) on a clock, paid by the water left in the cup.
  * Then down: back to the foot against the stopwatch, the same cup, a bonus for the time and the water, the best time
- * kept. The cup empty, the time up, out of the car, out of the AE86, busted or reset (R) and the run is off.
+ * kept. The cup empty, the time up, out of the car, out of the AE86, busted or reset (R) and the run is off. It starts at
+ * the shop or at the foot (`STARTS`): from the west of the city 亮马桥 is 20 km away.
  *
  * Side content: it never takes the navigation until the player starts it, and it does not start while a job, a fare,
  * a race, a chapter or the police are on (missions/index.ts). The shop's AE86 is parking/'s `FIXED` car; one driven off
@@ -25,6 +26,15 @@ import { WaterCup } from './WaterCup';
 
 /** The light on the apron, north of the parked AE86 (the shop's frame: (4.4, 1.5)). */
 const SHOP = { x: 5610.36, z: -4486.52 };
+/**
+ * Where it starts: the shop, and (2026-10-22, 「我在西五环开车，我想去送豆腐，却要跑到亮马桥，很远」) the foot of 妙峰山, by a
+ * second AE86 on 京拉路's verge (parking/'s `FIXED`): 8 m ahead of its nose (mountain.bin road 0 point 1233, 6.4 m right of
+ * the centre line). `y`: the ground. Each has its light, its blip and its words.
+ */
+const STARTS = [
+  { ...SHOP, y: 0, place: 'travel.shop', name: 'tofu.name', hint: 'tofu.hint', board: 'tofu.board', boardOut: 'tofu.boardOut' },
+  { x: -19562.47, z: -2385.3, y: 34.55, place: 'travel.foot', name: 'tofu.nameFoot', hint: 'tofu.hintFoot', board: 'tofu.boardFoot', boardOut: 'tofu.boardOutFoot' },
+] as const;
 /** The lights (the shop's, the top's, the foot's): soy-milk beige - white glared at night (the column is additive). */
 const MARK = '#d9c690';
 /** Up: a base, so much for a full cup, a bonus for barely a drop spilt (≥ 95%). Down: per second under DOWN_PAR, and
@@ -44,7 +54,7 @@ export interface TofuDeps { addCash(n: number): void; toast(s: string): void; rn
 
 export class Tofu {
   private stage: Stage = 'idle';
-  private readonly marker: Marker;
+  private readonly markers: Marker[];
   private readonly target: Marker;
   private readonly cup = new WaterCup();
   private readonly hud = new CupHud();
@@ -56,19 +66,25 @@ export class Tofu {
   private t = 0;
   private limit = 0;
   private hudT = 0;
-  private markerOn = false;
+  private readonly markerOn = STARTS.map(() => false);
+  /** The start in use (STARTS). */
+  private from = 0;
   /** The mountain is in and the AE86 at its foot (set in the dark). */
   private placed = false;
   /** Our own teleport fires 'vehicle:reset': not the player's R. */
   private moving = false;
+  /** On the way to a start (`travel`): in the dark while it loads. */
+  travelling = false;
+  /** Put down by `travel`: the light starts nothing until the player has been out of reach of it. */
+  private disarmed = false;
   private best = 0;
-  private top = { x: 0, z: 0 };
-  private foot = { x: 0, z: 0 };
+  private top = { x: 0, y: 0, z: 0 };
+  private foot = { x: 0, y: 0, z: 0 };
   private readonly blips: Blip[] = [];
   objective: string | null = null;
 
   constructor(private engine: Engine, private deps: TofuDeps) {
-    this.marker = new Marker(engine.scene);
+    this.markers = STARTS.map(() => new Marker(engine.scene));
     this.target = new Marker(engine.scene);
     try { this.best = Number(localStorage.getItem(BEST_KEY) ?? 0) || 0; } catch { /* private mode */ }
     engine.events.on('vehicle:impact', ({ strength }) => { if ((this.stage === 'up' || this.stage === 'down') && this.pl().mode === 'driving') this.cup.impact(strength); });
@@ -80,7 +96,7 @@ export class Tofu {
   /** Probes: where it starts, its stage, the cup, where it is going, the clock; the best time down. */
   get debug() {
     const dest = this.stage === 'up' ? this.top : this.stage === 'down' ? this.foot : null;
-    return { shop: SHOP, stage: this.stage, level: this.cup.level, dest, left: this.limit - this.t, t: this.t, best: this.best, cup: this.cup };
+    return { shop: SHOP, starts: STARTS.map((s) => ({ x: s.x, z: s.z })), from: this.from, stage: this.stage, level: this.cup.level, dest, left: this.limit - this.t, t: this.t, best: this.best, cup: this.cup };
   }
 
   private pl(): PlayerApi { return this.engine.get<PlayerApi>('player')!; }
@@ -90,7 +106,7 @@ export class Tofu {
 
   provideBlips(): Blip[] {
     this.blips.length = 0;
-    if (this.stage === 'idle' && this.cooldown <= 0) this.blips.push({ kind: 'target', x: SHOP.x, z: SHOP.z, label: t('tofu.name') });
+    if (this.stage === 'idle' && this.cooldown <= 0) for (const s of STARTS) this.blips.push({ kind: 'target', x: s.x, z: s.z, label: t(s.name) });
     return this.blips;
   }
 
@@ -100,6 +116,53 @@ export class Tofu {
     if (this.inAe86()) { this.goDark(); return; }
     this.stage = 'board';
     this.engine.get<ParkingApi>('parking')?.restock();
+  }
+
+  /** The starts, for the map's 快速前往. */
+  get starts(): readonly { x: number; z: number; name: string }[] { return STARTS.map((s) => ({ x: s.x, z: s.z, name: t(s.place) })); }
+
+  /**
+   * Fast travel to start `i` (the map's 快速前往, 2026-10-22: 「给个入口可以直接到藤原豆腐店或者妙峰山入口」): the screen goes
+   * dark while the place loads (the city's tiles there; the mountain), then the car driven stands in the lane nearest the
+   * light, or the player on foot between the light and that lane. The caller checks that nothing is on (missions/index.ts).
+   */
+  async travel(i: number): Promise<void> {
+    if (this.travelling || this.stage !== 'idle') return;
+    this.travelling = true;
+    const S = STARTS[i], v = this.veh(), pl = this.pl(), driving = pl.mode === 'driving';
+    this.fade ??= new Fade();
+    this.fade.to(true);
+    let ok = false;
+    try {
+      // the map closes first (closing gives the wheel back), then the wheel is held through the dark
+      await new Promise((r) => setTimeout(r, 0));
+      v.inputEnabled = false;
+      await new Promise((r) => setTimeout(r, 700));
+      if (S.y > 0) await this.engine.get<MountainApi>('mountain')?.load();
+      await this.engine.get<WorldApi>('world')?.preload?.(S.x, S.z);
+      const lane = v.roadPoseNear?.(S.x, S.y + 0.5, S.z);
+      if (lane) {
+        if (driving) {
+          // 25 m back down the lane, the light ahead (in it, the run would start at once)
+          const back = v.roadPoseNear?.(lane.pos.x - Math.sin(lane.yaw) * 25, lane.pos.y, lane.pos.z - Math.cos(lane.yaw) * 25) ?? lane;
+          this.moving = true;
+          v.reset(back.pos, back.yaw);
+          this.moving = false;
+        } else {
+          // on foot: 40% of the way from the light to the lane (on the apron / the verge), facing the light
+          const x = S.x + (lane.pos.x - S.x) * 0.4, z = S.z + (lane.pos.z - S.z) * 0.4;
+          pl.setRiding(null, { x, y: S.y + 0.3, z, yaw: Math.atan2(S.x - x, S.z - z) });
+        }
+        this.engine.get<CameraApi>('camera')?.snap();
+        this.hintT = 0;
+        this.disarmed = true;
+        ok = true;
+      }
+    } finally {
+      v.inputEnabled = true;
+      this.fade.to(false, ok ? t('travel.arrived', { place: t(S.place) }) : undefined);
+      this.travelling = false;
+    }
   }
 
   /** Dark: the mountain loaded, the clock to dawn, the AE86 at the foot of 妙峰山路 facing up; then the lights come up. */
@@ -123,8 +186,8 @@ export class Tofu {
       v.reset({ x, y: r[k * 4 + 1] + v.car.spec.wheelRadius + 0.3, z }, Math.atan2(dx, dz));
       this.moving = false;
       this.engine.get<CameraApi>('camera')?.snap();
-      this.foot = { x: r[0], z: r[2] };
-      this.top = { x: d.summit.x, z: d.summit.z };
+      this.foot = { x: r[0], y: r[1], z: r[2] };
+      this.top = { x: d.summit.x, y: d.summit.y, z: d.summit.z };
       void n;
       const rd = this.engine.get<RenderApi>('render');
       if (rd && !(rd.timeOfDay >= 3.5 && rd.timeOfDay <= 5.5)) { rd.timeOfDay = 4.5; rd.settle?.(); }
@@ -145,9 +208,9 @@ export class Tofu {
     this.fade!.to(false, t('tofu.dawn'));
   }
 
-  private aim(p: { x: number; z: number }, label: string): void {
+  private aim(p: { x: number; y: number; z: number }, label: string): void {
     this.nav()?.setTarget({ x: p.x, z: p.z, kind: 'mission', label });
-    this.target.show(p.x, p.z, MARK);
+    this.target.show(p.x, p.z, MARK, 1, p.y);
   }
 
   private end(msg: string | null, ok: boolean): void {
@@ -171,11 +234,17 @@ export class Tofu {
   fixedUpdate(dt: number, canStart: boolean): void {
     this.cooldown -= dt; this.hintT -= dt;
     const pl = this.pl(), pos = pl.position, car = this.veh().car;
-    const dShop = Math.hypot(pos.x - SHOP.x, pos.z - SHOP.z);
-    // the light at the shop: shown while it can start
+    // the nearer start (the one in use while boarding)
+    if (this.stage === 'idle') this.from = Math.hypot(pos.x - STARTS[1].x, pos.z - STARTS[1].z) < Math.hypot(pos.x - SHOP.x, pos.z - SHOP.z) ? 1 : 0;
+    const S = STARTS[this.from], dShop = Math.hypot(pos.x - S.x, pos.z - S.z);
+    // the lights at the starts: shown while it can start
     const ready = this.stage === 'idle' && this.cooldown <= 0 && canStart;
-    if ((ready && dShop < 400) !== this.markerOn) { this.markerOn = !this.markerOn; if (this.markerOn) this.marker.show(SHOP.x, SHOP.z, MARK); else this.marker.hide(); }
-    this.marker.update(dt); this.target.update(dt);
+    STARTS.forEach((s, i) => {
+      const on = ready && Math.hypot(pos.x - s.x, pos.z - s.z) < 400;
+      if (on !== this.markerOn[i]) { this.markerOn[i] = on; if (on) this.markers[i].show(s.x, s.z, MARK, 1, s.y); else this.markers[i].hide(); }
+      this.markers[i].update(dt);
+    });
+    this.target.update(dt);
     if (this.stage === 'up' || this.stage === 'down') {
       this.t += dt;
       if (pl.mode === 'driving') { this.offT = 0; this.cup.step(dt, car.accel.x, car.accel.z); } else this.offT += dt;
@@ -184,11 +253,12 @@ export class Tofu {
     switch (this.stage) {
       case 'idle':
         if (!ready) return;
-        if (dShop < 30 && this.hintT <= 0) { this.hintT = 60; this.deps.toast(t('tofu.hint')); }
+        if (this.disarmed) { if (dShop > 8) this.disarmed = false; else return; }
+        if (dShop < 30 && this.hintT <= 0) { this.hintT = 60; this.deps.toast(t(S.hint)); }
         if (dShop < (pl.mode === 'driving' ? 6 : 3.5) && (pl.mode !== 'driving' || car.speed < 3)) this.start();
         return;
       case 'board':
-        this.objective = pl.mode === 'driving' && !this.inAe86() ? t('tofu.boardOut') : t('tofu.board');
+        this.objective = pl.mode === 'driving' && !this.inAe86() ? t(S.boardOut) : t(S.board);
         if (this.inAe86()) { this.objective = null; this.goDark(); }
         else if (dShop > 80) this.end(null, false);
         return;

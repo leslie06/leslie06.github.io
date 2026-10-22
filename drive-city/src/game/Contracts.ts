@@ -322,6 +322,10 @@ export interface MissionApi extends System {
   taken?(id: number, x: number, z: number): void;
   /** Hailer `id`'s fare pays `mult` times when they get in (a fare won from the pirate cab). */
   contest?(id: number, mult: number): void;
+  /** Fast travel (the map's 快速前往: the starts of 送豆腐): where it goes. */
+  travelSpots?(): readonly { id: number; label: string; x: number; z: number }[];
+  /** Go to spot `id` now: null when on the way, else why not (a job on, wanted...). */
+  travel?(id: number): string | null;
 }
 
 /** Pedestrians on the pavements. Implemented by people/. */

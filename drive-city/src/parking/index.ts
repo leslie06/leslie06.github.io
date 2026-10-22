@@ -36,10 +36,13 @@ const LUXURY_ELSEWHERE = { coupe: 0.015, limo: 0.06 };
  * as on the card the user sent). Each is a tile of its own, made when the camera comes within `FIXED_IN` and dropped
  * beyond `FIXED_OUT`, so it is back after the player has driven it off and gone; not made while the player is in one.
  */
-const FIXED: { key: string; body: BodyType; x: number; z: number; heading: number; colour: string }[] = [
+const FIXED: { key: string; body: BodyType; x: number; z: number; heading: number; colour: string; /** The ground there (0: the city's). */ y?: number }[] = [
   // the shop's frame (landmarks/tofushop: origin 5606.10, -4484.66, heading -4.82 deg): local (4.1, -2.53), facing local +y -
   // as on the card (2026-10-22): before the open shop, its tail under the dry cleaner's sign
   { key: 'fixed:ae86', body: 'ae86', x: 5610.4, z: -4482.48, heading: -3.0575, colour: '#f2f2ef' },
+  // the second start of 送豆腐 (2026-10-22, 「我在西五环开车，我想去送豆腐，却要跑到亮马桥，很远」): on 京拉路's north verge
+  // 60 m short of the foot of 妙峰山路 (mountain.bin: road 0, point 1229, 6.4 m right of the centre line; past its guardrail)
+  { key: 'fixed:ae86foot', body: 'ae86', x: -19554.4, z: -2384.02, heading: -1.7417, colour: '#f2f2ef', y: 34.6 },
 ];
 const FIXED_IN = 300, FIXED_OUT = 400;
 import { defaultLivery } from '../vehicle/CarModel';
@@ -66,7 +69,7 @@ export interface ParkingApi extends System {
    * keep it clear for `hold` seconds (Infinity: for good) of cars on tiles still to come in.
    */
   clearAround(x: number, z: number, r: number, hold?: number): void;
-  /** Put the always-parked cars (`FIXED`: the AE86 at the tofu shop) back where one was driven off, if the camera is near. */
+  /** Put the always-parked cars (`FIXED`: the AE86s at the tofu shop and the foot of 妙峰山) back where one was driven off, if the camera is near. */
   restock(): void;
   /** Counts for probes: kept (drawn and solid), rejected by the collider check, Vehicles now, pending checks. */
   readonly stats: { kept: number; rejected: number; promoted: number; pending: number; drawnNear: number; drawnFar: number; knocked: number };
@@ -153,7 +156,7 @@ export async function install(engine: Engine): Promise<void> {
       if (t || d > FIXED_IN || engine.get<VehicleApi>('vehicle')?.look.body === f.body) continue;
       const spec = SPEC_OF[f.body], nt: Tile = { key: f.key, recs: [], born: time, checked: false, body: null };
       nt.recs.push({ tile: nt, body: f.body, heading: f.heading, hl: specLength(spec) / 2 + 0.15, state: 0, cols: [],
-        pos: new THREE.Vector3(f.x, 0.03 + spec.wheelRadius, f.z), quat: new THREE.Quaternion().setFromAxisAngle(_up, f.heading), colour: new THREE.Color(f.colour) });
+        pos: new THREE.Vector3(f.x, (f.y ?? 0) + 0.03 + spec.wheelRadius, f.z), quat: new THREE.Quaternion().setFromAxisAngle(_up, f.heading), colour: new THREE.Color(f.colour) });
       tiles.set(f.key, nt);
     }
   };
@@ -202,7 +205,7 @@ export async function install(engine: Engine): Promise<void> {
   /** Nothing fixed where the car stands (0.25-1.5 m up, a few cm inside its outline), other parked cars aside. */
   const isParkedCol = (c: RAPIER_NS.Collider) => engine.physics.dataOf(c).tag === 'parked';
   const notParked = (c: RAPIER_NS.Collider) => !isParkedCol(c);
-  const clear = (r: Rec) => !world.intersectionWithShape({ x: r.pos.x, y: 0.87, z: r.pos.z }, { x: r.quat.x, y: r.quat.y, z: r.quat.z, w: r.quat.w },
+  const clear = (r: Rec) => !world.intersectionWithShape({ x: r.pos.x, y: r.pos.y - 0.03 - SPEC_OF[r.body].wheelRadius + 0.87, z: r.pos.z }, { x: r.quat.x, y: r.quat.y, z: r.quat.z, w: r.quat.w },
     new R.Cuboid(PARK_W / 2 - 0.03, 0.62, r.hl - 0.05), R.QueryFilterFlags.EXCLUDE_DYNAMIC, groups(CG.PROP, CG.WORLD), undefined, undefined, notParked);
 
   /** Spots kept clear (`clearAround` with a hold): until `until` (seconds of `time`). */

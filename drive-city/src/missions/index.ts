@@ -15,6 +15,9 @@ import type { ParkingApi } from '../parking';
 import { Marker } from './Marker';
 import { Jobs } from './Jobs';
 import { Tofu } from './Tofu';
+import type { CampaignApi } from '../campaign';
+import type { UndergroundApi } from '../underground';
+import type { AdventureApi } from '../game/Contracts';
 import { pickAddress } from './Address';
 import { Banner } from '../ui/Banner';
 import { MissionHud } from './MissionHud';
@@ -317,6 +320,19 @@ export async function install(engine: Engine): Promise<void> {
       return true;
     },
     get objective() { return api.story ?? jobs?.objective ?? tofu?.objective ?? objective; },
+    travelSpots: () => tofu?.starts.map((s, id) => ({ id, label: s.name, x: s.x, z: s.z })) ?? [],
+    travel(id) {
+      if (!tofu || !tofu.starts[id]) return t('travel.none');
+      const pl = engine.get<PlayerApi>('player');
+      if ((engine.get<WantedApi>('wanted')?.level ?? 0) > 0) return t('travel.wanted');
+      if (tofu.travelling) return t('travel.busy');
+      if (api.busy || api.story || stage === 'alight' || engine.get<RaceApi>('races')?.active || engine.get<CampaignApi>('campaign')?.running
+        || engine.get<AdventureApi>('adventure')?.active || engine.get<UndergroundApi>('underground')?.inside || pl?.riding) return t('travel.busy');
+      const s = tofu.starts[id], p = pl?.position;
+      if (p && Math.hypot(p.x - s.x, p.z - s.z) < 60) return t('travel.here');
+      void tofu.travel(id);
+      return null;
+    },
     hailers: () => hailers.map((h) => ({ id: h.id, x: h.pos.x, z: h.pos.z })),
     contest(id, mult) { contested.set(id, mult); },
     taken(id, x, z) {

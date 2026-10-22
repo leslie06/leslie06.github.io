@@ -5,6 +5,7 @@ import type { CameraApi, HudApi, PlayerApi, VehicleApi, WorldApi, ParkApi } from
 import { C, F, css, el } from './theme';
 import { L } from './lang';
 import { SignCard } from './SignCard';
+import { TOUCH } from './Touch';
 
 css(`
 /* One margin for every corner of the HUD. The speedo used max(24px,3vw) while the wanted stars,
@@ -53,6 +54,9 @@ css(`
 .hud .shout small{display:block;font:800 10px/1.2 ${F.ui};color:#8a6a10;letter-spacing:.06em}
 .hud .shout[hidden]{display:none}
 .hud .flipped,.hud .stuck{position:absolute;left:50%;top:42%;transform:translateX(-50%);padding:12px 20px;border-radius:8px;background:${C.inkGlass};font:700 18px/1 ${F.ui};border-left:3px solid ${C.yellow}}
+/* A phone has no R (2026-10-22, 「在山上卡住了，手机没有r键，就一直卡着」): the hints are the button. */
+.hud .flipped.tap,.hud .stuck.tap{pointer-events:auto;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;border:1px solid ${C.yellow};border-left-width:3px}
+.hud .flipped.tap:active,.hud .stuck.tap:active{background:rgba(243,181,15,.45)}
 .hud .help{position:absolute;left:var(--hud-x);top:calc(var(--hud-y) + 58px);padding:14px 16px;border-radius:8px;background:${C.inkGlass};font:500 13px/1.9 ${F.ui};min-width:260px}
 /* The radar sits in the top-left corner (see Minimap.ts), so these stack below it. Only when a
    radar exists: the yard has no nav, and would otherwise leave the corner empty. */
@@ -179,8 +183,15 @@ export class Hud implements HudApi {
       b.el.append(text);
       b.el.hidden = false;
     });
-    this.flipped = el('div', 'flipped', root); this.flipped.appendChild(L('hud.flipped')); this.flipped.hidden = true;
-    this.stuck = el('div', 'stuck', root); this.stuck.appendChild(L('hud.stuck')); this.stuck.hidden = true;
+    this.flipped = el('div', TOUCH ? 'flipped tap' : 'flipped', root); this.flipped.appendChild(L(TOUCH ? 'hud.flippedTouch' : 'hud.flipped')); this.flipped.hidden = true;
+    this.stuck = el('div', TOUCH ? 'stuck tap' : 'stuck', root); this.stuck.appendChild(L(TOUCH ? 'hud.stuckTouch' : 'hud.stuck')); this.stuck.hidden = true;
+    if (TOUCH) for (const b of [this.flipped, this.stuck]) {
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const touch = engine.input.touch;
+        if (touch) touch.resetPressed = true;
+      });
+    }
     this.help = el('div', 'help', root);
     this.help.hidden = true;
     const rows: [string, Parameters<typeof L>[0]][] = [['W S', 'ctl.drive'], ['A D', 'ctl.steer'], ['@key.space', 'ctl.handbrake'], ['V', 'ctl.camera'], ['C', 'ctl.lookBack'], ['E', 'ctl.horn'], ['R', 'ctl.reset'], ['F', 'ctl.enter'], ['Shift', 'ctl.nitro'], ['Shift', 'ctl.sprint'], ['LMB', 'ctl.shove'], ['Tab', 'ctl.map'], ['W+S', 'ctl.burnout'], ['M', 'ctl.mute'], ['N', 'ctl.radio'], ['T', 'ctl.phone'], ['B', 'ctl.dealer'], ['Esc', 'ctl.pause']];

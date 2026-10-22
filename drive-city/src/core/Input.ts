@@ -19,6 +19,8 @@ export interface TouchInput {
   phonePressed?: boolean;
   /** Held: nitro (driving). */
   nitro: boolean;
+  /** Back on the road / back on the wheels (R): the HUD's stuck and flipped hints are buttons on a phone. Optional: probes. */
+  resetPressed?: boolean;
 }
 
 export interface InputState {
@@ -202,6 +204,7 @@ export class Input {
     s.radioPressed ||= c.radioPressed; c.radioPressed = false;
     s.phonePressed ||= !!c.phonePressed; c.phonePressed = false;
     s.pausePressed ||= c.pausePressed; c.pausePressed = false;
+    s.resetPressed ||= !!c.resetPressed; c.resetPressed = false;
   }
 
   /** Xbox layout (standard mapping): RT/LT pedals, left stick steers, A/RB handbrake. */

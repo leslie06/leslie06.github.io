@@ -201,7 +201,7 @@ export class TouchControls implements System {
   private state = {
     steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false, nitro: false,
     lookDX: 0, lookDY: 0,
-    jumpPressed: false, enterPressed: false, punchPressed: false, counterPressed: false, mapPressed: false, cameraPressed: false, pausePressed: false, radioPressed: false, phonePressed: false,
+    jumpPressed: false, enterPressed: false, punchPressed: false, counterPressed: false, mapPressed: false, cameraPressed: false, pausePressed: false, radioPressed: false, phonePressed: false, resetPressed: false,
   };
 
   constructor(private engine: Engine, container: HTMLElement) {
