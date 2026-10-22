@@ -457,6 +457,8 @@ export interface RenderApi extends System {
   setFocus(p: THREE.Vector3): void;
   /** Local Beijing time in hours, 0..24. Writable. */
   timeOfDay: number;
+  /** After the clock jumps: exposure and the environment map snap to it at once instead of adapting over seconds. */
+  settle?(): void;
   /** In-game hours per real minute (0 freezes the clock). */
   timeScale: number;
   /** 0..1 rain; wetness follows with a lag. Writable. */

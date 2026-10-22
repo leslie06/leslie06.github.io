@@ -66,6 +66,8 @@ export interface ParkingApi extends System {
    * keep it clear for `hold` seconds (Infinity: for good) of cars on tiles still to come in.
    */
   clearAround(x: number, z: number, r: number, hold?: number): void;
+  /** Put the always-parked cars (`FIXED`: the AE86 at the tofu shop) back where one was driven off, if the camera is near. */
+  restock(): void;
   /** Counts for probes: kept (drawn and solid), rejected by the collider check, Vehicles now, pending checks. */
   readonly stats: { kept: number; rejected: number; promoted: number; pending: number; drawnNear: number; drawnFar: number; knocked: number };
   /** Probes: the Vehicles now (where, whether knocked out of place), and the kept cars near a point. */
@@ -357,6 +359,10 @@ export async function install(engine: Engine): Promise<void> {
       promos: () => promos.map((p) => ({ x: p.car.pos.x, z: p.car.pos.z, moved: p.moved, car: p.car, by: p.by })),
       near: (x, z, rad) => [...tiles.values()].flatMap((t) => t.recs).filter((r) => r.state === 1 && Math.hypot(r.pos.x - x, r.pos.z - z) < rad)
         .map((r) => ({ x: r.pos.x, z: r.pos.z, heading: r.heading, body: r.body })),
+    },
+    restock() {
+      for (const f of FIXED) { const t = tiles.get(f.key); if (t && t.recs.every((q) => q.state === 4)) dropTile(t); }
+      fixedTiles(engine.camera.position);
     },
     clearAround(x, z, r, hold = 0) {
       if (hold > 0) holds.push({ x, z, r, until: time + hold });

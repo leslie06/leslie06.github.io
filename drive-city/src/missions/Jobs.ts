@@ -44,6 +44,8 @@ export class Jobs {
   private hintT = 0;
   private readonly blips: Blip[] = [];
   objective: string | null = null;
+  /** Something else is on (the tofu run): no post starts, though they still glow. */
+  hold = false;
 
   constructor(private engine: Engine, private deps: JobDeps) {
     this.target = new Marker(engine.scene);
@@ -169,6 +171,7 @@ export class Jobs {
     this.target.update(dt);
     const pl = this.player(), pos = pl.position, c = this.car();
     if (!this.active) {
+      if (this.hold) return;
       // Drive (or walk) into a post to start it.
       for (const p of this.posts) {
         if (p.cooldown > 0) continue;

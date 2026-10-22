@@ -14,6 +14,7 @@ import { nearestKerb, SIDEWALK, type Kerb } from '../people/Pavement';
 import type { ParkingApi } from '../parking';
 import { Marker } from './Marker';
 import { Jobs } from './Jobs';
+import { Tofu } from './Tofu';
 import { pickAddress } from './Address';
 import { Banner } from '../ui/Banner';
 import { MissionHud } from './MissionHud';
@@ -77,6 +78,9 @@ export interface MissionSystem extends MissionApi {
     jobPosts(): { kind: string; x: number; z: number; ready: boolean }[];
     startJob(kind: 'delivery' | 'chase' | 'trial'): boolean;
     job(): string | null;
+    /** 送豆腐: its state (null before the first step), and starting it as if walked into. */
+    tofu(): { shop: { x: number; z: number }; stage: string; level: number; dest: { x: number; z: number; label: string } | null; left: number } | null;
+    startTofu(): boolean;
     ride(): { kind: PaxKind; smooth: number; viewers: number; heat: string; vomited: boolean; told: string[] } | null;
     state(): { stage: string; pickup: { x: number; z: number } | null; dest: { x: number; z: number; label: string } | null; limit: number; elapsed: number;
       shift: { on: boolean; clock: number; fares: number; earned: number }; hailers: { x: number; z: number; tier: number; urgent: boolean }[] };
@@ -132,6 +136,7 @@ export async function install(engine: Engine): Promise<void> {
   let best = 0;
   try { best = Number(localStorage.getItem('drivecity.taxi.best') ?? 0) || 0; } catch { /* private mode */ }
   let jobs: Jobs | null = null;
+  let tofu: Tofu | null = null;
 
   let stage: Stage = 'off', timer = 0, objective: string | null = null, blipsOn = false;
   let dest: { x: number; z: number; label: string } | null = null;
@@ -301,7 +306,7 @@ export async function install(engine: Engine): Promise<void> {
     get cash() { return cash; },
     addCash(n) { cash = Math.max(0, cash + Math.round(n)); saveCash(); if (n > 0) hud.earned(Math.round(n)); },
     story: null,
-    get busy() { return !!jobs?.busy || stage === 'boarding' || stage === 'ride'; },
+    get busy() { return !!jobs?.busy || !!tofu?.busy || stage === 'boarding' || stage === 'ride'; },
     urgentFare() {
       if (!inTaxi() || stage !== 'pickup' || hailers.some((h) => h.urgent)) return false;
       // Room for it: the farthest ordinary hailer makes way.
@@ -311,7 +316,7 @@ export async function install(engine: Engine): Promise<void> {
       toast(t('taxi.urgent'));
       return true;
     },
-    get objective() { return api.story ?? jobs?.objective ?? objective; },
+    get objective() { return api.story ?? jobs?.objective ?? tofu?.objective ?? objective; },
     hailers: () => hailers.map((h) => ({ id: h.id, x: h.pos.x, z: h.pos.z })),
     contest(id, mult) { contested.set(id, mult); },
     taken(id, x, z) {
@@ -334,6 +339,8 @@ export async function install(engine: Engine): Promise<void> {
       jobPosts: () => jobs?.postList ?? [],
       startJob: (kind) => jobs?.startKind(kind) ?? false,
       job: () => jobs?.kind ?? null,
+      tofu: () => tofu?.debug ?? null,
+      startTofu: () => { tofu?.start(); return !!tofu?.busy; },
       state: () => {
         const car = vehicle().car;
         const near = hailers.reduce<Hailer | null>((b, h) => (!b || h.pos.distanceTo(car.pos) < b.pos.distanceTo(car.pos) ? h : b), null);
@@ -349,7 +356,12 @@ export async function install(engine: Engine): Promise<void> {
       for (let i = laters.length - 1; i >= 0; i--) if ((laters[i].t -= dt) <= 0) { const l = laters[i]; laters.splice(i, 1); l.fn(); }
       // The short jobs (Jobs.ts): while one runs, no fare is offered and a running fare is dropped.
       if (!jobs) jobs = new Jobs(engine, { places, resolve, addCash: (n) => api.addCash(n), toast, rnd });
+      // 送豆腐 (Tofu.ts): starts at the tofu shop when nothing else is on, and holds the jobs' posts while it runs
+      if (!tofu) tofu = new Tofu(engine, { addCash: (n) => api.addCash(n), toast, rnd, lang: () => (lang() === 'en' ? 'en' : 'zh') });
+      jobs.hold = tofu.busy;
       jobs.fixedUpdate(dt);
+      tofu.fixedUpdate(dt, !jobs.busy && stage !== 'boarding' && stage !== 'ride' && !api.story && !engine.get<RaceApi>('races')?.active
+        && (engine.get<WantedApi>('wanted')?.level ?? 0) === 0);
       // The client's walk is gameplay (boarding ends when they reach the door): stepped here, drawn in update.
       client.prev.copy(client.pos);
       if (client.visible) {
@@ -361,7 +373,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       if (!v.inputEnabled) return;
       const wanted = (engine.get<WantedApi>('wanted')?.level ?? 0) > 0;
-      const other = !!engine.get<RaceApi>('races')?.active || !!jobs.busy;
+      const other = !!engine.get<RaceApi>('races')?.active || !!jobs.busy || !!tofu?.busy;
       // The shift: its clock runs while you drive the taxi; out of it for long, or into a race or a job, it ends.
       if (shift.on) {
         shift.clock -= dt;
@@ -476,6 +488,7 @@ export async function install(engine: Engine): Promise<void> {
       if (n && !blipsOn) {
         blipsOn = true;
         n.addBlips(() => jobs?.provideBlips() ?? []);
+        n.addBlips(() => tofu?.provideBlips() ?? []);
         n.addBlips(() => {
           blips.length = 0;
           if (stage === 'pickup') for (const h of hailers) blips.push({ kind: 'pickup', x: h.pos.x, z: h.pos.z, flash: h.urgent });
@@ -494,6 +507,7 @@ export async function install(engine: Engine): Promise<void> {
         pl.crowd.add(client.draw, client.yaw, client.gait, client.look);
       }
       hud.update(dt, cash, api.objective);
+      tofu?.update(dt);
     },
   };
   engine.add(api);
