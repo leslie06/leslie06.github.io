@@ -32,8 +32,12 @@ const SHOP = { x: 5610.36, z: -4486.52 };
  * the centre line). `y`: the ground. Each has its light, its blip and its words.
  */
 const STARTS = [
-  { ...SHOP, y: 0, place: 'travel.shop', name: 'tofu.name', hint: 'tofu.hint', board: 'tofu.board', boardOut: 'tofu.boardOut' },
-  { x: -19562.47, z: -2385.3, y: 34.55, place: 'travel.foot', name: 'tofu.nameFoot', hint: 'tofu.hintFoot', board: 'tofu.boardFoot', boardOut: 'tofu.boardOutFoot' },
+  // `car`: where the map's 快速前往 puts a car (2026-10-22, 「并没有走到这家豆腐店门口，还差了几十米」: the nearest lane was
+  // the far side's, and 25 m back from it put the shop behind the trees) - northbound 13 m behind the parked AE86: it is
+  // the first thing ahead on the left, its tail and its lettered door, the light just past its nose (from the north the
+  // light stood in front of it and washed it out)
+  { ...SHOP, y: 0, car: { x: 5618.85, z: -4469.63, yaw: -3.058 }, place: 'travel.shop', name: 'tofu.name', hint: 'tofu.hint', board: 'tofu.board', boardOut: 'tofu.boardOut' },
+  { x: -19562.47, z: -2385.3, y: 34.55, car: null, place: 'travel.foot', name: 'tofu.nameFoot', hint: 'tofu.hintFoot', board: 'tofu.boardFoot', boardOut: 'tofu.boardOutFoot' },
 ] as const;
 /** The lights (the shop's, the top's, the foot's): soy-milk beige - white glared at night (the column is additive). */
 const MARK = '#d9c690';
@@ -138,13 +142,17 @@ export class Tofu {
       await new Promise((r) => setTimeout(r, 0));
       v.inputEnabled = false;
       await new Promise((r) => setTimeout(r, 700));
+      // the kerb's parked cars keep off the spot (their tiles may not be in yet: held for a while)
+      if (S.car && driving) this.engine.get<ParkingApi>('parking')?.clearAround(S.car.x, S.car.z, 5, 60);
       if (S.y > 0) await this.engine.get<MountainApi>('mountain')?.load();
       await this.engine.get<WorldApi>('world')?.preload?.(S.x, S.z);
       const lane = v.roadPoseNear?.(S.x, S.y + 0.5, S.z);
       if (lane) {
         if (driving) {
-          // 25 m back down the lane, the light ahead (in it, the run would start at once)
-          const back = v.roadPoseNear?.(lane.pos.x - Math.sin(lane.yaw) * 25, lane.pos.y, lane.pos.z - Math.cos(lane.yaw) * 25) ?? lane;
+          // the start's own spot (as it is: the lane search faces a car out of the dead end south of the shop, which put it
+          // in the far lane), else 25 m back down the nearest lane, the light ahead
+          const back = S.car ? { pos: { x: S.car.x, y: S.y + 0.03 + v.car.spec.wheelRadius + 0.3, z: S.car.z }, yaw: S.car.yaw }
+            : v.roadPoseNear?.(lane.pos.x - Math.sin(lane.yaw) * 25, lane.pos.y, lane.pos.z - Math.cos(lane.yaw) * 25) ?? lane;
           this.moving = true;
           v.reset(back.pos, back.yaw);
           this.moving = false;
