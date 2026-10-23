@@ -1353,17 +1353,41 @@ function nearOtherCarriageway(x, z, margin, own) {
   for (const [ax, az, bx, bz, hw, , way] of carSegs.get(tileOf(x, z).join('_')) ?? []) if (way !== own && segDist(x, z, ax, az, bx, bz) < hw + margin) return true;
   return false;
 }
-/** Whether (x, z) is within r m of a node where three or more car roads meet. */
+/**
+ * Whether (x, z) stands on a junction's corner: within `pad` m of the kerbs of two of the arms leaving a node where three
+ * or more car roads meet (the corner between them, however wide the roads: a lamp 15 m into a side street is near one
+ * kerb only), or within `min` m of the node. 2026-10-23 (「把每个路口的电线杆都尽量删除，拐弯的时候很容易碰到」): it was a
+ * fixed 12 m from the node, inside the carriageway of any main road (half widths of 12-25 m), so the corner lamps and
+ * trees of every big junction stood where a car turning (or drifting) round it went.
+ */
+const JUNCTION_PAD = 10;
 let junctionGrid = null;
-function nearJunction(x, z, r) {
+function nearJunction(x, z, pad = JUNCTION_PAD, min = 0) {
   if (!junctionGrid) {
     junctionGrid = new Map();
-    for (const w of ways) if (w._road?.car && w._ids) w._ids.forEach((id, i) => { if ((degCar.get(id) || 0) >= 3) { const k = `${Math.floor(w._pts[i][0] / 50)},${Math.floor(w._pts[i][1] / 50)}`; (junctionGrid.get(k) ?? junctionGrid.set(k, []).get(k)).push(w._pts[i]); } });
+    const at = new Map();   // node id -> { p, arms: [[to x, to z, half width]] }
+    for (const w of ways) if (w._road?.car && w._ids) w._ids.forEach((id, i) => {
+      if ((degCar.get(id) || 0) < 3) return;
+      let j = at.get(id);
+      if (!j) {
+        at.set(id, j = { p: w._pts[i], arms: [] });
+        const k = `${Math.floor(j.p[0] / 50)},${Math.floor(j.p[1] / 50)}`; (junctionGrid.get(k) ?? junctionGrid.set(k, []).get(k)).push(j);
+      }
+      const hw = w._road.w / 2;
+      if (i > 0) j.arms.push([...w._pts[i - 1], hw]);
+      if (i < w._pts.length - 1) j.arms.push([...w._pts[i + 1], hw]);
+    });
   }
   const cx = Math.floor(x / 50), cz = Math.floor(z / 50);
-  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const [jx, jz] of junctionGrid.get(`${cx + a},${cz + b}`) ?? []) if (Math.hypot(jx - x, jz - z) < r) return true;
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const j of junctionGrid.get(`${cx + a},${cz + b}`) ?? []) {
+    const [jx, jz] = j.p;
+    if (Math.hypot(jx - x, jz - z) < min) return true;
+    let near = 0;
+    for (const [ax, az, hw] of j.arms) if (segDist(x, z, jx, jz, ax, az) - hw < pad && ++near >= 2) return true;
+  }
   return false;
 }
+let treesCut = 0;
 let lampsCut = 0;
 /** Whether (x, z) is on a carriageway on the ground (or within `margin` of one). */
 function inCarriageway(x, z, margin) {
@@ -2200,11 +2224,14 @@ const treeType = (x, z, id) => {
 let nTrees = 0, treeSeed = 1;
 function addTree(x, z, kind, drop = false) {
   if (!inRegion(x, z) || inBuilding(x, z, 0.8) || nearRoad(x, z, 1.2)) return;
+  // nor on a junction's corner, where turning cars cut (nearJunction): dropped below, its seed spent all the same
+  const corner = nearJunction(x, z);
+  if (corner) treesCut++;
   // Off the decks and out from under them - still using up its seed, so every other tree in the
   // city keeps the species and size it had before the interchanges were lifted.
   // In the corridors a tree's seed is its position, so the main box's trees keep theirs.
   const main = inMain(x, z);
-  if (drop || underDeck(x, z)) { if (main) treeSeed++; return; }
+  if (drop || corner || underDeck(x, z)) { if (main) treeSeed++; return; }
   const seed = main ? treeSeed : 1e7 + Math.round(x * 10) * 7919 + Math.round(z * 10);
   const t = tile(...tileOf(x, z));
   t.trees.push(q1(x), q1(z), kind ?? treeType(x, z, seed), +(0.8 + 0.45 * rnd(seed, 9)).toFixed(2));
@@ -2229,6 +2256,7 @@ function addCanopyTrees(onOpen) {
   for (let i = 0; i < CHM.length; i += 3) {
     const x = CHM[i], z = CHM[i + 1], hgt = CHM[i + 2];
     if (!inRegion(x, z) || nearTreeG(x, z, 3.5) || inBuilding(x, z, 0.8) || nearRoad(x, z, 1.2) || underDeck(x, z) || onOpen(x, z)) continue;
+    if (nearJunction(x, z)) { treesCut++; continue; }
     const seed = 2e7 + Math.round(x * 10) * 7919 + Math.round(z * 10);
     // a tall one is most likely a poplar; the models stand ~9 m at scale 1
     let kind = treeType(x, z, seed);
@@ -2295,7 +2323,9 @@ for (const w of ways) {
       if (junctions.some((j) => Math.hypot(j[0] - x, j[1] - z) < 14)) continue;
       // None along a deck or a ramp (`drop`: the seed is spent all the same, see addTree).
       const up = Math.abs(heightAlong(w, acc + s)) > 0.3;
-      if (STREET_TREES.has(info.cls)) for (const sd of info.oneway ? [1] : [1, -1]) addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2), undefined, up);
+      if (STREET_TREES.has(info.cls)) for (const sd of info.oneway ? [1] : [1, -1]) {
+        addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2), undefined, up);
+      }
     }
     const gap = LAMPS[info.cls];
     if (gap) for (let s = (gap - lampAcc % gap) % gap; s < L; s += gap) {
@@ -2312,7 +2342,7 @@ for (const w of ways) {
       // 2026-10-02): the way's own junctions were skipped, but a side road crossing it through a gap in its
       // pavement, with no node shared, left a lamp standing in the mouth where cars turn.
       if (!inRegion(lx, lz) || inBuilding(lx, lz, 0.5) || nearTree(lx, lz, 1.2) || underDeck(lx, lz) || inCarriageway(lx, lz, 0.3) || heightAlong(w, acc + s) < -0.3
-        || nearJunction(lx, lz, 12) || nearOtherCarriageway(lx, lz, 2, w.id)) { lampsCut++; continue; }
+        || nearJunction(lx, lz, JUNCTION_PAD, 12) || nearOtherCarriageway(lx, lz, 2, w.id)) { lampsCut++; continue; }
       tile(...tileOf(lx, lz)).lamps.push(q1(lx), q1(lz), +yaw.toFixed(3));
       nLamps++;
     }
@@ -2615,7 +2645,7 @@ console.log(`skyline ${sky.length / 8} buildings`);
 execFileSync('node', ['scripts/city/lowrise.mjs'], { stdio: 'inherit' });
 console.log(`tiles ${Object.keys(index).length}, ${(bytes / 1e6).toFixed(1)} MB; network ${(net.length / 1e6).toFixed(1)} MB (${netXZ.length / 2} nodes, ${edges.length} edges, ${sig.reduce((a, b) => a + b, 0)} signalised)`);
 console.log(`buildings ${buildings.length} (outlines kept ${kept.length}/${outlines.length}, parts ${parts.length})`, kinds);
-console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lamps ${nLamps} (${lampsCut} spots skipped), signals ${nSignals}, crossings ${nCross}, stops ${nStops}`);
+console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lamps ${nLamps} (${lampsCut} spots skipped), street trees cut at junctions ${treesCut}, signals ${nSignals}, crossings ${nCross}, stops ${nStops}`);
 console.log('spawn', spawn);
 // The roads and hills west of the city (2026-10-22): appended to the network just written, before the signs see it
 // (阜石路 runs on into them instead of off the edge), and public/city/mountain.bin.
