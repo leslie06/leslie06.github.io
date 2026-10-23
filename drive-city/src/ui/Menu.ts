@@ -3,6 +3,7 @@ import { LANG_NAME, LANGS, lang, setLang, onLangChange, t } from '../core/I18n';
 import { QUALITY_CHOICE_KEY, type QualityTier } from '../core/Quality';
 import { C, F, css, el } from './theme';
 import { L } from './lang';
+import { TOUCH, touchPrefs } from './Touch';
 
 css(`
 .menu{position:fixed;inset:0;z-index:20;font-family:${F.ui};color:${C.paper};display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:32px;
@@ -40,6 +41,8 @@ css(`
 .menu .progress{font:700 13px/1.9 ${F.ui};color:${C.paper};letter-spacing:.04em;white-space:pre-line}
 .menu .progress[hidden]{display:none}
 @media (max-width: 820px){.menu{grid-template-columns:1fr;align-items:end}.menu .card{display:none}}
+/* a phone held upright: the map credit wraps to three lines at the bottom and sat over the settings row */
+@media (max-width: 820px) and (orientation: portrait){.menu{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}}
 /* 手机（2026-10-18，埋点：手机到了标题却不进城）：851x393 这种横屏宽过 820，键盘操作卡片还在，782px 高的卡片把菜单
    撑高，「进入城市」掉到屏幕下面，要在菜单里往下滑才看得到。触屏用不上键盘，矮屏放不下卡片，都不显示；触屏换成一行
    触屏操作的提示（摇杆是隐形的，按下才出现）。 */
@@ -144,6 +147,20 @@ export class Menu {
         try { localStorage.setItem(QUALITY_CHOICE_KEY, tier); } catch { /* ignore */ }
         const u = new URL(location.href); u.searchParams.set('quality', tier); location.href = u.toString();
       });
+    }
+    // phones: the car accelerates by itself (QQ飞车) or a gas key does it (ui/Touch.ts)
+    if (TOUCH) {
+      const gLabel = el('span', 'seglabel', opts); gLabel.appendChild(L('settings.autoGas'));
+      const gSeg = el('div', 'seg', opts);
+      for (const on of [true, false]) {
+        const b = el('button', on === touchPrefs.autoGas ? 'on' : '', gSeg);
+        b.id = on ? 'autogas-on' : 'autogas-off';
+        b.appendChild(L(on ? 'settings.on' : 'settings.off'));
+        b.addEventListener('click', () => {
+          touchPrefs.setAutoGas(on);
+          [...gSeg.children].forEach((x, i) => x.classList.toggle('on', (i === 0) === on));
+        });
+      }
     }
     const card = el('div', 'card', root);
     const h2 = el('h2', '', card); h2.appendChild(L('title.controls'));

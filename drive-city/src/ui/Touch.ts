@@ -12,6 +12,22 @@ export const TOUCH = (() => {
   return (navigator.maxTouchPoints ?? 0) > 0 && matchMedia('(pointer: coarse)').matches;
 })();
 
+/**
+ * The phone's own driving choice (2026-10-23, 「要」 to 「设置里加自动油门：开 / 关」): the car accelerates by itself (QQ飞车,
+ * the default) or a gas key does it. Kept on this device (online/CloudSave.ts `DEVICE_KEYS`).
+ */
+const AUTO_GAS_KEY = 'drivecity.autogas';
+export const touchPrefs = {
+  autoGas: (() => { try { return localStorage.getItem(AUTO_GAS_KEY) !== '0'; } catch { return true; } })(),
+  setAutoGas(on: boolean): void {
+    touchPrefs.autoGas = on;
+    try { localStorage.setItem(AUTO_GAS_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+  },
+};
+
+/** Seconds the brake is held at a stand before it reverses (until then it holds the car still). */
+const REVERSE_AFTER = 0.6;
+
 type Mode = 'drive' | 'foot' | 'both';
 interface Btn { el: HTMLButtonElement; mode: Mode }
 
@@ -53,6 +69,12 @@ const SHEET = `
 .touch .qq .qbrake{--qb:14px;--qr:134px;width:62px;height:62px;background:rgba(226,64,47,.22);border-color:rgba(226,64,47,.55)}
 .touch .qq .qnitro{--qb:90px;--qr:140px;width:62px;height:62px;background:rgba(80,170,255,.24);border-color:rgba(120,190,255,.6)}
 .touch .qq .qf{--qb:132px;--qr:38px;width:60px;height:60px;white-space:pre-line;line-height:1.3;background:rgba(243,181,15,.24);border-color:${C.yellow}}
+.touch .qq .qgas{--qb:14px;--qr:16px;width:104px;height:104px;font:800 20px/1 ${F.ui};background:rgba(243,181,15,.28);border:2px solid rgba(243,181,15,.75)}
+.touch .qq .qgas.down{background:rgba(243,181,15,.6)}
+/* the gas key (auto gas off) takes the drift key's corner; the drift key moves in beside it, the brake above that */
+.touch .qq.manual .drift{--qr:134px;width:86px;height:86px;font-size:18px}
+.touch .qq.manual .qbrake{--qb:112px;--qr:146px}
+.touch .qq.manual .qnitro{--qb:14px;--qr:232px}
 .touch .qq .go{position:absolute;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(108px + env(safe-area-inset-bottom,0px));padding:6px 12px;border-radius:6px;
   background:${C.inkGlass};border-left:3px solid ${C.yellow};font:700 13px/1.2 ${F.ui};color:${C.paper};white-space:nowrap}
 .touch .qq .go[hidden]{display:none}
@@ -218,7 +240,11 @@ export class TouchControls implements System {
   private goEl: HTMLDivElement;
   private pads: HTMLDivElement;
   /** Driving: held keys (the car accelerates by itself once `armed`: a first tap after getting in, not on its own). */
-  private keys = { left: false, right: false, brake: false };
+  private keys = { left: false, right: false, brake: false, gas: false, drift: false };
+  private qgas: HTMLButtonElement;
+  /** Seconds the brake has held the car at a stand (it reverses after `REVERSE_AFTER`). */
+  private standT = 0;
+  private autoGas = touchPrefs.autoGas;
   private armed = false;
   /** The ◀ ▶ keys' steering, eased in (see `update`). */
   private steerNow = 0;
@@ -274,10 +300,12 @@ export class TouchControls implements System {
     this.button(arrows, 'drive', '◀', (down) => { this.keys.left = down; if (down) this.armed = true; }, true);
     this.button(arrows, 'drive', '▶', (down) => { this.keys.right = down; if (down) this.armed = true; }, true);
     // the drift key is the handbrake key (Vehicle.ts `ARCADE`)
-    this.button(qq, 'drive', t('touch.hand'), (down) => { this.state.handbrake = down; if (down) this.armed = true; }, true, 'qbtn drift');
+    this.button(qq, 'drive', t('touch.hand'), (down) => { this.keys.drift = down; if (down) this.armed = true; }, true, 'qbtn drift');
     this.button(qq, 'drive', t('touch.brake'), (down) => { this.keys.brake = down; }, true, 'qbtn qbrake');
     this.button(qq, 'drive', t('touch.nitro'), (down) => { this.state.nitro = down; if (down) this.armed = true; }, true, 'qbtn qnitro');
     this.qnitro = this.btns[this.btns.length - 1].el;
+    this.button(qq, 'drive', t('touch.gas'), (down) => { this.keys.gas = down; }, true, 'qbtn qgas');
+    this.qgas = this.btns[this.btns.length - 1].el;
     this.button(qq, 'drive', '', interact, false, 'qbtn qf');
     this.qf = this.btns[this.btns.length - 1].el;
     this.goEl = el('div', 'go', qq);
@@ -364,6 +392,8 @@ export class TouchControls implements System {
   private syncMode(): void {
     for (const b of this.btns) if (b.mode !== 'both') b.el.hidden = (b.mode === 'drive') !== this.driving;
     this.qnitro.hidden = !(this.driving && this.n2o);
+    this.qgas.hidden = !this.driving || this.autoGas;
+    this.qq.classList.toggle('manual', !this.autoGas);
     this.pads.hidden = this.driving;
     this.qq.hidden = !this.driving;
     document.body.classList.toggle('dc-qq', this.driving);
@@ -373,7 +403,8 @@ export class TouchControls implements System {
     this.pointers.clear();
     this.stick.classList.remove('on');
     Object.assign(this.state, { steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false, nitro: false });
-    this.keys.left = this.keys.right = this.keys.brake = false;
+    this.keys.left = this.keys.right = this.keys.brake = this.keys.gas = this.keys.drift = false;
+    this.standT = 0;
     this.steerNow = 0;
     for (const b of this.btns) b.el.classList.remove('down');
   }
@@ -396,12 +427,12 @@ export class TouchControls implements System {
       this.armed = false;
     }
     const veh = this.engine.get<VehicleApi>('vehicle');
+    if (this.autoGas !== touchPrefs.autoGas) { this.autoGas = touchPrefs.autoGas; this.syncMode(); this.armed = false; }
     if (driving) {
-      // QQ飞车: the car goes by itself, the brake holds it (and reverses once stopped). Not until a first tap after
-      // getting in or a cut scene, or every car would drive off on its own.
-      // (the pause screen and the garage turn input off too: those keep it going)
+      // QQ飞车: the car goes by itself, not until a first tap after getting in or a cut scene, or every car would drive
+      // off on its own (the pause screen and the garage turn input off too: those keep it going).
       if (!veh?.occupied || (!veh.inputEnabled && ui?.state === 'playing')) this.armed = false;
-      const k = this.keys;
+      const k = this.keys, fs = veh?.car.forwardSpeed ?? 0;
       // QQ飞车's keys pull in (2026-10-23, 「方向键太过灵敏…它的方向键有拉拽感」): full lock 0.2 s after the press, back to
       // the centre in 0.1 s, on top of the keyboard's own steering lag (ControlFilter)
       const want = (k.right ? 1 : 0) - (k.left ? 1 : 0);
@@ -409,9 +440,26 @@ export class TouchControls implements System {
       this.steerNow += Math.max(-rate * dt, Math.min(rate * dt, want - this.steerNow));
       this.state.steer = this.steerNow;
       this.state.analog = false;
-      this.state.back = k.brake ? 1 : 0;
-      this.state.forward = this.armed && !k.brake ? 1 : 0;
-      this.goEl.hidden = this.armed || !veh?.inputEnabled || k.brake;
+      // The brake stops the car and holds it there (a passenger, a parking spot, the garage: everything that wants the car
+      // still); held on at a stand it reverses. With the gas automatic, a stop also pauses it until the next tap.
+      let back = 0, hold = false;
+      if (k.brake) {
+        if (fs > 0.6) back = 1;
+        else {
+          this.standT += dt;
+          if (this.standT >= REVERSE_AFTER || fs < -0.6) back = 1;
+          else hold = true;   // the handbrake (the drift key, below its speed) keeps it there, on a slope too
+          this.armed = false;
+        }
+      } else {
+        this.standT = 0;
+        // let go while reversing with the gas automatic: it stops there (it would roll on backwards, nothing to stop it)
+        if (this.autoGas && !this.armed && fs < -0.3) hold = true;
+      }
+      this.state.back = back;
+      this.state.handbrake = k.drift || hold;
+      this.state.forward = (this.autoGas ? this.armed : k.gas) && !k.brake ? 1 : 0;
+      this.goEl.hidden = !this.autoGas || this.armed || !veh?.inputEnabled || k.brake;
     }
     const n2o = (veh?.car.tune.nitro ?? 0) > 0;
     if (n2o !== this.n2o) { this.n2o = n2o; this.syncMode(); if (!n2o) this.state.nitro = false; }

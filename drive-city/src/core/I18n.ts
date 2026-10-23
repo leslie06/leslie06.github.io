@@ -236,6 +236,9 @@ const EN = {
   'ctl.sprint': 'Sprint (on foot)',
 
   'settings.quality': 'Graphics',
+  'settings.autoGas': 'Auto gas',
+  'settings.on': 'On',
+  'settings.off': 'Off',
   'settings.q.low': 'Low',
   'settings.q.medium': 'Medium',
   'settings.q.high': 'High',
@@ -775,6 +778,9 @@ const ZH: Record<TKey, string> = {
   'ctl.sprint': '冲刺（步行）',
 
   'settings.quality': '画质',
+  'settings.autoGas': '自动油门',
+  'settings.on': '开',
+  'settings.off': '关',
   'settings.q.low': '低',
   'settings.q.medium': '中',
   'settings.q.high': '高',

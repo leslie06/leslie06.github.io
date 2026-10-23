@@ -5,7 +5,7 @@
 export const ACCT = 'drivecity.acct.v1', SYNC = 'drivecity.sync.v1';
 /** This device's own keys: never synced (and never removed when a cloud save comes down). */
 export const DEVICE_KEYS = new Set([ACCT, SYNC, 'drivecity.blackbox', 'drivecity.blackbox.last', 'drivecity.fb.pending', 'drivecity.lb.pending',
-  'drivecity.probe', 'drivecity.quality.choice', 'drivecity.muted', 'drivecity.radio', 'drivecity.lang.v1']);
+  'drivecity.probe', 'drivecity.quality.choice', 'drivecity.muted', 'drivecity.radio', 'drivecity.lang.v1', 'drivecity.autogas']);
 const PREFIX = 'drivecity.';
 
 export type Snapshot = Record<string, string>;
