@@ -258,6 +258,14 @@ export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
   else mat.userData.wet = wet === 'damp' ? true : wet;
   const std = mat as THREE.MeshStandardMaterial;
   if (!std.isMeshStandardMaterial) return;
+  // `cutout`: leaves and the like, cut by their texture's alpha (藤原豆腐店's ivy, 2026-10-22): opaque, both faces,
+  // shadows cut the same way (three's depth material follows alphaTest and the map)
+  if ((x as { cutout?: unknown }).cutout) {
+    std.alphaTest = 0.5;
+    std.transparent = false;
+    std.depthWrite = true;
+    std.side = THREE.DoubleSide;
+  }
   for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap'] as const) if (std[k]) std[k]!.anisotropy = 8;
   const glow = x.glow === 'lamp' || x.glow === 'none' ? x.glow : 'flood';
   const night = x.emit === 'night';

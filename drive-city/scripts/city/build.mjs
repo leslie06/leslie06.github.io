@@ -2611,6 +2611,8 @@ fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest));
   fs.writeFileSync(path.join(OUT, 'skyline.json'), JSON.stringify({ v: 2, d }));
 }
 console.log(`skyline ${sky.length / 8} buildings`);
+// streets kept low (藤原豆腐店's): patches the tiles and the skyline just written
+execFileSync('node', ['scripts/city/lowrise.mjs'], { stdio: 'inherit' });
 console.log(`tiles ${Object.keys(index).length}, ${(bytes / 1e6).toFixed(1)} MB; network ${(net.length / 1e6).toFixed(1)} MB (${netXZ.length / 2} nodes, ${edges.length} edges, ${sig.reduce((a, b) => a + b, 0)} signalised)`);
 console.log(`buildings ${buildings.length} (outlines kept ${kept.length}/${outlines.length}, parts ${parts.length})`, kinds);
 console.log(`road pieces ${roadPieces}, areas`, areaCount, `trees ${nTrees}, lamps ${nLamps} (${lampsCut} spots skipped), signals ${nSignals}, crossings ${nCross}, stops ${nStops}`);

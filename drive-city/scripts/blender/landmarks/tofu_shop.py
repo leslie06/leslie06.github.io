@@ -29,6 +29,9 @@
 #     bay (a glazed transom over a dark noren with a white crest and a slatted wooden door), a red brick pier;
 #   - a yard: a board fence set back, a low white wall painted with grass.
 # Not from the card: the backs, the depths (8 m), the far ends of the two houses.
+# Then the photograph of the film's set again (「现在还是不像，现在没有质感」): every surface painted with its own normal map,
+# ivy in the round as alpha-cut leaf cards (material `cutout`), the upright とうふ panel at the sign's end, the pole and
+# its wires, the crates and pots before the pier, the dry cleaner's upper storey in dark boards.
 
 import math
 import os
@@ -132,6 +135,103 @@ def glowing(name, color, rough, emit, props, tex=None):
 
 
 # --- textures --------------------------------------------------------------------------------------------
+# 「现在还是不像，现在没有质感」(2026-10-22, the film's photo again): every surface a painted texture with its own normal
+# map - value noise in octaves for the mottling, streaks of grime from every ledge, rust under the iron, cracks and
+# spalls cut into the height that the normal map is made from.
+
+def srgb_(hexs):
+    return [int(hexs[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+
+
+def vnoise(h, w, cell, rng):
+    """Smooth value noise, one random value per `cell` px, bilinear between (0..1)."""
+    gh, gw = int(h / cell) + 2, int(w / cell) + 2
+    g = rng.random((gh, gw)).astype(np.float32)
+    y = (np.arange(h, dtype=np.float32) + 0.5) / cell
+    x = (np.arange(w, dtype=np.float32) + 0.5) / cell
+    y0, x0 = np.floor(y).astype(int), np.floor(x).astype(int)
+    fy, fx = (y - y0)[:, None], (x - x0)[None, :]
+    fy, fx = fy * fy * (3 - 2 * fy), fx * fx * (3 - 2 * fx)
+    a, b = g[y0][:, x0], g[y0][:, x0 + 1]
+    c, d = g[y0 + 1][:, x0], g[y0 + 1][:, x0 + 1]
+    return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy
+
+
+def fbm(h, w, cell, rng, octaves=4):
+    """Octaves of value noise from `cell` px down, -1..1-ish."""
+    out = np.zeros((h, w), np.float32)
+    amp, tot = 1.0, 0.0
+    for _ in range(octaves):
+        out += amp * (vnoise(h, w, max(1.0, cell), rng) - 0.5) * 2
+        tot += amp
+        amp *= 0.5
+        cell /= 2
+    return out / tot
+
+
+def normal_image(name, hgt, strength=2.0):
+    """A tangent-space normal map (OpenGL, +v up) from a height field in canvas rows (row 0 at the top)."""
+    gy, gx = np.gradient(hgt.astype(np.float32))
+    n = np.dstack([-gx * strength, gy * strength, np.ones_like(hgt)])
+    n /= np.linalg.norm(n, axis=2, keepdims=True)
+    return image(name, np.flipud(n * 0.5 + 0.5).copy())
+
+
+def image_rgba(name, rgba):
+    """A packed PNG with alpha from an (h, w, 4) sRGB array in canvas rows (row 0 at the top)."""
+    h, w, _ = rgba.shape
+    im = bpy.data.images.new(name, w, h, alpha=True)
+    im.pixels.foreach_set(np.flipud(np.clip(rgba, 0, 1)).astype(np.float32).ravel())
+    im.file_format = "PNG"
+    im.pack()
+    return im
+
+
+def grime(cv, hgt, rng, n, top_rows, length, width, k=0.8, col=None):
+    """Streaks running down from the rows `top_rows` (a list of canvas y), darkening (or tinting) the colour."""
+    for _ in range(n):
+        x = rng.uniform(0, cv.w)
+        y0 = rng.choice(top_rows) if len(top_rows) else 0
+        L, wd = rng.uniform(*length), rng.uniform(*width)
+        m = (np.abs(cv.x - x) < wd * (1 - 0.6 * np.clip((cv.y - y0) / L, 0, 1))) & (cv.y > y0) & (cv.y < y0 + L)
+        f = (1 - np.clip((cv.y[m] - y0) / L, 0, 1)) ** 0.7
+        if col is None:
+            cv.a[m] *= (1 - (1 - k) * f)[..., None]
+        else:
+            c = cv.c(col)
+            cv.a[m] = cv.a[m] * (1 - 0.6 * f[..., None]) + c * 0.6 * f[..., None]
+
+
+def cracks(cv, hgt, rng, n, col="#5f5a50"):
+    """Hairline cracks: random walks, dark, cut into the height."""
+    for _ in range(n):
+        x, y = rng.uniform(0, cv.w), rng.uniform(0, cv.h)
+        a = rng.uniform(0, 2 * math.pi)
+        for _ in range(int(rng.integers(6, 18))):
+            a += rng.normal(0, 0.5)
+            L = rng.uniform(4, 12)
+            x1, y1 = x + L * math.cos(a), y + L * math.sin(a)
+            seg(cv, x, y, x1, y1, 1.1, col)
+            xa, xb = int(max(0, min(x, x1) - 1)), int(min(cv.w, max(x, x1) + 2))
+            ya, yb = int(max(0, min(y, y1) - 1)), int(min(cv.h, max(y, y1) + 2))
+            if xa < xb and ya < yb:
+                X, Y = cv.x[ya:yb, xa:xb], cv.y[ya:yb, xa:xb]
+                dx, dy = x1 - x, y1 - y
+                t = np.clip(((X - x) * dx + (Y - y) * dy) / (dx * dx + dy * dy or 1), 0, 1)
+                hgt[ya:yb, xa:xb][np.hypot(X - (x + t * dx), Y - (y + t * dy)) < 1.2] -= 0.6
+            x, y = x1, y1
+
+
+def weathered(cv, hgt, rng, mottle=0.12, moss=0.0):
+    """Mottling at three scales, a little moss green in the low patches; the height gets the fine grain."""
+    big = fbm(cv.h, cv.w, 90, rng, 3)
+    fine = fbm(cv.h, cv.w, 6, rng, 3)
+    cv.a *= (1 + mottle * big + 0.05 * fine)[..., None]
+    if moss:
+        m = np.clip(-big * 2 - 0.2, 0, 1) * moss
+        cv.a = cv.a * (1 - m[..., None]) + np.array([0.42, 0.45, 0.33], np.float32) * m[..., None]
+    hgt += 0.35 * fine + 0.15 * big
+
 
 def dot(cv, cx, cy, rx, ry, col):
     """An ellipse stamped on its own box (the canvas's ellipse() walks every pixel: too slow for thousands of leaves)."""
@@ -171,20 +271,27 @@ def leaves(cv, rng, n, box, size=(3, 7)):
 
 
 def shopwall_image():
-    """The shop's front, 4.3 x 6.2 m at 80 px a metre: beige-grey stucco, run-down streaks, a net of vine stems
-    over the upper storey, ivy over the window and down the right-hand corner (as on the card)."""
-    K = 80
+    """The shop's front, 4.3 x 6.2 m at 120 px a metre: beige-grey concrete gone dark with age - mottled, streaked black
+    from the parapet and the sills, rust under the air-conditioner, cracked, splashed dark at the foot - a net of vine
+    stems over the upper storey, ivy over the window and down the right-hand corner (as on the photographs). Returns
+    the colour and its normal map."""
+    K = 120
     W, H = int((SY1 - SY0) * K), int(STOP * K)
-    cv = Canvas(W, H, "#bdb7a7")
-    cv.noise(0.07, 101)
+    cv = Canvas(W, H, "#b3ad9c")
+    hgt = np.zeros((H, W), np.float32)
     P = lambda y, z: ((y - SY0) * K, (STOP - z) * K)  # noqa: E731
     rng = np.random.default_rng(102)
-    for _ in range(30):                                   # streaks from the parapet and under the sill
-        x, w = rng.uniform(0, W), rng.uniform(2, 7)
-        y0 = 0.0 if rng.random() < 0.6 else (STOP - WZ0) * K
-        L = rng.uniform(40, 220)
-        m = (np.abs(cv.x - x) < w) & (cv.y > y0) & (cv.y < y0 + L)
-        cv.a[m] *= (0.86 + 0.12 * ((cv.y[m] - y0) / L))[..., None]
+    weathered(cv, hgt, rng, 0.14, moss=0.35)
+    grime(cv, hgt, rng, 60, [0.0, 0.0, P(0, WZ0)[1] + 4, P(0, 2.4)[1] + 2], (60, 420), (2, 9), 0.62)
+    grime(cv, hgt, rng, 6, [P(0, 3.94)[1]], (40, 160), (2, 4), col="#7a4a2a")      # rust under the air-conditioner
+    foot = np.clip(1 - cv.y / H, 0, 1)
+    cv.a *= (1 - 0.22 * np.clip((0.12 - foot) / 0.12, 0, 1))[..., None]          # splashed dark at the foot
+    cracks(cv, hgt, rng, 26)
+    for _ in range(10):                                   # spalls: rougher, paler patches knocked off
+        cx, cy, r = rng.uniform(0, W), rng.uniform(0, H), rng.uniform(6, 22)
+        m = ((cv.x - cx) / r) ** 2 + ((cv.y - cy) / (r * 0.7)) ** 2 < 1
+        cv.a[m] *= 1.07
+        hgt[m] -= 0.5
     for _ in range(90):                                   # vine stems, wandering, mostly upstairs
         x, y = rng.uniform(0, W), rng.uniform(0, (STOP - 2.3) * K)
         a = rng.uniform(0, 2 * math.pi)
@@ -195,13 +302,53 @@ def shopwall_image():
             seg(cv, x, y, x1, y1, 1.2, "#5d574a")
             x, y = x1, y1
     box = lambda ya, yb, za, zb: (*P(ya, zb), *P(yb, za))  # noqa: E731
-    leaves(cv, rng, 1400, box(-3.15, 0.45, 4.75, 5.6))     # the mat over the window
-    leaves(cv, rng, 260, box(-2.7, -0.3, 4.55, 4.85), (2, 5))
-    leaves(cv, rng, 1500, box(0.42, 1.0, 1.7, 6.2))        # the right-hand corner, top to the yard
-    leaves(cv, rng, 300, box(-3.3, -2.75, 4.3, 5.9))       # a tongue down the left
-    leaves(cv, rng, 260, box(-1.2, 1.0, 5.85, 6.2))        # along the parapet
-    cv.noise(0.05, 103)
-    return image("TF_ShopWall", np.flipud(cv.a).copy())
+    leaves(cv, rng, 900, box(-3.0, 0.45, 5.2, 6.2), (4, 10))        # a band along the top
+    leaves(cv, rng, 400, box(-2.7, -0.3, 4.55, 4.85), (3, 7))
+    leaves(cv, rng, 3200, box(-0.4, 1.0, 1.5, 6.2), (4, 10))        # the right-hand third, top to the yard
+    leaves(cv, rng, 500, box(-3.3, -2.75, 4.3, 5.9), (4, 9))        # a tongue down the left
+    leaves(cv, rng, 500, box(-1.8, 1.0, 5.7, 6.2), (4, 9))          # along the parapet
+    cv.noise(0.04, 103)
+    return image("TF_ShopWall", np.flipud(cv.a).copy()), normal_image("TF_ShopWall_N", hgt, 2.5)
+
+
+def stucco_image():
+    """The shop's sides and back, 2 m a repeat at 128 px a metre: the front's concrete without its ivy."""
+    cv = Canvas(256, 256, "#aaa494")
+    hgt = np.zeros((256, 256), np.float32)
+    rng = np.random.default_rng(301)
+    weathered(cv, hgt, rng, 0.14, moss=0.3)
+    grime(cv, hgt, rng, 26, [0.0], (60, 256), (2, 8), 0.7)
+    cracks(cv, hgt, rng, 6)
+    return image("TF_Stucco", np.flipud(cv.a).copy()), normal_image("TF_Stucco_N", hgt, 2.5)
+
+
+def siding_image():
+    """The dry cleaner's upstairs: dark weathered boards laid horizontally, 2 m a repeat (18 cm boards, lapped)."""
+    cv = Canvas(256, 256, "#5b4d40")
+    hgt = np.zeros((256, 256), np.float32)
+    rng = np.random.default_rng(311)
+    row = (cv.y // 23).astype(int)
+    cv.a *= rng.uniform(0.78, 1.12, 12)[row % 12][..., None]
+    grain = fbm(256, 256, 30, rng, 3)
+    cv.a *= (1 + 0.08 * np.sin(cv.x * 0.15 + grain * 9))[..., None]
+    lap = np.mod(cv.y, 23) / 23
+    hgt += lap * 1.2
+    cv.a *= (0.7 + 0.3 * lap)[..., None]
+    weathered(cv, hgt, rng, 0.1)
+    grime(cv, hgt, rng, 14, [0.0], (40, 200), (2, 6), 0.75)
+    return image("TF_Siding", np.flipud(cv.a).copy()), normal_image("TF_Siding_N", hgt, 3.0)
+
+
+def woodgrain_image():
+    """Dark painted wood gone matt (posts, beams, frames), 1 m a repeat: grain along u, worn paler on the edges."""
+    cv = Canvas(128, 128, "#3d2f24")
+    hgt = np.zeros((128, 128), np.float32)
+    rng = np.random.default_rng(321)
+    g = fbm(128, 128, 20, rng, 3)
+    cv.a *= (1 + 0.12 * np.sin(cv.y * 0.9 + g * 12))[..., None]
+    hgt += 0.3 * np.sin(cv.y * 0.9 + g * 12)
+    weathered(cv, hgt, rng, 0.1)
+    return image("TF_DarkWood", np.flipud(cv.a).copy()), normal_image("TF_DarkWood_N", hgt, 1.5)
 
 
 def ivy_image():
@@ -214,64 +361,79 @@ def ivy_image():
 
 
 def tiles_image():
-    """Grey kawara, 1 m a repeat: courses every 25 cm down the slope (v), round channels every 25 cm along (u)."""
-    cv = Canvas(128, 128, "#3c3f43")
-    u = np.mod(cv.x, 32) / 32
-    cv.a *= (0.78 + 0.34 * np.sin(u * math.pi))[..., None]
-    v = np.mod(cv.y, 32)
-    cv.a[v < 3] *= 0.55                                   # the shadow under each course's lip
-    cv.a[(v >= 3) & (v < 6)] *= 1.18
-    cv.noise(0.08, 121)
-    return image("TF_Tiles", np.flipud(cv.a).copy())
+    """Grey kawara, 1 m a repeat: courses every 25 cm down the slope (v), round channels every 25 cm along (u); lichen."""
+    cv = Canvas(256, 256, "#3c3f43")
+    rng = np.random.default_rng(122)
+    u = np.mod(cv.x, 64) / 64
+    v = np.mod(cv.y, 64)
+    hgt = np.sin(u * math.pi) * 2.0 + (v / 64) * 0.8
+    cv.a *= (0.72 + 0.4 * np.sin(u * math.pi))[..., None]
+    cv.a[v < 6] *= 0.5                                    # the shadow under each course's lip
+    cv.a[(v >= 6) & (v < 11)] *= 1.2
+    cv.a *= (1 + 0.1 * fbm(256, 256, 40, rng, 3))[..., None]
+    for _ in range(40):                                   # lichen
+        dot(cv, rng.uniform(0, 256), rng.uniform(0, 256), rng.uniform(2, 6), rng.uniform(2, 5), rng.choice(["#6c705d", "#7d7b66", "#5a5f52"]))
+    return image("TF_Tiles", np.flipud(cv.a).copy()), normal_image("TF_Tiles_N", hgt, 1.6)
 
 
 def plaster_image():
-    """The dry cleaner's white walls, 2 m a repeat: off-white, grimy low down and under the eaves."""
-    cv = Canvas(128, 128, "#e3dfd4")
-    cv.noise(0.06, 131)
+    """The dry cleaner's white walls, 2 m a repeat at 128 px a metre: off-white gone grey, streaked from the eaves."""
+    cv = Canvas(256, 256, "#d9d4c6")
+    hgt = np.zeros((256, 256), np.float32)
     rng = np.random.default_rng(132)
-    for _ in range(8):
-        x, w, L = rng.uniform(0, 128), rng.uniform(2, 6), rng.uniform(20, 90)
-        m = (np.abs(cv.x - x) < w) & (cv.y < L)
-        cv.a[m] *= 0.93
-    return image("TF_Plaster", np.flipud(cv.a).copy())
+    weathered(cv, hgt, rng, 0.08)
+    grime(cv, hgt, rng, 22, [0.0], (40, 220), (2, 7), 0.78)
+    cracks(cv, hgt, rng, 4, "#8e897d")
+    return image("TF_Plaster", np.flipud(cv.a).copy()), normal_image("TF_Plaster_N", hgt, 2.0)
 
 
 def brick_image():
-    """Red brick, 1 m a repeat (128 px): 21 x 6 cm bricks, stretcher bond, grey mortar."""
-    cv = Canvas(128, 128, "#8f4a36")
+    """Red brick, 1 m a repeat (256 px): 21 x 6 cm bricks, stretcher bond, sunk grey mortar, chipped and sooty."""
+    cv = Canvas(256, 256, "#8a4734")
     rng = np.random.default_rng(141)
-    rows = (cv.y // 8).astype(int)
-    cols = ((cv.x + (rows % 2) * 13.5) // 27).astype(int)
-    tint = rng.uniform(0.8, 1.15, (17, 7))
+    rows = (cv.y // 16).astype(int)
+    cols = ((cv.x + (rows % 2) * 27) // 54).astype(int)
+    tint = rng.uniform(0.75, 1.15, (17, 7))
     cv.a *= tint[rows % 17, cols % 7][..., None]
-    cv.put((np.mod(cv.y, 8) < 1.2) | (np.mod(cv.x + (rows % 2) * 13.5, 27) < 1.2), "#8a857b")
-    cv.noise(0.08, 142)
-    return image("TF_Brick", np.flipud(cv.a).copy())
+    mortar = (np.mod(cv.y, 16) < 2.4) | (np.mod(cv.x + (rows % 2) * 27, 54) < 2.4)
+    hgt = np.where(mortar, -1.0, 0.0).astype(np.float32)
+    weathered(cv, hgt, rng, 0.12)
+    cv.put(mortar, "#7d786e")
+    cv.a[mortar] *= (0.9 + 0.2 * rng.random(mortar.sum()))[..., None]
+    grime(cv, hgt, rng, 10, [0.0], (40, 200), (3, 8), 0.75)
+    return image("TF_Brick", np.flipud(cv.a).copy()), normal_image("TF_Brick_N", hgt, 2.5)
 
 
 def slats_image():
-    """The slatted wooden door, 1 m a repeat: brown boards 10 cm wide, darker joints, grain."""
-    cv = Canvas(128, 128, "#7a5236")
+    """The slatted wooden door, 1 m a repeat: brown boards 10 cm wide, darker sunk joints, grain, sun-bleached."""
+    cv = Canvas(128, 128, "#6e4b33")
     rng = np.random.default_rng(151)
     col = (cv.x // 12.8).astype(int)
-    cv.a *= rng.uniform(0.85, 1.12, 10)[col % 10][..., None]
-    cv.a *= (0.93 + 0.07 * np.sin(cv.y * 0.6 + col * 2.1))[..., None]
-    cv.put(np.mod(cv.x, 12.8) < 1.3, "#3e2a1d")
-    cv.noise(0.08, 152)
-    return image("TF_Slats", np.flipud(cv.a).copy())
+    cv.a *= rng.uniform(0.8, 1.12, 10)[col % 10][..., None]
+    g = fbm(128, 128, 24, rng, 3)
+    cv.a *= (0.9 + 0.1 * np.sin(cv.y * 0.6 + col * 2.1 + g * 6))[..., None]
+    joint = np.mod(cv.x, 12.8) < 1.3
+    cv.put(joint, "#2e2016")
+    hgt = np.where(joint, -1.0, 0.1 * np.sin(cv.y * 0.6 + col * 2.1 + g * 6)).astype(np.float32)
+    weathered(cv, hgt, rng, 0.08)
+    return image("TF_Slats", np.flipud(cv.a).copy()), normal_image("TF_Slats_N", hgt, 2.0)
 
 
 def fence_image():
-    """The yard's board fence, 2 m a repeat: weathered dark boards, 18 cm, a gap between."""
-    cv = Canvas(128, 128, "#5a4636")
+    """The yard's board fence, 2 m a repeat: weathered grey-brown boards, 18 cm, a dark gap between, two rails."""
+    cv = Canvas(256, 256, "#5e4c3c")
     rng = np.random.default_rng(161)
-    col = (cv.x // 11.5).astype(int)
-    cv.a *= rng.uniform(0.8, 1.15, 12)[col % 12][..., None]
-    cv.put(np.mod(cv.x, 11.5) < 1.2, "#231b14")
-    cv.put((np.abs(cv.y - 20) < 1.5) | (np.abs(cv.y - 100) < 1.5), "#3a2d22")
-    cv.noise(0.1, 162)
-    return image("TF_Fence", np.flipud(cv.a).copy())
+    col = (cv.x // 23).astype(int)
+    cv.a *= rng.uniform(0.75, 1.15, 12)[col % 12][..., None]
+    g = fbm(256, 256, 30, rng, 3)
+    cv.a *= (0.9 + 0.1 * np.sin(cv.y * 0.3 + col * 1.7 + g * 8))[..., None]
+    gap = np.mod(cv.x, 23) < 2.4
+    rails = (np.abs(cv.y - 40) < 3) | (np.abs(cv.y - 200) < 3)
+    cv.put(gap, "#1c1510")
+    cv.put(rails & ~gap, "#3a2d22")
+    hgt = np.where(gap, -1.0, 0.0).astype(np.float32) + np.where(rails, 0.6, 0.0)
+    weathered(cv, hgt, rng, 0.12)
+    return image("TF_Fence", np.flipud(cv.a).copy()), normal_image("TF_Fence_N", hgt, 2.5)
 
 
 def noren_image():
@@ -319,14 +481,65 @@ def curtain_image():
 
 
 def concrete_image():
-    """The apron: grey concrete, 4 m a repeat, a joint every 2 m and a few stains."""
-    cv = Canvas(256, 256, "#a19e96")
-    cv.noise(0.08, 71)
+    """The apron: worn grey concrete, 4 m a repeat at 128 px a metre, a joint every 2 m, oil stains, cracks."""
+    cv = Canvas(512, 512, "#9d9a92")
+    hgt = np.zeros((512, 512), np.float32)
     rng = np.random.default_rng(72)
-    for _ in range(6):
-        cv.ellipse(rng.uniform(0, 256), rng.uniform(0, 256), rng.uniform(8, 30), rng.uniform(5, 20), cv.a.mean((0, 1)) * 0.9)
-    cv.put((np.mod(cv.x, 128) < 1.5) | (np.mod(cv.y, 128) < 1.5), "#6f6c66")
-    return image("TF_Concrete", np.flipud(cv.a).copy())
+    weathered(cv, hgt, rng, 0.12)
+    for _ in range(10):
+        cx, cy, rx, ry = rng.uniform(0, 512), rng.uniform(0, 512), rng.uniform(14, 60), rng.uniform(10, 40)
+        m = ((cv.x - cx) / rx) ** 2 + ((cv.y - cy) / ry) ** 2
+        cv.a *= (1 - 0.18 * np.clip(1 - m, 0, 1))[..., None]
+    joint = (np.mod(cv.x, 256) < 2.5) | (np.mod(cv.y, 256) < 2.5)
+    cv.put(joint, "#5f5c56")
+    hgt[joint] -= 1.0
+    cracks(cv, hgt, rng, 8, "#6a6760")
+    return image("TF_Concrete", np.flipud(cv.a).copy()), normal_image("TF_Concrete_N", hgt, 2.0)
+
+
+def signface_image(base, name, seed):
+    """A lit sign's face by day, 1 m a repeat: yellowed towards the top, grime run down from the top and the ribs."""
+    cv = Canvas(128, 128, base)
+    hgt = np.zeros((128, 128), np.float32)
+    rng = np.random.default_rng(seed)
+    cv.a *= (1 + 0.05 * fbm(128, 128, 40, rng, 3))[..., None]
+    cv.a *= (0.93 + 0.07 * (cv.y / 128))[..., None]
+    grime(cv, hgt, rng, 10, [0.0], (15, 70), (1.0, 3.0), 0.93)
+    for _ in range(30):
+        dot(cv, rng.uniform(0, 128), rng.uniform(0, 128), rng.uniform(0.6, 1.6), rng.uniform(0.6, 1.6), cv.a.mean((0, 1)) * 0.8)
+    return image(name, np.flipud(cv.a).copy())
+
+
+def leaf_atlas():
+    """Ivy leaves for the cards in the round, 512 px, four clusters (one a quadrant): each a spray of three-lobed
+    leaves in greens from shadow to sunlit, alpha cut round them."""
+    S = 512
+    rgba = np.zeros((S, S, 4), np.float32)
+    Y, X = np.mgrid[0:S, 0:S].astype(np.float32) + 0.5
+    rng = np.random.default_rng(401)
+    greens = [srgb_(c) for c in ("#1f3a22", "#28472a", "#335a32", "#3f6c3a", "#4d7d44", "#5b8c4d", "#2b4f2e")]
+    for q in range(4):
+        ox, oy = (q % 2) * S / 2, (q // 2) * S / 2
+        leaves_ = [(rng.uniform(40, 216), rng.uniform(40, 216), rng.uniform(22, 44), rng.uniform(0, 2 * math.pi), rng.integers(len(greens))) for _ in range(16)]
+        for (lx, ly, r, a, k) in sorted(leaves_, key=lambda t: t[4]):
+            cx, cy = ox + lx, oy + ly
+            x0, x1, y0, y1 = int(max(ox, cx - r * 1.3)), int(min(ox + S / 2, cx + r * 1.3)), int(max(oy, cy - r * 1.3)), int(min(oy + S / 2, cy + r * 1.3))
+            if x0 >= x1 or y0 >= y1:
+                continue
+            xx, yy = X[y0:y1, x0:x1] - cx, Y[y0:y1, x0:x1] - cy
+            u, v = xx * math.cos(a) + yy * math.sin(a), -xx * math.sin(a) + yy * math.cos(a)
+            th = np.arctan2(v, u)
+            # a three-lobed heart: the radius swells at three angles
+            rad = r * (0.62 + 0.38 * np.abs(np.cos(1.5 * th)) ** 0.8)
+            d = np.hypot(u, v)
+            m = d < rad
+            c = np.array(greens[k], np.float32) * (0.85 + 0.3 * (1 - d / (rad + 1e-3)))[..., None]
+            vein = (np.abs(v) < 1.2) & (u > 0) | (np.abs(np.sin(th - 2.1) * d) < 1.0) | (np.abs(np.sin(th + 2.1) * d) < 1.0)
+            c = np.where(vein[..., None], c * 0.75, c)
+            sub = rgba[y0:y1, x0:x1]
+            sub[m, :3] = c[m]
+            sub[m, 3] = 1.0
+    return image_rgba("TF_Leaf", rgba)
 
 
 # --- parts -----------------------------------------------------------------------------------------------
@@ -389,20 +602,40 @@ def build():
     none = {"glow": "none"}
     lamp = lambda col, k: {"wet": "surface", "glow": "lamp", "glowColor": col, "glowStrength": k}  # noqa: E731
     damp = {"wet": "damp", **none}
+    tx = lambda f: f()  # noqa: E731
+    wall_c, wall_n = shopwall_image()
+    stucco_c, stucco_n = stucco_image()
+    plaster_c, plaster_n = plaster_image()
+    tiles_c, tiles_n = tiles_image()
+    brick_c, brick_n = brick_image()
+    slats_c, slats_n = slats_image()
+    fence_c, fence_n = fence_image()
+    conc_c, conc_n = concrete_image()
+    siding_c, siding_n = siding_image()
+    dw_c, dw_n = woodgrain_image()
+    leaf = material("TF_Leaf", "#ffffff", 0.75, tex=leaf_atlas(), props={"wet": "surface", "cutout": 1, **none})
+    lt_ = leaf.node_tree
+    lt_.links.new([n for n in lt_.nodes if n.type == "TEX_IMAGE"][0].outputs["Alpha"], lt_.nodes.get("Principled BSDF").inputs["Alpha"])
     M = dict(
-        wall=material("TF_ShopWall", "#ffffff", 0.9, tex=shopwall_image(), props=damp),
-        stucco=material("TF_Stucco", "#b4ae9e", 0.9, props=damp),
+        wall=material("TF_ShopWall", "#ffffff", 0.92, tex=wall_c, normal_tex=wall_n, props=damp),
+        stucco=material("TF_Stucco", "#ffffff", 0.92, tex=stucco_c, normal_tex=stucco_n, props=damp),
+        siding=material("TF_Siding", "#ffffff", 0.85, tex=siding_c, normal_tex=siding_n, props=damp),
+        leaf=leaf,
+        pole=material("TF_Pole", "#8d8b84", 0.85, props=damp),
+        wire=material("TF_Wire", "#16171a", 0.6, props={"wet": "surface", **none}),
+        crate=material("TF_Crate", "#2b5ea6", 0.55, props={"wet": "surface", **none}),
+        pot=material("TF_Pot", "#9a5a3c", 0.85, props=damp),
         ivy=material("TF_Ivy", "#ffffff", 0.8, tex=ivy_image(), props={"wet": "surface", **none}),
-        plaster=material("TF_Plaster", "#ffffff", 0.85, tex=plaster_image(), props=damp),
-        tiles=material("TF_Tiles", "#ffffff", 0.96, tex=tiles_image(), props={"wet": "surface", **none}),
-        darkwood=material("TF_DarkWood", "#3a2c22", 0.75, props=damp),
+        plaster=material("TF_Plaster", "#ffffff", 0.88, tex=plaster_c, normal_tex=plaster_n, props=damp),
+        tiles=material("TF_Tiles", "#ffffff", 0.9, tex=tiles_c, normal_tex=tiles_n, props={"wet": "surface", **none}),
+        darkwood=material("TF_DarkWood", "#ffffff", 0.8, tex=dw_c, normal_tex=dw_n, props=damp),
         board=material("TF_Board", "#ffffff", 0.7, tex=board_image(), props=damp),
-        brick=material("TF_Brick", "#ffffff", 0.9, tex=brick_image(), props=damp),
-        slats=material("TF_Slats", "#ffffff", 0.8, tex=slats_image(), props=damp),
+        brick=material("TF_Brick", "#ffffff", 0.9, tex=brick_c, normal_tex=brick_n, props=damp),
+        slats=material("TF_Slats", "#ffffff", 0.82, tex=slats_c, normal_tex=slats_n, props=damp),
         noren=material("TF_Noren", "#ffffff", 0.95, tex=noren_image(), props=damp),
-        fence=material("TF_Fence", "#ffffff", 0.9, tex=fence_image(), props=damp),
+        fence=material("TF_Fence", "#ffffff", 0.9, tex=fence_c, normal_tex=fence_n, props=damp),
         yardwall=material("TF_YardWall", "#ffffff", 0.8, tex=yardwall_image(), props=damp),
-        concrete=material("TF_Concrete", "#ffffff", 0.9, tex=concrete_image(), props={"wet": "ground", "layer": 9, **none}),
+        concrete=material("TF_Concrete", "#ffffff", 0.92, tex=conc_c, normal_tex=conc_n, props={"wet": "ground", "layer": 9, **none}),
         alu=material("TF_Alu", "#c7cbcb", 0.35, metal=0.75, props={"wet": "surface", **none}),
         wood=material("TF_Wood", "#8a6a48", 0.75, props=damp),
         dark=material("TF_Dark", "#1b1c1d", 0.85, props=damp),
@@ -416,12 +649,12 @@ def build():
         curtain=glowing("TF_Curtain", "#ffffff", 0.7, "#6e604a", {"wet": "surface", "emit": "night", **none}, tex=curtain_image()),
         light=material("TF_Light", "#f4f1e8", 0.4, props=lamp([1.0, 0.97, 0.9], 0.8)),
         # the signs: lit boxes, the white ones weathered to a grey by day
-        signw=material("TF_SignWhite", "#dedcd5", 0.5, props=lamp([1.0, 0.98, 0.94], 0.45)),
-        yellow=material("TF_SignYellow", "#e9c64a", 0.5, props=lamp([1.0, 0.85, 0.3], 0.4)),
+        signw=material("TF_SignWhite", "#ffffff", 0.5, tex=signface_image("#d8d4c8", "TF_SignWhiteTex", 501), props=lamp([1.0, 0.98, 0.94], 0.45)),
+        yellow=material("TF_SignYellow", "#ffffff", 0.5, tex=signface_image("#dfbc45", "TF_SignYellowTex", 502), props=lamp([1.0, 0.85, 0.3], 0.4)),
     )
-    for a, b in (("coping", "stucco"), ("roof", "concrete"), ("pipe", "paint"), ("meter", "alu"), ("crate", "wood")):
+    for a, b in (("coping", "stucco"), ("roof", "concrete"), ("pipe", "paint"), ("meter", "alu")):
         M[a] = M[b]
-    TILE = dict(concrete=4.0, plaster=2.0, brick=1.0, slats=1.0, fence=2.0, board=2.0, ivy=1.0, stucco=2.0, coping=1.0)
+    TILE = dict(signw=1.0, yellow=1.0, concrete=4.0, plaster=2.0, brick=1.0, slats=1.0, fence=2.0, board=2.0, ivy=1.0, stucco=2.0, coping=1.0, siding=2.0, darkwood=1.0)
     main = collection("藤原豆腐店")
     g = Geo()
     font = bpy.data.fonts.load(FONT)
@@ -474,7 +707,7 @@ def build():
     window(g, FX - 0.12, -1.62, OP1, 0.02, 2.05, panes=1, frame="paint", glass="shopglass", t=0.05, bars=(0.9,))
     g.box(FX - 0.12, FX - 0.06, OP0, OP0 + 0.05, 0.0, OPH, "paint")
     for (ya, yb, za, zb, xa) in ((-1.6, -1.05, 0.0, 0.34, FX - 0.85), (-1.58, -1.08, 0.34, 0.68, FX - 0.85), (-2.35, -1.85, 0.0, 0.34, FX - 1.0)):
-        g.box(xa, xa + 0.42, ya, yb, za, zb, "crate")
+        g.box(xa, xa + 0.42, ya, yb, za, zb, "wood")
     g.polyn([(FX - 0.85, -2.5, OPH - 0.02), (FX - 0.75, -2.5, OPH - 0.02), (FX - 0.75, -1.3, OPH - 0.02), (FX - 0.85, -1.3, OPH - 0.02)], "light", (0, 0, -1))
     # the header over the open shop and the door bay, the post between them
     g.box(FX - 0.02, FX + 0.07, OP0, DB1, OPH, 2.4, "darkwood", skip=("-x",))
@@ -548,6 +781,111 @@ def build():
     nl += spaced(font, "手づくりの店", 0.21, 0.27, (sx, -1.84, 3.27), M["ink"], lt, "T")
     for i, (ch, y) in enumerate(zip("藤原豆腐店", (-2.68, -2.18, -1.46, -0.92, -0.13))):
         nl += text(font, ch, 0.38, plane((sx, y, 2.79), (0, 1, 0), UP), M["ink"], lt, f"B{i}")
+    # the narrow upright panel at its right end (the photographs): とうふ down it, standing above the sign
+    EY0, EY1, EZ1 = TY1, TY1 + 0.3, S1 + SR + 0.5
+    g.box(FX, FX + SD - 0.04, EY0, EY1, S0, EZ1, "signw")
+    for (ya, yb, za, zb) in ((EY0 - 0.02, EY0 + 0.02, S0, EZ1), (EY1 - 0.02, EY1 + 0.02, S0, EZ1)):
+        g.box(FX + SD - 0.05, FX + SD - 0.02, ya, yb, za, zb, "alu")
+    g.box(FX, FX + SD - 0.02, EY0 - 0.02, EY1 + 0.02, EZ1, EZ1 + 0.04, "alu")
+    nl += column(font, "とうふ", 0.2, plane((FX + SD - 0.04, (EY0 + EY1) / 2, EZ1 - 0.2), (0, 1, 0), UP), M["ink"], lt, "E", gap=1.15)
+
+    # ---- ivy in the round: leaf cards (alpha cut) heaped on the right third, over the window, along the parapet, down the
+    # north side and over the yard's fence: the deep green mass of the photographs ----
+    def card(p, nrm, size):
+        n = (Vector(nrm) + Vector((0, 0, rng.uniform(0.2, 0.9))) + Vector(rng.normal(0, 0.35, 3))).normalized()
+        t = n.cross(Vector((0, 0, 1)))
+        if t.length < 1e-3:
+            t = Vector((1, 0, 0))
+        t.normalize()
+        b = n.cross(t)
+        a = rng.uniform(0, 2 * math.pi)
+        t, b = t * math.cos(a) + b * math.sin(a), -t * math.sin(a) + b * math.cos(a)
+        h = size / 2
+        q = int(rng.integers(4))
+        u0, v0 = (q % 2) * 0.5, (q // 2) * 0.5
+        P = Vector(p)
+        g.polyn([P - t * h - b * h, P + t * h - b * h, P + t * h + b * h, P - t * h + b * h], "leaf", n,
+                 uvs=[(u0, v0), (u0 + 0.5, v0), (u0 + 0.5, v0 + 0.5), (u0, v0 + 0.5)])
+
+    clump = lambda a, b: 0.55 + 0.45 * math.sin(a * 2.3 + 1.0) * math.sin(b * 1.7 + 2.0)  # noqa: E731
+    in_sign = lambda y, z: TY0 - 0.05 < y < TY1 + 0.35 and S0 - 0.1 < z < S1 + SR + 0.55  # noqa: E731
+    nleaf = 0
+
+    def front(n, y0, y1, z0, z1, deep, avoid_ac=True):
+        nonlocal nleaf
+        for _ in range(n):
+            y, z = rng.uniform(y0, y1), rng.uniform(z0, z1)
+            if in_sign(y, z) or (WY0 + 0.1 < y < WY1 - 0.1 and WZ0 + 0.15 < z < WZ1 - 0.1):
+                continue
+            if avoid_ac and -0.55 < y < 0.05 and 3.9 < z < 4.9 and rng.random() < 0.75:
+                continue
+            card((FX + 0.03 + deep * clump(y, z) * rng.random(), y, z), (1, 0, 0), rng.uniform(0.26, 0.48))
+            nleaf += 1
+
+    front(900, -0.6, SY1 + 0.08, 1.5, STOP + 0.15, 0.42)       # the right third, thickest
+    front(170, -2.9, 0.4, 5.3, STOP + 0.12, 0.22)               # a band along the top, over the window
+    front(90, SY0, -2.7, 4.2, 5.95, 0.2)                        # the tongue down the left
+    for _ in range(300):                                        # spilling over the parapet
+        y, x = rng.uniform(-2.6, SY1 + 0.1), rng.uniform(FX - 1.6, FX + 0.3)
+        card((x, y, STOP + rng.uniform(-0.05, 0.3) * clump(x, y)), (0.4, 0, 1), rng.uniform(0.3, 0.5))
+        nleaf += 1
+    for _ in range(750):                                        # the north side, the whole height
+        x, z = rng.uniform(BX + 1.0, FX + 0.05), rng.uniform(0.2, STOP + 0.15)
+        card((x, SY1 + 0.03 + 0.45 * clump(x, z) * rng.random(), z), (0, 1, 0), rng.uniform(0.28, 0.5))
+        nleaf += 1
+    for _ in range(160):                                        # round the corner
+        z, a = rng.uniform(1.4, STOP + 0.1), rng.uniform(0, math.pi / 2)
+        r = rng.uniform(0.05, 0.45)
+        card((FX + r * math.cos(a), SY1 + r * math.sin(a), z), (math.cos(a), math.sin(a), 0), rng.uniform(0.3, 0.5))
+        nleaf += 1
+    for _ in range(380):                                        # heaped over the yard's fence, down to the ground
+        y, z = rng.uniform(SY1, 3.4), rng.uniform(0.1, 2.25)
+        card((FX - 1.4 + 0.05 + 0.5 * clump(y, z) * rng.random(), y, z), (1, 0, 0), rng.uniform(0.3, 0.5))
+        nleaf += 1
+
+    # ---- a concrete pole at the kerb before the dry cleaner's, its wires along the street and two drops ----
+    PX, PY = KERB - 0.25, -9.0
+    cyl(g, PX, PY, 0.0, 9.2, 0.17, 0.12, 10, "pole", caps=(False, True))
+    g.box(PX - 0.75, PX + 0.75, PY - 0.06, PY + 0.06, 8.2, 8.32, "wire")
+    for dx in (-0.6, 0.0, 0.6):
+        cyl(g, PX + dx, PY, 8.32, 8.45, 0.04, 0.03, 6, "paint")
+    cyl(g, PX + 0.32, PY, 6.3, 7.1, 0.26, 0.26, 10, "pole", caps=(True, True))               # the transformer
+    for z in np.arange(1.8, 8.0, 0.45):                                                       # step bolts
+        g.box(PX - 0.02, PX + 0.02, PY - 0.24 if int(z * 10) % 2 else PY + 0.13, PY - 0.13 if int(z * 10) % 2 else PY + 0.24, z, z + 0.03, "alu")
+
+    def wire(a, b, sag, r=0.011, nseg=14):
+        A, B = Vector(a), Vector(b)
+        pts = [A.lerp(B, k / nseg) - Vector((0, 0, sag * 4 * (k / nseg) * (1 - k / nseg))) for k in range(nseg + 1)]
+        for p0, p1 in zip(pts, pts[1:]):
+            d = (p1 - p0).normalized()
+            u = d.cross(Vector((0, 0, 1)))
+            u = (u if u.length > 1e-4 else Vector((1, 0, 0))).normalized() * r
+            w = d.cross(u).normalized() * r
+            ring0 = [p0 + u, p0 + w, p0 - u, p0 - w]
+            ring1 = [p1 + u, p1 + w, p1 - u, p1 - w]
+            for k in range(4):
+                g.poly([ring0[k], ring0[(k + 1) % 4], ring1[(k + 1) % 4], ring1[k]], "wire")
+
+    for dx in (-0.6, 0.0, 0.6):
+        wire((PX + dx, -48.0, 8.4), (PX + dx, PY, 8.42), 0.9)
+        wire((PX + dx, PY, 8.42), (PX + dx, 38.0, 8.4), 0.9)
+    wire((PX + 0.15, -48.0, 6.6), (PX + 0.15, PY, 6.65), 0.7, r=0.02)
+    wire((PX + 0.15, PY, 6.65), (PX + 0.15, 38.0, 6.6), 0.7, r=0.02)
+    wire((PX - 0.2, PY, 7.0), (FX + 0.5, -10.6, LEAVE - 0.3), 0.25)                           # to the dry cleaner's eaves
+    wire((PX - 0.2, PY, 7.6), (FX + 0.02, SY0 + 0.15, STOP - 0.35), 0.35)                     # to the shop's corner
+
+    # ---- the clutter before the right-hand pier: blue crates, a white bottle or two, potted plants ----
+    for (z, k) in ((0.0, 0), (0.31, 1)):
+        y0 = 1.22 + k * 0.03
+        g.box(2.62, 3.08, y0, y0 + 0.36, z, z + 0.3, "crate")
+        for zz in (z + 0.08, z + 0.17):
+            g.box(3.081, 3.09, y0 + 0.05, y0 + 0.31, zz, zz + 0.04, "dark")
+    for (y, h) in ((1.95, 0.36), (2.12, 0.3), (2.3, 0.36)):
+        cyl(g, 2.72, y, 0.0, h, 0.1, 0.1, 10, "paint", caps=(False, True))
+    for (x, y, z) in ((2.85, 1.42, 0.61), (2.66, 0.75, 1.88), (2.66, 0.95, 1.88)):
+        cyl(g, x, y, z, z + 0.18, 0.09, 0.12, 8, "pot", caps=(True, False))
+        blob(g, (x, y, z + 0.3), (0.16, 0.16, 0.16))
+    g.box(FX + 0.06, FX + 0.2, 0.62, 1.0, 1.84, 1.88, "darkwood")                            # a shelf on the pier for two
 
     # ================= the dry cleaner's =================
     LW = LY0 - 0.5                                    # its eaves' far end
@@ -582,7 +920,7 @@ def build():
     nl += text(font, "TEL.22-0077", 0.19, plane((BALX + 0.04, -5.9, 2.52), (0, 1, 0), UP), M["ink"], lt, "Bd2", extrude=0.004)
     # upstairs: dark wooden windows behind the balcony, plaster between
     up = [(-11.6, -8.3, 3.17, 4.0), (-6.9, -3.5, 3.17, 4.0)]
-    holed(g, FX, LY0, LY1, CAN1, LEAVE, up, "plaster")
+    holed(g, FX, LY0, LY1, CAN1, LEAVE, up, "siding")
     for (ya, yb, za, zb) in up:
         reveal(g, FX - 0.06, FX, ya, yb, za, zb, "darkwood")
         window(g, FX - 0.06, ya, yb, za, zb, panes=6, frame="darkwood", glass="glass", t=0.05, bars=(3.78,))
@@ -651,6 +989,7 @@ def build():
     collider_box(helpers, "balcony", FX, BALX + 0.06, LY0, LY1, CAN0, BAL1 + 0.07)
     collider_box(helpers, "fence", FXF - 0.05, FXF, SY1, YARD, 0.0, 1.9)
     collider_box(helpers, "yardwall", FX - 0.5, FX - 0.36, 1.6, 3.4, 0.0, 0.75)
+    collider_box(helpers, "pole", PX - 0.17, PX + 0.17, PY - 0.17, PY + 0.17, 0.0, 9.2)
 
     flat_marker(helpers, "tofushop_main", rect(BX - 0.1, FX + 0.4, LY0 - 0.1, SY1 + 0.15), "FOOTPRINT")
     flat_marker(helpers, "tofushop_clear", rect(-6.0, KERB - 0.1, LY0 - 0.8, 8.0), "CLEAR")
@@ -660,7 +999,7 @@ def build():
     s.coord_mode, s.game_x, s.game_z, s.heading = "GAME", GX, GZ, HEADING
     s.far_distance = 260
     s.repo_path = REPO
-    return dict(tris=tris, letters=nl, far=far.tris())
+    return dict(tris=tris, letters=nl, leaves=nleaf, far=far.tris())
 
 
 if __name__ == "__main__":

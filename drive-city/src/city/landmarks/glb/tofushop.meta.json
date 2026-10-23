@@ -8,7 +8,7 @@
   "lon": 116.4632233,
   "headingDeg": -4.82,
   "file": "tofushop.glb",
-  "version": "2fb44458",
+  "version": "ae94378f",
   "footprint": [
     [-5.6, -1.15],
     [2.9, -1.15],
@@ -23,23 +23,23 @@
       [-6, 13.1]
     ]
   ],
-  "height": 6.3,
+  "height": 9.2,
   "farDistance": 260,
   "stats": {
-    "triangles": 16430,
+    "triangles": 23520,
     "farTriangles": 54,
-    "materials": 26,
+    "materials": 32,
     "farMaterials": 7,
     "colliders": {
-      "solid": 8,
+      "solid": 9,
       "walk": 0,
       "mesh": 0
     },
     "instancedMeshes": 0,
-    "textures": 12,
-    "maxTexture": 496,
+    "textures": 28,
+    "maxTexture": 744,
     "footprintArea": 115,
-    "bytes": 326648,
+    "bytes": 679228,
     "source": "tofushop.glb"
   }
 }
