@@ -33,10 +33,11 @@ const SHOP = { x: 5610.36, z: -4486.52 };
  */
 const STARTS = [
   // `car`: where the map's 快速前往 puts a car (2026-10-22, 「并没有走到这家豆腐店门口，还差了几十米」: the nearest lane was
-  // the far side's, and 25 m back from it put the shop behind the trees) - northbound 13 m behind the parked AE86: it is
-  // the first thing ahead on the left, its tail and its lettered door, the light just past its nose (from the north the
-  // light stood in front of it and washed it out)
-  { ...SHOP, y: 0, car: { x: 5618.85, z: -4469.63, yaw: -3.058 }, place: 'travel.shop', name: 'tofu.name', hint: 'tofu.hint', board: 'tofu.board', boardOut: 'tofu.boardOut' },
+  // the far side's, and 25 m back from it put the shop behind the trees) - southbound in the shop's own lane, level with
+  // its door (shop frame x 8.6, y 1; 2026-10-23, 「还是没停到豆腐店对面门口，还有一段距离」: 13 m south it read as down the
+  // street); `look`: the camera turned that far right, onto the shop, the parked AE86 and the light (a chase camera
+  // looks down the street, and from the far lane looking across it backed into the houses opposite)
+  { ...SHOP, y: 0, car: { x: 5614.59, z: -4486.38, yaw: 0.0836, look: -0.7 }, place: 'travel.shop', name: 'tofu.name', hint: 'tofu.hint', board: 'tofu.board', boardOut: 'tofu.boardOut' },
   { x: -19562.47, z: -2385.3, y: 34.55, car: null, place: 'travel.foot', name: 'tofu.nameFoot', hint: 'tofu.hintFoot', board: 'tofu.boardFoot', boardOut: 'tofu.boardOutFoot' },
 ] as const;
 /** The lights (the shop's, the top's, the foot's): soy-milk beige - white glared at night (the column is additive). */
@@ -161,7 +162,7 @@ export class Tofu {
           const x = S.x + (lane.pos.x - S.x) * 0.4, z = S.z + (lane.pos.z - S.z) * 0.4;
           pl.setRiding(null, { x, y: S.y + 0.3, z, yaw: Math.atan2(S.x - x, S.z - z) });
         }
-        this.engine.get<CameraApi>('camera')?.snap();
+        this.engine.get<CameraApi>('camera')?.snap(driving ? S.car?.look : undefined);
         this.hintT = 0;
         this.disarmed = true;
         ok = true;

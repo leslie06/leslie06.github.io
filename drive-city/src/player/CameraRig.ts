@@ -53,7 +53,10 @@ export class CameraRig implements CameraApi {
   }
 
   shake(amount: number): void { this.shakeAmt = Math.min(1.2, this.shakeAmt + amount); }
-  snap(): void { this.snapNext = true; }
+  snap(orbit?: number): void {
+    this.snapNext = true;
+    if (orbit !== undefined) { this.orbitYaw = orbit; this.orbitPitch = 0; this.sinceOrbit = 0; }
+  }
 
   update(dt: number): void {
     const cam = this.engine.camera;

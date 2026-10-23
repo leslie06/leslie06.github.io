@@ -73,8 +73,11 @@ export type CameraMode = 'chase' | 'far' | 'near' | 'hood';
 export interface CameraApi extends System {
   mode: CameraMode;
   shake(amount: number): void;
-  /** Jump straight to the target pose (after a reset or a pose change). */
-  snap(): void;
+  /**
+   * Jump straight to the target pose (after a reset or a pose change). `orbit` (radians, positive to the car's left): look
+   * that far round from behind the car, as if the player had turned the camera (it drifts back once they drive).
+   */
+  snap(orbit?: number): void;
   /** While set, the rig hands the camera to this function (shot poses, title screen). */
   override: ((camera: THREE.PerspectiveCamera, dt: number) => void) | null;
 }

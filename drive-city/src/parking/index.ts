@@ -34,7 +34,7 @@ const LUXURY_ELSEWHERE = { coupe: 0.015, limo: 0.06 };
  * Cars that always stand in one place (2026-10-22, 「头文字的AE86长这样，尽量还原」): the AE86 on the apron of 藤原豆腐店
  * (亮马桥, city/landmarks tofushop: its side 0.8 m off the shop front, before the open shop, its nose along the street,
  * as on the card the user sent). Each is a tile of its own, made when the camera comes within `FIXED_IN` and dropped
- * beyond `FIXED_OUT`, so it is back after the player has driven it off and gone; not made while the player is in one.
+ * beyond `FIXED_OUT`, so it is back after the player has driven it off and gone; not made while the player's car stands on it.
  */
 const FIXED: { key: string; body: BodyType; x: number; z: number; heading: number; colour: string; /** The ground there (0: the city's). */ y?: number }[] = [
   // the shop's frame (landmarks/tofushop: origin 5606.10, -4484.66, heading -4.82 deg): local (4.1, -2.53), facing local +y -
@@ -153,7 +153,10 @@ export async function install(engine: Engine): Promise<void> {
     for (const f of FIXED) {
       const t = tiles.get(f.key), d = Math.hypot(cam.x - f.x, cam.z - f.z);
       if (t && d > FIXED_OUT) dropTile(t);
-      if (t || d > FIXED_IN || engine.get<VehicleApi>('vehicle')?.look.body === f.body) continue;
+      // made even while the player drives an AE86 of their own (2026-10-23, 「豆腐店门口也没停着一辆AE86」: one bought or
+      // taken earlier left the apron bare); only not on top of the player's car
+      const pc = engine.get<VehicleApi>('vehicle')?.car.pos;
+      if (t || d > FIXED_IN || (pc && Math.hypot(pc.x - f.x, pc.z - f.z) < 3)) continue;
       const spec = SPEC_OF[f.body], nt: Tile = { key: f.key, recs: [], born: time, checked: false, body: null };
       nt.recs.push({ tile: nt, body: f.body, heading: f.heading, hl: specLength(spec) / 2 + 0.15, state: 0, cols: [],
         pos: new THREE.Vector3(f.x, (f.y ?? 0) + 0.03 + spec.wheelRadius, f.z), quat: new THREE.Quaternion().setFromAxisAngle(_up, f.heading), colour: new THREE.Color(f.colour) });
@@ -210,12 +213,14 @@ export async function install(engine: Engine): Promise<void> {
 
   /** Spots kept clear (`clearAround` with a hold): until `until` (seconds of `time`). */
   const holds: { x: number; z: number; r: number; until: number }[] = [];
+  /** One of `FIXED`: never cleared away (2026-10-23: the 快速前往 landing beside the tofu shop cleared its AE86). */
+  const fixedRec = (r: Rec) => r.tile.key.startsWith('fixed:');
   const check = (t: Tile) => {
     t.checked = true;
     for (let i = holds.length - 1; i >= 0; i--) if (holds[i].until < time) holds.splice(i, 1);
     for (const r of t.recs) {
       if (r.state !== 0) continue;
-      if (holds.some((k) => Math.hypot(r.pos.x - k.x, r.pos.z - k.z) < k.r + r.hl)) { r.state = 4; continue; }
+      if (!fixedRec(r) && holds.some((k) => Math.hypot(r.pos.x - k.x, r.pos.z - k.z) < k.r + r.hl)) { r.state = 4; continue; }
       if (!clear(r)) { r.state = 2; continue; }
       r.state = 1;
       solidify(r);
@@ -375,7 +380,7 @@ export async function install(engine: Engine): Promise<void> {
         if (!c) continue;
         for (let i = c.length - 1; i >= 0; i--) {
           const q = c[i];
-          if (Math.hypot(q.pos.x - x, q.pos.z - z) > r + q.hl) continue;
+          if (fixedRec(q) || Math.hypot(q.pos.x - x, q.pos.z - z) > r + q.hl) continue;
           c.splice(i, 1); unsolidify(q); q.state = 4;
         }
       }
