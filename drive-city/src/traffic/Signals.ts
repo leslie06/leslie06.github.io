@@ -251,6 +251,28 @@ function lightsParam(): LightsMode {
  */
 const HOUSING = { across: 0.32, along: 0.42, h: 1.2, out: 1.05, y: 4.95 };
 const LAMP_PROUD = HOUSING.along / 2 + 0.015;
+/**
+ * A mast arm (2026-10-23, 「红绿灯摆在路上方，可以把杆子往里一点，横杆比较长，往里是为了不影响拐弯」): the pole stands
+ * `POLE_IN` m back from the kerb, out of a turning car's way, and the arm reaches `ARM_EXTRA` m further than Blender's
+ * (housing 1.05 m out), so the lamps hang ~3.5 m in over the carriageway.
+ */
+const POLE_IN = 3, ARM_EXTRA = 5.45;
+
+/**
+ * Blender's pole with its arm drawn out by `extra` m along local +z: the arm's end, the housing and its back plate (all past
+ * 0.65 m) move the whole way, the brace's end (0.3-0.65 m) a third of it, so it still props the arm near the pole.
+ */
+function mastArm(geo: THREE.BufferGeometry, extra: number): THREE.BufferGeometry {
+  const p = geo.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const z = p.getZ(i);
+    if (z > 0.65) p.setZ(i, z + extra);
+    else if (z > 0.3) p.setZ(i, z + extra * 0.35);
+  }
+  p.needsUpdate = true;
+  geo.computeBoundingSphere();
+  return geo;
+}
 
 /** Poles with three-lamp heads at the stop lines of signalised approaches near the player. */
 export class SignalHeads {
@@ -274,7 +296,7 @@ export class SignalHeads {
   constructor(scene: THREE.Scene, private g: LaneGraph, private sig: Signals, private cap = 240) {
     // Blender's pole (scripts/blender/props/street.py `signal`): a tapered pole on a base, the arm and its brace, the housing
     // at HOUSING with a white-bordered back plate and a visor over each lamp.
-    const g0 = streetGeometry('signal');
+    const g0 = mastArm(streetGeometry('signal'), ARM_EXTRA);
     this.poles = new THREE.InstancedMesh(g0, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 }), cap);
     // Three lamps per head: one instanced mesh, per-instance colour (lit colours are HDR for bloom).
     const lamp = new THREE.CircleGeometry(0.13, 16).rotateY(Math.PI).translate(0, 0, 0);
@@ -333,17 +355,17 @@ export class SignalHeads {
       // Short of the junction, on the right-hand pavement, arm reaching over the carriageway, lamps facing traffic.
       // 2026-10-23 (「把红绿灯往里移下，转弯也容易撞到」): it stood 7 m short of the node, which at a junction with a main
       // road is in the crossing carriageway's lanes, and anywhere on the corner is where a car turning cuts through; now
-      // 7 m back from the crossing carriageway's kerb (10 m at least), past the corner's curve, and 2 m into the pavement
-      // (was 0.8).
+      // 7 m back from the crossing carriageway's kerb (10 m at least), past the corner's curve, and `POLE_IN` m into the pavement
+      // (was 0.8), the arm long enough to hang the lamps over the lanes (`mastArm`).
       const back = Math.max(10, this.crossHalfWidth(l) + 7);
-      const p = this.g.at(l, Math.max(2, l.len - back), -l.hw - 2, this.tmp);
+      const p = this.g.at(l, Math.max(2, l.len - back), -l.hw - POLE_IN, this.tmp);
       // Local +Z (the arm) turned onto left of travel, (dz, -dx): across the road.
       this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(p.dz, -p.dx));
       const i = this.heads.length;
       this.poles.setMatrixAt(i, this._m.compose(this._v.set(p.x, 0, p.z), this._q, this._s));
       for (let k = 0; k < 3; k++) {
         // Lamps on the housing's face towards oncoming traffic (against the travel direction).
-        const local = new THREE.Vector3(0, HOUSING.y + 0.38 - k * 0.38, HOUSING.out).applyQuaternion(this._q);
+        const local = new THREE.Vector3(0, HOUSING.y + 0.38 - k * 0.38, HOUSING.out + ARM_EXTRA).applyQuaternion(this._q);
         this._v.set(p.x + local.x - p.dx * LAMP_PROUD, local.y, p.z + local.z - p.dz * LAMP_PROUD);
         const face = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-p.dx, 0, -p.dz));
         this.lamps.setMatrixAt(i * 3 + k, this._m.compose(this._v, face, this._s));
