@@ -196,11 +196,22 @@ export async function install(engine: Engine): Promise<void> {
   /** Let a cast member go now (and out of `end`'s hands). */
   const letGo = (a: Actor, how: 'walk' | 'flee' | 'vanish') => { a.release(how); cast = cast.filter((x) => x !== a); };
 
+  /**
+   * Where 送豆腐 starts (the tofu shop, the foot of 妙峰山: `MissionApi.travelSpots`): nothing starts within `QUIET` of one
+   * (2026-10-23, 「为什么我在藤原豆腐店下车，有几个人打我」: a gang fell on the player walking to the light).
+   */
+  const QUIET = 80;
+  let quiet: readonly { x: number; z: number }[] | null = null;
+  const calm = () => {
+    if (!quiet?.length) quiet = missions()?.travelSpots?.() ?? [];
+    const P = pl.position;
+    return quiet.some((q) => Math.hypot(P.x - q.x, P.z - q.z) < QUIET);
+  };
   const free = () => {
     const ui = engine.get<{ name: string; state: string }>('ui');
     if (ui && ui.state !== 'playing') return false;
     const v = vehicle(), m = missions(), intro = engine.get<IntroApi>('intro')?.step;
-    return v.inputEnabled && !v.autopilot && !pl.riding && (wanted()?.level ?? 0) === 0 && !engine.get<RaceApi>('races')?.active
+    return !calm() && v.inputEnabled && !v.autopilot && !pl.riding && (wanted()?.level ?? 0) === 0 && !engine.get<RaceApi>('races')?.active
       && !m?.busy && !m?.story && !engine.get<GarageApi>('garage')?.open && (intro === undefined || intro === 'off' || intro === 'done')
       && !engine.get<{ name: string; active: unknown }>('events')?.active && !dlg()?.busy;
   };
