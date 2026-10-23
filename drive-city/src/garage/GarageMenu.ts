@@ -1,6 +1,7 @@
 import { t } from '../core/I18n';
 import { C, F, css, el } from '../ui/theme';
 import { DEALER, NITRO, PAINTS, PRICE, TRANSFER, type LuxuryBody } from './Parts';
+import type { ThumbLook } from './Thumbs';
 
 css(`
 .garage{position:fixed;inset:0;z-index:31;display:grid;place-items:center;font-family:${F.ui};color:${C.paper};
@@ -13,6 +14,9 @@ css(`
 .garage .sub{font:500 13px/1.5 ${F.ui};color:${C.muted};margin:6px 0 12px}
 .garage .row{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid ${C.line}}
 .garage .name{font:800 15px/1.2 ${F.ui}}
+/* the 车行's rows lead with a picture of the car (2026-10-23) */
+.garage .row.car{grid-template-columns:120px 64px 1fr auto}
+.garage .pic{width:120px;height:68px;object-fit:contain;display:block}
 .garage .what{font:500 13px/1.4 ${F.ui};color:${C.muted}}
 .garage .pips{letter-spacing:3px;color:${C.yellow};margin-right:6px}
 .garage button{font:800 14px/1 ${F.ui};cursor:pointer;border:0;border-radius:6px;padding:10px 14px;background:${C.yellow};color:${C.ink};white-space:nowrap}
@@ -36,6 +40,7 @@ css(`
   .garage .sub{margin:2px 0 4px;font-size:11px}
   .garage .row{padding:3px 0;gap:8px}
   .garage .name{font-size:13px}.garage .what{font-size:11px}
+  .garage .row.car{grid-template-columns:84px 56px 1fr auto}.garage .pic{width:84px;height:48px}
   .garage button{padding:7px 10px;font-size:12px}
   .garage .paints{gap:6px}.garage .paints button{width:22px;height:22px}
   .garage .leave{position:sticky;bottom:0;margin:6px 0 0;padding:9px;background:#2b2e31;box-shadow:0 -8px 12px rgba(12,14,16,.8)}
@@ -77,7 +82,7 @@ export interface GarageView {
 export interface DealerView {
   cash: number;
   wanted: boolean;
-  mine: { i: number; name: string; levels: { engine: number; tyres: number; nitro: number }; state: 'pound' | 'driving' | 'call' }[];
+  mine: { i: number; name: string; look: ThumbLook; levels: { engine: number; tyres: number; nitro: number }; state: 'pound' | 'driving' | 'call' }[];
   ownBodies: string[];
 }
 
@@ -89,6 +94,8 @@ export class GarageMenu {
   private panel: HTMLDivElement;
   onBuy: (item: Item, paint?: string) => void = () => {};
   onClose: () => void = () => {};
+  /** A picture of a car (garage/Thumbs): now if made, else null and `ready` later. Unset: rows without pictures. */
+  thumb: ((look: ThumbLook, ready: (url: string) => void) => string | null) | null = null;
 
   constructor() {
     this.root = el('div', 'garage', document.body);
@@ -182,8 +189,8 @@ export class GarageMenu {
         const lv = t('garage.levels', { e: pips(m.levels.engine, 3), t: pips(m.levels.tyres, 2), n: pips(m.levels.nitro, 3) });
         if (m.state === 'call') {
           const short = v.cash < PRICE.call;
-          this.row(p, m.name, lv, short ? undefined : PRICE.call, !v.wanted && !short, () => this.onBuy(`call:${m.i}`), short ? t('garage.short', { n: (PRICE.call - v.cash).toLocaleString('en-US') }) : t('garage.call'));
-        } else this.row(p, m.name, m.state === 'pound' ? t('garage.inPoundWhat', { n: PRICE.impound }) : lv, undefined, false, () => {}, m.state === 'pound' ? t('garage.inPound') : t('garage.driving'));
+          this.row(p, m.name, lv, short ? undefined : PRICE.call, !v.wanted && !short, () => this.onBuy(`call:${m.i}`), short ? t('garage.short', { n: (PRICE.call - v.cash).toLocaleString('en-US') }) : t('garage.call'), m.look);
+        } else this.row(p, m.name, m.state === 'pound' ? t('garage.inPoundWhat', { n: PRICE.impound }) : lv, undefined, false, () => {}, m.state === 'pound' ? t('garage.inPound') : t('garage.driving'), m.look);
       }
     }
     const sale = DEALER.filter((d) => !v.ownBodies.includes(d.body));
@@ -191,15 +198,23 @@ export class GarageMenu {
     for (const d of sale) {
       // short of money: how much more, not a greyed-out price
       const short = v.cash < d.price;
-      this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }) + (short ? ` · ¥${d.price.toLocaleString('en-US')}` : ''), short ? undefined : d.price, !v.wanted && !short, () => this.onBuy(`car:${d.body}`), short ? t('garage.short', { n: (d.price - v.cash).toLocaleString('en-US') }) : t('garage.order'));
+      this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }) + (short ? ` · ¥${d.price.toLocaleString('en-US')}` : ''), short ? undefined : d.price, !v.wanted && !short, () => this.onBuy(`car:${d.body}`), short ? t('garage.short', { n: (d.price - v.cash).toLocaleString('en-US') }) : t('garage.order'),
+        { body: d.body, upper: d.paint, lower: d.paint, taxi: false });
     }
     const leave = el('button', 'leave', p);
     leave.textContent = t('garage.dealerClose');
     leave.addEventListener('click', () => this.onClose());
   }
 
-  private row(parent: HTMLElement, name: string, what: string, price: number | undefined, can: boolean, go: () => void, label = t('garage.buy')): void {
+  private row(parent: HTMLElement, name: string, what: string, price: number | undefined, can: boolean, go: () => void, label = t('garage.buy'), car?: ThumbLook): void {
     const r = el('div', 'row', parent);
+    if (car && this.thumb) {
+      r.classList.add('car');
+      const img = el('img', 'pic', r) as HTMLImageElement;
+      img.alt = '';
+      const url = this.thumb(car, (u) => { img.src = u; });
+      if (url) img.src = url;
+    }
     el('div', 'name', r).textContent = name;
     el('div', 'what', r).innerHTML = what.replace(/^([●○]+)/, '<span class="pips">$1</span>');
     const b = el('button', '', r);

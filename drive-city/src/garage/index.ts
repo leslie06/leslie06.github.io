@@ -13,6 +13,7 @@ import { SPEC_OF, TAXI } from '../vehicle/Spec';
 import { Vehicle } from '../vehicle/Vehicle';
 import { BuyButton } from './BuyButton';
 import { GarageMenu, type Item } from './GarageMenu';
+import { CarThumbs } from './Thumbs';
 
 import { DEALER, ENGINE, FINE, isLuxury, NITRO, PRICE, TRANSFER, TYRES, type LuxuryBody } from './Parts';
 export { DEALER, ENGINE, FINE, NITRO, PAINTS, PRICE, TYRES } from './Parts';
@@ -71,6 +72,8 @@ export async function install(engine: Engine): Promise<void> {
   if (!pl) return;
   const [ax, az] = project(ANCHOR.lat, ANCHOR.lon);
   const menu = new GarageMenu();
+  const thumbs = new CarThumbs(engine.renderer);
+  menu.thumb = (look, ready) => thumbs.get(look, ready);
   const fleet: Mine[] = readSaved().map((p) => ({ p, car: null }));
   let cur: Mine | null = fleet[0] ?? null;
   let open = false, dismissed = false, impoundNext = false;
@@ -410,7 +413,7 @@ export async function install(engine: Engine): Promise<void> {
     return {
       cash: cashOf(), wanted: wanted(),
       mine: fleet.map((m, i) => ({
-        i, name: nameOf(m.p), levels: m.p,
+        i, name: nameOf(m.p), levels: m.p, look: { body: m.p.body, upper: m.p.upper, lower: m.p.lower, taxi: m.p.taxi },
         state: (m.p.impounded ? 'pound' : m.car === v.car && pl.mode === 'driving' ? 'driving' : 'call') as 'pound' | 'driving' | 'call',
       })),
       ownBodies: fleet.map((m) => m.p.body),
