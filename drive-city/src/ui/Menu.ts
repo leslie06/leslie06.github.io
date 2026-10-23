@@ -29,7 +29,9 @@ css(`
 .menu .seg button.on{background:rgba(244,241,232,.14);color:${C.paper}}
 .menu .seg button:focus-visible{outline:2px solid ${C.yellow};outline-offset:-2px}
 .menu .seglabel{font:700 11px/1 ${F.num};letter-spacing:.2em;color:${C.muted};margin-right:2px}
-.menu .card{min-width:300px;padding:18px 20px;border-radius:10px;background:${C.inkGlass};border:1px solid ${C.line};backdrop-filter:blur(8px)}
+.menu .card{min-width:300px;padding:18px 20px;border-radius:10px;box-sizing:border-box;overflow:auto;
+  /* never taller than the screen: a taller card pushed the start button below a 720-px window (2026-10-23) */
+  max-height:calc(100vh - 2 * max(28px, 4vh));max-height:calc(100dvh - 2 * max(28px, 4vh));background:${C.inkGlass};border:1px solid ${C.line};backdrop-filter:blur(8px)}
 .menu .card h2{margin:0 0 10px;font:800 12px/1 ${F.num};letter-spacing:.24em;color:${C.yellow}}
 .menu .card .k{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;align-items:center;font:500 13px/1.3 ${F.ui}}
 .menu .card kbd{display:inline-block;min-width:22px;padding:0 6px;margin-right:4px;border-radius:4px;border:1px solid ${C.line};background:rgba(244,241,232,.08);font:700 11px/22px ${F.mono};text-align:center}
