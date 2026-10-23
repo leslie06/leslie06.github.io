@@ -25,7 +25,8 @@
 #     the upstairs window and down the whole right-hand corner; upstairs a 2.1 m four-light window behind a railing,
 #     a window air-conditioner beside it, a downpipe at the left edge; the sign (5.4 m, one yellow panel とうふ 油あげ and
 #     three white ones 手づくりの店 over 藤原豆腐店) with its foot 2.4 m up, reaching over the neighbour's pillar;
-#     under it a brick pier, the shop open 2 m wide and dark inside (a sliding glass door, crates), a post, a door
+#     under it a brick pier, the shop 2 m wide behind sliding glass doors and lit inside (tubes, steel tanks of tofu, tubs,
+#     crates), a post, a door
 #     bay (a glazed transom over a dark noren with a white crest and a slatted wooden door), a red brick pier;
 #   - a yard: a board fence set back, a low white wall painted with grass.
 # Not from the card: the backs, the depths (8 m), the far ends of the two houses.
@@ -55,7 +56,7 @@ FX, BX = 2.5, -5.5             # the fronts and the backs
 # the shop, along the street (y, south to north)
 SY0, SY1, STOP = -3.3, 1.0, 6.2
 WY0, WY1, WZ0, WZ1 = -2.53, -0.47, 3.83, 4.83          # its upstairs window
-OP0, OP1, OPH, OPD = -2.94, -0.94, 2.2, 1.2            # the open shop: from, to, height, depth
+OP0, OP1, OPH, OPD = -2.94, -0.94, 2.2, 2.4            # the open shop: from, to, height, depth
 DB0, DB1, DBH = -0.83, 0.58, 1.83                      # the door bay and its transom's foot
 # the dry cleaner's
 LY0, LY1 = -12.3, SY0
@@ -449,6 +450,31 @@ def noren_image():
     return image("TF_Noren", np.flipud(cv.a).copy())
 
 
+def dimmed(src, name, k):
+    """A copy of image `src` multiplied by k (r, g, b, in sRGB): an interior's walls are darker than the street's."""
+    w, h = src.size
+    px = np.empty(w * h * 4, np.float32)
+    src.pixels.foreach_get(px)
+    a = px.reshape(h, w, 4)[..., :3] * np.array(k, np.float32)
+    return image(name, a)
+
+
+def paper_image():
+    """The price card over the tanks: yellowed paper, three columns of brushed lines, a red seal."""
+    cv = Canvas(64, 96, "#ece4cc")
+    cv.noise(0.05, 211)
+    rng = np.random.default_rng(212)
+    for col in range(3):
+        x = 46 - col * 15
+        y = 10
+        while y < 80:
+            h = rng.uniform(5, 10)
+            cv.rect(x - 2, y, x + 3, y + h, "#2a2622")
+            y += h + rng.uniform(2, 5)
+    cv.ellipse(14, 82, 6, 6, "#b8322c")
+    return image("TF_Paper", np.flipud(cv.a).copy())
+
+
 def yardwall_image():
     """The low wall in the yard: white, painted along its foot with blades of grass (one panel, 1.8 x 0.75 m)."""
     cv = Canvas(256, 112, "#e8eae5")
@@ -647,6 +673,17 @@ def build():
         glass=material("TF_Glass", "#56636c", 0.12, metal=0.3, props={"wet": "surface", **none}),
         shopglass=glowing("TF_ShopGlass", "#2a2f32", 0.08, "#9a8f78", {"wet": "surface", "emit": "night", **none}),
         curtain=glowing("TF_Curtain", "#ffffff", 0.7, "#6e604a", {"wet": "surface", "emit": "night", **none}, tex=curtain_image()),
+        # inside the open shop: lit by its own tubes (a glow day and night), the steel tanks, the water, the tofu
+        inwall=glowing("TF_InWall", "#ffffff", 0.85, "#1f1c15", damp, tex=dimmed(plaster_c, "TF_InWallTex", (0.74, 0.7, 0.62))),
+        inceil=glowing("TF_InCeil", "#9c9788", 0.8, "#38342a", damp),
+        infloor=glowing("TF_InFloor", "#ffffff", 0.6, "#0e0d0b", damp, tex=dimmed(conc_c, "TF_InFloorTex", (0.62, 0.6, 0.56))),
+        tube=glowing("TF_Tube", "#ffffff", 0.3, "#fffaf0", none),
+        steel=material("TF_Steel", "#b9bdbd", 0.28, metal=0.85, props={"wet": "surface", **none}),
+        water=material("TF_Water", "#6f8b92", 0.04, metal=0.2, props={"wet": "surface", **none}),
+        tofu=glowing("TF_Tofu", "#f2efe4", 0.55, "#1e1d18", none),
+        styro=glowing("TF_Styro", "#e4e3dd", 0.8, "#100f0d", none),
+        paper=material("TF_Paper", "#ffffff", 0.9, tex=paper_image(), props=damp),
+        inglass=material("TF_InGlass", "#3c4648", 0.03, metal=0.0, props={"wet": "surface", "glassy": 0.42, **none}),
         light=material("TF_Light", "#f4f1e8", 0.4, props=lamp([1.0, 0.97, 0.9], 0.8)),
         # the signs: lit boxes, the white ones weathered to a grey by day
         signw=material("TF_SignWhite", "#ffffff", 0.5, tex=signface_image("#d8d4c8", "TF_SignWhiteTex", 501), props=lamp([1.0, 0.98, 0.94], 0.45)),
@@ -654,7 +691,7 @@ def build():
     )
     for a, b in (("coping", "stucco"), ("roof", "concrete"), ("pipe", "paint"), ("meter", "alu")):
         M[a] = M[b]
-    TILE = dict(signw=1.0, yellow=1.0, concrete=4.0, plaster=2.0, brick=1.0, slats=1.0, fence=2.0, board=2.0, ivy=1.0, stucco=2.0, coping=1.0, siding=2.0, darkwood=1.0)
+    TILE = dict(inwall=2.0, infloor=3.0, signw=1.0, yellow=1.0, concrete=4.0, plaster=2.0, brick=1.0, slats=1.0, fence=2.0, board=2.0, ivy=1.0, stucco=2.0, coping=1.0, siding=2.0, darkwood=1.0)
     main = collection("藤原豆腐店")
     g = Geo()
     font = bpy.data.fonts.load(FONT)
@@ -699,16 +736,51 @@ def build():
     cyl(g, FX + 0.07, SY0 + 0.1, 0.0, STOP - 0.1, 0.045, 0.045, 6, "pipe", caps=(False, False))     # the downpipe
     # downstairs, left to right: a brick pier
     g.box(FX - 0.01, FX + 0.06, SY0, OP0, 0.0, OPH, "brick", skip=("-x",))
-    # the open shop: dark inside, a sliding glass door, crates, a tube on the ceiling
+    # the open shop (2026-10-23, 「一楼店里面还是黑的」): 2.4 m deep behind a row of sliding glass doors, lit inside -
+    # cream walls and ceiling with a glow of their own (the tubes' light: nothing else lights an interior here), two tubes,
+    # the steel tanks along the back with the day's tofu in the water, a shelf of white tubs, crates and foam boxes
     xb = FX - OPD
-    reveal(g, xb, FX, OP0, OP1, 0.0, OPH, "dark")
-    g.polyn([(xb, OP0, 0.02), (FX, OP0, 0.02), (FX, OP1, 0.02), (xb, OP1, 0.02)], "concrete", UP)
-    quad(g, xb, OP0, OP1, 0.0, OPH, "dark")
-    window(g, FX - 0.12, -1.62, OP1, 0.02, 2.05, panes=1, frame="paint", glass="shopglass", t=0.05, bars=(0.9,))
-    g.box(FX - 0.12, FX - 0.06, OP0, OP0 + 0.05, 0.0, OPH, "paint")
-    for (ya, yb, za, zb, xa) in ((-1.6, -1.05, 0.0, 0.34, FX - 0.85), (-1.58, -1.08, 0.34, 0.68, FX - 0.85), (-2.35, -1.85, 0.0, 0.34, FX - 1.0)):
+    reveal(g, xb, FX, OP0, OP1, 0.0, OPH, "inwall")
+    g.polyn([(xb, OP0, 0.01), (FX, OP0, 0.01), (FX, OP1, 0.01), (xb, OP1, 0.01)], "infloor", UP)
+    g.polyn([(xb, OP0, OPH - 0.01), (FX, OP0, OPH - 0.01), (FX, OP1, OPH - 0.01), (xb, OP1, OPH - 0.01)], "inceil", (0, 0, -1))
+    quad(g, xb, OP0, OP1, 0.0, OPH, "inwall")
+    for y in (OP0 + 0.55, OP1 - 0.55):                                                                # the tubes
+        g.box(xb + 0.3, FX - 0.4, y - 0.05, y + 0.05, OPH - 0.05, OPH - 0.01, "paint", skip=("+z",))
+        g.box(xb + 0.32, FX - 0.42, y - 0.016, y + 0.016, OPH - 0.085, OPH - 0.05, "tube")
+    # the tanks: steel, waist high, the water just under the rim and the blocks of tofu in it
+    tx0, tx1, tz = xb + 0.02, xb + 0.72, 0.82
+    g.box(tx0, tx1, OP0 + 0.08, OP1 - 0.08, 0.0, tz, "steel", skip=("-z", "+z"))
+    for (ya, yb) in ((OP0 + 0.08, -1.98), (-1.94, OP1 - 0.08)):
+        g.box(tx0, tx1, ya, yb, tz - 0.012, tz, "steel", skip=("-z",))
+        g.polyn([(tx0 + 0.04, ya + 0.04, tz - 0.03), (tx1 - 0.04, ya + 0.04, tz - 0.03), (tx1 - 0.04, yb - 0.04, tz - 0.03), (tx0 + 0.04, yb - 0.04, tz - 0.03)], "water", UP)
+        n = int((yb - ya - 0.1) / 0.13)
+        for i in range(n):
+            for j in range(4):
+                if rng.random() < 0.2:
+                    continue
+                cx, cy = tx0 + 0.1 + j * 0.15, ya + 0.1 + i * 0.13
+                g.box(cx, cx + 0.11, cy, cy + 0.1, tz - 0.05, tz - 0.015, "tofu")
+    # over the tanks: a shelf of white tubs, a price card, a calendar
+    g.box(xb, xb + 0.3, OP0 + 0.1, OP1 - 0.1, 1.42, 1.45, "wood")
+    for k in range(9):
+        y = OP0 + 0.2 + k * 0.19
+        if k in (3, 7):
+            continue
+        cyl(g, xb + 0.15, y, 1.45, 1.57, 0.065, 0.075, 8, "styro")
+    quad(g, xb + 0.005, -1.3, -1.02, 1.6, 1.98, "paper", uvs=UV1)
+    quad(g, xb + 0.005, -2.75, -2.45, 1.0, 1.35, "red")
+    # on the left: blue crates stacked, foam boxes; by the door the wooden crates
+    for k in range(4):
+        g.box(FX - 1.05, FX - 0.62, OP0 + 0.04, OP0 + 0.58, k * 0.3, k * 0.3 + 0.29, "crate")
+    for (xa, ya, za) in ((FX - 1.6, OP0 + 0.05, 0.0), (FX - 1.6, OP0 + 0.05, 0.32), (FX - 0.52, -1.6, 0.0)):
+        g.box(xa, xa + 0.42, ya, ya + 0.5, za, za + 0.31, "styro")
+    for (ya, yb, za, zb, xa) in ((-1.6, -1.05, 0.0, 0.34, FX - 0.95), (-1.58, -1.08, 0.34, 0.68, FX - 0.95)):
         g.box(xa, xa + 0.42, ya, yb, za, zb, "wood")
-    g.polyn([(FX - 0.85, -2.5, OPH - 0.02), (FX - 0.75, -2.5, OPH - 0.02), (FX - 0.75, -1.3, OPH - 0.02), (FX - 0.85, -1.3, OPH - 0.02)], "light", (0, 0, -1))
+    # the sliding glass doors: two sashes, the right one in front, aluminium, a rail at hand height
+    window(g, FX - 0.16, OP0 + 0.04, -1.86, 0.02, 2.12, panes=1, frame="alu", glass="inglass", t=0.045, bars=(0.95,))
+    window(g, FX - 0.1, -2.0, OP1, 0.02, 2.12, panes=1, frame="alu", glass="inglass", t=0.045, bars=(0.95,))
+    g.box(FX - 0.17, FX - 0.08, OP0, OP1, 0.0, 0.025, "alu")
+    g.box(FX - 0.17, FX - 0.08, OP0, OP1, 2.12, OPH, "alu")
     # the header over the open shop and the door bay, the post between them
     g.box(FX - 0.02, FX + 0.07, OP0, DB1, OPH, 2.4, "darkwood", skip=("-x",))
     g.box(FX - 0.1, FX + 0.04, OP1, DB0, 0.0, OPH, "darkwood")
@@ -985,6 +1057,7 @@ def build():
     collider_box(helpers, "pier", FX - OPD, FX + 0.07, SY0, OP0, 0.0, STOP)
     collider_box(helpers, "doors", FX - OPD, FX + 0.07, OP1, SY1, 0.0, STOP)
     collider_box(helpers, "over", FX - OPD, FX, OP0, OP1, OPH, STOP)
+    collider_box(helpers, "glassdoors", FX - 0.17, FX - 0.08, OP0, OP1, 0.0, OPH)
     collider_box(helpers, "house", BX, FX + 0.1, LY0, LY1, 0.0, LEAVE)
     collider_box(helpers, "balcony", FX, BALX + 0.06, LY0, LY1, CAN0, BAL1 + 0.07)
     collider_box(helpers, "fence", FXF - 0.05, FXF, SY1, YARD, 0.0, 1.9)

@@ -150,8 +150,11 @@ export class TimeOfDay {
   private lastLp = -1;
   private tmp = new THREE.Color();
 
-  /** Recompute the look for `hour` and `rain`. The CPU sky is re-integrated only when it changed. */
-  compute(hour: number, rain: number, force = false): Look {
+  /**
+   * Recompute the look for `hour`, `rain` and `cloud` (0..1, an overcast sky without the rain: render/'s overcast zones).
+   * The CPU sky is re-integrated only when it changed.
+   */
+  compute(hour: number, rain: number, force = false, cloud = 0): Look {
     const L = this.look;
     L.hour = hour; L.rain = rain;
     sunAt(hour, L.sun); moonAt(hour, L.moon);
@@ -161,7 +164,7 @@ export class TimeOfDay {
     L.night = nightFromElevation(el);
     L.golden = smooth(20, 5, el) * smooth(-3, 1, el);
     L.blue = smooth(1, -3, el) * (1 - smooth(-8, -14, el));
-    const oc = L.overcast = smooth(0.05, 0.7, rain);
+    const oc = L.overcast = Math.max(smooth(0.05, 0.7, rain), cloud);
     const night = L.night;
     const lights = L.lights = cityLights(el, oc);
 

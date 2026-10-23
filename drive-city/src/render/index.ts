@@ -69,6 +69,9 @@ class Render implements RenderSystem {
   private lutNow = new Float64Array(15);
   private envSun = new THREE.Vector3(9, 9, 9);
   private envState = [NaN, NaN, NaN, NaN];
+  /** Overcast zones (`addOvercast`), and the overcast now (eased towards theirs). */
+  private zones: { x: number; z: number; inner: number; outer: number; amount: number }[] = [];
+  private cloud = 0;
 
   constructor(private engine: Engine) {
     const p = new URLSearchParams(location.search);
@@ -115,9 +118,24 @@ class Render implements RenderSystem {
   prepare(root: THREE.Object3D): void { this.lighting.prepare(root); }
   setStreetLamps(xz: Float32Array): void { this.lamps.setHeads(xz); }
   settle(): void { this.snapAll = true; }
+  addOvercast(x: number, z: number, inner: number, outer: number, amount: number): void { this.zones.push({ x, z, inner, outer, amount }); }
+
+  /** The overcast the camera's place asks for. */
+  private zoneCloud(): number {
+    const c = this.engine.camera.position;
+    let w = 0;
+    for (const z of this.zones) {
+      const d = Math.hypot(c.x - z.x, c.z - z.z);
+      if (d >= z.outer) continue;
+      const t = Math.min(1, (z.outer - d) / (z.outer - z.inner));
+      w = Math.max(w, z.amount * t * t * (3 - 2 * t));
+    }
+    // the photo's grey is a day's: thinner after dark (a full deck turned the night sky a muddy orange-brown)
+    return w * (1 - 0.55 * this.tod.look.night);
+  }
 
   private updateLook(force: boolean): void {
-    const L = this.tod.compute(this.timeOfDay, this.rain, force);
+    const L = this.tod.compute(this.timeOfDay, this.rain, force, this.cloud);
     this.uniforms.uNight.value = L.lights;
     this.sunDir.copy(L.sunDir);
     this.hazeColor.copy(L.horizon);
@@ -133,6 +151,11 @@ class Render implements RenderSystem {
     const dh = Math.abs(this.timeOfDay - this.lastHour);
     const jumped = !(Math.min(dh, 24 - dh) < 0.2);
     this.lastHour = this.timeOfDay;
+    // an overcast zone closes in over ~4 s (a jump into one - fast travel - eases in behind the fade)
+    const want = this.zones.length ? this.zoneCloud() : 0;
+    if (this.snapAll) this.cloud = want;
+    else if (dt > 0) this.cloud += (want - this.cloud) * (1 - Math.exp(-dt / 1.5));
+    if (Math.abs(want - this.cloud) < 0.004) this.cloud = want;
     // Roads soak through in ~20 s of rain and take ~2.5 min to dry.
     if (this.snapAll) this.wetness = this.rain;
     else if (dt > 0) this.wetness += (this.rain - this.wetness) * (1 - Math.exp(-dt / (this.rain > this.wetness ? 20 : 150)));

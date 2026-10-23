@@ -26,6 +26,8 @@ import { WaterCup } from './WaterCup';
 
 /** The light on the apron, north of the parked AE86 (the shop's frame: (4.4, 1.5)). */
 const SHOP = { x: 5610.36, z: -4486.52 };
+/** How overcast the sky over the shop's street is (render/'s `addOvercast`). */
+const OVERCAST = 0.75;
 /**
  * Where it starts: the shop, and (2026-10-22, 「我在西五环开车，我想去送豆腐，却要跑到亮马桥，很远」) the foot of 妙峰山, by a
  * second AE86 on 京拉路's verge (parking/'s `FIXED`): 8 m ahead of its nose (mountain.bin road 0 point 1233, 6.4 m right of
@@ -91,6 +93,9 @@ export class Tofu {
   constructor(private engine: Engine, private deps: TofuDeps) {
     this.markers = STARTS.map(() => new Marker(engine.scene));
     this.target = new Marker(engine.scene);
+    // the shop's street under the photo's grey sky (2026-10-23, 「照片里那种阴天的柔光」): overcast within 100 m (the
+    // street kept low, scripts/city/lowrise.mjs), clearing by 220 m
+    engine.get<RenderApi>('render')?.addOvercast?.(SHOP.x, SHOP.z, 100, 220, OVERCAST);
     try { this.best = Number(localStorage.getItem(BEST_KEY) ?? 0) || 0; } catch { /* private mode */ }
     engine.events.on('vehicle:impact', ({ strength }) => { if ((this.stage === 'up' || this.stage === 'down') && this.pl().mode === 'driving') this.cup.impact(strength); });
     engine.events.on('vehicle:reset', () => { if (this.stage !== 'idle' && !this.moving) this.end(t('tofu.abort'), false); });

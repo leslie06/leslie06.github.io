@@ -266,6 +266,14 @@ export function prepareMaterial(mat: THREE.Material, env: EnvUniforms): void {
     std.depthWrite = true;
     std.side = THREE.DoubleSide;
   }
+  // `glassy`: clear glass of that opacity (藤原豆腐店's sliding doors, 2026-10-23: the lit shop seen through them) -
+  // blended over what is behind, reflecting the sky, writing no depth
+  const glassy = (x as { glassy?: unknown }).glassy;
+  if (typeof glassy === 'number' && glassy > 0 && glassy < 1) {
+    std.transparent = true;
+    std.opacity = glassy;
+    std.depthWrite = false;
+  }
   for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap'] as const) if (std[k]) std[k]!.anisotropy = 8;
   const glow = x.glow === 'lamp' || x.glow === 'none' ? x.glow : 'flood';
   const night = x.emit === 'night';

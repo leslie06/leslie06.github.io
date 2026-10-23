@@ -470,6 +470,11 @@ export interface RenderApi extends System {
   timeScale: number;
   /** 0..1 rain; wetness follows with a lag. Writable. */
   rain: number;
+  /**
+   * A place under an overcast sky without rain (2026-10-23, 藤原豆腐店: 「照片里那种阴天的柔光」): with the camera within
+   * `inner` of (x, z) the sky is `amount` overcast (0..1), easing off to clear at `outer`; the sky follows over seconds.
+   */
+  addOvercast?(x: number, z: number, inner: number, outer: number, amount: number): void;
   /** 0 = day .. 1 = the city's lights fully on (from sunset; `look.night` is the sky's own darkness). */
   readonly night: number;
   readonly wetness: number;
