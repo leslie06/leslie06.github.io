@@ -65,11 +65,29 @@ import * as voices from './voice';
 import * as ui from './ui';
 
 /**
+ * Nothing of the game's in this browser's storage yet (index.html's test for the funnel's `ret`, made before any
+ * script ran): skip the title and go straight into the city (`UiApi.skipTitle`). `?title=1` keeps the title, `?title=0` skips it.
+ */
+function firstVisit(): boolean {
+  const q = new URLSearchParams(location.search).get('title');
+  if (q === '0') return true;
+  if (q === '1') return false;
+  // index.html's own test, made before any script ran (a module may save something as it loads)
+  const stat = (window as unknown as { __stat?: { ret?: number } }).__stat;
+  if (stat) return !stat.ret;
+  try {
+    for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i)?.startsWith('drivecity.')) return false;
+  } catch { return false; }
+  return true;
+}
+
+/**
  * Boot order: render -> world (yard or city) -> vehicle -> player (camera, on foot) -> traffic -> people -> fx -> audio -> ui.
  * A module's install may only `engine.get` modules earlier in this list.
  */
 async function boot() {
   funnel.stat.mark('js');
+  const skipTitle = firstVisit();
   const container = document.getElementById('app')!;
   const loading = document.getElementById('loading');
   if (loading) loading.querySelector('b')!.textContent = t('title.loading');
@@ -142,6 +160,7 @@ async function boot() {
   funnel.markTitle();
   loading?.remove();
   bootBar.titleShown();
+  if (skipTitle && !shotMode && worldName === 'city') engine.get<ui.UiApi>('ui')?.skipTitle();
 }
 
 boot().catch((e) => { console.error(e); document.body.innerHTML = `<pre style="color:#f66;padding:20px;white-space:pre-wrap">${String(e?.stack ?? e)}</pre>`; });

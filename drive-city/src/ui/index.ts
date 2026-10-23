@@ -27,6 +27,11 @@ export interface UiApi extends System {
   /** Title screen with the attract loop (the taxi drifting the figure-eight). */
   showTitle(): void;
   start(): void;
+  /**
+   * A first visit: straight into the city without the title (2026-10-23: 41% of first visits that reached the title left
+   * there, half within 15 s), with a line of the controls. Sound and the mouse lock wait for the first click or key.
+   */
+  skipTitle(): void;
   pause(): void;
   /**
    * A screen of the game's own over the play (the garage): driving input off, the mouse free, the
@@ -133,6 +138,19 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       veh.inputEnabled = true;
       engine.paused = false;
       if (!TOUCH) engine.input.requestLock();
+    },
+    skipTitle() {
+      if (api.state !== 'title') return;
+      api.start();
+      hud.coach(t(TOUCH ? 'title.touch' : 'hud.coachKeys'), 14);
+      // the browser lets sound start, and the mouse be captured, only from a click or a key
+      const first = (e: Event) => {
+        removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true);
+        engine.get<AudioApi>('audio')?.unlock();
+        engine.get<VoiceApi>('voices')?.unlock();
+        if (!TOUCH && e.type === 'pointerdown' && e.target === engine.renderer.domElement && api.state === 'playing') engine.input.requestLock();
+      };
+      addEventListener('pointerdown', first, true); addEventListener('keydown', first, true);
     },
     overlay(on) {
       if (on) {

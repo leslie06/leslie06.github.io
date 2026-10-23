@@ -49,6 +49,10 @@ css(`
 .hud .prompt{position:absolute;left:50%;bottom:17vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:800 15px/1 ${F.ui};letter-spacing:.08em;border-left:3px solid ${C.yellow}}
 .hud .toast{position:absolute;left:50%;bottom:22vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:700 14px/1 ${F.ui};letter-spacing:.08em;opacity:0;transition:opacity .2s}
 .hud .toast.on{opacity:1}
+/* A first visit goes straight into the city (no title card with the controls): one line of them, then it fades. */
+.hud .coach{position:absolute;left:50%;top:78px;transform:translateX(-50%);max-width:min(88vw,640px);padding:10px 16px;border-radius:8px;background:${C.inkGlass};border-left:3px solid ${C.yellow};font:600 14px/1.5 ${F.ui};text-align:center;transition:opacity .8s}
+.hud .coach.gone{opacity:0}
+.hud .coach[hidden]{display:none}
 .hud .shout{position:absolute;left:0;top:0;padding:5px 9px;border-radius:5px;background:rgba(244,241,232,.92);color:#15171a;font:800 13px/1.3 ${F.ui};max-width:220px;width:max-content;pointer-events:none;will-change:transform}
 .hud .shout::after{content:'';position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:rgba(244,241,232,.92)}
 .hud .shout small{display:block;font:800 10px/1.2 ${F.ui};color:#8a6a10;letter-spacing:.06em}
@@ -110,6 +114,8 @@ export class Hud implements HudApi {
   /** Seconds the F1 hint has been on screen. */
   private hintT = 0;
   private toastT = 0;
+  private coachEl!: HTMLDivElement;
+  private coachT = 0;
   private lastGear = 1;
   private gearFlash = 0;
   private lastCam = '';
@@ -162,6 +168,8 @@ export class Hud implements HudApi {
     onLangChange(() => { this.shown.best = ''; });
     const hint = this.hintEl = el('div', 'hint', root); hint.appendChild(L('hud.helpHint'));
     this.toastEl = el('div', 'toast', root);
+    this.coachEl = el('div', 'coach', root);
+    this.coachEl.hidden = true;
     this.streetEl = el('div', 'street', root);
     this.signCard = new SignCard(engine, root);
     this.promptEl = el('div', 'prompt', root);
@@ -209,6 +217,14 @@ export class Hud implements HudApi {
 
   setVisible(v: boolean): void { this.visible = v; this.root.hidden = !v; }
 
+  /** One line of how to play for `secs` seconds (a first visit, which skips the title's controls card). */
+  coach(text: string, secs: number): void {
+    this.coachEl.textContent = text;
+    this.coachEl.hidden = false;
+    this.coachEl.classList.remove('gone');
+    this.coachT = secs;
+  }
+
   toast(text: string): void {
     this.toastEl.textContent = text;
     this.toastEl.classList.add('on');
@@ -220,6 +236,7 @@ export class Hud implements HudApi {
     if (!v || !this.visible) return;
     const inp = this.engine.input.state;
     if (inp.helpPressed) this.help.hidden = !this.help.hidden;
+    if (this.coachT > 0 && (this.coachT -= dt) <= 0) this.coachEl.classList.add('gone');
     const car = v.car;
     const sh = this.shown;
     const kmh = Math.round(Math.abs(car.forwardSpeed) * 3.6);

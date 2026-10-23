@@ -60,6 +60,7 @@ body.dc-touch .hud .wanted{top:calc(12px + env(safe-area-inset-top,0px));right:c
 body.dc-touch .hud .cash{top:calc(42px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));font-size:19px}
 body.dc-touch .hud .health{top:calc(68px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));width:92px}
 body.dc-touch .hud .toast{bottom:32vh}
+body.dc-touch .hud .coach{top:15%;padding:7px 12px;font-size:12px}
 body.dc-touch .hud .prompt{bottom:25vh}
 /* Clear of the pads: 16px inset + 64px top row + 10px gap + 82px gas button = 172px tall, so the
    street name sat inside the buttons at 118px. */

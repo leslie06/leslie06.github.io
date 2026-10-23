@@ -133,7 +133,12 @@ export async function install(engine: Engine): Promise<void> {
 
   engine.events.on('drift:end', ({ score, crashed }) => { if (!crashed && score >= 80) event('drift', Math.round(score * 0.5)); });
   engine.events.on('vehicle:land', ({ airTime }) => { if (airTime > 0.55) event('air', Math.round(80 * airTime + 60 * airTime * airTime)); });
-  engine.events.on('prop:hit', ({ kind }) => event('smash', kind === 'rail' ? 25 : kind === 'bike' ? 15 : 20));
+  // Only what the car hit: life/'s props report any start of motion (2026-10-23: a stall settling 190 m away scored
+  // 「撞飞 +20」 the moment a first visit went into the city, the car standing still).
+  engine.events.on('prop:hit', ({ kind, x, z }) => {
+    const c = vehicle().car.pos;
+    if (Math.hypot(x - c.x, z - c.z) < 8) event('smash', kind === 'rail' ? 25 : kind === 'bike' ? 15 : 20);
+  });
   engine.events.on('wanted:level', ({ level, up }) => {
     if (!up && level === 0 && wanted > 0) event('evade', 250 * wanted);
     wanted = level;
