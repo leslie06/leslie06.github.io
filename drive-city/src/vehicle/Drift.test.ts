@@ -30,51 +30,61 @@ async function drift(kmh: number, steer: number, secs: number, opts: { tune?: bo
   rig.launch(kmh / KMH);
   for (let i = 0; i < 20; i++) rig.stepInput(input());
   const v0 = rig.car.speed;
-  let psi = heading(rig);
-  const psi0 = psi;
+  let psi = heading(rig), tv = travel(rig);
+  const psi0 = psi, tv0 = tv;
   let minUp = 1, maxSlip = 0, slipAt04 = NaN, tIn = 0;
   for (let t = 0; t < secs; t += DT) {
     rig.stepInput(input({ steer: t < 0.3 ? steer : (opts.into ?? steer), drift: true }));
-    psi = unwrap(heading(rig), psi);
+    psi = unwrap(heading(rig), psi); tv = unwrap(travel(rig), tv);
     minUp = Math.min(minUp, rig.car.up.y);
     if (t > 0.4) maxSlip = Math.max(maxSlip, Math.abs(rig.car.bodySlip));
     if (isNaN(slipAt04) && t >= 0.4) slipAt04 = rig.car.bodySlip;
     if (rig.car.driftPhase === 1) tIn += DT;
   }
-  return { rig, v0, turned: psi - psi0, minUp, maxSlip, slipAt04, slipEnd: rig.car.bodySlip, vEnd: rig.car.speed, tIn };
+  return { rig, v0, turned: psi - psi0, went: tv - tv0, minUp, maxSlip, slipAt04, slipEnd: rig.car.bodySlip, vEnd: rig.car.speed, tIn };
 }
 
 describe('arcade drift', () => {
   it('swings out to a steady angle and carves a left arc without spinning', async () => {
     const d = await drift(80, -1, 2.5);
     Object.assign(report, { 'left80.slip at 0.4 s deg': deg(d.slipAt04), 'left80.slip end deg': deg(d.slipEnd), 'left80.max slip deg': deg(d.maxSlip),
-      'left80.turned deg': deg(d.turned), 'left80.speed kept %': 100 * d.vEnd / d.v0, 'left80.drifting s': d.tIn });
+      'left80.turned deg': deg(d.turned), 'left80.travel turned deg': deg(d.went), 'left80.speed kept %': 100 * d.vEnd / d.v0, 'left80.drifting s': d.tIn });
     expect(d.rig.car.driftPhase).toBe(1);
     expect(deg(d.slipAt04)).toBeGreaterThan(20);           // out quickly
     expect(deg(d.slipEnd)).toBeGreaterThan(30);
     expect(deg(d.maxSlip)).toBeLessThan(50);               // never spins
-    expect(deg(d.turned)).toBeGreaterThan(60);             // a real corner in 2.5 s (left is +)
+    expect(deg(d.went)).toBeGreaterThan(110);              // the travel itself carves a real corner (left is +)
     expect(d.vEnd / d.v0).toBeGreaterThan(0.85);           // keeps its speed
     expect(d.minUp).toBeGreaterThan(0.95);
+  });
+
+  it('takes a city corner: the travel turns with the nose, not past it', async () => {
+    // 2026-10-23, 「漂移成功不了，比如我右转，车子一直向左偏」: a right drift at 60 km/h, the key held, no steering after the
+    // first 0.3 s. The first version turned the travel 15°/s while the nose swung 35° right at once: it slid on straight.
+    const d = await drift(60, 1, 1.5, { into: 0 });
+    report['corner60.travel turned deg'] = deg(d.went);
+    report['corner60.nose turned deg'] = deg(d.turned);
+    expect(deg(d.went)).toBeLessThan(-50);                 // most of a 90° corner in 1.5 s
+    expect(deg(d.turned - d.went)).toBeLessThan(-15);      // the nose ahead of the travel (a drift, right is -)
   });
 
   it('drifts right the same way', async () => {
     const d = await drift(80, 1, 2.5);
     report['right80.slip end deg'] = deg(d.slipEnd);
-    report['right80.turned deg'] = deg(d.turned);
+    report['right80.travel turned deg'] = deg(d.went);
     expect(deg(d.slipEnd)).toBeLessThan(-30);
-    expect(deg(d.turned)).toBeLessThan(-60);
+    expect(deg(d.went)).toBeLessThan(-110);
   });
 
   it('tightens steering into the drift and widens steering against it', async () => {
     const into = await drift(70, -1, 2, { into: -1 });
     const out = await drift(70, -1, 2, { into: 1 });
     const flat = await drift(70, -1, 2, { into: 0 });
-    Object.assign(report, { 'arc.into turned deg': deg(into.turned), 'arc.neutral turned deg': deg(flat.turned), 'arc.against turned deg': deg(out.turned),
+    Object.assign(report, { 'arc.into travel deg': deg(into.went), 'arc.neutral travel deg': deg(flat.went), 'arc.against travel deg': deg(out.went),
       'arc.into slip deg': deg(into.slipEnd), 'arc.against slip deg': deg(out.slipEnd) });
-    expect(into.turned).toBeGreaterThan(flat.turned);
-    expect(flat.turned).toBeGreaterThan(out.turned);
-    expect(out.turned).toBeGreaterThan(0);                 // still a left drift
+    expect(into.went).toBeGreaterThan(flat.went);
+    expect(flat.went).toBeGreaterThan(out.went);
+    expect(out.went).toBeGreaterThan(0);                   // still a left drift
     expect(into.slipEnd).toBeGreaterThan(out.slipEnd);
   });
 

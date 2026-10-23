@@ -66,8 +66,13 @@ export const ARCADE = {
   steerTau: 0.4,
   /** Body angle to the travel, rad: neutral, steering into the drift, steering against it. */
   angle: 0.52, angleIn: 0.7, angleOut: 0.34,
-  /** Sideways pull of the arc, m/s² (the same three; the path takes `velGain` of it each step). */
-  lat: 9, latIn: 13, latOut: 5,
+  /**
+   * How fast the travel turns, rad/s (the same three), at most `latMax` m/s² sideways (fast, the arc opens). As a turn
+   * rate (2026-10-23, 「漂移成功不了，比如我右转，车子一直向左偏」): the first version set a sideways pull of 9 m/s², and
+   * with half of it reaching the path each step a drift at 60 km/h turned the travel 15°/s - the nose swung right at
+   * once and the car slid on nearly straight, off the road on the left.
+   */
+  turn: 0.8, turnIn: 1.2, turnOut: 0.35, latMax: 24,
   /** Speed lost per second: coasting, extra when steering in, extra on the brake; the throttle gives back `gas`. */
   loss: 1.2, lossIn: 1.5, brakeLoss: 9, gas: 1,
   /**
@@ -75,8 +80,8 @@ export const ARCADE = {
    * share of the yaw-rate error fixed each step.
    */
   yawK: 4.5, yawMax: 2.2, yawMaxIn: 3.5, entryT: 0.35, yawGain: 0.35,
-  /** Share of the velocity error fixed each step. */
-  velGain: 0.5,
+  /** Share of the velocity error fixed each step (all of it: the turn comes out as set). */
+  velGain: 1,
   /** After the key: the travel swings to the nose at `align` rad/s, for `recover` s at most. */
   align: 4, recover: 0.35,
   /** The push after a drift: needs `kickAfter` s of drift, lasts `kickTime` s at `kickAccel` m/s². */
@@ -540,8 +545,8 @@ export class Vehicle {
         this.driftSteer += (clamp(-c.steer * dir, -1, 1) - this.driftSteer) * (1 - Math.exp(-dt / A.steerTau));
         const u = this.driftSteer;
         const ang = u >= 0 ? A.angle + (A.angleIn - A.angle) * u : A.angle + (A.angle - A.angleOut) * u;
-        const lat = u >= 0 ? A.lat + (A.latIn - A.lat) * u : A.lat + (A.lat - A.latOut) * u;
-        const omega = dir * lat / Math.max(v, 1);
+        const turn = u >= 0 ? A.turn + (A.turnIn - A.turn) * u : A.turn + (A.turn - A.turnOut) * u;
+        const omega = dir * Math.min(turn, A.latMax / Math.max(v, 1));
         psiNew = psiV + omega * dt;
         vNew = Math.max(0, v - Math.max(0, A.loss + A.lossIn * Math.max(0, u) + A.brakeLoss * c.brake - A.gas * c.throttle) * dt);
         const yawMax = this.driftT < A.entryT ? A.yawMaxIn : A.yawMax;
