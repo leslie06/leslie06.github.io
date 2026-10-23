@@ -263,6 +263,8 @@ export class SignalHeads {
   private cols: THREE.Color[];
 
   private order: { id: number; d: number }[] = [];
+  /** Links arriving at each node (the graph keeps the leaving ones), built on the first rebuild. */
+  private ins: number[][] | null = null;
 
   /**
    * `cap` heads, nearest first. With every junction lit there are ~3x the approaches in range, and
@@ -297,6 +299,23 @@ export class SignalHeads {
     if (this.lamps.instanceColor) this.lamps.instanceColor.needsUpdate = true;
   }
 
+  /**
+   * Half width of the widest road crossing the one `l` arrives on, at its junction node: the other roads there, not its own
+   * carrying on across (within ~37° of its direction) - an avenue's lights at a side street stay near the side street.
+   */
+  private crossHalfWidth(l: Link): number {
+    const g = this.g;
+    if (!this.ins) {
+      this.ins = g.out.map(() => []);
+      for (const k of g.links) this.ins[k.to]?.push(k.id);
+    }
+    const across = (dx: number, dz: number) => Math.abs(dx * l.d1x + dz * l.d1z) < 0.8;
+    let hw = 0;
+    for (const id of g.out[l.to] ?? []) { const k = g.links[id]; if (id !== l.rev && across(k.d0x, k.d0z)) hw = Math.max(hw, k.hw); }
+    for (const id of this.ins[l.to] ?? []) { const k = g.links[id]; if (id !== l.id && across(k.d1x, k.d1z)) hw = Math.max(hw, k.hw); }
+    return hw;
+  }
+
   private rebuild(x: number, z: number): void {
     this.heads = [];
     const order = this.order;
@@ -311,9 +330,13 @@ export class SignalHeads {
     for (const { id } of order) {
       const l = this.g.links[id];
       if (this.heads.length >= this.cap) break;
-      // At the stop line (7 m short of the node, or as near the start as a short approach allows),
-      // on the right-hand kerb, arm reaching over the carriageway, lamps facing traffic.
-      const p = this.g.at(l, Math.max(2, l.len - 7), -l.hw - 0.8, this.tmp);
+      // Short of the junction, on the right-hand pavement, arm reaching over the carriageway, lamps facing traffic.
+      // 2026-10-23 (「把红绿灯往里移下，转弯也容易撞到」): it stood 7 m short of the node, which at a junction with a main
+      // road is in the crossing carriageway's lanes, and anywhere on the corner is where a car turning cuts through; now
+      // 7 m back from the crossing carriageway's kerb (10 m at least), past the corner's curve, and 2 m into the pavement
+      // (was 0.8).
+      const back = Math.max(10, this.crossHalfWidth(l) + 7);
+      const p = this.g.at(l, Math.max(2, l.len - back), -l.hw - 2, this.tmp);
       // Local +Z (the arm) turned onto left of travel, (dz, -dx): across the road.
       this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(p.dz, -p.dx));
       const i = this.heads.length;
