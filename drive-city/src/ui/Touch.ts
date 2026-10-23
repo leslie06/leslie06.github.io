@@ -28,6 +28,7 @@ const SHEET = `
   background:rgba(243,181,15,.5);border:1px solid rgba(244,241,232,.5)}
 .touch .pads{position:absolute;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));
   display:grid;grid-template-columns:repeat(3,64px);gap:10px;justify-items:center;align-items:end;pointer-events:none}
+.touch .pads[hidden]{display:none}
 .touch button{${PAD};color:${C.paper};font:700 13px/1.1 ${F.ui};letter-spacing:.02em;pointer-events:auto;touch-action:none;
   -webkit-tap-highlight-color:transparent;display:grid;place-items:center;padding:0}
 .touch button[hidden]{display:none}
@@ -39,6 +40,23 @@ const SHEET = `
 .touch button.action{position:absolute;left:50%;bottom:25vh;transform:translateX(-50%);width:auto;height:auto;min-height:48px;max-width:80vw;
   padding:10px 16px;border-radius:8px;background:${C.inkGlass};border-color:${C.yellow};font-size:15px;line-height:1.3}
 .touch button:active,.touch button.down{background:rgba(243,181,15,.45);border-color:${C.yellow}}
+/* Driving, QQ飞车's layout (2026-10-23, 「现在开车几乎不能漂移，开车手感很差，做成qq飞车这样的操作」): ◀ ▶ bottom left, a big
+   漂移 bottom right with the brake, the nitro and F around it; the car accelerates by itself. */
+.touch .qq{position:absolute;inset:0;pointer-events:none}
+.touch .qq[hidden]{display:none}
+.touch .qq .arrows{position:absolute;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;gap:10px}
+.touch .qq .arrows button{width:var(--arrow-w,92px);height:84px;border-radius:20px;font:700 34px/1 ${F.ui};background:rgba(40,120,220,.26);border:1.5px solid rgba(150,205,255,.6)}
+.touch .qq .arrows button.down{background:rgba(80,170,255,.55);border-color:#bfe2ff}
+.touch .qq .qbtn{position:absolute;bottom:calc(var(--qb) + env(safe-area-inset-bottom,0px));right:calc(var(--qr) + env(safe-area-inset-right,0px))}
+.touch .qq .drift{--qb:14px;--qr:16px;width:104px;height:104px;font:800 22px/1 ${F.ui};letter-spacing:.06em;background:rgba(243,120,15,.36);border:2px solid rgba(255,190,90,.85)}
+.touch .qq .drift.down{background:rgba(255,140,30,.7);border-color:#ffd9a0}
+.touch .qq .qbrake{--qb:14px;--qr:134px;width:62px;height:62px;background:rgba(226,64,47,.22);border-color:rgba(226,64,47,.55)}
+.touch .qq .qnitro{--qb:90px;--qr:140px;width:62px;height:62px;background:rgba(80,170,255,.24);border-color:rgba(120,190,255,.6)}
+.touch .qq .qf{--qb:132px;--qr:38px;width:60px;height:60px;white-space:pre-line;line-height:1.3;background:rgba(243,181,15,.24);border-color:${C.yellow}}
+.touch .qq .go{position:absolute;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(108px + env(safe-area-inset-bottom,0px));padding:6px 12px;border-radius:6px;
+  background:${C.inkGlass};border-left:3px solid ${C.yellow};font:700 13px/1.2 ${F.ui};color:${C.paper};white-space:nowrap}
+.touch .qq .go[hidden]{display:none}
+@media (max-width:700px){.touch .qq{--arrow-w:78px}}
 .touch .top{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:10px}
 .touch .top button{width:48px;height:48px;font-size:12px}
 .touch .rot{position:absolute;left:50%;top:46%;transform:translateX(-50%);padding:7px 14px;border-radius:6px;
@@ -49,6 +67,9 @@ const SHEET = `
    at most 62 px left of the screen's centre (the car's half width, chase camera). */
 body.dc-touch .hud .speedo{left:min(calc(var(--mm-left) + var(--mm-w) + 14px),calc(50% - 170px));right:auto;top:auto;
   bottom:calc(4px + env(safe-area-inset-bottom,0px));transform:scale(.55);transform-origin:bottom left}
+/* the ◀ ▶ keys took the bottom left (2026-10-23): the dial goes right of them, smaller */
+body.dc-touch.dc-qq .hud .speedo{left:calc(var(--arrow-w,92px) * 2 + 34px + env(safe-area-inset-left,0px));transform:scale(.46)}
+@media (max-width:700px){body.dc-touch.dc-qq{--arrow-w:78px}}
 body.dc-touch .hud .hint{display:none}
 body.dc-touch .hud .prompt{display:none}
 /* Dialogue choices must receive taps above the full-screen touch surface. */
@@ -190,9 +211,15 @@ export class TouchControls implements System {
   private stick: HTMLDivElement;
   private knob: HTMLElement;
   private btns: Btn[] = [];
-  private spacer!: HTMLDivElement;
-  private nitroBtn!: HTMLButtonElement;
   private interactBtn: HTMLButtonElement;
+  private qq: HTMLDivElement;
+  private qf: HTMLButtonElement;
+  private qnitro: HTMLButtonElement;
+  private goEl: HTMLDivElement;
+  private pads: HTMLDivElement;
+  /** Driving: held keys (the car accelerates by itself once `armed`: a first tap after getting in, not on its own). */
+  private keys = { left: false, right: false, brake: false };
+  private armed = false;
   private actionBtn: HTMLButtonElement;
   /** The car has a nitro bottle: the button shows only then (an empty cell otherwise). */
   private n2o = false;
@@ -224,26 +251,36 @@ export class TouchControls implements System {
     this.button(top, 'drive', t('touch.radio'), (down) => { if (down) this.state.radioPressed = true; });
     this.button(top, 'both', t(engine.get('adventure') ? 'adv.short' : 'touch.phone'), (down) => { if (down) this.state.phonePressed = true; });
 
-    const pads = el('div', 'pads', this.root);
-    // Row 1: camera / get in or out / shove or jump.
-    this.button(pads, 'drive', t('touch.cam'), (down) => { if (down) this.state.cameraPressed = true; });
+    this.button(top, 'drive', t('touch.cam'), (down) => { if (down) this.state.cameraPressed = true; });
+
+    // On foot: the stick on the left half, these bottom right.
+    const pads = this.pads = el('div', 'pads', this.root);
+    // Row 1: jump / get in / shove.
     this.button(pads, 'foot', t('touch.jump'), (down) => { if (down) this.state.jumpPressed = true; });
     const interact = (down: boolean) => { if (down) this.state.enterPressed = true; };
     this.button(pads, 'both', '', interact, false, 'interact');
     this.interactBtn = this.btns[this.btns.length - 1].el;
-    this.button(pads, 'drive', t('touch.hand'), (down) => { this.state.handbrake = down; }, true);
     this.button(pads, 'foot', t('touch.push'), (down) => { if (down) this.state.punchPressed = true; });
-    // Row 2: brake / run / throttle.
-    this.button(pads, 'drive', t('touch.brake'), (down) => { this.state.back = down ? 1 : 0; }, true, 'brake');
+    // Row 2: run / counter (combat/: catch one winding up, else block) / walk on.
     this.button(pads, 'foot', t('touch.run'), (down) => { this.state.sprint = down; }, true);
-    // The middle of row 2: nitro while driving, an empty cell on foot so the throttle keeps its place.
-    this.button(pads, 'drive', t('touch.nitro'), (down) => { this.state.nitro = down; }, true, 'nitro');
-    this.nitroBtn = this.btns[this.btns.length - 1].el;
-    // on foot the middle cell is the counter (combat/: catch one winding up, else block)
     this.button(pads, 'foot', t('touch.counter'), (down) => { if (down) this.state.counterPressed = true; });
-    const spacer = this.spacer = el('div', undefined, pads);
-    spacer.style.width = '64px';
-    this.button(pads, 'both', t('touch.gas'), (down) => { this.state.forward = down ? 1 : 0; }, true, 'gas');
+    this.button(pads, 'foot', t('touch.gas'), (down) => { this.state.forward = down ? 1 : 0; }, true, 'gas');
+
+    // Driving: QQ飞车's keys.
+    const qq = this.qq = el('div', 'qq', this.root);
+    const arrows = el('div', 'arrows', qq);
+    this.button(arrows, 'drive', '◀', (down) => { this.keys.left = down; if (down) this.armed = true; }, true);
+    this.button(arrows, 'drive', '▶', (down) => { this.keys.right = down; if (down) this.armed = true; }, true);
+    // the drift key is the handbrake key (Vehicle.ts `ARCADE`)
+    this.button(qq, 'drive', t('touch.hand'), (down) => { this.state.handbrake = down; if (down) this.armed = true; }, true, 'qbtn drift');
+    this.button(qq, 'drive', t('touch.brake'), (down) => { this.keys.brake = down; }, true, 'qbtn qbrake');
+    this.button(qq, 'drive', t('touch.nitro'), (down) => { this.state.nitro = down; if (down) this.armed = true; }, true, 'qbtn qnitro');
+    this.qnitro = this.btns[this.btns.length - 1].el;
+    this.button(qq, 'drive', '', interact, false, 'qbtn qf');
+    this.qf = this.btns[this.btns.length - 1].el;
+    this.goEl = el('div', 'go', qq);
+    this.goEl.textContent = t('touch.go');
+    this.goEl.hidden = true;
     this.button(this.root, 'both', '', interact, false, 'action');
     this.actionBtn = this.btns[this.btns.length - 1].el;
     this.actionBtn.hidden = true;
@@ -278,7 +315,8 @@ export class TouchControls implements System {
 
   private down(e: PointerEvent): void {
     e.preventDefault();
-    const left = e.clientX < window.innerWidth * 0.45;
+    // driving, the ◀ ▶ keys steer: a drag anywhere on the screen swings the camera
+    const left = !this.driving && e.clientX < window.innerWidth * 0.45;
     this.pointers.set(e.pointerId, { kind: left ? 'stick' : 'look', x: e.clientX, y: e.clientY });
     if (left) {
       this.stick.style.left = `${e.clientX}px`;
@@ -323,14 +361,17 @@ export class TouchControls implements System {
 
   private syncMode(): void {
     for (const b of this.btns) if (b.mode !== 'both') b.el.hidden = (b.mode === 'drive') !== this.driving;
-    this.nitroBtn.hidden = !(this.driving && this.n2o);
-    this.spacer.hidden = !this.driving || this.n2o;
+    this.qnitro.hidden = !(this.driving && this.n2o);
+    this.pads.hidden = this.driving;
+    this.qq.hidden = !this.driving;
+    document.body.classList.toggle('dc-qq', this.driving);
   }
 
   private release(): void {
     this.pointers.clear();
     this.stick.classList.remove('on');
     Object.assign(this.state, { steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false, nitro: false });
+    this.keys.left = this.keys.right = this.keys.brake = false;
     for (const b of this.btns) b.el.classList.remove('down');
   }
 
@@ -349,17 +390,32 @@ export class TouchControls implements System {
       this.driving = driving;
       this.syncMode();
       this.release();
+      this.armed = false;
     }
-    const n2o = (this.engine.get<VehicleApi>('vehicle')?.car.tune.nitro ?? 0) > 0;
+    const veh = this.engine.get<VehicleApi>('vehicle');
+    if (driving) {
+      // QQ飞车: the car goes by itself, the brake holds it (and reverses once stopped). Not until a first tap after
+      // getting in or a cut scene, or every car would drive off on its own.
+      // (the pause screen and the garage turn input off too: those keep it going)
+      if (!veh?.occupied || (!veh.inputEnabled && ui?.state === 'playing')) this.armed = false;
+      const k = this.keys;
+      this.state.steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+      this.state.analog = false;
+      this.state.back = k.brake ? 1 : 0;
+      this.state.forward = this.armed && !k.brake ? 1 : 0;
+      this.goEl.hidden = this.armed || !veh?.inputEnabled || k.brake;
+    }
+    const n2o = (veh?.car.tune.nitro ?? 0) > 0;
     if (n2o !== this.n2o) { this.n2o = n2o; this.syncMode(); if (!n2o) this.state.nitro = false; }
     const park = this.engine.get<ParkApi>('park');
     const prompt = park?.prompt === 'board' ? t('hud.ride') : park?.prompt === 'exit' ? t('hud.rideOff') : player?.prompt;
     const label = prompt === t('npc.talk') ? t('touch.talk') : !park?.prompt && driving ? (prompt ? t('touch.leap') : t('touch.exit'))
       : player?.nearCar ? t('touch.enter') : t('touch.interact');
     const text = `F\n${label}`;
-    if (this.interactBtn.textContent !== text) {
-      this.interactBtn.textContent = text;
-      this.interactBtn.setAttribute('aria-label', label);
+    for (const b of [this.interactBtn, this.qf]) {
+      if (b.textContent === text) continue;
+      b.textContent = text;
+      b.setAttribute('aria-label', label);
     }
     this.actionBtn.hidden = !prompt;
     if (prompt) {

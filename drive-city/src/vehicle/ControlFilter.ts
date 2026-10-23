@@ -9,10 +9,12 @@ export interface VehicleControls {
   reverse: boolean;
   /** Throttle and brake together at a standstill: front brakes hold, rear tyres spin. */
   burnout: boolean;
+  /** The player's drift key (QQ飞车-style arcade drift, Vehicle.ts `ARCADE`); a handbrake below its speed. */
+  drift?: boolean;
 }
 
 /** Driver intent from a device or the autopilot. */
-export interface DriveInput { forward: number; back: number; steer: number; analog: boolean; handbrake: boolean }
+export interface DriveInput { forward: number; back: number; steer: number; analog: boolean; handbrake: boolean; drift?: boolean }
 
 /**
  * Keyboard steering shape (see ControlFilter). Exported so tuning sweeps can vary it; the game
@@ -31,7 +33,7 @@ export const KEYBOARD = {
   highSpeedCut: 0.5, cutFrom: 18, cutTo: 36,
 };
 
-export const emptyControls = (): VehicleControls => ({ throttle: 0, brake: 0, steer: 0, handbrake: false, reverse: false, burnout: false });
+export const emptyControls = (): VehicleControls => ({ throttle: 0, brake: 0, steer: 0, handbrake: false, reverse: false, burnout: false, drift: false });
 
 /**
  * Turns driver intent into pedal and steering positions.
@@ -95,6 +97,7 @@ export class ControlFilter {
     }
     o.reverse = this.reversing;
     o.handbrake = i.handbrake;
+    o.drift = !!i.drift;
     return o;
   }
 }

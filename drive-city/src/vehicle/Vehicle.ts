@@ -45,6 +45,38 @@ const _q = new THREE.Quaternion();
 const _combined = { x: 0, y: 0 };
 const _rv = { x: 0, y: 0, z: 0 };
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/**
+ * The player's drift key (2026-10-23, 「现在开车几乎不能漂移，开车手感很差，做成qq飞车这样的操作」): QQ飞车's drift, not the
+ * tyres'. Held with a direction above `minSpeed`, the car swings its tail out to `angle` and carves a steady arc while
+ * the tyre forces are set aside: the path and the body's angle are steered straight (an impulse on the velocity, a
+ * torque on the yaw), so a drift starts on any car at any speed and never spins. Steering into the drift tightens the
+ * arc and the angle, against it widens them. Let go and the travel turns to where the nose points (that is what the
+ * drift was for), then the tyres take over again; a drift held `kickAfter` s ends in a short push (小喷), and it fills
+ * a fitted nitro bottle. Below `minSpeed`, and on two-wheelers, the key is the handbrake it was.
+ */
+export const ARCADE = {
+  minSpeed: 8, steerIn: 0.35,
+  /** Body angle to the travel, rad: neutral, steering into the drift, steering against it. */
+  angle: 0.52, angleIn: 0.73, angleOut: 0.28,
+  /** Sideways acceleration of the arc, m/s² (the same three). */
+  lat: 9, latIn: 14, latOut: 3.5,
+  /** Speed lost per second: coasting, extra when steering in, extra on the brake; the throttle gives back `gas`. */
+  loss: 1.2, lossIn: 1.5, brakeLoss: 9, gas: 1,
+  /** Yaw: rad/s per rad of angle error, the cap, and the share of the yaw-rate error fixed each step. */
+  yawK: 7, yawMax: 3.5, yawGain: 0.5,
+  /** Share of the velocity error fixed each step. */
+  velGain: 0.5,
+  /** After the key: the travel swings to the nose at `align` rad/s, for `recover` s at most. */
+  align: 4, recover: 0.35,
+  /** The push after a drift: needs `kickAfter` s of drift, lasts `kickTime` s at `kickAccel` m/s². */
+  kickAfter: 0.6, kickTime: 0.8, kickAccel: 5,
+  /** Nitro bottle filled per second of drift (when one is fitted). */
+  charge: 0.12,
+  /** An impact this hard (m/s) ends the drift without the push. */
+  crash: 4,
+};
 
 /**
  * A ray-cast car on a Rapier rigid body.
@@ -112,6 +144,15 @@ export class Vehicle {
   nitroFill = 0;
   /** Extra forward acceleration while the nitro burns, m/s² (set every step by whoever drives). */
   boost = 0;
+  /** The arcade drift (`ARCADE`): 0 off, 1 drifting, 2 straightening after the key came up. */
+  driftPhase: 0 | 1 | 2 = 0;
+  /** +1 a left drift, -1 a right one. */
+  driftDir = 0;
+  /** Seconds into the arcade drift. */
+  driftT = 0;
+  /** Seconds left of the push after a drift (小喷). */
+  kick = 0;
+  private recoverT = 0;
   private readonly velBefore = new THREE.Vector3();
   private readonly impulse = new THREE.Vector3();
   private readonly staticLoad: number[];
@@ -187,6 +228,7 @@ export class Vehicle {
     b.setAngvel({ x: 0, y: 0, z: 0 }, true);
     for (const w of this.wheels) { w.compression = 0; w.springLen = this.spec.suspension.restLength; w.spinRate = 0; w.contact = false; }
     this.gear = 1; this.rpm = this.spec.engine.idle; this.steerAngle = 0; this.flippedTime = 0; this.airTime = 0; this.righting = false;
+    this.driftPhase = 0; this.driftT = 0; this.kick = 0;
     this.accel.set(0, 0, 0);
     this.readState();
     this.velBefore.copy(this.vel);
@@ -222,7 +264,26 @@ export class Vehicle {
     this.readState();
     this.velBefore.copy(this.vel);
     this.impulse.set(0, 0, 0);
-    this.throttle = c.throttle; this.brake = c.brake; this.handbrake = c.handbrake;
+    // the arcade drift's phase (from the last step's state); below its speed and on two-wheelers the key is the handbrake
+    const A = ARCADE;
+    const canDrift = !s.single && this.grounded >= 3 && this.forwardSpeed > A.minSpeed && !c.reverse && this.up.y > 0.8;
+    if (this.driftPhase === 1) {
+      this.driftT += dt;
+      const crashed = this.impact > A.crash;
+      if (!c.drift || crashed || this.speed < A.minSpeed * 0.75 || this.airTime > 0.3 || this.up.y < 0.7) {
+        if (!crashed && !c.drift && this.driftT >= A.kickAfter) this.kick = A.kickTime;
+        this.driftPhase = crashed || this.airTime > 0.3 ? 0 : 2; this.recoverT = 0;
+      }
+    } else if (this.driftPhase === 2) {
+      this.recoverT += dt;
+      if (Math.abs(this.bodySlip) < 0.05 || this.recoverT > A.recover || this.impact > A.crash || this.speed < 3) this.driftPhase = 0;
+    }
+    if (this.driftPhase !== 1 && c.drift && canDrift && Math.abs(c.steer) > A.steerIn) {
+      this.driftPhase = 1; this.driftDir = c.steer < 0 ? 1 : -1; this.driftT = 0;
+    }
+    const arcade = this.driftPhase > 0;
+    const handbrake = c.handbrake || (!!c.drift && !arcade && (!!s.single || this.forwardSpeed < A.minSpeed));
+    this.throttle = c.throttle; this.brake = c.brake; this.handbrake = handbrake;
 
     // --- steering: speed-sensitive limiter + counter-steer --------------------------------------
     const vAbs = Math.abs(this.forwardSpeed);
@@ -292,7 +353,7 @@ export class Vehicle {
 
     // --- tyres ------------------------------------------------------------------------------------
     _g.set(0, -G, 0);
-    if (c.handbrake) this.tcOff = 1; else this.tcOff = Math.max(0, this.tcOff - dt);
+    if (handbrake) this.tcOff = 1; else this.tcOff = Math.max(0, this.tcOff - dt);
     // Traction control while the car is gripping: drive may only use the grip cornering leaves over,
     // so full throttle mid-corner pushes wide instead of spinning. Off once the car is sliding (then
     // the throttle is what holds the angle), at a crawl (donuts), and just after the handbrake.
@@ -321,7 +382,7 @@ export class Vehicle {
         w.skid = 0; w.slipAngle = 0; w.locked = false; w.spinning = false;
         const drivenAir = m.front ? s.engine.frontShare > 0 : s.engine.frontShare < 1;
         w.spinRate = drivenAir && c.throttle > 0 ? w.spinRate + (60 * c.throttle - w.spinRate) * dt * 3 : w.spinRate * (1 - dt * 0.6);
-        if (c.handbrake && !m.front) w.spinRate = 0;
+        if (handbrake && !m.front) w.spinRate = 0;
         w.spin += w.spinRate * dt;
         continue;
       }
@@ -345,7 +406,7 @@ export class Vehicle {
       const driven = m.front ? s.engine.frontShare > 0 : s.engine.frontShare < 1;
       const share = driven ? (m.front ? s.engine.frontShare : 1 - s.engine.frontShare) / 2 : 0;
       const brakeCap = s.brakes.force * c.brake * (m.front ? s.brakes.frontBias : 1 - s.brakes.frontBias) / 2;
-      const handLocked = c.handbrake && !m.front;
+      const handLocked = handbrake && !m.front;
       const mc = this.mCorner;
       let fx = 0, fy = 0;
       w.locked = false; w.spinning = false;
@@ -407,6 +468,9 @@ export class Vehicle {
         fx = _combined.x; fy = _combined.y;
       }
 
+      // The arcade drift steers the car itself (below): the tyres only roll and smoke.
+      if (arcade) { fx = 0; fy = 0; w.locked = false; w.spinning = false; w.slipAngle = this.bodySlip; }
+
       // Buffered, not applied: an impulse changes the body's velocity immediately, so applying
       // wheel 0's suspension push before sampling wheel 1 would make wheel 1 see the pitch it caused
       // and "correct" it, leaving the parked car creeping.
@@ -422,7 +486,7 @@ export class Vehicle {
       const latSkid = clamp01((Math.abs(w.slipAngle) / this.aPeak - 1.15) / 1.6) * clamp01((Math.abs(vy) - 0.8) / 2.5);
       const lockSkid = w.locked ? clamp01(Math.hypot(vx, vy) / 6) : 0;
       const spinSkid = w.spinning ? 0.85 : 0;
-      w.skid = Math.max(latSkid, lockSkid, spinSkid);
+      w.skid = arcade ? (this.driftPhase === 1 ? (m.front ? 0.25 : 0.95) : 0.4) * smoothstep(4, 9, this.speed) : Math.max(latSkid, lockSkid, spinSkid);
     }
 
     for (let i = 0; i < 4; i++) {
@@ -445,8 +509,43 @@ export class Vehicle {
       this.push(_f, _p);
     }
 
-    // --- assists ----------------------------------------------------------------------------------
+    // --- the push after a drift (小喷) ----------------------------------------------------------------
+    if (this.kick > 0) {
+      this.kick -= dt;
+      if (grounded >= 2 && this.forwardSpeed > 0 && this.forwardSpeed * 3.6 < s.engine.limiterKmh * this.tune.top * 1.3) {
+        _f.copy(this.fwd).multiplyScalar(s.mass * A.kickAccel);
+        this.push(_f, _p);
+      }
+    }
+
     const I = s.inertia;
+    // --- the arcade drift: the path's arc and the body's angle, set straight --------------------------
+    if (arcade && grounded >= 2) {
+      const vx = this.vel.x, vz = this.vel.z, v = Math.hypot(vx, vz);
+      const psiV = Math.atan2(vx, vz), psiB = Math.atan2(this.fwd.x, this.fwd.z), dir = this.driftDir;
+      let psiNew = psiV, vNew = v, yawCmd = 0;
+      if (this.driftPhase === 1) {
+        const u = clamp(-c.steer * dir, -1, 1);   // + steering into the drift
+        const ang = u >= 0 ? A.angle + (A.angleIn - A.angle) * u : A.angle + (A.angle - A.angleOut) * u;
+        const lat = u >= 0 ? A.lat + (A.latIn - A.lat) * u : A.lat + (A.lat - A.latOut) * u;
+        const omega = dir * lat / Math.max(v, 1);
+        psiNew = psiV + omega * dt;
+        vNew = Math.max(0, v - Math.max(0, A.loss + A.lossIn * Math.max(0, u) + A.brakeLoss * c.brake - A.gas * c.throttle) * dt);
+        yawCmd = omega + clamp(wrap(psiV + dir * ang - psiB) * A.yawK, -A.yawMax, A.yawMax);
+        if (this.tune.nitro > 0) this.nitroFill = Math.min(1, this.nitroFill + A.charge * dt);
+      } else {
+        // the key is up: the travel turns to the nose, the body holds its heading
+        const e = wrap(psiB - psiV), stepA = A.align * dt;
+        psiNew = psiV + clamp(e, -stepA, stepA);
+      }
+      _t.set(Math.sin(psiNew) * vNew - vx, 0, Math.cos(psiNew) * vNew - vz).multiplyScalar(b.mass() * A.velGain);
+      b.applyImpulse(_t, true);
+      this.impulse.add(_t);
+      _t.copy(this.up).multiplyScalar((yawCmd - this.yawRate) * A.yawGain * I[1]);
+      b.applyTorqueImpulse(_t, true);
+    }
+
+    // --- assists ----------------------------------------------------------------------------------
     if (grounded === 0) {
       this.airTime += dt;
       // Damp pitch and roll in the body frame; leave yaw alone. GTA-style air control on top.
@@ -464,14 +563,14 @@ export class Vehicle {
       const intoG = clamp01(-c.steer * Math.sign(this.bodySlip));
       const excess = Math.abs(this.bodySlip) - (s.assists.spinAngleNeutral + (s.assists.spinAngle - s.assists.spinAngleNeutral) * intoG);
       // Held off for half a second after the handbrake, so a handbrake turn can finish rotating.
-      if (excess > 0 && this.tcOff < 0.5 && this.speed > 5 && grounded >= 3) {
+      if (excess > 0 && this.tcOff < 0.5 && this.speed > 5 && grounded >= 3 && !arcade) {
         const k = Math.min(0.25, s.assists.spinGuard * excess * dt * 6);
         _t.copy(this.up).multiplyScalar(-this.yawRate * k * I[1]);
         b.applyTorqueImpulse(_t, true);
       }
     }
     // Sliding with the wheel near centre: bleed the rotation so a straightened slide straightens.
-    if (grounded >= 3 && !c.handbrake && this.tcOff <= 0 && this.speed > 4) {
+    if (grounded >= 3 && !handbrake && !arcade && this.tcOff <= 0 && this.speed > 4) {
       const calm = (1 - clamp01(Math.abs(c.steer) / 0.3)) * smoothstep(0.06, 0.15, Math.abs(this.bodySlip));
       if (calm > 0) {
         const k = Math.min(0.2, s.assists.calmYawDamp * calm * dt);
