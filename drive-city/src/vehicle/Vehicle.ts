@@ -57,15 +57,24 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
  * a fitted nitro bottle. Below `minSpeed`, and on two-wheelers, the key is the handbrake it was.
  */
 export const ARCADE = {
-  minSpeed: 8, steerIn: 0.35,
+  minSpeed: 8, steerIn: 0.25,
+  /**
+   * The direction's hold on the drift follows the key through this lag, s (2026-10-23, 「方向键太过灵敏，导致漂移不好操作…
+   * qq飞车…它的方向键有拉拽感，很好漂移」): a tap is a nudge, a held key tightens the arc over half a second. Taken at
+   * once, swapping into the drift for against it swung the angle 42° -> 16° and the arc 14 -> 3.5 m/s² in a frame.
+   */
+  steerTau: 0.4,
   /** Body angle to the travel, rad: neutral, steering into the drift, steering against it. */
-  angle: 0.52, angleIn: 0.73, angleOut: 0.28,
-  /** Sideways acceleration of the arc, m/s² (the same three). */
-  lat: 9, latIn: 14, latOut: 3.5,
+  angle: 0.52, angleIn: 0.7, angleOut: 0.34,
+  /** Sideways pull of the arc, m/s² (the same three; the path takes `velGain` of it each step). */
+  lat: 9, latIn: 13, latOut: 5,
   /** Speed lost per second: coasting, extra when steering in, extra on the brake; the throttle gives back `gas`. */
   loss: 1.2, lossIn: 1.5, brakeLoss: 9, gas: 1,
-  /** Yaw: rad/s per rad of angle error, the cap, and the share of the yaw-rate error fixed each step. */
-  yawK: 7, yawMax: 3.5, yawGain: 0.5,
+  /**
+   * Yaw: rad/s per rad of angle error, the cap (`yawMaxIn` for the first `entryT` s: the swing out stays quick), and the
+   * share of the yaw-rate error fixed each step.
+   */
+  yawK: 4.5, yawMax: 2.2, yawMaxIn: 3.5, entryT: 0.35, yawGain: 0.35,
   /** Share of the velocity error fixed each step. */
   velGain: 0.5,
   /** After the key: the travel swings to the nose at `align` rad/s, for `recover` s at most. */
@@ -153,6 +162,8 @@ export class Vehicle {
   /** Seconds left of the push after a drift (小喷). */
   kick = 0;
   private recoverT = 0;
+  /** The direction's hold on the drift, -1 (against) .. 1 (into), lagging the steering by `ARCADE.steerTau`. */
+  private driftSteer = 0;
   private readonly velBefore = new THREE.Vector3();
   private readonly impulse = new THREE.Vector3();
   private readonly staticLoad: number[];
@@ -279,7 +290,7 @@ export class Vehicle {
       if (Math.abs(this.bodySlip) < 0.05 || this.recoverT > A.recover || this.impact > A.crash || this.speed < 3) this.driftPhase = 0;
     }
     if (this.driftPhase !== 1 && c.drift && canDrift && Math.abs(c.steer) > A.steerIn) {
-      this.driftPhase = 1; this.driftDir = c.steer < 0 ? 1 : -1; this.driftT = 0;
+      this.driftPhase = 1; this.driftDir = c.steer < 0 ? 1 : -1; this.driftT = 0; this.driftSteer = 0;
     }
     const arcade = this.driftPhase > 0;
     const handbrake = c.handbrake || (!!c.drift && !arcade && (!!s.single || this.forwardSpeed < A.minSpeed));
@@ -525,13 +536,16 @@ export class Vehicle {
       const psiV = Math.atan2(vx, vz), psiB = Math.atan2(this.fwd.x, this.fwd.z), dir = this.driftDir;
       let psiNew = psiV, vNew = v, yawCmd = 0;
       if (this.driftPhase === 1) {
-        const u = clamp(-c.steer * dir, -1, 1);   // + steering into the drift
+        // + steering into the drift; through a lag, so a tap nudges and a held key tightens
+        this.driftSteer += (clamp(-c.steer * dir, -1, 1) - this.driftSteer) * (1 - Math.exp(-dt / A.steerTau));
+        const u = this.driftSteer;
         const ang = u >= 0 ? A.angle + (A.angleIn - A.angle) * u : A.angle + (A.angle - A.angleOut) * u;
         const lat = u >= 0 ? A.lat + (A.latIn - A.lat) * u : A.lat + (A.lat - A.latOut) * u;
         const omega = dir * lat / Math.max(v, 1);
         psiNew = psiV + omega * dt;
         vNew = Math.max(0, v - Math.max(0, A.loss + A.lossIn * Math.max(0, u) + A.brakeLoss * c.brake - A.gas * c.throttle) * dt);
-        yawCmd = omega + clamp(wrap(psiV + dir * ang - psiB) * A.yawK, -A.yawMax, A.yawMax);
+        const yawMax = this.driftT < A.entryT ? A.yawMaxIn : A.yawMax;
+        yawCmd = omega + clamp(wrap(psiV + dir * ang - psiB) * A.yawK, -yawMax, yawMax);
         if (this.tune.nitro > 0) this.nitroFill = Math.min(1, this.nitroFill + A.charge * dt);
       } else {
         // the key is up: the travel turns to the nose, the body holds its heading

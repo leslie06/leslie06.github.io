@@ -78,6 +78,26 @@ describe('arcade drift', () => {
     expect(into.slipEnd).toBeGreaterThan(out.slipEnd);
   });
 
+  it('a tap of the other direction nudges the drift instead of throwing it', async () => {
+    // 2026-10-23, 「方向键太过灵敏，导致漂移不好操作」: a left drift held 1.5 s, then a 0.15 s tap of ▶ (or none)
+    const run = async (tap: boolean) => {
+      const d = await drift(70, -1, 1.5, { into: 0 });
+      const rig = d.rig, slip0 = rig.car.bodySlip;
+      let minSlip = slip0, psi = travel(rig);
+      const psi0 = psi;
+      for (let t = 0; t < 1; t += DT) {
+        rig.stepInput(input({ steer: tap && t < 0.15 ? 1 : 0, drift: true }));
+        minSlip = Math.min(minSlip, rig.car.bodySlip); psi = unwrap(travel(rig), psi);
+      }
+      return { rig, dSlip: slip0 - minSlip, turned: psi - psi0 };
+    };
+    const tap = await run(true), none = await run(false);
+    Object.assign(report, { 'tap.slip given up deg': deg(tap.dSlip), 'tap.turned in 1 s deg': deg(tap.turned), 'tap.untapped turned deg': deg(none.turned) });
+    expect(tap.rig.car.driftPhase).toBe(1);
+    expect(deg(tap.dSlip)).toBeLessThan(5);
+    expect(tap.turned).toBeGreaterThan(none.turned * 0.75);   // still carving left, a little wider
+  });
+
   it('comes out straight along the nose with a push when the key comes up', async () => {
     const d = await drift(80, -1, 1.5);
     const rig = d.rig, nose = heading(rig);

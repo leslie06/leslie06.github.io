@@ -220,6 +220,8 @@ export class TouchControls implements System {
   /** Driving: held keys (the car accelerates by itself once `armed`: a first tap after getting in, not on its own). */
   private keys = { left: false, right: false, brake: false };
   private armed = false;
+  /** The ◀ ▶ keys' steering, eased in (see `update`). */
+  private steerNow = 0;
   private actionBtn: HTMLButtonElement;
   /** The car has a nitro bottle: the button shows only then (an empty cell otherwise). */
   private n2o = false;
@@ -372,10 +374,11 @@ export class TouchControls implements System {
     this.stick.classList.remove('on');
     Object.assign(this.state, { steer: 0, forward: 0, back: 0, handbrake: false, sprint: false, analog: false, nitro: false });
     this.keys.left = this.keys.right = this.keys.brake = false;
+    this.steerNow = 0;
     for (const b of this.btns) b.el.classList.remove('down');
   }
 
-  update(): void {
+  update(dt: number): void {
     const ui = this.engine.get<UiApi>('ui');
     const open = this.engine.get<NavApi>('nav')?.mapOpen ?? false;
     const show = ui?.state === 'playing' && !open;
@@ -399,7 +402,12 @@ export class TouchControls implements System {
       // (the pause screen and the garage turn input off too: those keep it going)
       if (!veh?.occupied || (!veh.inputEnabled && ui?.state === 'playing')) this.armed = false;
       const k = this.keys;
-      this.state.steer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+      // QQ飞车's keys pull in (2026-10-23, 「方向键太过灵敏…它的方向键有拉拽感」): full lock 0.2 s after the press, back to
+      // the centre in 0.1 s, on top of the keyboard's own steering lag (ControlFilter)
+      const want = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+      const rate = want === 0 || want * this.steerNow < 0 ? 10 : 5;
+      this.steerNow += Math.max(-rate * dt, Math.min(rate * dt, want - this.steerNow));
+      this.state.steer = this.steerNow;
       this.state.analog = false;
       this.state.back = k.brake ? 1 : 0;
       this.state.forward = this.armed && !k.brake ? 1 : 0;
