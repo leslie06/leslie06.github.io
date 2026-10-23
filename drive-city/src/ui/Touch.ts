@@ -13,12 +13,13 @@ export const TOUCH = (() => {
 })();
 
 /**
- * The phone's own driving choice (2026-10-23, 「要」 to 「设置里加自动油门：开 / 关」): the car accelerates by itself (QQ飞车,
- * the default) or a gas key does it. Kept on this device (online/CloudSave.ts `DEVICE_KEYS`).
+ * The phone's own driving choice (2026-10-23, 「要」 to 「设置里加自动油门：开 / 关」): a gas key (the default since
+ * 「默认都做成手动油门」, the same day) or the car accelerates by itself (QQ飞车). Kept on this device (online/CloudSave.ts
+ * `DEVICE_KEYS`): only a choice of 'on' is stored as such, so everyone who never chose drives with the gas key.
  */
 const AUTO_GAS_KEY = 'drivecity.autogas';
 export const touchPrefs = {
-  autoGas: (() => { try { return localStorage.getItem(AUTO_GAS_KEY) !== '0'; } catch { return true; } })(),
+  autoGas: (() => { try { return localStorage.getItem(AUTO_GAS_KEY) === '1'; } catch { return false; } })(),
   setAutoGas(on: boolean): void {
     touchPrefs.autoGas = on;
     try { localStorage.setItem(AUTO_GAS_KEY, on ? '1' : '0'); } catch { /* private mode */ }

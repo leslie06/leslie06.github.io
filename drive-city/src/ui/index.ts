@@ -7,7 +7,7 @@ import { onLangChange, t } from '../core/I18n';
 import { PathPilot, figureEight } from '../vehicle/Autopilot';
 import { FIGURE8 } from '../world/Layout';
 import { Hud } from './Hud';
-import { TOUCH, TouchControls } from './Touch';
+import { TOUCH, TouchControls, touchPrefs } from './Touch';
 import { Menu, type MenuState } from './Menu';
 import { Minimap } from './Minimap';
 import { MapScreen } from './MapScreen';
@@ -142,7 +142,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     skipTitle() {
       if (api.state !== 'title') return;
       api.start();
-      hud.coach(t(TOUCH ? 'title.touch' : 'hud.coachKeys'), 14);
+      hud.coach(t(TOUCH ? (touchPrefs.autoGas ? 'title.touchAuto' : 'title.touch') : 'hud.coachKeys'), 14);
       // the browser lets sound start, and the mouse be captured, only from a click or a key
       const first = (e: Event) => {
         removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true);

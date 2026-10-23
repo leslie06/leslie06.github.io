@@ -56,3 +56,4 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
     - **设置「自动油门：开 / 关」**（只在触屏上出现，标题页和暂停菜单的画质那一行，`Menu.ts` `#autogas-on/off`）：存在 `drivecity.autogas`（这台设备自己的，不进云存档，`CloudSave.ts` `DEVICE_KEYS`），`Touch.ts` 的 `touchPrefs`。关掉后右下角大键换成「油门」，漂移键挪到它左边（86 px），刹车在漂移键上面，氮气在最左（`.qq.manual`）。刹车停得住、按住才倒车两种模式一样。
     - 竖屏标题页底部的地图数据版权（三行）压在设置行上，竖屏给菜单底部留 64 px。
     - 测：`node .scratch/title/qq3.mjs outDir`（停住、倒车间隔、松开不动、点 ▶ 再走、暂停菜单关掉自动油门后油门键）。`.scratch/title/shots.mjs` 现在带 `?title=1`（全新存档会跳过标题页）。
+  - 2026-10-23 第三版（「默认都做成手动油门」）：默认改成油门键，只有在设置里选过「开」的（`drivecity.autogas` 存的是 `'1'`）才是自动油门，以前没选过的玩家也变成手动。操作提示分两句（`title.touch` 手动「右下角油门」/ `title.touchAuto` 自动「自动加速」），标题页那行和新玩家进城的提示条按当前设置显示，切换开关时标题页的提示跟着换。测：`node .scratch/title/manual.mjs`（全新存档：进城是油门键、不按不动、按住 3 秒 49 km/h；标题页默认「关」，点「开」后提示变成自动加速、存下 `1`）。`qq3.mjs` 假设默认是自动油门，现在要先在设置里点「开」才对得上。

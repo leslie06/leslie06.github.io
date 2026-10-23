@@ -101,7 +101,9 @@ export class Menu {
     h1.appendChild(L('title.name'));
     this.subEl = el('div', 'sub', left); this.subEl.appendChild(L('title.sub'));
     this.noteEl = el('div', 'note', left); this.noteEl.appendChild(L('title.note'));
-    el('div', 'touchhint', left).appendChild(L('title.touch'));
+    const touchHint = el('div', 'touchhint', left);
+    const showTouchHint = () => touchHint.replaceChildren(L(touchPrefs.autoGas ? 'title.touchAuto' : 'title.touch'));
+    showTouchHint();
     this.pauseHint = el('div', 'pausehint', left); this.pauseHint.appendChild(L('pause.hint'));
     this.progressEl = el('div', 'progress', left);
     this.progressEl.hidden = true;
@@ -158,6 +160,7 @@ export class Menu {
         b.appendChild(L(on ? 'settings.on' : 'settings.off'));
         b.addEventListener('click', () => {
           touchPrefs.setAutoGas(on);
+          showTouchHint();
           [...gSeg.children].forEach((x, i) => x.classList.toggle('on', (i === 0) === on));
         });
       }
