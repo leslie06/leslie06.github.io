@@ -1,3 +1,4 @@
+import './core/Polyfill';
 import { Engine } from './core/Engine';
 import { t } from './core/I18n';
 import { afterTitle, boot as bootBar } from './core/Boot';

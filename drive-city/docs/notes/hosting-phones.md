@@ -57,3 +57,7 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
     - 竖屏标题页底部的地图数据版权（三行）压在设置行上，竖屏给菜单底部留 64 px。
     - 测：`node .scratch/title/qq3.mjs outDir`（停住、倒车间隔、松开不动、点 ▶ 再走、暂停菜单关掉自动油门后油门键）。`.scratch/title/shots.mjs` 现在带 `?title=1`（全新存档会跳过标题页）。
   - 2026-10-23 第三版（「默认都做成手动油门」）：默认改成油门键，只有在设置里选过「开」的（`drivecity.autogas` 存的是 `'1'`）才是自动油门，以前没选过的玩家也变成手动。操作提示分两句（`title.touch` 手动「右下角油门」/ `title.touchAuto` 自动「自动加速」），标题页那行和新玩家进城的提示条按当前设置显示，切换开关时标题页的提示跟着换。测：`node .scratch/title/manual.mjs`（全新存档：进城是油门键、不按不动、按住 3 秒 49 km/h；标题页默认「关」，点「开」后提示变成自动加速、存下 `1`）。`qq3.mjs` 假设默认是自动油门，现在要先在设置里点「开」才对得上。
+
+## 老浏览器补丁（2026-10-24）
+
+「游戏有时候报这个错」：手机百度浏览器上整屏红字 `TypeError: r.roundRect is not a function`。canvas 的 `roundRect` 到 Chrome 99 / Safari 16 才有，百度、部分国产浏览器的内核更老；游戏有五处用它画东西（地图标注、雷达图标、地铁口标志、地标贴图），走到哪个地标、打开哪张图才会画到，所以是「有时候」。`src/core/Polyfill.ts` 补上 `roundRect`（2D 画布、OffscreenCanvas、Path2D），在 `main.ts` 第一行引入。其他可能缺的新 API（`findLast`、`structuredClone`、`Object.hasOwn`、`toSorted`、`replaceAll`、`.at(-1)`）查过源码里没用。看：`node .scratch/title/oldcanvas.mjs`（删掉原生 `roundRect` 再开游戏：确认补丁接上、没有报错、和原生画法逐像素一致）。
