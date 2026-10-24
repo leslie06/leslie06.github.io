@@ -11,7 +11,16 @@ css(`
 .hud .signcard canvas{display:block;width:100%;height:auto}
 body.dc-touch .hud .signcard{right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(222px + env(safe-area-inset-bottom,0px));
   width:clamp(110px,calc((100vh - 310px) * 1.7),210px)}
-@media (max-height:340px){body.dc-touch .hud .signcard{display:none}}
+/* A phone on its side (2026-10-24, 「手机横屏版，蓝色路标不会在右下角显示」): the corner is all buttons, and stacked over them the card
+   had no room under 340 px tall - a phone browser with its bars - so it was hidden. Now under the street's name, as tall as the
+   room down to the F key (44 px at least); where even that does not fit, beside it in from the right, clear of F and the
+   brake (and of the nitro and drift keys further in under 312 px). */
+@media (max-height:470px){
+  html body.dc-touch .hud .signcard{top:calc(92px + env(safe-area-inset-top,0px));bottom:auto;width:210px}
+  html body.dc-touch .hud .signcard canvas{width:auto;height:auto;max-width:100%;max-height:max(44px,calc(100vh - 292px - env(safe-area-inset-bottom,0px)));margin-left:auto}
+}
+@media (max-height:335px){html body.dc-touch .hud .signcard{right:calc(112px + env(safe-area-inset-right,0px))}}
+@media (max-height:312px){html body.dc-touch .hud .signcard{right:calc(216px + env(safe-area-inset-right,0px))}}
 `);
 
 /** Face pixels per plate pixel: the card is drawn at twice the atlas's size, so it stays crisp at any dpr. */

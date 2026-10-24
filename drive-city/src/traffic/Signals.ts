@@ -274,7 +274,7 @@ function mastArm(geo: THREE.BufferGeometry, extra: number): THREE.BufferGeometry
   return geo;
 }
 
-/** Poles with three-lamp heads at the stop lines of signalised approaches near the player. */
+/** Poles with three-lamp heads across the junction from each signalised approach near the player. */
 export class SignalHeads {
   private poles: THREE.InstancedMesh;
   private lamps: THREE.InstancedMesh;
@@ -322,20 +322,58 @@ export class SignalHeads {
   }
 
   /**
-   * Half width of the widest road crossing the one `l` arrives on, at its junction node: the other roads there, not its own
-   * carrying on across (within ~37° of its direction) - an avenue's lights at a side street stay near the side street.
+   * Half width of the widest road crossing the axis (dx, dz) at `node`: the other roads there, not the one running on across
+   * (within ~37° of the axis) - an avenue's lights at a side street stay near the side street.
    */
-  private crossHalfWidth(l: Link): number {
+  private crossHalfWidth(node: number, dx: number, dz: number): number {
     const g = this.g;
     if (!this.ins) {
       this.ins = g.out.map(() => []);
       for (const k of g.links) this.ins[k.to]?.push(k.id);
     }
-    const across = (dx: number, dz: number) => Math.abs(dx * l.d1x + dz * l.d1z) < 0.8;
+    const across = (ax: number, az: number) => Math.abs(ax * dx + az * dz) < 0.8;
     let hw = 0;
-    for (const id of g.out[l.to] ?? []) { const k = g.links[id]; if (id !== l.rev && across(k.d0x, k.d0z)) hw = Math.max(hw, k.hw); }
-    for (const id of this.ins[l.to] ?? []) { const k = g.links[id]; if (id !== l.id && across(k.d1x, k.d1z)) hw = Math.max(hw, k.hw); }
+    for (const id of g.out[node] ?? []) { const k = g.links[id]; if (across(k.d0x, k.d0z)) hw = Math.max(hw, k.hw); }
+    for (const id of this.ins[node] ?? []) { const k = g.links[id]; if (across(k.d1x, k.d1z)) hw = Math.max(hw, k.hw); }
     return hw;
+  }
+
+  /** The link leaving `node` straightest on from direction (dx, dz) (within ~37°), not `back` (the way in). */
+  private straightOn(node: number, dx: number, dz: number, back: number): Link | null {
+    let best: Link | null = null, bd = 0.8;
+    for (const id of this.g.out[node] ?? []) {
+      const k = this.g.links[id];
+      const d = k.d0x * dx + k.d0z * dz;
+      if (id !== back && d > bd) { bd = d; best = k; }
+    }
+    return best;
+  }
+
+  /**
+   * Where the far-side pole for approach `l` stands: on the right-hand pavement of the road straight on across the junction,
+   * `back` m past the last crossing carriageway's kerb (through the short links between a dual carriageway's two halves,
+   * and on along a road OSM split without a junction). Null for an approach with nothing straight on (the stem of a T) or
+   * a road going up a ramp there.
+   */
+  private farSide(l: Link): { x: number; z: number; dx: number; dz: number } | null {
+    const c = this.sig.junctionOf(l.to);
+    let cur = l, k: Link | null = null;
+    for (let hop = 0; hop < 4; hop++) {
+      k = this.straightOn(cur.to, cur.d1x, cur.d1z, cur.rev);
+      if (!k || this.sig.junctionOf(k.to) !== c) break;
+      cur = k;
+    }
+    if (!k) return null;
+    let s = Math.max(10, this.crossHalfWidth(k.from, k.d0x, k.d0z) + 7);
+    for (let hop = 0; hop < 3 && k.len < s && this.sig.junctionOf(k.to) < 0; hop++) {
+      const n: Link | null = this.straightOn(k.to, k.d1x, k.d1z, k.rev);
+      if (!n) break;
+      s -= k.len; k = n;
+    }
+    // Short of the next junction's own lights.
+    if (s > k.len) s = Math.max(2, Math.min(s, k.len * 0.6));
+    if (this.g.heightAt(k, s) > 1) return null;
+    return this.g.at(k, s, -k.hw - POLE_IN, this.tmp);
   }
 
   private rebuild(x: number, z: number): void {
@@ -352,13 +390,15 @@ export class SignalHeads {
     for (const { id } of order) {
       const l = this.g.links[id];
       if (this.heads.length >= this.cap) break;
-      // Short of the junction, on the right-hand pavement, arm reaching over the carriageway, lamps facing traffic.
-      // 2026-10-23 (「把红绿灯往里移下，转弯也容易撞到」): it stood 7 m short of the node, which at a junction with a main
-      // road is in the crossing carriageway's lanes, and anywhere on the corner is where a car turning cuts through; now
-      // 7 m back from the crossing carriageway's kerb (10 m at least), past the corner's curve, and `POLE_IN` m into the pavement
-      // (was 0.8), the arm long enough to hang the lamps over the lanes (`mastArm`).
-      const back = Math.max(10, this.crossHalfWidth(l) + 7);
-      const p = this.g.at(l, Math.max(2, l.len - back), -l.hw - POLE_IN, this.tmp);
+      // Across the junction on the right-hand pavement, arm reaching over the lanes straight on, lamps facing traffic coming
+      // up to it - a driver at the stop line sees their own light (2026-10-24, 「改成国内常见的、装在路口对面」); before, it
+      // stood on the near side and was over or behind the camera once the car stopped. Where nothing runs straight on (the stem
+      // of a T), still the near side.
+      // 2026-10-23 (「把红绿灯往里移下，转弯也容易撞到」): 7 m back from the crossing carriageway's kerb (10 m at least), past the
+      // corner's curve, and `POLE_IN` m into the pavement (was 7 m from the node, 0.8 m out: in the crossing lanes and on
+      // the corner a turning car cuts through), the arm long enough to hang the lamps over the lanes (`mastArm`).
+      const p = this.farSide(l)
+        ?? this.g.at(l, Math.max(2, l.len - Math.max(10, this.crossHalfWidth(l.to, l.d1x, l.d1z) + 7)), -l.hw - POLE_IN, this.tmp);
       // Local +Z (the arm) turned onto left of travel, (dz, -dx): across the road.
       this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(p.dz, -p.dx));
       const i = this.heads.length;
