@@ -21,6 +21,18 @@ body.cmp-cine .chat-btn,body.cmp-cine .chat-feed{display:none}
   border:1px solid ${C.line};box-shadow:0 14px 40px rgba(0,0,0,.45);font-family:${F.ui};color:${C.paper};overflow:hidden}
 .chat-panel[hidden]{display:none}
 body.dc-touch .chat-panel{top:calc(8px + env(safe-area-inset-top,0px))}
+/* A phone (2026-10-25, 「聊天键在方向键下面，按动方向键会碰到聊天窗口，把聊天窗口放在方向键上面」): counted down from the radar it
+   landed in the ◀ ▶ row on a phone on its side. Now just over the arrows (14 px inset + 84 px keys + 10 px), the new lines beside
+   it growing upwards (above it standing up, where the brake is beside it); a smaller key under 320 px tall, clear of the route
+   line under the radar. The auto-gas 按住油门 hint (Touch.ts .go, until the first touch) has that place for its few seconds. */
+body.dc-touch .chat-btn{top:auto;left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(108px + env(safe-area-inset-bottom,0px))}
+body.dc-touch:has(.qq .go:not([hidden])) .chat-btn{visibility:hidden}
+body.dc-touch .chat-feed{top:auto;left:calc(140px + env(safe-area-inset-left,0px));bottom:calc(108px + env(safe-area-inset-bottom,0px));width:min(320px,36vw)}
+@media (orientation:portrait){body.dc-touch .chat-feed{left:calc(14px + env(safe-area-inset-left,0px));bottom:calc(184px + env(safe-area-inset-bottom,0px));width:min(300px,66vw)}}
+@media (max-height:320px){
+  body.dc-touch .chat-btn{min-height:34px;padding:6px 10px;bottom:calc(104px + env(safe-area-inset-bottom,0px))}
+  body.dc-touch .chat-feed{bottom:calc(104px + env(safe-area-inset-bottom,0px))}
+}
 .chat-panel .top{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid ${C.line}}
 .chat-panel h3{margin:0;font:800 12px/1 ${F.num};letter-spacing:.22em;color:${C.yellow}}
 .chat-panel .x{background:transparent;border:0;color:${C.muted};font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
