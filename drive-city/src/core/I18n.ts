@@ -243,6 +243,7 @@ const EN = {
   'settings.q.low': 'Low',
   'settings.q.medium': 'Medium',
   'settings.q.high': 'High',
+  'quality.steppedDown': 'Last time the phone ran out of memory and closed the game: graphics are now {to} (were {from}). Change it in the pause menu.',
 
   'diag.title': 'DIAGNOSTICS (F9)',
   'diag.voice.title': 'NPC VOICES (F9)', 'diag.voice.who': 'Speaker', 'diag.voice.trigger': 'Trigger event', 'diag.voice.play': 'Play',
@@ -786,6 +787,7 @@ const ZH: Record<TKey, string> = {
   'settings.q.low': '低',
   'settings.q.medium': '中',
   'settings.q.high': '高',
+  'quality.steppedDown': '上次手机内存不够，游戏被系统关掉了：画质已从「{from}」自动调到「{to}」，暂停菜单里可以改回去',
 
   'diag.title': '诊断（F9）',
   'diag.voice.title': 'NPC 语音（F9）', 'diag.voice.who': '说话人', 'diag.voice.trigger': '触发事件', 'diag.voice.play': '播放',

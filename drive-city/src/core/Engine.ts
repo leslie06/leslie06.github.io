@@ -3,7 +3,7 @@ import { EventBus } from './Events';
 import { Input } from './Input';
 import { Physics } from './Physics';
 import { Assets } from './Assets';
-import { QUALITY, detectGpu, pickTier, type GpuInfo, type QualitySettings } from './Quality';
+import { detectGpu, pickTier, settingsFor, type GpuInfo, type QualitySettings } from './Quality';
 import { newGovernor, step as governorStep, type GovernorConfig, type GovernorState } from './Resolution';
 
 /** Frames the resolution governor ignores at boot (shader compiles, first uploads). */
@@ -85,7 +85,7 @@ export class Engine {
     // No canvas MSAA: the post chain (render/PostFx) anti-aliases with SMAA, MSAA would only cost bandwidth.
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, powerPreference: 'high-performance', stencil: false, depth: true, alpha: false, preserveDrawingBuffer: shot });
     this.gpu = detectGpu(this.renderer.getContext());
-    this.quality = QUALITY[pickTier(this.gpu)];
+    this.quality = settingsFor(pickTier(this.gpu));
     this.governor = newGovernor(1, WARMUP_FRAMES, this.quality.maxRenderScale);
     this.governorCfg = { targetFps: this.quality.targetFps, minScale: this.quality.minRenderScale, maxScale: this.quality.maxRenderScale, window: 30, cooldown: 20 };
     this.frameCapMs = Engine.frameCapMs(this.quality.frameCap);

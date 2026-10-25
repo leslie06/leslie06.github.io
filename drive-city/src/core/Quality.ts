@@ -31,6 +31,9 @@ export interface QualitySettings {
   skidSegments: number;
   /** Trees and lamp posts around the yard. */
   propDensity: number;
+  /** City tiles loaded round the camera, in tiles each way (city/Streamer.ts), and the band of them that gets trees. */
+  tileRadius: number;
+  vegRadius: number;
   // --- resolution policy (core/Resolution.ts) ---
   adaptiveResolution: boolean;
   targetFps: number;
@@ -107,7 +110,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
     // phone-sized buffer, 4x the pixels cost +32% of a frame - so shedding pixels bought the governor
     // a few percent of frame time for a visibly softer picture.
     tier: 'low', pixelRatio: dpr, antialias: true, shadowMapSize: 1024, shadowExtent: 40, anisotropy: 8,
-    textureRes: 1024, canvasTextureRes: 1024, smokeParticles: 160, skidSegments: 1500, propDensity: 0.5,
+    textureRes: 1024, canvasTextureRes: 1024, smokeParticles: 160, skidSegments: 1500, propDensity: 0.5, tileRadius: 2, vegRadius: 1,
     adaptiveResolution: true, targetFps: 60, minRenderScale: 1, maxRenderScale: 1, maxPixels: 1.6, frameCap: 60,
     shadowCascades: 1, csmMapSize: 1024, shadowDistance: 40, shadowPcfTaps: 5, ao: 0, aoSamples: 8, aoRadius: 1.2,
     bloomLevels: 4, smaaPreset: 0, motionBlurSamples: 0, cloudSteps: 0, sunShafts: false, filmGrain: 0.012, sharpen: 0.3,
@@ -115,7 +118,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
   },
   medium: {
     tier: 'medium', pixelRatio: dpr, antialias: true, shadowMapSize: 2048, shadowExtent: 55, anisotropy: 4,
-    textureRes: 1024, canvasTextureRes: 2048, smokeParticles: 320, skidSegments: 3000, propDensity: 0.8,
+    textureRes: 1024, canvasTextureRes: 2048, smokeParticles: 320, skidSegments: 3000, propDensity: 0.8, tileRadius: 3, vegRadius: 2,
     adaptiveResolution: true, targetFps: 60, minRenderScale: 0.6, maxRenderScale: 1, maxPixels: 2.4, frameCap: 60,
     shadowCascades: 2, csmMapSize: 2048, shadowDistance: 120, shadowPcfTaps: 8, ao: 1, aoSamples: 12, aoRadius: 1.4,
     bloomLevels: 5, smaaPreset: 1, motionBlurSamples: 6, cloudSteps: 3, sunShafts: true, filmGrain: 0.015, sharpen: 0,
@@ -123,7 +126,7 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
   },
   high: {
     tier: 'high', pixelRatio: dpr, antialias: true, shadowMapSize: 4096, shadowExtent: 70, anisotropy: 8,
-    textureRes: 2048, canvasTextureRes: 2048, smokeParticles: 600, skidSegments: 5000, propDensity: 1,
+    textureRes: 2048, canvasTextureRes: 2048, smokeParticles: 600, skidSegments: 5000, propDensity: 1, tileRadius: 4, vegRadius: 3,
     adaptiveResolution: true, targetFps: 60, minRenderScale: 0.6, maxRenderScale: 1, maxPixels: 3.6, frameCap: 60,
     shadowCascades: 3, csmMapSize: 2048, shadowDistance: 200, shadowPcfTaps: 12, ao: 2, aoSamples: 16, aoRadius: 1.5,
     bloomLevels: 6, smaaPreset: 2, motionBlurSamples: 10, cloudSteps: 5, sunShafts: true, filmGrain: 0.018, sharpen: 0.25,
@@ -141,13 +144,58 @@ function savedTier(): QualityTier | null {
   } catch { return null; }
 }
 
+/**
+ * Written every 5 s while playing (online/Funnel.ts), wiped on leaving or going to the background: still there at the next
+ * launch means the system killed the page mid-game. `q` is the tier it was killed on.
+ */
+export const ALIVE_KEY = 'drivecity.alive.v1';
+/** The tier this launch stepped down from (`stepDownAfterKill`), for the HUD to say so; null if it did not. */
+export let steppedDownFrom: QualityTier | null = null;
+
+/**
+ * A phone killed mid-game on medium or high comes back one tier lower (2026-10-25, 「会闪退咋办 手机是iPhone17pm 开的高画质
+ * 在开着车就重新加载了」). A phone's browser kills a page past its memory limit and loads it again, and high costs
+ * ~0.7 GB more than low (city tiles 4 out against 2, 2048 maps, the post chain's buffers: `.scratch/phone/qmem.mjs`).
+ * Stored as the player's choice, so it holds; the menu can still put it back up. Only for the tier it was killed on: a
+ * reload on a tier picked since then is left alone.
+ */
+function stepDownAfterKill(tier: QualityTier, phone: boolean): QualityTier {
+  if (!phone || tier === 'low') return tier;
+  let killedOn: unknown = null;
+  try { const a = localStorage.getItem(ALIVE_KEY); killedOn = a ? JSON.parse(a).q : null; } catch { return tier; }
+  if (killedOn !== tier) return tier;
+  const down: QualityTier = tier === 'high' ? 'medium' : 'low';
+  try { localStorage.setItem(QUALITY_CHOICE_KEY, down); } catch { /* private mode */ }
+  // the reload comes back on the same address, `?quality=` and all (the menu sets it)
+  const u = new URL(location.href);
+  if (u.searchParams.has('quality')) { u.searchParams.set('quality', down); history.replaceState(history.state, '', u); }
+  steppedDownFrom = tier;
+  return down;
+}
+
 export function pickTier(gpu?: GpuInfo): QualityTier {
+  const phone = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
   const q = new URLSearchParams(location.search).get('quality') as QualityTier | null;
-  if (q && q in QUALITY) return q;
+  if (q && q in QUALITY) return stepDownAfterKill(q, phone);
   const saved = savedTier();
-  if (saved) return saved;
+  if (saved) return stepDownAfterKill(saved, phone);
   if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) return 'low';
   if (gpu && (gpu.kind === 'software' || gpu.kind === 'integrated')) return 'low';
   const cores = navigator.hardwareConcurrency || 4;
   return cores >= 8 ? 'high' : 'medium';
+}
+
+/**
+ * The settings for `tier`, with `?qset=key:value,…` laid over them (probes: what one setting costs, e.g.
+ * `?quality=high&qset=ao:1,textureRes:1024`).
+ */
+export function settingsFor(tier: QualityTier): QualitySettings {
+  const q: QualitySettings = { ...QUALITY[tier] };
+  const over = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('qset') : null;
+  for (const kv of over ? over.split(',') : []) {
+    const [k, v] = kv.split(':');
+    if (!(k in q) || k === 'tier' || v === undefined) continue;
+    (q as unknown as Record<string, unknown>)[k] = v === 'true' ? true : v === 'false' ? false : Number(v);
+  }
+  return q;
 }

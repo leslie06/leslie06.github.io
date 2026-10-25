@@ -1,6 +1,7 @@
 import type { Engine, System } from '../core/Engine';
 import type { PlayerApi, WantedApi } from '../game/Contracts';
 import type { UiApi } from '../ui';
+import { ALIVE_KEY, steppedDownFrom } from '../core/Quality';
 
 /**
  * The funnel (2026-10-17, to find out why the median session is 29 s of play): the steps a session gets through,
@@ -20,6 +21,8 @@ import type { UiApi } from '../ui';
  *   died                        上一次会话是玩着玩着没了（页面被系统杀掉，多半是内存不够）：当时玩了多少秒（2026-10-19，iPhone
  *                               「玩了一分钟就退到这个页面了」）。玩的时候每 5 秒在本地记一笔，正常离开或切到后台就擦掉；下次打开还在，
  *                               就是没来得及擦——被杀了
+ *   qdown                       这次开局因为上次被杀把画质自动降了一档：降之前的档（'high' / 'medium'；2026-10-25，iPhone 高画质
+ *                               「开着车就重新加载了」）
  */
 type Stat = Record<string, number | string>;
 const S = (): Stat | null => (typeof window !== 'undefined' ? (window as unknown as { __stat?: Stat }).__stat ?? null : null);
@@ -78,10 +81,11 @@ export function install(engine: Engine): void {
   ev.on('renderer:contextlost', () => stat.mark('lost'));
 
   // Killed last time? (see `died` above) Then keep a mark while playing: every 5 s, wiped on leaving or going to the background.
-  const ALIVE = 'drivecity.alive.v1';
+  const ALIVE = ALIVE_KEY;
   try {
     const prev = localStorage.getItem(ALIVE);
     if (prev) { const p = Number(JSON.parse(prev).p); if (Number.isFinite(p)) stat.set('died', p); localStorage.removeItem(ALIVE); }
+    if (steppedDownFrom) stat.set('qdown', steppedDownFrom);
   } catch { /* private mode */ }
   const wipe = () => { try { localStorage.removeItem(ALIVE); } catch { /* private mode */ } };
   addEventListener('pagehide', wipe);
@@ -114,7 +118,7 @@ export function install(engine: Engine): void {
         fps.length = 0; cpu.length = 0;
       }
       aliveT -= dt;
-      if (aliveT <= 0) { aliveT = 5; try { localStorage.setItem(ALIVE, JSON.stringify({ p: Math.round(played) })); } catch { /* private mode */ } }
+      if (aliveT <= 0) { aliveT = 5; try { localStorage.setItem(ALIVE, JSON.stringify({ p: Math.round(played), q: engine.quality.tier })); } catch { /* private mode */ } }
       if (played >= 180) stat.mark('p3m');
       if (played >= 600) stat.mark('p10m');
       if (played >= 1800) stat.mark('p30m');

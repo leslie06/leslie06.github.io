@@ -21,6 +21,7 @@ import { ChatPanel } from './ChatPanel';
 import { FeedbackPanel } from './Feedback';
 import type { PresenceApi } from '../online/Presence';
 import { journalOf } from '../npc/Journal';
+import { steppedDownFrom } from '../core/Quality';
 
 export interface UiApi extends System {
   state: MenuState;
@@ -105,6 +106,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   // the player's own play time (the pause screen, the account panel): counted while in the city
   trackPlaytime(engine, () => api.state === 'playing');
 
+  let saidStepDown = false;
   const api: UiApi = {
     name: 'ui',
     state: 'title',
@@ -135,6 +137,11 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       api.state = 'playing';
       menu.set('playing');
       hud.setVisible(true); chat?.setVisible(true);
+      // killed mid-game last time and the tier came down one (core/Quality.ts `stepDownAfterKill`): say so, once
+      if (steppedDownFrom && !saidStepDown) {
+        saidStepDown = true;
+        hud.coach(t('quality.steppedDown', { from: t(`settings.q.${steppedDownFrom}` as 'settings.q.low'), to: t(`settings.q.${engine.quality.tier}` as 'settings.q.low') }), 9);
+      }
       veh.inputEnabled = true;
       engine.paused = false;
       if (!TOUCH) engine.input.requestLock();
@@ -142,7 +149,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     skipTitle() {
       if (api.state !== 'title') return;
       api.start();
-      hud.coach(t(TOUCH ? (touchPrefs.autoGas ? 'title.touchAuto' : 'title.touch') : 'hud.coachKeys'), 14);
+      if (!steppedDownFrom) hud.coach(t(TOUCH ? (touchPrefs.autoGas ? 'title.touchAuto' : 'title.touch') : 'hud.coachKeys'), 14);
       // the browser lets sound start, and the mouse be captured, only from a click or a key
       const first = (e: Event) => {
         removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true);

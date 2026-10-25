@@ -238,8 +238,8 @@ export class CityStreamer implements System {
       l.push(trees[i], trees[i + 1], trees[i + 2], trees[i + 3]);
     }
     const tier = engine.quality.tier;
-    this.radius = tier === 'low' ? 2 : tier === 'medium' ? 3 : 4;
-    this.vegRadius = tier === 'low' ? 1 : tier === 'medium' ? 2 : 3;
+    this.radius = engine.quality.tileRadius;
+    this.vegRadius = engine.quality.vegRadius;
     for (const w of workers ?? newTileWorkers()) {
       w.onmessage = (ev: MessageEvent<TileResult>) => this.done.push(ev.data);
       this.workers.push(w);
