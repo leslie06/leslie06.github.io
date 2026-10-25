@@ -440,9 +440,39 @@ export function glbLandmark(meta: GlbMeta): LandmarkDef {
       const l = loader;
       const gltf = await retry(`landmark ${meta.id}`, () => l.loadAsync(url));
       await capTextures(gltf.scene);
+      // the file's own pictures, before the kit's facade materials (shared textures) take some meshes over: what an unload frees
+      const own = new Set<THREE.Texture>();
+      gltf.scene.traverse((o) => {
+        const mats = (o as THREE.Mesh).material;
+        for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) for (const v of Object.values(m)) if (v instanceof THREE.Texture) own.add(v);
+      });
       const model = buildGlbModel(gltf.scene, env, meta);
+      model.group.userData.ownTextures = own;
       if (glbTextureCap.freeGeometry) freeAfterUpload(model.group);
       return model;
     },
   };
+}
+
+/**
+ * Lets a loaded glb landmark go (a phone, driven away from it: city/index.ts): its geometry, its materials' programs and
+ * the file's own pictures off the GPU. The kit's facade textures are shared and stay. Loading it again fetches the file
+ * afresh (from the browser's cache).
+ */
+export function disposeGlbLandmark(root: THREE.Object3D): void {
+  const geos = new Set<THREE.BufferGeometry>(), mats = new Set<THREE.Material>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.geometry) geos.add(m.geometry);
+    for (const x of Array.isArray(m.material) ? m.material : m.material ? [m.material] : []) mats.add(x);
+    if ((m as THREE.InstancedMesh).isInstancedMesh) (m as THREE.InstancedMesh).dispose();
+  });
+  for (const g of geos) g.dispose();
+  for (const m of mats) m.dispose();
+  for (const t of (root.userData.ownTextures as Set<THREE.Texture> | undefined) ?? []) {
+    t.dispose();
+    const img = t.image as ImageBitmap | null;
+    if (img && typeof (img as ImageBitmap).close === 'function') img.close();
+  }
+  root.userData.ownTextures = undefined;
 }

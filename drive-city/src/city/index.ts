@@ -11,7 +11,7 @@ import { createCityMaterials } from './Materials';
 import { Routes } from './Routes';
 import { findDeadEnds } from './DeadEnds';
 import { carStops } from './landmarks/CarStops';
-import { glbTextureCap } from './landmarks/glb/Glb';
+import { disposeGlbLandmark, glbTextureCap } from './landmarks/glb/Glb';
 import { placeDeadEndSigns } from './visual/DeadEndSigns';
 import { placeGuideSigns } from './visual/GuideSigns';
 import { decodeRail, placeRailways, railZones, type RailFileV2 } from './visual/Railways';
@@ -68,14 +68,16 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
   if (params.get('glb') === '0') defs = defs.filter((d) => !d.load);
   const { R, world } = engine.physics;
   const footprints: number[][] = [], clear: number[][] = [], trees: number[] = [], areas: { id: string; rings: number[][]; height: number }[] = [];
-  const jobs: { x: number; z: number; d: number; run: () => Promise<void> }[] = [];
+  /** A glb landmark to load: `live` while its model is in the scene, `busy` while loading, `failed` if it never will. */
+  type Job = { x: number; z: number; d: number; live: boolean; busy: boolean; failed: boolean; run: () => Promise<void>; unload: () => void };
+  const jobs: Job[] = [];
   const body = world.createRigidBody(R.RigidBodyDesc.fixed());
   const g = groups(CG.WORLD, CG.ALL);
   /** Same world geometry, but invisible to cars: see ColliderSpec.walkOnly. */
   const gWalk = groups(CG.WORLD, CG.ALL & ~CG.CAR);
   /** Only vehicles meet it: see ColliderSpec.carOnly and CarStops.ts. */
   const gCar = groups(CG.WORLD, CG.CAR);
-  const place = (def: LandmarkDef, model: LandmarkModel) => {
+  const place = (def: LandmarkDef, model: LandmarkModel, colliders = true) => {
     const [x, z] = project(def.lat, def.lon);
     const rot = -def.headingDeg * Math.PI / 180;
     const c = Math.cos(rot), s = Math.sin(rot);
@@ -85,6 +87,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
     model.group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     model.group.name = `landmark ${def.id}`;
     engine.scene.add(model.group);
+    if (!colliders) return;
     // Stone you can stand on. Terraces, steps and bridges are geometry only, so the player used to
     // stand on the ground *under* them and looked buried. Build trimesh colliders from the stone
     // meshes, preferring the far LOD (same shape, a fraction of the triangles).
@@ -144,14 +147,24 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
     // A glb: the boot has what it needs (the footprint); the model and its colliders come when loaded.
     if (def.load) {
       const placeholder = model.group, load = def.load;
-      jobs.push({
-        x, z, d: Math.hypot(x - from[0], z - from[1]),
+      let group: THREE.Object3D | null = null, placed = false;
+      const job: Job = {
+        x, z, d: Math.hypot(x - from[0], z - from[1]), live: false, busy: false, failed: false,
         run: () => load(env).then((m) => {
           engine.get<RenderSystem>('render')?.prepare?.(m.group);
           engine.scene.remove(placeholder);
-          place(def, m);
-        }).catch((e) => console.warn('[city] landmark', def.id, 'did not load', e)),
-      });
+          // its colliders stay when the model goes (`unload`): made once
+          place(def, m, !placed);
+          placed = true; group = m.group; job.live = true;
+        }).catch((e) => { job.failed = true; console.warn('[city] landmark', def.id, 'did not load', e); }),
+        unload: () => {
+          if (!group) return;
+          engine.scene.remove(group);
+          disposeGlbLandmark(group);
+          group = null; job.live = false;
+        },
+      };
+      jobs.push(job);
     }
   }
   jobs.sort((a, b) => a.d - b.d);
@@ -159,26 +172,39 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
   // reach (checked every 2 s); a computer all of them, nearest the spawn first. 2026-10-19 (an iPhone's crashed tab): all
   // 69 came in a minute into every session, ~150 MB of geometry and most of a GB of pictures, wherever you were.
   // `loaded`: everything within reach is in (everything, on a computer).
-  const reach = touch ? 2200 : Infinity;
-  const next = () => {
-    const c = engine.camera.position;
-    let bi = -1, bd = Infinity;
-    if (!Number.isFinite(reach)) bi = jobs.length ? 0 : -1;
-    else jobs.forEach((j, i) => { const d = Math.hypot(j.x - c.x, j.z - c.z); if (d < bd) { bd = d; bi = i; } });
-    return bi < 0 || bd > reach ? null : jobs.splice(bi, 1)[0];
+  // 2026-10-25 (an iPhone on high, 「开高画质玩了一会重新加载了」): nothing let them go again, so a drive round the city piled them
+  // up - touring them all, 12 to 56 in the scene took the GPU process 1.03 -> 1.41 GB and the two processes' peak 3.3 -> 4.2 GB
+  // (`.scratch/phone/tour.mjs`). A phone now drops one `unload` m off (past `reach`, so one at the edge does not come and go)
+  // and loads it again on the way back; its colliders stay.
+  const reach = touch ? 2200 : Infinity, unload = touch ? 3200 : Infinity;
+  const dist = (j: Job) => Math.hypot(j.x - engine.camera.position.x, j.z - engine.camera.position.z);
+  const next = (): Job | null => {
+    let best: Job | null = null, bd = Infinity;
+    for (const j of jobs) {
+      if (j.live || j.busy || j.failed) continue;
+      if (!Number.isFinite(reach)) return j;   // sorted from the spawn: a computer takes them in order
+      const d = dist(j);
+      if (d < bd) { bd = d; best = j; }
+    }
+    return bd > reach ? null : best;
   };
   let settle: () => void = () => {};
   const settled = new Promise<void>((r) => { settle = r; });
+  // before every load too: arriving somewhere new queues a string of loads, and the ones left behind must go first
+  const drop = () => { if (Number.isFinite(unload)) for (const k of jobs) if (k.live && !k.busy && dist(k) > unload) k.unload(); };
   const worker = async () => {
-    while (jobs.length) {
+    for (;;) {
+      drop();
       const j = next();
-      if (j) { await j.run(); continue; }
+      if (j) { j.busy = true; await j.run(); j.busy = false; continue; }
       settle();
+      if (!Number.isFinite(unload)) break;   // a computer: all in, for good
       await new Promise((r) => setTimeout(r, 2000));
     }
     settle();
   };
-  const loaded = gate.then(() => { void worker(); void worker(); return settled; });
+  // two at a time on a computer; one on a phone, where two files' parsing at once was the page's tallest spike
+  const loaded = gate.then(() => { void worker(); if (!touch) void worker(); return settled; });
   return { footprints, areas, clear, trees, loaded };
 }
 
