@@ -444,7 +444,8 @@ export interface DialogueApi extends System {
 
 export interface HudApi extends System {
   setVisible(v: boolean): void;
-  toast(text: string): void;
+  /** A short line mid-screen for `secs` (default 1.6). */
+  toast(text: string, secs?: number): void;
 }
 
 // --- Rendering (render/) ---------------------------------------------------------------------------

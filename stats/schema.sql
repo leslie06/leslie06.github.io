@@ -63,6 +63,19 @@ CREATE TABLE IF NOT EXISTS fb_shot (
   id   INTEGER PRIMARY KEY,
   data TEXT    NOT NULL
 );
+-- 反馈里的来回对话（2026-10-28 起）：后台回复（who = 'dev'）和玩家在游戏里接着回（who = 'me'）。
+-- 玩家凭反馈带的随机玩家号（fb.pid）取自己那几条的对话；seen = 玩家在游戏里看过这条开发者回复的时间。
+CREATE TABLE IF NOT EXISTS fb_msg (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  fb_id   INTEGER NOT NULL,
+  ts      INTEGER NOT NULL,
+  who     TEXT    NOT NULL,             -- dev / me
+  text    TEXT    NOT NULL,
+  seen    INTEGER NOT NULL DEFAULT 0,
+  ip_hash TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS fb_msg_fb ON fb_msg (fb_id, id);
+CREATE INDEX IF NOT EXISTS fb_pid ON fb (game, pid);
 
 -- 账号和云存档（2026-10-15 起，b城追车在用）：用户名 + 密码，只存加盐的 PBKDF2 哈希（pbkdf2$迭代$盐$哈希）。
 -- 不收手机号、邮箱；忘了密码靠注册时给的恢复码（同样只存哈希）。ip_hash 同 ev 表，每天换盐，只用来限制一台设备一天注册几个号。

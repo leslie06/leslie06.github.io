@@ -5,7 +5,9 @@
 //   GET  /lb?g=&b=&p=  排行榜前十 + 这个玩家自己的名次
 //   GET  /online?g=    在线人数（最近 45 秒有心跳的会话）和今天玩过的设备数
 //   POST /fb           玩家反馈（text/plain 的 JSON：类型、正文、联系方式、游戏情况、截图）
-//   GET  /fb?k=密钥    反馈列表（/fb/list 取数，/fb/shot?id= 截图，POST /fb/state?id=&s= 标状态）
+//   GET  /fb?k=密钥    反馈列表（/fb/list 取数，/fb/shot?id= 截图，POST /fb/state?id=&s= 标状态，
+//                      POST /fb/msg?id= 回复玩家，POST /fb/msgdel?id= 删掉一条回复）
+//   GET  /fb/mine      玩家取自己反馈的对话（凭随机玩家号），POST /fb/reply 玩家接着回，POST /fb/seen 看过了
 //   GET  /?k=密钥      看板
 //   GET  /api?k=密钥   看板取数
 //   POST /acct/*、/save/*  账号（用户名 + 密码）和云存档，见下面「账号与云存档」
@@ -317,7 +319,18 @@ const FBSQL = {
   counts: `SELECT state, COUNT(*) AS c FROM fb GROUP BY state`,
   getShot: 'SELECT data FROM fb_shot WHERE id = ?',
   setState: 'UPDATE fb SET state = ? WHERE id = ?',
+  // 对话
+  get: 'SELECT id, game, pid, state FROM fb WHERE id = ?',
+  mine: 'SELECT id, ts, kind, text FROM fb WHERE game = ? AND pid = ? ORDER BY id DESC LIMIT 20',
+  msgs: `SELECT id, fb_id, ts, who, text, seen FROM fb_msg WHERE fb_id IN (SELECT value FROM json_each(?)) ORDER BY id`,
+  msgPut: 'INSERT INTO fb_msg (fb_id, ts, who, text, ip_hash) VALUES (?, ?, ?, ?, ?) RETURNING id',
+  msgDel: "DELETE FROM fb_msg WHERE id = ? AND who = 'dev'",
+  lastMine: "SELECT text, ts FROM fb_msg WHERE fb_id = ? AND who = 'me' ORDER BY id DESC LIMIT 1",
+  myToday: "SELECT COUNT(*) AS c FROM fb_msg m JOIN fb f ON f.id = m.fb_id WHERE f.game = ? AND f.pid = ? AND m.who = 'me' AND m.ts > ?",
+  seen: "UPDATE fb_msg SET seen = ? WHERE who = 'dev' AND seen = 0 AND fb_id IN (SELECT id FROM fb WHERE game = ? AND pid = ?)",
 };
+/** 玩家在游戏里一天最多回几条、一条多长；开发者一条回复多长。 */
+const FB_REPLY_PER_DAY = 30, FB_REPLY = 1000, FB_DEV = 2000;
 /** Text a player typed: control characters out (newlines kept), trimmed, capped. */
 export const cleanText = (t, max) => String(t ?? '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, '').trim().slice(0, max);
 
@@ -348,7 +361,84 @@ async function feedbackList(env, url) {
   const limit = Math.min(Math.max(+url.searchParams.get('n') || 200, 1), 1000);
   const rows = await env.DB.prepare(FBSQL.list).bind(game, game, state, state, limit).all();
   const counts = await env.DB.prepare(FBSQL.counts).all();
-  return json({ items: rows.results, counts: Object.fromEntries(counts.results.map((r) => [r.state, r.c])) });
+  const msgs = await threads(env, rows.results.map((r) => r.id));
+  return json({
+    items: rows.results.map((r) => ({ ...r, msgs: msgs.get(r.id) ?? [] })),
+    counts: Object.fromEntries(counts.results.map((r) => [r.state, r.c])),
+  });
+}
+
+/** 这几条反馈的对话，按反馈号分组（旧的在前）。 */
+async function threads(env, ids) {
+  const out = new Map();
+  if (!ids.length) return out;
+  const rows = await env.DB.prepare(FBSQL.msgs).bind(JSON.stringify(ids)).all();
+  for (const m of rows.results) {
+    if (!out.has(m.fb_id)) out.set(m.fb_id, []);
+    out.get(m.fb_id).push({ id: m.id, ts: m.ts, who: m.who, text: m.text, seen: m.seen });
+  }
+  return out;
+}
+
+// ---- 反馈里的对话（2026-10-28，「我想回复他反馈的问题，比如想问他反馈的地图在哪里」）
+// 后台在反馈下面回复；游戏凭交反馈时带的随机玩家号（没公开过：排行榜和聊天都不回它）取自己那几条的对话，
+// 有没看过的回复就提示玩家，玩家可以在「意见反馈 → 我的反馈」里接着回，回了这条反馈变回未读。
+
+/** GET /fb/mine?g=&p=：这个玩家号最近 20 条反馈和对话，及没看过的开发者回复数。 */
+async function feedbackMine(env, url) {
+  const g = url.searchParams.get('g'), pid = cleanPid(url.searchParams.get('p'));
+  if (!GAMES.has(g) || !pid) return json({ error: 'pid' }, 400);
+  const rows = (await env.DB.prepare(FBSQL.mine).bind(g, pid).all()).results;
+  const msgs = await threads(env, rows.map((r) => r.id));
+  let unread = 0;
+  const items = rows.map((r) => {
+    const m = (msgs.get(r.id) ?? []).map((x) => {
+      if (x.who === 'dev' && !x.seen) unread++;
+      return { id: x.id, ts: x.ts, who: x.who, text: x.text, ...(x.who === 'dev' && !x.seen ? { unread: true } : {}) };
+    });
+    return { id: r.id, ts: r.ts, kind: r.kind, text: r.text.slice(0, 400), msgs: m };
+  });
+  return json({ items, unread });
+}
+
+/** POST /fb/seen {g, p}：玩家打开了「我的反馈」，回复都算看过。 */
+async function feedbackSeen(request, env) {
+  const b = await body(request), pid = cleanPid(b?.p);
+  if (!GAMES.has(b?.g) || !pid) return json({ error: 'pid' }, 400);
+  await env.DB.prepare(FBSQL.seen).bind(Date.now(), b.g, pid).run();
+  return json({ ok: true });
+}
+
+/** POST /fb/reply {g, p, id, t}：玩家在自己的反馈下接着回。 */
+async function feedbackReply(request, env) {
+  const b = await body(request), pid = cleanPid(b?.p);
+  if (!GAMES.has(b?.g) || !pid) return json({ error: 'pid' }, 400);
+  const f = await env.DB.prepare(FBSQL.get).bind(+b.id || 0).first();
+  if (!f || f.game !== b.g || f.pid !== pid) return json({ error: 'id' }, 404);
+  const text = cleanText(b.t, FB_REPLY);
+  if (!text) return json({ error: 'empty' }, 400);
+  const now = Date.now();
+  const last = await env.DB.prepare(FBSQL.lastMine).bind(f.id).first();
+  if (last && last.text === text && now - last.ts < 600e3) return json({ ok: true, dup: true });
+  const n = await env.DB.prepare(FBSQL.myToday).bind(b.g, pid, now - 86400e3).first();
+  if ((n?.c ?? 0) >= FB_REPLY_PER_DAY) return json({ error: 'busy' }, 429);
+  const ip = request.headers.get('cf-connecting-ip') ?? '', ua = request.headers.get('user-agent') ?? '';
+  const ipHash = await hash(ip, ua, cnDay(now), env.SALT ?? 'salt');
+  const row = await env.DB.prepare(FBSQL.msgPut).bind(f.id, now, 'me', text, ipHash).first();
+  await env.DB.prepare(FBSQL.setState).bind('new', f.id).run();
+  return json({ ok: true, msg: { id: row?.id ?? 0, ts: now, who: 'me', text } });
+}
+
+/** POST /fb/msg?id=&k=，正文 {t}：后台回复这条反馈（未读的顺手标成已读）。 */
+async function feedbackAnswer(request, env, url) {
+  const f = await env.DB.prepare(FBSQL.get).bind(+url.searchParams.get('id') || 0).first();
+  if (!f) return json({ error: 'id' }, 404);
+  const text = cleanText((await body(request))?.t, FB_DEV);
+  if (!text) return json({ error: 'empty' }, 400);
+  const now = Date.now();
+  const row = await env.DB.prepare(FBSQL.msgPut).bind(f.id, now, 'dev', text, '').first();
+  if (f.state === 'new') await env.DB.prepare(FBSQL.setState).bind('read', f.id).run();
+  return json({ ok: true, msg: { id: row?.id ?? 0, ts: now, who: 'dev', text, seen: 0 } });
 }
 
 async function api(env, days) {
@@ -647,6 +737,15 @@ export default {
     if (url.pathname === '/fb' && request.method === 'POST') {
       try { return await feedback(request, env); } catch (e) { console.error('fb', e); return json({ error: 'server' }, 500); }
     }
+    // 玩家这边的对话（凭玩家号，不要密钥）
+    if (url.pathname === '/fb/mine' || url.pathname === '/fb/reply' || url.pathname === '/fb/seen') {
+      try {
+        if (url.pathname === '/fb/mine' && request.method === 'GET') return await feedbackMine(env, url);
+        if (url.pathname === '/fb/reply' && request.method === 'POST') return await feedbackReply(request, env);
+        if (url.pathname === '/fb/seen' && request.method === 'POST') return await feedbackSeen(request, env);
+        return new Response(null, { status: 405, headers: CORS });
+      } catch (e) { console.error('fb', e); return json({ error: 'server' }, 500); }
+    }
     // 在线人数：最近 45 秒有心跳的会话数，和今天玩过的设备数（只给数字，谁都能看）
     if (url.pathname === '/online') {
       const g = url.searchParams.get('g');
@@ -697,6 +796,11 @@ export default {
         const st = url.searchParams.get('s');
         if (!['new', 'read', 'done'].includes(st)) return json({ error: 'state' }, 400);
         await env.DB.prepare(FBSQL.setState).bind(st, +url.searchParams.get('id') || 0).run();
+        return json({ ok: true });
+      }
+      if (url.pathname === '/fb/msg' && request.method === 'POST') return await feedbackAnswer(request, env, url);
+      if (url.pathname === '/fb/msgdel' && request.method === 'POST') {
+        await env.DB.prepare(FBSQL.msgDel).bind(+url.searchParams.get('id') || 0).run();
         return json({ ok: true });
       }
       return new Response('not found', { status: 404 });
@@ -912,7 +1016,8 @@ document.getElementById('days').addEventListener('click', e => {
 load(14);
 </script></body></html>`;
 
-// 反馈列表：/fb?k=密钥。最新的在上面，按游戏 / 状态筛；点截图看大图；「已读」「已处理」写回库。
+// 反馈列表：/fb?k=密钥。最新的在上面，按游戏 / 状态筛；点截图看大图；「已读」「已处理」写回库；
+// 每条下面是和玩家的对话和回复框（玩家在游戏的「意见反馈 → 我的反馈」里看到、接着回）。
 const FBPAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>玩家反馈</title>
 <style>
@@ -937,6 +1042,17 @@ const FBPAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
   img{width:220px;max-width:36vw;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;display:block}
   .acts{display:flex;gap:6px;margin-top:8px}
   .empty{padding:40px 0;color:var(--muted);text-align:center}
+  .k-me{background:var(--accent)}
+  .thread{margin-top:10px;display:flex;flex-direction:column;gap:6px;max-width:720px}
+  .msg{padding:7px 11px;border-radius:10px;background:rgba(123,131,159,.12);border:1px solid var(--line);align-self:flex-start;max-width:90%}
+  .msg.dev{background:rgba(245,163,58,.12);border-color:rgba(245,163,58,.35);align-self:flex-end}
+  .msg .who{font:11px/1.6 var(--mono);color:var(--muted)}
+  .msg .body{white-space:pre-wrap;word-break:break-word}
+  .msg button{padding:0 6px;margin-left:6px;font-size:11px;background:transparent}
+  .reply{display:flex;gap:8px;margin-top:8px;max-width:720px;align-items:flex-end}
+  .reply textarea{flex:1;min-height:40px;height:44px;resize:vertical;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:#0c0f17;color:var(--text);font:14px/1.5 var(--ui)}
+  .reply button{background:var(--accent);border-color:var(--accent);color:#0b0d14;font-weight:700;padding:9px 14px}
+  .reply .err{color:#ff6b5a;font-size:12px}
   @media (max-width:640px){.item{grid-template-columns:1fr}img{max-width:100%;width:100%}}
 </style></head><body>
 <h1>玩家反馈</h1>
@@ -969,24 +1085,58 @@ async function setState(id, s) {
   await fetch('/fb/state?id=' + id + '&s=' + s + '&k=' + encodeURIComponent(key), { method: 'POST' });
   load();
 }
+function thread(f) {
+  const msgs = (f.msgs || []).map((m) => '<div class="msg ' + (m.who === 'dev' ? 'dev' : 'me') + '"><div class="who">' +
+    (m.who === 'dev' ? '我 · ' + when(m.ts) + ' · ' + (m.seen ? '玩家已看（' + when(m.seen) + '）' : '玩家还没看') +
+      '<button data-del="' + m.id + '" title="删掉这条回复">删除</button>' : '玩家 · ' + when(m.ts)) +
+    '</div><div class="body">' + esc(m.text) + '</div></div>').join('');
+  const box = f.pid
+    ? '<div class="reply"><textarea data-for="' + f.id + '" maxlength="2000" placeholder="回复这位玩家（游戏里会提示，玩家能接着回；Ctrl/⌘+回车发送）"></textarea><button data-send="' + f.id + '">回复</button></div>'
+    : '<div class="ctx">这条反馈没带玩家号，回复不了。</div>';
+  return '<div class="thread">' + msgs + '</div>' + box;
+}
+const drafts = {};
+async function send(id) {
+  const ta = document.querySelector('textarea[data-for="' + id + '"]'), t = ta.value.trim();
+  if (!t) return;
+  const btn = document.querySelector('button[data-send="' + id + '"]'); btn.disabled = true;
+  const r = await fetch('/fb/msg?id=' + id + '&k=' + encodeURIComponent(key), { method: 'POST', body: JSON.stringify({ t }), headers: { 'content-type': 'text/plain' } });
+  btn.disabled = false;
+  if (!r.ok) { btn.insertAdjacentHTML('afterend', '<span class="err">没发出去（' + r.status + '）</span>'); return; }
+  ta.value = ''; delete drafts[id];
+  load();
+}
 async function load() {
+  for (const ta of document.querySelectorAll('textarea[data-for]')) drafts[ta.dataset.for] = ta.value;
   const r = await fetch('/fb/list?state=' + state + '&k=' + encodeURIComponent(key));
   if (!r.ok) { document.getElementById('sum').textContent = key ? '密钥不对' : '网址后面要带 ?k=你的密钥'; return; }
   const d = await r.json(), c = d.counts;
   document.getElementById('sum').textContent = '未读 ' + (c.new || 0) + ' · 已读 ' + (c.read || 0) + ' · 已处理 ' + (c.done || 0);
   const list = document.getElementById('list');
   list.innerHTML = d.items.map((f) => '<div class="item ' + f.state + '"><div>' +
-    '<div class="meta"><span class="kind k-' + f.kind + '">' + (KIND[f.kind] || f.kind) + '</span>#' + f.id + ' · ' + when(f.ts) + ' · ' + esc(f.game) +
+    '<div class="meta"><span class="kind k-' + f.kind + '">' + (KIND[f.kind] || f.kind) + '</span>' +
+      (f.msgs && f.msgs.length && f.msgs[f.msgs.length - 1].who === 'me' ? '<span class="kind k-me">玩家回复了</span>' : '') + '#' + f.id + ' · ' + when(f.ts) + ' · ' + esc(f.game) +
       (f.province ? ' · ' + esc(f.province) + ' ' + esc(f.city || '') : '') + (f.by_pid > 1 ? ' · 这位玩家共提了 ' + f.by_pid + ' 条' : '') + '</div>' +
     '<div class="text">' + esc(f.text) + '</div>' +
     (f.contact ? '<div class="contact">联系方式：' + esc(f.contact) + '</div>' : '') +
-    '<div class="ctx">' + ctxLine(f.ctx) + '</div>' +
+    '<div class="ctx">' + ctxLine(f.ctx) + '</div>' + thread(f) +
     '<div class="acts">' + (f.state !== 'read' ? '<button onclick="setState(' + f.id + ',\\'read\\')">标为已读</button>' : '') +
       (f.state !== 'done' ? '<button onclick="setState(' + f.id + ',\\'done\\')">已处理</button>' : '<button onclick="setState(' + f.id + ',\\'new\\')">重新打开</button>') + '</div>' +
     '</div>' + (f.has_shot ? '<a href="/fb/shot?id=' + f.id + '&k=' + encodeURIComponent(key) + '" target="_blank"><img loading="lazy" src="/fb/shot?id=' + f.id + '&k=' + encodeURIComponent(key) + '"></a>' : '<div></div>') +
     '</div>').join('');
   document.getElementById('empty').hidden = d.items.length > 0;
+  for (const ta of document.querySelectorAll('textarea[data-for]')) if (drafts[ta.dataset.for]) ta.value = drafts[ta.dataset.for];
 }
+document.getElementById('list').addEventListener('click', async (e) => {
+  const s = e.target.closest('[data-send]'), d = e.target.closest('[data-del]');
+  if (s) send(s.dataset.send);
+  if (d && confirm('删掉这条回复？玩家那边也就看不到了。')) { await fetch('/fb/msgdel?id=' + d.dataset.del + '&k=' + encodeURIComponent(key), { method: 'POST' }); load(); }
+});
+document.getElementById('list').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.dataset.for) { e.preventDefault(); send(e.target.dataset.for); }
+});
+// 玩家接着回了要看得到：半分钟刷新一次（正在打字时不刷）
+setInterval(() => { if (!(document.activeElement && document.activeElement.dataset && document.activeElement.dataset.for)) load(); }, 30000);
 document.getElementById('states').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   state = b.dataset.s;

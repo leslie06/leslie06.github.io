@@ -225,10 +225,10 @@ export class Hud implements HudApi {
     this.coachT = secs;
   }
 
-  toast(text: string): void {
+  toast(text: string, secs = 1.6): void {
     this.toastEl.textContent = text;
     this.toastEl.classList.add('on');
-    this.toastT = 1.6;
+    this.toastT = secs;
   }
 
   update(dt: number): void {

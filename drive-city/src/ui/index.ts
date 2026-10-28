@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
-import type { CameraApi, VehicleApi, VoiceApi, WorldApi } from '../game/Contracts';
+import type { CameraApi, DialogueApi, VehicleApi, VoiceApi, WorldApi } from '../game/Contracts';
 import type { AudioApi } from '../audio';
 import type { FxApi } from '../fx';
 import { onLangChange, t } from '../core/I18n';
@@ -19,6 +19,7 @@ import type { CloudApi } from '../online/Cloud';
 import type { ChatApi } from '../online/Chat';
 import { ChatPanel } from './ChatPanel';
 import { FeedbackPanel } from './Feedback';
+import type { FeedbackApi } from '../online/Feedback';
 import type { PresenceApi } from '../online/Presence';
 import { journalOf } from '../npc/Journal';
 import { steppedDownFrom } from '../core/Quality';
@@ -73,6 +74,22 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   // Players' feedback (online/Feedback.ts), from the title and the pause screen.
   const feedback = engine.get('feedback') ? new FeedbackPanel(engine, container) : null;
   if (feedback) menu.onFeedback = () => feedback.show();
+  // The developer's replies to it (2026-10-28): a count on the menu's button; a toast when one comes in during play.
+  const fbApi = engine.get<FeedbackApi>('feedback');
+  // The toast waits while a call or a line is on screen (on a phone the dialogue box covers it).
+  let fbUnread = 0;
+  const fbToast = (tries = 0) => {
+    if (!fbApi?.unread) return;   // read meanwhile
+    if ((engine.get<DialogueApi>('dialogue')?.busy || api.state !== 'playing') && tries < 60) { setTimeout(() => fbToast(tries + 1), 2000); return; }
+    hud.toast(t('fb.toast'), 6);
+  };
+  fbApi?.listen(() => {
+    menu.setFeedbackUnread(fbApi.unread);
+    if (fbApi.unread > fbUnread && api.state === 'playing') fbToast();
+    fbUnread = fbApi.unread;
+  });
+  // ...and once on going into the city if some came in before (the title's badge is easy to miss on a phone)
+  engine.events.on('game:start', () => setTimeout(() => fbToast(1), 5000));
   // How many are playing (online/Presence.ts), on the title and pause screens.
   const presence = engine.get<PresenceApi>('presence');
   if (presence) presence.onChange = (n, d) => menu.setOnline(n, d);

@@ -174,6 +174,37 @@ await admin('/fb/state?id=' + f1.body.id + '&s=done', { method: 'POST' });
 ok('标为已处理', (await (await admin('/fb/list?state=done')).json()).items.map((r) => r.id).join() === String(f1.body.id));
 ok('反馈页要密钥才出', (await worker.fetch(new Request('https://s/fb'), env)).status === 401 && (await admin('/fb')).status === 200);
 
+// —— 反馈里的对话
+const mine = async (p) => (await worker.fetch(new Request('https://s/fb/mine?g=bcity&p=' + p), env)).json();
+const pl = async (path, b, ip = '5.6.7.8') => { const r = await worker.fetch(new Request('https://s' + path, { method: 'POST', body: JSON.stringify(b), headers: { 'content-type': 'text/plain', 'user-agent': 'fb-ua', 'cf-connecting-ip': ip } }), env); return { status: r.status, body: await r.json().catch(() => null) }; };
+ok('没回复时没有未读', (await mine('player1')).unread === 0 && (await mine('player1')).items[0].id === f1.body.id);
+ok('没密钥不能回复', (await worker.fetch(new Request('https://s/fb/msg?id=' + f1.body.id, { method: 'POST', body: '{"t":"x"}' }), env)).status === 401);
+const ans = await (await admin('/fb/msg?id=' + f1.body.id, { method: 'POST', body: JSON.stringify({ t: '  国贸桥哪个方向？\n能截个地图吗  ' }) })).json();
+ok('后台回复', ans.ok && ans.msg.who === 'dev' && ans.msg.text === '国贸桥哪个方向？\n能截个地图吗');
+let m1 = await mine('player1');
+ok('玩家取到回复和未读数', m1.unread === 1 && m1.items[0].msgs.length === 1 && m1.items[0].msgs[0].unread === true && m1.items[0].msgs[0].text.startsWith('国贸桥'));
+ok('别的玩家号取不到', (await mine('player2')).items.length === 0 && (await mine('')).items === undefined);
+ok('取到的不带玩家号和设备', !JSON.stringify(m1).includes('player1') && !JSON.stringify(m1).includes('ip_hash'));
+ok('看过了就不算未读', (await pl('/fb/seen', { g: 'bcity', p: 'player1' })).status === 200 && (await mine('player1')).unread === 0);
+ok('后台看得到玩家已看', (await (await admin('/fb/list')).json()).items.find((r) => r.id === f1.body.id).msgs[0].seen > 0);
+ok('别人的反馈回不了', (await pl('/fb/reply', { g: 'bcity', p: 'player2', id: f1.body.id, t: '我是冒充的' })).status === 404);
+ok('空回复不收', (await pl('/fb/reply', { g: 'bcity', p: 'player1', id: f1.body.id, t: '  ' })).status === 400);
+const rp = await pl('/fb/reply', { g: 'bcity', p: 'player1', id: f1.body.id, t: '往东，三环主路上' });
+ok('玩家接着回', rp.status === 200 && rp.body.msg.who === 'me');
+ok('连点两下只收一条', (await pl('/fb/reply', { g: 'bcity', p: 'player1', id: f1.body.id, t: '往东，三环主路上' })).body.dup === true && (await mine('player1')).items[0].msgs.length === 2);
+const after = (await (await admin('/fb/list')).json()).items.find((r) => r.id === f1.body.id);
+ok('玩家回了，反馈变回未读、对话按顺序', after.state === 'new' && after.msgs.map((m) => m.who).join() === 'dev,me');
+await admin('/fb/msg?id=' + f1.body.id, { method: 'POST', body: JSON.stringify({ t: '收到，修好了' }) });
+ok('后台回复后未读标成已读', (await (await admin('/fb/list')).json()).items.find((r) => r.id === f1.body.id).state === 'read');
+const dv = (await mine('player1')).items[0].msgs.find((m) => m.text === '收到，修好了');
+await admin('/fb/msgdel?id=' + dv.id, { method: 'POST' });
+ok('后台删回复', (await mine('player1')).items[0].msgs.length === 2 && (await mine('player1')).unread === 0);
+await admin('/fb/msgdel?id=' + rp.body.msg.id, { method: 'POST' });
+ok('玩家的话删不掉', (await mine('player1')).items[0].msgs.length === 2);
+let replyLimited = 0;
+for (let i = 0; i < 32; i++) if ((await pl('/fb/reply', { g: 'bcity', p: 'player1', id: f1.body.id, t: '补充 ' + i })).status === 429) replyLimited++;
+ok('玩家一天最多回 30 条', replyLimited === 3, `(${replyLimited} 次被挡)`);
+
 // —— 账号与云存档
 const ac = async (path, b, ip = '7.7.7.7') => { const r = await worker.fetch(new Request('https://s' + path, { method: 'POST', body: JSON.stringify(b), headers: { 'content-type': 'text/plain', 'user-agent': 'test-ua', 'cf-connecting-ip': ip } }), env); return { status: r.status, body: await r.json() }; };
 const reg = await ac('/acct/register', { g: 'bcity', name: '陈野Fan', pw: 'secret1' });

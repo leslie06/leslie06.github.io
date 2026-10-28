@@ -25,6 +25,8 @@ css(`
 .menu .ghost{padding:14px 20px;background:rgba(244,241,232,.1);color:${C.paper};font:800 15px/1 ${F.ui};letter-spacing:.1em;border:1px solid ${C.line}}
 .menu .ghost:hover,.menu .ghost:focus-visible{background:rgba(244,241,232,.18);outline:none}
 .menu .ghost[hidden]{display:none}
+.menu .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:8px;border-radius:9px;background:#e8433a;color:#fff;font:800 11px/18px ${F.num};letter-spacing:0;text-align:center;vertical-align:1px}
+.menu .badge[hidden]{display:none}
 .menu .seg{display:inline-flex;border:1px solid ${C.line};border-radius:6px;overflow:hidden}
 .menu .seg button{padding:9px 13px;background:transparent;color:${C.muted};font:700 12px/1 ${F.ui};letter-spacing:.1em}
 .menu .seg button.on{background:rgba(244,241,232,.14);color:${C.paper}}
@@ -89,6 +91,7 @@ export class Menu {
   /** The 意见反馈 button (title and pause); unset, it stays hidden. */
   onFeedback: (() => void) | null = null;
   private feedbackBtn: HTMLButtonElement;
+  private feedbackBadge: HTMLSpanElement;
   /** 当前在线 N 人 (online/Presence.ts), hidden until there is a reading. */
   private onlineEl: HTMLElement;
   private onlineN: [number, number] | null = null;
@@ -129,6 +132,7 @@ export class Menu {
     const fb = this.feedbackBtn = el('button', 'ghost', row);
     fb.id = 'feedback';
     fb.appendChild(L('fb.button'));
+    this.feedbackBadge = el('span', 'badge', fb); this.feedbackBadge.hidden = true;
     fb.addEventListener('click', () => this.onFeedback?.());
     const opts = el('div', 'row', left);
     const langSeg = el('div', 'seg', opts);
@@ -184,6 +188,9 @@ export class Menu {
     this.onlineEl.textContent = t('online.count', { n, d });
     this.onlineEl.hidden = false;
   }
+
+  /** Developer replies to the player's feedback not read yet (online/Feedback.ts): a red count on 意见反馈. */
+  setFeedbackUnread(n: number): void { this.feedbackBadge.hidden = !n; this.feedbackBadge.textContent = n > 99 ? '99+' : String(n); }
 
   /** Who is logged in (the account button's label), or null. */
   setAccount(name: string | null): void { this.accountName = name; this.accountBtn.textContent = name ? t('acct.buttonUser', { name }) : t('acct.button'); }

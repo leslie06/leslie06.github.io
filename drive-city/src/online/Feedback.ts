@@ -12,14 +12,33 @@ import { statsEndpoint } from './Leaderboard';
  * game's hour, minutes played. Nothing else: no account, no IP kept (the server keeps a day-salted hash for its rate
  * limit). What does not get through (offline, blocked, the server down) waits in `drivecity.fb.pending` and goes at
  * the next start; a dev server and shot mode send nothing unless `?lb=<base url>` (as the leaderboards).
+ *
+ * Replies (2026-10-28, 「我想回复他反馈的问题……他也看不见，增加后台可以和玩家反馈交流的功能」): the developer answers
+ * under a feedback on the `/fb` page; the game asks `GET /fb/mine` with the player's random id (`drivecity.pid`, the one
+ * the feedback carried) a few seconds after the start, every minute with a menu up and every 3 minutes while playing,
+ * and keeps the threads and how many replies are unread (the menu badge, a toast in game, the panel's 我的反馈 tab).
+ * Opening that tab marks them seen (`POST /fb/seen`); the player answers with `POST /fb/reply`.
  */
 export type FeedbackKind = 'bug' | 'idea' | 'praise' | 'other';
 export type SendResult = 'ok' | 'queued' | 'off' | 'busy';
+export interface FeedbackMsg { id: number; ts: number; who: 'dev' | 'me'; text: string; unread?: boolean }
+export interface FeedbackThread { id: number; ts: number; kind: FeedbackKind; text: string; msgs: FeedbackMsg[] }
 export interface FeedbackApi extends System {
   readonly enabled: boolean;
   /** The frame as it is drawn next, as a JPEG data URL at most 960 px wide ('' if it cannot be read). */
   capture(): Promise<string>;
   send(kind: FeedbackKind, text: string, contact: string, shot: string): Promise<SendResult>;
+  /** This player's feedback (newest first) and the conversation under each; empty until the first answer comes. */
+  readonly threads: FeedbackThread[];
+  /** Developer replies the player has not looked at. */
+  readonly unread: number;
+  /** Called whenever `threads` or `unread` change. */
+  listen(fn: () => void): void;
+  /** Ask the server now. */
+  refresh(): Promise<void>;
+  /** The player is looking at the replies: none unread. */
+  markSeen(): void;
+  reply(id: number, text: string): Promise<'ok' | 'busy' | 'fail'>;
 }
 
 const GAME = 'bcity';
@@ -27,6 +46,8 @@ const PENDING = 'drivecity.fb.pending';
 /** At most this many waiting (a screenshot is ~100-300 KB of localStorage); the oldest go first. */
 const PENDING_MAX = 4;
 const TIMEOUT = 15000;
+/** How often to look for replies (wall-clock seconds): with a menu up, while playing. */
+const INBOX_MENU = 60, INBOX_PLAY = 180;
 
 /** A short device name from the user agent: "iPhone · Safari", "Android · Chrome", "Mac · Chrome"... */
 function device(): string {
@@ -50,13 +71,21 @@ export function install(engine: Engine): FeedbackApi {
     }
   };
 
-  const post = async (body: unknown): Promise<number> => {
+  const call = async (path: string, body?: unknown): Promise<{ status: number; json: unknown }> => {
     const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), TIMEOUT);
     try {
-      const r = await fetch(`${base}/fb`, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'text/plain' }, signal: ctl.signal, cache: 'no-store' });
-      return r.status;
-    } catch { return 0; } finally { clearTimeout(timer); }
+      const r = await fetch(`${base}${path}`, body === undefined ? { signal: ctl.signal, cache: 'no-store' }
+        : { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'text/plain' }, signal: ctl.signal, cache: 'no-store' });
+      return { status: r.status, json: r.ok ? await r.json().catch(() => null) : null };
+    } catch { return { status: 0, json: null }; } finally { clearTimeout(timer); }
   };
+  const post = async (body: unknown): Promise<number> => (await call('/fb', body)).status;
+  // read at each call: the cloud save can bring another device's id in after the start
+  const pid = (): string => { try { return String(JSON.parse(localStorage.getItem('drivecity.pid') ?? '""')); } catch { return ''; } };
+
+  const listeners: (() => void)[] = [];
+  const changed = () => { for (const fn of listeners) fn(); };
+  let nextAsk = performance.now() + 6000, asking = false;
 
   /** What the game knows about where and how the player is. */
   const context = () => {
@@ -91,7 +120,7 @@ export function install(engine: Engine): FeedbackApi {
     }
   };
 
-  const api: FeedbackApi = {
+  const api: FeedbackApi & { threads: FeedbackThread[]; unread: number } = {
     name: 'feedback',
     enabled,
     capture() {
@@ -110,18 +139,54 @@ export function install(engine: Engine): FeedbackApi {
     },
     async send(kind, text, contact, shot) {
       if (!enabled) return 'off';
-      const body = { g: GAME, k: kind, t: text, c: contact, x: context(), s: shot || undefined, p: (() => { try { return JSON.parse(localStorage.getItem('drivecity.pid') ?? '""'); } catch { return ''; } })() };
+      const body = { g: GAME, k: kind, t: text, c: contact, x: context(), s: shot || undefined, p: pid() };
       const st = await post(body);
-      if (st === 200) { void flush(); return 'ok'; }
+      if (st === 200) { void flush(); void api.refresh(); return 'ok'; }
       if (st === 429) return 'busy';
       if (st === 400) return 'ok';   // refused as malformed: nothing to retry (the panel checks what it can first)
       write([...read(), body]);
       return 'queued';
     },
+    threads: [],
+    unread: 0,
+    listen(fn) { listeners.push(fn); },
+    async refresh() {
+      const p = pid();
+      if (!enabled || !p || asking) return;
+      asking = true;
+      try {
+        const r = await call(`/fb/mine?g=${GAME}&p=${encodeURIComponent(p)}`);
+        const j = r.json as { items?: FeedbackThread[]; unread?: number } | null;
+        if (!j || !Array.isArray(j.items)) return;
+        const was = JSON.stringify([api.threads, api.unread]);
+        api.threads = j.items; api.unread = Math.max(0, j.unread ?? 0);
+        if (JSON.stringify([api.threads, api.unread]) !== was) changed();
+      } finally { asking = false; }
+    },
+    markSeen() {
+      if (!api.unread) return;
+      api.unread = 0;   // the messages keep their mark while the panel is open (the next answer drops it)
+      changed();
+      void call('/fb/seen', { g: GAME, p: pid() });
+    },
+    async reply(id, text) {
+      const r = await call('/fb/reply', { g: GAME, p: pid(), id, t: text });
+      if (r.status === 429) return 'busy';
+      const msg = (r.json as { msg?: FeedbackMsg; dup?: boolean } | null);
+      if (r.status !== 200 || !msg) return 'fail';
+      const th = api.threads.find((x) => x.id === id);
+      if (th && msg.msg) { th.msgs.push(msg.msg); changed(); }
+      return 'ok';
+    },
     update() {
       const now = performance.now(), dt = now - last;
       last = now;
       if (dt > 0 && dt < 1000) fpsAvg += (1000 / dt - fpsAvg) * 0.02;
+      // replies: wall-clock time (systems get dt = 0 while paused), only while the page is in front
+      if (!enabled || now < nextAsk || document.visibilityState !== 'visible') return;
+      const ui = engine.get<System & { state: string }>('ui');
+      nextAsk = now + (ui?.state === 'playing' ? INBOX_PLAY : INBOX_MENU) * 1000;
+      void api.refresh();
     },
   };
   engine.add(api);
