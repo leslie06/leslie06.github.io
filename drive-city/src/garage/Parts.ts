@@ -21,7 +21,8 @@ export const DEALER = [
   // AE86 (2026-10-22, 「把AE86放到商店里，名字叫AE86」): the cheap one, white over black as 藤原's
   { body: 'ae86', price: 12000, paint: '#f2f2ef', kmh: 200, to100: 6.9 },
   { body: 'coupe', price: 30000, paint: '#8c1d1d', kmh: 320, to100: 2.3 },
-  { body: 'super', price: 80000, paint: '#9bd21c', kmh: 340, to100: 2.2 },
+  // 蛮牛 (2026-10-29, 「蛮牛跑车改成5万」): was 8 万
+  { body: 'super', price: 50000, paint: '#9bd21c', kmh: 340, to100: 2.2 },
 ] as const;
 export const TRANSFER = 0.5;
 export type LuxuryBody = (typeof DEALER)[number]['body'];
