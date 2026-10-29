@@ -25,6 +25,14 @@ css(`
 .garage .paints button{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid rgba(244,241,232,.5)}
 .garage .leave{margin-top:14px;width:100%;background:rgba(244,241,232,.14);color:${C.paper}}
 .garage .note{font:600 13px/1.5 ${F.ui};color:${C.yellow};margin:0 0 8px}
+/* a promotion's code box (2026-10-29) */
+.garage .promo{margin:2px 0 10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(243,181,15,.55);background:rgba(243,181,15,.1)}
+.garage .promo .pt{font:800 14px/1.4 ${F.ui};color:${C.yellow};margin-bottom:8px}
+.garage .promo .pr{display:flex;gap:8px}
+.garage .promo input{flex:1;min-width:0;padding:9px 12px;border-radius:6px;border:1px solid ${C.line};background:rgba(9,11,13,.6);color:${C.paper};font:700 16px/1.2 ${F.num};letter-spacing:.12em;text-transform:uppercase}
+.garage .promo input::placeholder{letter-spacing:.04em;text-transform:none;font:500 14px/1.2 ${F.ui};color:${C.muted}}
+.garage .promo .ps{font:600 13px/1.5 ${F.ui};color:${C.paper};margin-top:6px}
+.garage .promo .ps:empty{display:none}
 /* Always on screen, whatever the panel's scroll (2026-10-19, a phone on its side: 「打开这个页面没有关闭按钮」). The screen sits over
    the map credit (z 30), which had covered the way out at the panel's foot. */
 .garage .x{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));z-index:1;
@@ -43,6 +51,7 @@ css(`
   .garage .row.car{grid-template-columns:84px 56px 1fr auto}.garage .pic{width:84px;height:48px}
   .garage button{padding:7px 10px;font-size:12px}
   .garage .paints{gap:6px}.garage .paints button{width:22px;height:22px}
+  .garage .promo{padding:6px 10px;margin-bottom:6px}.garage .promo .pt{font-size:12px;margin-bottom:4px}.garage .promo input{padding:6px 10px;font-size:14px}
   .garage .leave{position:sticky;bottom:0;margin:6px 0 0;padding:9px;background:#2b2e31;box-shadow:0 -8px 12px rgba(12,14,16,.8)}
 }
 `);
@@ -76,6 +85,8 @@ export interface GarageView {
   ownBodies: string[];
   /** Your other cars, free to swap into the garage. */
   others: { i: number; name: string }[];
+  /** A promotion gives this car for a code and you do not have it: the code box shows. */
+  promo: LuxuryBody | null;
 }
 
 /** The phone's 车行: your cars (one sent for, for a fee) and the ones for sale. */
@@ -84,6 +95,7 @@ export interface DealerView {
   wanted: boolean;
   mine: { i: number; name: string; look: ThumbLook; levels: { engine: number; tyres: number; nitro: number }; state: 'pound' | 'driving' | 'call' }[];
   ownBodies: string[];
+  promo: LuxuryBody | null;
 }
 
 const pips = (n: number, of: number) => '●'.repeat(n) + '○'.repeat(Math.max(0, of - n));
@@ -94,6 +106,8 @@ export class GarageMenu {
   private panel: HTMLDivElement;
   onBuy: (item: Item, paint?: string) => void = () => {};
   onClose: () => void = () => {};
+  /** A promotion code typed in: what to tell the player, or null when the car came. */
+  onRedeem: (code: string) => Promise<string | null> = async () => null;
   /** A picture of a car (garage/Thumbs): now if made, else null and `ready` later. Unset: rows without pictures. */
   thumb: ((look: ThumbLook, ready: (url: string) => void) => string | null) | null = null;
 
@@ -161,6 +175,7 @@ export class GarageMenu {
     }
     // 车行: the luxury cars, new; the ones you own are marked.
     el('div', 'sub', p).textContent = t('garage.dealer');
+    if (v.promo) this.promoBox(p);
     for (const d of DEALER) {
       const have = v.ownBodies.includes(d.body);
       this.row(p, t(`car.${d.body}`), t('garage.carWhat', { kmh: d.kmh, s: d.to100 }), have ? undefined : d.price, !have && v.cash >= d.price, () => this.onBuy(`car:${d.body}`), have ? t('garage.carHave') : t('garage.buy'));
@@ -195,6 +210,7 @@ export class GarageMenu {
     }
     const sale = DEALER.filter((d) => !v.ownBodies.includes(d.body));
     if (sale.length) el('div', 'sub', p).textContent = t('garage.forSale');
+    if (v.promo) this.promoBox(p);
     for (const d of sale) {
       // short of money: how much more, not a greyed-out price
       const short = v.cash < d.price;
@@ -204,6 +220,34 @@ export class GarageMenu {
     const leave = el('button', 'leave', p);
     leave.textContent = t('garage.dealerClose');
     leave.addEventListener('click', () => this.onClose());
+  }
+
+  /** 「限时活动」: a box for the code, its button, a line for what came of it. Typing never reaches the game. */
+  private promoBox(parent: HTMLElement): void {
+    const box = el('div', 'promo', parent);
+    el('div', 'pt', box).textContent = t('promo.title');
+    const row = el('div', 'pr', box);
+    const inp = el('input', '', row) as HTMLInputElement;
+    inp.type = 'text'; inp.maxLength = 20; inp.placeholder = t('promo.ph');
+    inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('autocapitalize', 'characters');
+    const go = el('button', '', row);
+    go.textContent = t('promo.go');
+    const st = el('div', 'ps', box);
+    const send = async () => {
+      const code = inp.value.trim();
+      if (!code) { st.textContent = t('promo.empty'); inp.focus(); return; }
+      if (go.disabled) return;
+      go.disabled = true; st.textContent = t('promo.checking');
+      const msg = await this.onRedeem(code);
+      go.disabled = false;
+      if (msg !== null) st.textContent = msg;
+    };
+    go.addEventListener('click', () => void send());
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); void send(); }
+    });
+    inp.addEventListener('keyup', (e) => e.stopPropagation());
   }
 
   private row(parent: HTMLElement, name: string, what: string, price: number | undefined, can: boolean, go: () => void, label = t('garage.buy'), car?: ThumbLook): void {

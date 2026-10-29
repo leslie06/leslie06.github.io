@@ -50,6 +50,7 @@ import * as funnel from './online/Funnel';
 import * as leaderboard from './online/Leaderboard';
 import * as feedback from './online/Feedback';
 import * as presence from './online/Presence';
+import * as promo from './online/Promo';
 import * as cloud from './online/Cloud';
 import * as chat from './online/Chat';
 import * as campaign from './campaign';
@@ -141,6 +142,7 @@ async function boot() {
   if (worldName === 'city') await voices.install(engine);
   feedback.install(engine);
   presence.install(engine);
+  if (worldName === 'city') promo.install(engine);
   cloud.install(engine);
   if (worldName === 'city') funnel.install(engine);
   if (worldName === 'city') chat.install(engine);

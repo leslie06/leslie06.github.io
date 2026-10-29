@@ -150,3 +150,31 @@ CREATE TABLE IF NOT EXISTS fn (
   PRIMARY KEY (day, game, sid)
 );
 CREATE INDEX IF NOT EXISTS fn_day ON fn (game, day);
+
+-- 促销兑换码（2026-10-29 起，b城追车：输码领一辆蛮牛跑车）。后台一批批生成一次性码，私发给玩家；
+-- 玩家在游戏的车行里输码，服务器核对后游戏把车给他。码只在这里，游戏代码里没有。
+CREATE TABLE IF NOT EXISTS promo_code (
+  code    TEXT    PRIMARY KEY,          -- 8 位大写字母数字（去掉 0 O 1 I），不带横线
+  game    TEXT    NOT NULL,
+  prize   TEXT    NOT NULL,             -- 奖品，比如 super = 蛮牛跑车
+  note    TEXT    NOT NULL DEFAULT '',  -- 生成时写的备注（发给谁、哪个渠道）
+  ts      INTEGER NOT NULL,             -- 生成时间
+  used    INTEGER NOT NULL DEFAULT 0,   -- 兑换时间；0 = 没用过；-1 = 作废
+  pid     TEXT    NOT NULL DEFAULT '',  -- 兑换的玩家号
+  acct    INTEGER,                      -- 兑换时登录的账号
+  ip_hash TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS promo_code_pid ON promo_code (game, prize, pid);
+-- 活动开关：一种奖品一行，on = 1 才能兑换。
+CREATE TABLE IF NOT EXISTS promo (
+  game  TEXT    NOT NULL,
+  prize TEXT    NOT NULL,
+  on_   INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (game, prize)
+);
+-- 输错码的记录（防止猜码：一台设备一小时最多错 PROMO_FAILS 次）。
+CREATE TABLE IF NOT EXISTS promo_fail (
+  ip_hash TEXT    NOT NULL,
+  ts      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS promo_fail_ip ON promo_fail (ip_hash, ts);

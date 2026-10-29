@@ -309,5 +309,36 @@ ok('看板：每步人数和中位', fun.segs.all.num.js.c === 2 && fun.segs.all
 ok('看板：最远到哪一步', fun.segs.all.last.p1m === 1 && fun.segs.all.last.js === 1);
 ok('看板：出错信息汇总', fun.segs.all.str.e[0][0] === 'TypeError: x is undefined' && fun.segs.all.str.e[0][1] === 1);
 
+// —— 促销兑换码
+const promo_pr = async (b, ip = '6.6.6.6') => { const r = await worker.fetch(new Request('https://s/promo/redeem', { method: 'POST', body: JSON.stringify(b), headers: { 'content-type': 'text/plain', 'user-agent': 'promo-ua', 'cf-connecting-ip': ip } }), env); return { status: r.status, body: await r.json() }; };
+const promo_state = async () => (await (await worker.fetch(new Request('https://s/promo/state?g=bcity'), env)).json()).on;
+ok('没密钥不能生成码', (await worker.fetch(new Request('https://s/promo/gen?prize=super&n=3', { method: 'POST' }), env)).status === 401);
+const promo_gen = await (await admin('/promo/gen?prize=super&n=5&note=' + encodeURIComponent('微信群'), { method: 'POST' })).json();
+ok('生成 5 个 8 位码、没有 0 O 1 I', promo_gen.codes.length === 5 && new Set(promo_gen.codes).size === 5 && promo_gen.codes.every((c) => /^[A-HJ-NP-Z2-9]{8}$/.test(c)), promo_gen.codes.join(' '));
+ok('不认识的奖品不生成', (await admin('/promo/gen?prize=tank&n=1', { method: 'POST' })).status === 400);
+ok('活动没开时 state 是空的', (await promo_state()).length === 0);
+const [pc1, pc2, pc3, pc4] = promo_gen.codes;
+ok('活动没开兑换不了', (await promo_pr({ g: 'bcity', p: 'buyer1', code: pc1 })).body.error === 'off');
+await admin('/promo/toggle?prize=super&on=1', { method: 'POST' });
+ok('开了活动 state 有蛮牛', (await promo_state()).join() === 'super');
+const promo_r1 = await promo_pr({ g: 'bcity', p: 'buyer1', code: ' ' + pc1.slice(0, 4).toLowerCase() + '-' + pc1.slice(4) + ' ' });
+ok('兑换成功（小写、带横线空格也行）', promo_r1.status === 200 && promo_r1.body.prize === 'super', JSON.stringify(promo_r1.body));
+ok('同一个玩家拿同一个码再兑一次也是 ok（网络断了重试）', (await promo_pr({ g: 'bcity', p: 'buyer1', code: pc1 })).body.again === true);
+ok('别人用不了已经兑换的码', (await promo_pr({ g: 'bcity', p: 'buyer2', code: pc1 })).body.error === 'used');
+ok('一个玩家只能领一辆', (await promo_pr({ g: 'bcity', p: 'buyer1', code: pc2 })).body.error === 'have');
+const promo_lg = await ac('/acct/register', { g: 'bcity', name: 'promoGuy', pw: 'secret1' }, '6.6.6.7');
+ok('登录的账号领过，换个玩家号也不行', (await promo_pr({ g: 'bcity', p: 'buyer3', code: pc2, t: promo_lg.body.token })).status === 200 && (await promo_pr({ g: 'bcity', p: 'buyer4', code: pc3, t: promo_lg.body.token })).body.error === 'have');
+ok('码不对', (await promo_pr({ g: 'bcity', p: 'buyer5', code: 'ZZZZZZZZ' })).body.error === 'code');
+await admin('/promo/void?code=' + pc4, { method: 'POST' });
+ok('作废的码用不了', (await promo_pr({ g: 'bcity', p: 'buyer5', code: pc4 })).body.error === 'code');
+await admin('/promo/toggle?prize=super&on=0', { method: 'POST' });
+ok('结束活动后没用过的码也用不了', (await promo_pr({ g: 'bcity', p: 'buyer6', code: pc3 })).body.error === 'off');
+const promo_pl2 = await (await admin('/promo/list')).json();
+ok('后台列表：计数、谁兑换的', promo_pl2.counts[0].used === 2 && promo_pl2.counts[0].free === 2 && promo_pl2.counts[0].void === 1 && promo_pl2.codes.find((c) => c.code === pc2).acct_name === 'promoGuy' && promo_pl2.codes.find((c) => c.code === pc1).note === '微信群');
+let promo_guessBlocked = 0;
+for (let i = 0; i < 24; i++) if ((await promo_pr({ g: 'bcity', p: 'guesser', code: 'AAAA' + String(i).padStart(4, '2') }, '8.8.8.8')).status === 429) promo_guessBlocked++;
+ok('猜码：一台设备一小时错 20 次就挡', promo_guessBlocked === 4, `(${promo_guessBlocked} 次被挡)`);
+ok('兑换码管理页要密钥', (await worker.fetch(new Request('https://s/promo/admin'), env)).status === 401 && (await admin('/promo/admin')).status === 200);
+
 console.log(failed ? `\n${failed} 条没过` : '\n全过');
 process.exit(failed ? 1 : 0);

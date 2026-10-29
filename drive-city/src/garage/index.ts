@@ -6,6 +6,7 @@ import type { CarLook, HudApi, MissionApi, NavApi, PlayerApi, TrafficCars, Vehic
 import { CG, groups } from '../core/Physics';
 import type { TrafficApi } from '../traffic';
 import type { DamageApi } from '../damage';
+import type { PromoApi } from '../online/Promo';
 import type { UiApi } from '../ui';
 import { ANCHOR, DRIVE, GARAGE, PARK_AT } from '../home/Layout';
 import { bodyOfSpec, bodySettled, readyBodies, type BodySource, type BodyType } from '../vehicle/Bodies';
@@ -181,6 +182,7 @@ export async function install(engine: Engine): Promise<void> {
       discount: contacts()?.discount ?? 0,
       stolen: stolenHere(),
       ownBodies: fleet.map((m) => m.p.body),
+      promo: promoBody(),
       others: fleet.flatMap((m, i) => m === me || m.p.impounded ? [] : [{ i, name: nameOf(m.p) }]),
     });
   };
@@ -209,12 +211,12 @@ export async function install(engine: Engine): Promise<void> {
    * A new luxury car from the 车行: it rolls into the garage stock, in its own paint, and is the car you drive now; the
    * one you came in goes out on the drive, a parked car (still yours, if it was).
    */
-  const buyCar = (body: LuxuryBody): boolean => {
+  const buyCar = (body: LuxuryBody, free = false): boolean => {
     const d = DEALER.find((x) => x.body === body)!;
-    if (holder(body) || cashOf() < d.price) return false;
+    if (holder(body) || (!free && cashOf() < d.price)) return false;
     // the model comes after the title; if it is somehow not in yet, fetch it and ask again
     if (!loaded(body)) return false;
-    pay(d.price);
+    if (!free) pay(d.price);
     const v = vehicle(), was = v.car, wasLook = { ...v.look, upper: v.look.upper.clone(), lower: v.look.lower.clone(), parked: true };
     const car = new Vehicle(engine.physics, SPEC_OF[body], { x: 0, y: -600, z: 0 }, 0);
     car.reset({ x: ax + PARK_AT.x, y: 0.03 + car.spec.wheelRadius + 0.1, z: az + PARK_AT.z }, PARK_AT.yaw);
@@ -228,7 +230,7 @@ export async function install(engine: Engine): Promise<void> {
     apply(car, cur.p);
     save();
     engine.get<DamageApi>('damage')?.repair(car);
-    toast(t('garage.bought.car', { car: t(`car.${body}`) }));
+    toast(t(free ? 'promo.got' : 'garage.bought.car', { car: t(`car.${body}`) }));
     return true;
   };
 
@@ -269,12 +271,12 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   /** Tell the player where the car brought to them stands, from where they look. */
-  const sayWhere = (at: { x: number; z: number }, name: string) => {
+  const sayWhere = (at: { x: number; z: number }, name: string, before = '') => {
     const me = pl.position, cam = engine.camera.getWorldDirection(new THREE.Vector3());
     const rx = at.x - me.x, rz = at.z - me.z, m = Math.round(Math.hypot(rx, rz));
     const ahead = (rx * cam.x + rz * cam.z) / Math.max(1, m), side = (rx * cam.z - rz * cam.x) / Math.max(1, m);
     const where = Math.abs(ahead) >= Math.abs(side) ? (ahead > 0 ? 'ahead' : 'behind') : (side > 0 ? 'left' : 'right');
-    toast(t('garage.delivered', { car: name, where: t(`garage.where.${where}` as 'garage.where.ahead'), m }));
+    toast(before + t('garage.delivered', { car: name, where: t(`garage.where.${where}` as 'garage.where.ahead'), m }));
   };
 
   /**
@@ -282,14 +284,14 @@ export async function install(engine: Engine): Promise<void> {
    * you and waits there with a flashing blip; it is yours (saved) at once, and the car you drive once you get in. Your
    * other cars stay yours. Not while wanted, nor where nothing can stop.
    */
-  const order = (body: LuxuryBody): boolean => {
+  const order = (body: LuxuryBody, free = false): boolean => {
     const d = DEALER.find((x) => x.body === body)!;
-    if (holder(body) || cashOf() < d.price) return false;
+    if (holder(body) || (!free && cashOf() < d.price)) return false;
     if (wanted()) { toast(t('garage.dealerWanted')); return false; }
     if (!loaded(body)) return false;
     const at = spot();
     if (!at) { toast(t('garage.noSpot')); return false; }
-    pay(d.price);
+    if (!free) pay(d.price);
     const car = new Vehicle(engine.physics, SPEC_OF[body], { x: 0, y: -600, z: 0 }, 0);
     car.reset({ x: at.x, y: 0.03 + car.spec.wheelRadius + 0.1, z: at.z }, at.yaw);
     const m: Mine = { p: { body, upper: d.paint, lower: d.paint, taxi: false, engine: 0, tyres: 0, nitro: 0, impounded: false }, car };
@@ -299,8 +301,50 @@ export async function install(engine: Engine): Promise<void> {
     save();
     engine.get<TrafficCars>('traffic')?.parkCar(car, lookOf(m.p));
     delivered = car; deliveredName = nameOf(m.p);
-    sayWhere(at, deliveredName);
+    sayWhere(at, deliveredName, free ? t('promo.ok') : '');
     return true;
+  };
+
+  /** Ask whether a promotion started or ended since the last look, and redraw the screen if it did. */
+  const promoCheck = () => {
+    const was = promoBody();
+    void engine.get<PromoApi>('promo')?.refresh().then(() => {
+      if (promoBody() === was) return;
+      if (dealerOpen) menu.renderDealer(dealerView()); else if (open) refresh();
+    });
+  };
+  /** A promotion's car (online/Promo.ts) is on offer here and not yours yet: the 车行 shows the code box. */
+  const promoBody = (): LuxuryBody | null => {
+    const b = engine.get<PromoApi>('promo')?.on.find((x) => isLuxury(x));
+    return b && isLuxury(b) && !holder(b) ? b : null;
+  };
+  /**
+   * A code typed into the 车行 (2026-10-29, 「对蛮牛跑车搞促销，用户获取兑换码就可以购车」). What would stop the car coming
+   * is checked before the code is spent (wanted, nowhere to stop, the model not in); the server then checks the code,
+   * and on its ok the car comes as bought - into the garage at home, to the kerb from the phone. If it still cannot
+   * come, the same code works again for this player (the server answers ok to the one who used it).
+   * Returns what to tell the player, or null when the car came (the screen moves on).
+   */
+  const redeem = async (code: string): Promise<string | null> => {
+    const promo = engine.get<PromoApi>('promo'), body = promoBody();
+    if (!promo || !body) return t('promo.err.off');
+    if (dealerOpen) {
+      if (wanted()) return t('garage.dealerWanted');
+      if (!spot()) return t('garage.noSpot');
+    }
+    if (!loaded(body)) return t('garage.carLoading');
+    const r = await promo.redeem(code);
+    if (!r.ok) return t(`promo.err.${r.error}`);
+    if (!isLuxury(r.prize)) return t('promo.err.off');
+    if (holder(r.prize)) return t('promo.have', { car: t(`car.${r.prize}`) });
+    if (dealerOpen) {
+      if (!order(r.prize, true)) return t('promo.retry', { why: t(wanted() ? 'garage.dealerWanted' : 'garage.noSpot') });
+      closeDealer();
+      return null;
+    }
+    if (!open || !buyCar(r.prize, true)) return t('promo.retry', { why: '' });
+    refresh();
+    return null;
   };
 
   /**
@@ -401,6 +445,7 @@ export async function install(engine: Engine): Promise<void> {
     ui.overlay(true);
     refresh();
     menu.show();
+    promoCheck();
   };
   const hide = () => {
     if (!open) return;
@@ -417,6 +462,7 @@ export async function install(engine: Engine): Promise<void> {
         state: (m.p.impounded ? 'pound' : m.car === v.car && pl.mode === 'driving' ? 'driving' : 'call') as 'pound' | 'driving' | 'call',
       })),
       ownBodies: fleet.map((m) => m.p.body),
+      promo: promoBody(),
     };
   };
   const dealer = () => {
@@ -428,6 +474,7 @@ export async function install(engine: Engine): Promise<void> {
     engine.events.emit('game:pause', { paused: true });
     menu.renderDealer(dealerView());
     menu.show();
+    promoCheck();
   };
   const closeDealer = () => {
     if (!dealerOpen) return;
@@ -445,6 +492,7 @@ export async function install(engine: Engine): Promise<void> {
     if (ok) closeDealer(); else menu.renderDealer(dealerView());
   };
   menu.onClose = () => { if (dealerOpen) closeDealer(); else hide(); };
+  menu.onRedeem = redeem;
   // 「🚗 买车」 by the cash, B on a keyboard (2026-10-21, 「重新设计下买车的入口，现在不明显」)
   const HINT_KEY = 'drivecity.dealerHint.v1';
   let buyButton: BuyButton | null = null, hinted = (() => { try { return !!localStorage.getItem(HINT_KEY); } catch { return false; } })();
@@ -461,7 +509,8 @@ export async function install(engine: Engine): Promise<void> {
       buyButton = new BuyButton(hud, !!engine.input.touch, dealer);
     }
     const ready = playing && canAfford();
-    buyButton.update(playing, ready);
+    // a promotion's car waiting for a code makes it flash too
+    buyButton.update(playing, ready || (playing && !!promoBody()));
     // the first time a car is affordable, say where to buy it
     if (ready && !hinted) {
       hinted = true;

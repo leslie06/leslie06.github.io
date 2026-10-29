@@ -8,6 +8,7 @@
 //   GET  /fb?k=密钥    反馈列表（/fb/list 取数，/fb/shot?id= 截图，POST /fb/state?id=&s= 标状态，
 //                      POST /fb/msg?id= 回复玩家，POST /fb/msgdel?id= 删掉一条回复）
 //   GET  /fb/mine      玩家取自己反馈的对话（凭随机玩家号），POST /fb/reply 玩家接着回，POST /fb/seen 看过了
+//   GET  /promo/state  促销活动开着哪些奖品；POST /promo/redeem 玩家输兑换码；/promo/admin?k=密钥 生成码、开关活动
 //   GET  /?k=密钥      看板
 //   GET  /api?k=密钥   看板取数
 //   POST /acct/*、/save/*  账号（用户名 + 密码）和云存档，见下面「账号与云存档」
@@ -441,6 +442,91 @@ async function feedbackAnswer(request, env, url) {
   return json({ ok: true, msg: { id: row?.id ?? 0, ts: now, who: 'dev', text, seen: 0 } });
 }
 
+// ---------------------------------------------------------------- 促销兑换码
+// 2026-10-29，「现在做个促销活动，对蛮牛跑车搞促销，用户获取兑换码就可以购车」：后台一次生成一批一次性码，私发给玩家；
+// 玩家在游戏车行里输码，这里核对（码存在、没用过、没作废、活动开着、这个玩家号没领过同一种奖品），记下谁用的，
+// 游戏收到 ok 再把车给他。同一个玩家号拿同一个码再兑一次也回 ok（网络断在半路时能重试）。
+const PROMO_PRIZES = { bcity: ['super'] };
+const PROMO_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 没有 0 O 1 I，口头念、手抄都不会错
+const PROMO_LEN = 8, PROMO_FAILS = 20, PROMO_GEN_MAX = 500;
+const PRSQL = {
+  state: 'SELECT prize FROM promo WHERE game = ? AND on_ = 1',
+  get: 'SELECT code, game, prize, used, pid FROM promo_code WHERE code = ?',
+  had: 'SELECT code FROM promo_code WHERE game = ? AND prize = ? AND used > 0 AND (pid = ? OR (? IS NOT NULL AND acct = ?)) LIMIT 1',
+  use: 'UPDATE promo_code SET used = ?, pid = ?, acct = ?, ip_hash = ? WHERE code = ? AND used = 0 RETURNING code',
+  fails: 'SELECT COUNT(*) AS c FROM promo_fail WHERE ip_hash = ? AND ts > ?',
+  fail: 'INSERT INTO promo_fail (ip_hash, ts) VALUES (?, ?)',
+  put: 'INSERT OR IGNORE INTO promo_code (code, game, prize, note, ts) VALUES (?, ?, ?, ?, ?)',
+  list: `SELECT c.code, c.prize, c.note, c.ts, c.used, c.pid, a.name AS acct_name FROM promo_code c LEFT JOIN acct a ON a.id = c.acct
+         WHERE c.game = ? ORDER BY c.ts DESC, c.code LIMIT ?`,
+  toggle: 'INSERT INTO promo (game, prize, on_) VALUES (?, ?, ?) ON CONFLICT(game, prize) DO UPDATE SET on_ = excluded.on_',
+  void: 'UPDATE promo_code SET used = -1 WHERE code = ? AND used = 0',
+  counts: `SELECT prize, SUM(used = 0) AS free, SUM(used > 0) AS used, SUM(used < 0) AS void FROM promo_code WHERE game = ? GROUP BY prize`,
+};
+/** 玩家输的码：大写，去掉空格、横线这些。 */
+export const cleanCode = (c) => String(c ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+export function newCode() {
+  const r = crypto.getRandomValues(new Uint8Array(PROMO_LEN));
+  return Array.from(r, (x) => PROMO_ABC[x % PROMO_ABC.length]).join('');
+}
+const promoOn = async (env, g) => (await env.DB.prepare(PRSQL.state).bind(g).all()).results.map((r) => r.prize);
+
+/** POST /promo/redeem {g, p, code, t}：回 {ok, prize} 或 {error: code 不对 / used 用过了 / have 领过了 / off 活动没开 / busy 错太多}。 */
+async function promoRedeem(request, env) {
+  const b = await body(request), pid = cleanPid(b?.p), code = cleanCode(b?.code);
+  if (!PROMO_PRIZES[b?.g] || !pid) return json({ error: 'pid' }, 400);
+  const dev = await deviceHash(request, env), now = Date.now();
+  const f = await env.DB.prepare(PRSQL.fails).bind(dev, now - 3600e3).first();
+  if ((f?.c ?? 0) >= PROMO_FAILS) return json({ error: 'busy' }, 429);
+  const row = code.length === PROMO_LEN ? await env.DB.prepare(PRSQL.get).bind(code).first() : null;
+  if (!row || row.game !== b.g || row.used < 0) {
+    await env.DB.prepare(PRSQL.fail).bind(dev, now).run();
+    return json({ error: 'code' }, 404);
+  }
+  if (row.used > 0) return row.pid === pid ? json({ ok: true, prize: row.prize, again: true }) : json({ error: 'used' }, 409);
+  if (!(await promoOn(env, b.g)).includes(row.prize)) return json({ error: 'off' }, 403);
+  const s = b.t ? await session(env, b.g, b.t) : null, acct = s ? s.acct : null;
+  if (await env.DB.prepare(PRSQL.had).bind(b.g, row.prize, pid, acct, acct).first()) return json({ error: 'have' }, 409);
+  const done = await env.DB.prepare(PRSQL.use).bind(now, pid, acct, dev, code).first();
+  if (!done) return json({ error: 'used' }, 409);   // 两个人同时输同一个码
+  return json({ ok: true, prize: row.prize });
+}
+
+async function promoAdmin(request, env, url) {
+  const g = url.searchParams.get('g') || 'bcity';
+  if (url.pathname === '/promo/admin') return new Response(PROMOPAGE, { headers: { 'content-type': 'text/html;charset=utf-8', 'cache-control': 'no-store' } });
+  if (!PROMO_PRIZES[g]) return json({ error: 'game' }, 400);
+  if (url.pathname === '/promo/list') {
+    const n = Math.min(Math.max(+url.searchParams.get('n') || 2000, 1), 10000);
+    const [codes, counts, on] = await Promise.all([env.DB.prepare(PRSQL.list).bind(g, n).all(), env.DB.prepare(PRSQL.counts).bind(g).all(), promoOn(env, g)]);
+    return json({ prizes: PROMO_PRIZES[g], on, counts: counts.results, codes: codes.results });
+  }
+  if (request.method !== 'POST') return new Response(null, { status: 405 });
+  const prize = url.searchParams.get('prize');
+  if (url.pathname === '/promo/gen') {
+    if (!PROMO_PRIZES[g].includes(prize)) return json({ error: 'prize' }, 400);
+    const n = Math.min(Math.max(Math.floor(+url.searchParams.get('n') || 0), 1), PROMO_GEN_MAX);
+    const note = cleanText(url.searchParams.get('note'), 60).replace(/\n/g, ' '), now = Date.now(), codes = [];
+    while (codes.length < n) {
+      const c = newCode();
+      if (await env.DB.prepare(PRSQL.get).bind(c).first()) continue;
+      await env.DB.prepare(PRSQL.put).bind(c, g, prize, note, now).run();
+      codes.push(c);
+    }
+    return json({ ok: true, codes });
+  }
+  if (url.pathname === '/promo/toggle') {
+    if (!PROMO_PRIZES[g].includes(prize)) return json({ error: 'prize' }, 400);
+    await env.DB.prepare(PRSQL.toggle).bind(g, prize, url.searchParams.get('on') === '1' ? 1 : 0).run();
+    return json({ ok: true, on: await promoOn(env, g) });
+  }
+  if (url.pathname === '/promo/void') {
+    await env.DB.prepare(PRSQL.void).bind(cleanCode(url.searchParams.get('code'))).run();
+    return json({ ok: true });
+  }
+  return new Response('not found', { status: 404 });
+}
+
 async function api(env, days) {
   const since = daysAgo(days);
   const now = Date.now();
@@ -737,6 +823,15 @@ export default {
     if (url.pathname === '/fb' && request.method === 'POST') {
       try { return await feedback(request, env); } catch (e) { console.error('fb', e); return json({ error: 'server' }, 500); }
     }
+    // 促销：活动开着哪些奖品（谁都能看）、兑换
+    if (url.pathname === '/promo/state') {
+      const g = url.searchParams.get('g');
+      if (!PROMO_PRIZES[g]) return json({ error: 'game' }, 400);
+      return json({ on: await promoOn(env, g) });
+    }
+    if (url.pathname === '/promo/redeem' && request.method === 'POST') {
+      try { return await promoRedeem(request, env); } catch (e) { console.error('promo', e); return json({ error: 'server' }, 500); }
+    }
     // 玩家这边的对话（凭玩家号，不要密钥）
     if (url.pathname === '/fb/mine' || url.pathname === '/fb/reply' || url.pathname === '/fb/seen') {
       try {
@@ -776,6 +871,10 @@ export default {
       if (!ok) return new Response('unauthorized', { status: 401 });
       const days = Math.min(Math.max(+url.searchParams.get('days') || 14, 1), 365);
       return json(await api(env, days));
+    }
+    if (url.pathname.startsWith('/promo/')) {
+      if (!ok) return new Response('unauthorized', { status: 401 });
+      return await promoAdmin(request, env, url);
     }
     if (url.pathname.startsWith('/chat/')) {
       if (!ok) return new Response('unauthorized', { status: 401 });
@@ -836,7 +935,7 @@ const DASH = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
   .wrap{overflow-x:auto;}
 </style></head><body>
 <h1>玩了多少</h1>
-<div class="sub"><a id="fblink" style="color:var(--accent)" href="/fb">玩家反馈 →</a></div>
+<div class="sub"><a id="fblink" style="color:var(--accent)" href="/fb">玩家反馈 →</a> &nbsp; <a id="promolink" style="color:var(--accent)" href="/promo/admin">兑换码 →</a></div>
 <div class="sub" id="range">LOADING…</div>
 <div class="bar" id="days">
   <button data-d="7">最近 7 天</button><button data-d="14" aria-pressed="true">14 天</button>
@@ -892,6 +991,7 @@ IP 只存到网段（最后一段抹成 x），完整地址不落库；省份是
 <script>
 const key = new URLSearchParams(location.search).get('k') || '';
 document.getElementById('fblink').href = '/fb?k=' + encodeURIComponent(key);
+document.getElementById('promolink').href = '/promo/admin?k=' + encodeURIComponent(key);
 const fmt = (s) => s >= 60 ? Math.floor(s / 60) + '分' + String(s % 60).padStart(2, '0') + '秒' : s + '秒';
 const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '–';
 const fmtLong = (s) => s >= 3600 ? Math.floor(s / 3600) + '小时' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + '分' : fmt(s || 0);
@@ -1170,4 +1270,94 @@ async function load() {
     + '<button onclick="act(\'/chat/ban?id=' + r.id + '&hours=24\')">禁言1天</button><button onclick="act(\'/chat/ban?id=' + r.id + '&hours=720\')">禁言30天</button><button onclick="act(\'/chat/ban?id=' + r.id + '&hours=0\')">解除</button></td></tr>').join('');
 }
 load(); setInterval(load, 10000);
+</script></body></html>`;
+
+// 兑换码管理：/promo/admin?k=密钥。活动开关、生成一批码（带备注）、码的列表（没用 / 用了谁用的 / 作废），复制没用过的。
+const PROMOPAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>兑换码</title>
+<style>
+  :root{--bg:#07090f;--panel:#121622;--line:rgba(123,131,159,.2);--text:#e6e8f0;--muted:#8d94ae;--dim:#535a72;--accent:#f5a33a;--good:#62d39a;
+    --mono:"Courier New",Menlo,Consolas,monospace;--ui:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 var(--ui);padding:clamp(16px,4vw,40px)}
+  h1{margin:0 0 4px;font-size:22px;letter-spacing:3px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .card h2{margin:0 0 8px;font-size:15px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  button{font:13px var(--ui);color:var(--text);background:#222838;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+  button.main{background:var(--accent);border-color:var(--accent);color:#0b0d14;font-weight:700}
+  input{font:14px var(--ui);color:var(--text);background:#0c0f17;border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+  .on{color:var(--good);font-weight:700}.off{color:var(--muted);font-weight:700}
+  .new{font:16px/1.9 var(--mono);letter-spacing:1px;white-space:pre;background:#0c0f17;border-radius:8px;padding:8px 12px;margin-top:10px;max-height:300px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:600}td.c{font:14px var(--mono);letter-spacing:1px;white-space:nowrap}
+  tr.used td{color:var(--muted)}tr.void td{color:var(--dim);text-decoration:line-through}
+  .filters button[aria-pressed=true]{background:var(--accent);color:#0b0d14;border-color:var(--accent);font-weight:700}
+</style></head><body>
+<h1>兑换码</h1>
+<div class="sub">一个码只能用一次；同一个玩家（玩家号或登录的账号）同一种奖品只能领一次。活动关掉后所有码都兑换不了，再打开又能用。</div>
+<div id="prizes"></div>
+<div class="card"><h2>码</h2>
+  <div class="row filters" id="filters"><button data-f="" aria-pressed="true">全部</button><button data-f="free">没用过</button><button data-f="used">已兑换</button><button data-f="void">作废</button>
+  <button id="copyFree">复制所有没用过的</button><span id="copied" class="sub" style="margin:0"></span></div>
+  <table><thead><tr><th>码</th><th>奖品</th><th>备注</th><th>生成</th><th>状态</th><th></th></tr></thead><tbody id="codes"></tbody></table>
+</div>
+<script>
+const key = new URLSearchParams(location.search).get('k') || '';
+const NAME = { super: '蛮牛跑车' };
+const q = (p) => p + (p.includes('?') ? '&' : '?') + 'k=' + encodeURIComponent(key);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const when = (ts) => new Date(ts + 8 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
+const show = (c) => c.slice(0, 4) + '-' + c.slice(4);
+let data = null, filter = '';
+async function post(p) { const r = await fetch(q(p), { method: 'POST' }); return r.json(); }
+async function load() {
+  const r = await fetch(q('/promo/list'));
+  if (!r.ok) { document.querySelector('.sub').textContent = key ? '密钥不对' : '网址后面要带 ?k=你的密钥'; return; }
+  data = await r.json();
+  document.getElementById('prizes').innerHTML = data.prizes.map((p) => {
+    const c = data.counts.find((x) => x.prize === p) || {}, on = data.on.includes(p);
+    return '<div class="card"><h2>' + esc(NAME[p] || p) + ' · 活动 <span class="' + (on ? 'on' : 'off') + '">' + (on ? '进行中' : '没开') + '</span></h2>' +
+      '<div class="row"><button class="' + (on ? '' : 'main') + '" data-toggle="' + p + '" data-on="' + (on ? 0 : 1) + '">' + (on ? '结束活动' : '开始活动') + '</button>' +
+      '<span class="sub" style="margin:0">没用过 ' + (c.free || 0) + ' · 已兑换 ' + (c.used || 0) + ' · 作废 ' + (c.void || 0) + '</span></div>' +
+      '<div class="row" style="margin-top:10px">生成 <input type="number" min="1" max="500" value="10" style="width:80px" data-n="' + p + '"> 个，备注 <input placeholder="比如：微信群 10-29" maxlength="60" data-note="' + p + '"> <button class="main" data-gen="' + p + '">生成</button></div>' +
+      '<div class="new" data-out="' + p + '" hidden></div></div>';
+  }).join('');
+  codes();
+}
+function codes() {
+  const rows = data.codes.filter((c) => !filter || (filter === 'free' ? c.used === 0 : filter === 'used' ? c.used > 0 : c.used < 0));
+  document.getElementById('codes').innerHTML = rows.map((c) => '<tr class="' + (c.used > 0 ? 'used' : c.used < 0 ? 'void' : '') + '"><td class="c">' + show(c.code) + '</td><td>' + esc(NAME[c.prize] || c.prize) + '</td><td>' + esc(c.note) + '</td><td>' + when(c.ts) + '</td><td>' +
+    (c.used > 0 ? '已兑换 ' + when(c.used) + (c.acct_name ? ' · 账号 ' + esc(c.acct_name) : ' · 游客') : c.used < 0 ? '作废' : '没用过') + '</td><td>' +
+    (c.used === 0 ? '<button data-void="' + c.code + '">作废</button>' : '') + '</td></tr>').join('') || '<tr><td colspan="6" class="sub">还没有码。</td></tr>';
+}
+document.body.addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.toggle) {
+    if (b.dataset.on === '0' && !confirm('结束活动？之后所有码都兑换不了（没用过的码留着，再开始又能用）。')) return;
+    await post('/promo/toggle?prize=' + b.dataset.toggle + '&on=' + b.dataset.on); load();
+  }
+  if (b.dataset.gen) {
+    const p = b.dataset.gen, n = document.querySelector('[data-n="' + p + '"]').value, note = document.querySelector('[data-note="' + p + '"]').value;
+    b.disabled = true;
+    const r = await post('/promo/gen?prize=' + p + '&n=' + n + '&note=' + encodeURIComponent(note));
+    b.disabled = false;
+    await load();
+    const out = document.querySelector('[data-out="' + p + '"]');
+    out.hidden = false; out.textContent = '刚生成的 ' + r.codes.length + ' 个（可以直接复制）：\\n' + r.codes.map(show).join('\\n');
+  }
+  if (b.dataset.void && confirm('作废 ' + show(b.dataset.void) + '？作废后这个码就用不了了。')) { await post('/promo/void?code=' + b.dataset.void); load(); }
+  if (b.dataset.f !== undefined) {
+    filter = b.dataset.f;
+    for (const x of document.querySelectorAll('#filters [data-f]')) x.setAttribute('aria-pressed', String(x === b));
+    codes();
+  }
+  if (b.id === 'copyFree') {
+    const list = data.codes.filter((c) => c.used === 0).map((c) => show(c.code)).join('\\n');
+    try { await navigator.clipboard.writeText(list); document.getElementById('copied').textContent = '已复制 ' + (list ? list.split('\\n').length : 0) + ' 个'; }
+    catch { document.getElementById('copied').textContent = '复制不了，请手动选中表格里的码'; }
+  }
+});
+load();
 </script></body></html>`;
