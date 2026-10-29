@@ -19,6 +19,8 @@ import type { CloudApi } from '../online/Cloud';
 import type { ChatApi } from '../online/Chat';
 import { ChatPanel } from './ChatPanel';
 import { FeedbackPanel } from './Feedback';
+import { RoomPanel } from './RoomPanel';
+import type { MultiplayerApi } from '../online/Multiplayer';
 import type { FeedbackApi } from '../online/Feedback';
 import type { PresenceApi } from '../online/Presence';
 import { journalOf } from '../npc/Journal';
@@ -90,6 +92,13 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   });
   // ...and once on going into the city if some came in before (the title's badge is easy to miss on a phone)
   engine.events.on('game:start', () => setTimeout(() => fbToast(1), 5000));
+  // 和朋友联机 (online/Multiplayer.ts), from the title and the pause screen; the button says the room while in one.
+  const mpApi = engine.get<MultiplayerApi>('mp');
+  const rooms = mpApi ? new RoomPanel(engine, container, mpApi, () => { if (api.state === 'paused') api.start(); }) : null;
+  if (rooms && mpApi) {
+    menu.onFriends = () => rooms.show();
+    mpApi.listen(() => menu.setRoom(mpApi.status === 'in' ? mpApi.room : null, mpApi.peers.length + 1));
+  }
   // How many are playing (online/Presence.ts), on the title and pause screens.
   const presence = engine.get<PresenceApi>('presence');
   if (presence) presence.onChange = (n, d) => menu.setOnline(n, d);
@@ -138,7 +147,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       engine.paused = false;
     },
     start() {
-      boards?.hide(); chapters?.hide();
+      boards?.hide(); chapters?.hide(); rooms?.hide();
       if (!cloud?.conflict) account?.hide();
       engine.get<AudioApi>('audio')?.unlock();
       engine.get<VoiceApi>('voices')?.unlock();   // in the same click: three's audio shares the context

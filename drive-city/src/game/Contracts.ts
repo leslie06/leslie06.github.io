@@ -214,7 +214,7 @@ export interface HomeApi extends System {
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------
 
-export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact' | 'story';
+export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact' | 'story' | 'friend';
 /** A marker on the minimap and map. `heading` (atan2(x, z)) turns it into an arrow. */
 export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string;
   /** The label's colour (a contact's own), else the map's default. */

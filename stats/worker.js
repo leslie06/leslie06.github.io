@@ -641,7 +641,7 @@ async function newSession(env, acct) {
   await env.DB.prepare(ACSQL.seen).bind(now, acct).run();
   return token;
 }
-async function session(env, g, t) {
+export async function session(env, g, t) {
   if (typeof t !== 'string' || t.length !== 64) return null;
   const key = await sha(t), s = await env.DB.prepare(ACSQL.sessGet).bind(key, g).first();
   if (!s) return null;

@@ -29,7 +29,7 @@ Cloudflare 上那个 Worker + D1 留着当备份，没在用（国内连不上�
 ### 改完代码怎么更新服务器
 
 ```sh
-scp stats/worker.js stats/server.mjs stats/schema.sql root@47.95.248.104:/opt/ai-games-stats/
+scp stats/worker.js stats/server.mjs stats/schema.sql stats/mp.mjs root@47.95.248.104:/opt/ai-games-stats/
 ssh root@47.95.248.104 'systemctl restart ai-games-stats && systemctl is-active ai-games-stats'
 ```
 
@@ -257,3 +257,15 @@ node stats/apply.mjs --off      # 把所有页面里的片段删干净
 - 库表：`promo_code`（码、奖品、备注、生成时间、`used` 兑换时间 / 0 没用 / -1 作废、玩家号、账号、设备哈希）、`promo`（开关）、`promo_fail`（输错记录）。服务启动时自动建。
 - 加奖品：`worker.js` 的 `PROMO_PRIZES`，游戏那边 `garage/index.ts` 的 `redeem` 按奖品给东西（现在认车行里的车）。
 - 本地测：`node stats/test.mjs`（兑换码 17 条）。
+
+## 联机（2026-10-29 起，b城追车在用）
+
+和朋友在同一个城市里各开各的车：一个人建房间（4 位房间号 / 邀请链接），朋友输号或开链接进来，每个房间最多 4 人。`mp.mjs` 是 WebSocket 中转，接在 `server.mjs` 的 HTTP 服务上（`/mp` 的升级请求），手写的 RFC 6455，没有依赖。**只有自建服务器（Node）上有，Cloudflare Worker 版没有。** Caddy 的 `reverse_proxy` 自动转发 WebSocket，不用改配置。
+
+- 第一条消息 `{t:'create', g, p, tk}` 建房间或 `{t:'join', g, p, tk, room}` 进房间，回 `{t:'joined', room, id, name, max, peers}` 或 `{t:'err', e}`（`noroom` / `full` / `bad` / `busy`）。
+- 之后游戏发 `{t:'s', …}`（自己的位置、车，每秒约 10 次）和 `{t:'e', …}`（喇叭、撞车），服务器加上 `id` 原样转给房间里其他人；有人进来 `{t:'peer', id, name}`，走了 `{t:'gone', id}`。
+- 名字服务器定：登录的用账号名，没登录是「游客」+ 4 位编号（和聊天一样），冒充不了别人的账号。
+- 房间只在内存里，最后一个人走了就删；服务重启所有房间都断（游戏会自动重连回原房间号，房间没了就提示）。
+- 限制：一条最多 2 KB，一个连接每秒最多 40 条（多的丢掉），最多 3000 个房间；15 秒 ping 一次，40 秒没回音就断。
+- 更新服务器时 **`mp.mjs` 也要传**（见上面「改完代码怎么更新服务器」）。
+- 本地测：`node stats/mp.test.mjs`（起一个真的 server.mjs，用 Node 自带的 WebSocket 当几个玩家，13 条）。

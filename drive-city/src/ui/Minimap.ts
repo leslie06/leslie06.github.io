@@ -60,7 +60,7 @@ const ROAD = ['#343c42', '#465057', '#5c656c', '#757d83', '#8f969a'];
 const ROAD_PX = [1.4, 2.4, 3.6, 5, 6.6];
 const GROUND = '#161b1e', WATER = '#1a3444', GREEN = '#1c2f23';
 const REF_SCALE = 0.6;
-const EDGE_KINDS = new Set<MarkKind>(['target', 'pickup', 'dropoff', 'mission', 'waypoint', 'encounter', 'suspect', 'story']);
+const EDGE_KINDS = new Set<MarkKind>(['target', 'pickup', 'dropoff', 'mission', 'waypoint', 'encounter', 'suspect', 'story', 'friend']);
 /** 小雨's favour (contacts/): police cars out of the radar's range are pinned to its edge. */
 export function setPoliceOnEdge(on: boolean): void { if (on) EDGE_KINDS.add('police'); else EDGE_KINDS.delete('police'); }
 /**

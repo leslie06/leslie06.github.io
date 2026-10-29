@@ -19,6 +19,8 @@ export const routeColor = (kind: string | undefined): string => (kind === 'waypo
 export const BLIP_COLOR: Record<MarkKind, string> = {
   police: POLICE_BLUE, target: C.yellow, pickup: '#3aa6ff', dropoff: '#3ccf72', car: '#d8dbde', landmark: '#d4b264', landmarkDone: '#8a8270', trial: '#5fd1ff', waypoint: WAYPOINT, waypointDot: WAYPOINT, mission: C.yellow, story: C.yellow,
   jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a', encounter: '#ff9f1c', suspect: '#ff3b30', contact: '#b07cff',
+  /** A friend in your room (online/Multiplayer.ts): the name tags' teal. */
+  friend: '#35e0c2',
 };
 
 /** Police lights: red/blue at ~2.5 Hz. */
@@ -156,6 +158,13 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(x, y - r * 0.22, r * 0.3, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(x, y + r * 0.42, r * 0.5, r * 0.3, 0, Math.PI, 0); ctx.fill();
+      break;
+    }
+    case 'friend': {
+      // A friend in the room: the player's own arrowhead, teal, pointing where they head.
+      ctx.translate(x, y); ctx.rotate(Number.isFinite(angle) ? angle : 0);
+      ctx.beginPath(); ctx.moveTo(0, -r * 1.3); ctx.lineTo(r * 1.0, r * 1.0); ctx.lineTo(0, r * 0.45); ctx.lineTo(-r * 1.0, r * 1.0); ctx.closePath();
+      ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1.5, r * 0.26); ctx.strokeStyle = INK; ctx.stroke();
       break;
     }
     case 'suspect': {

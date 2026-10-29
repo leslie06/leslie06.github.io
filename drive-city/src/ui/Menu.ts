@@ -90,7 +90,9 @@ export class Menu {
   private accountBtn: HTMLButtonElement;
   /** The 意见反馈 button (title and pause); unset, it stays hidden. */
   onFeedback: (() => void) | null = null;
+  onFriends: (() => void) | null = null;
   private feedbackBtn: HTMLButtonElement;
+  private friendsBtn: HTMLButtonElement;
   private feedbackBadge: HTMLSpanElement;
   /** 当前在线 N 人 (online/Presence.ts), hidden until there is a reading. */
   private onlineEl: HTMLElement;
@@ -129,6 +131,10 @@ export class Menu {
     acct.id = 'account';
     acct.textContent = t('acct.button');
     acct.addEventListener('click', () => this.onAccount?.());
+    const fr = this.friendsBtn = el('button', 'ghost', row);
+    fr.id = 'friends';
+    fr.textContent = t('mp.button');
+    fr.addEventListener('click', () => this.onFriends?.());
     const fb = this.feedbackBtn = el('button', 'ghost', row);
     fb.id = 'feedback';
     fb.appendChild(L('fb.button'));
@@ -142,6 +148,7 @@ export class Menu {
       b.addEventListener('click', () => setLang(l));
     }
     onLangChange(() => this.setAccount(this.accountName));
+    onLangChange(() => this.setRoom(...this.roomN));
     onLangChange((l) => { [...langSeg.children].forEach((b, i) => b.classList.toggle('on', LANGS[i] === l)); if (this.onlineN) this.setOnline(...this.onlineN); });
     const qLabel = el('span', 'seglabel', opts); qLabel.appendChild(L('settings.quality'));
     const qSeg = el('div', 'seg', opts);
@@ -189,6 +196,10 @@ export class Menu {
     this.onlineEl.hidden = false;
   }
 
+  /** 和朋友联机 (online/Multiplayer.ts): the button says the room while in one. */
+  setRoom(room: string | null, n = 0): void { this.roomN = [room, n]; this.friendsBtn.textContent = room ? t('mp.buttonIn', { room, n }) : t('mp.button'); }
+  private roomN: [string | null, number] = [null, 0];
+
   /** Developer replies to the player's feedback not read yet (online/Feedback.ts): a red count on 意见反馈. */
   setFeedbackUnread(n: number): void { this.feedbackBadge.hidden = !n; this.feedbackBadge.textContent = n > 99 ? '99+' : String(n); }
 
@@ -203,6 +214,7 @@ export class Menu {
     this.root.hidden = state === 'playing' || state === 'overlay';
     this.boardsBtn.hidden = !this.onBoards;
     this.feedbackBtn.hidden = !this.onFeedback;
+    this.friendsBtn.hidden = !this.onFriends;
     this.accountBtn.hidden = !this.onAccount;
     this.setAccount(this.accountName);
     const paused = state === 'paused';

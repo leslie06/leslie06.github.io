@@ -19,7 +19,7 @@
 | `nav-map.md` | 寻路、GPS 转向提示、地图标注（`Labeller`）、地图上的地铁 |
 | `gameplay.md` | 电台、开局逃亡、战役框架与第一章、氮气/连击/车库/出租车、特技坡道、断桥飞跃、兔儿爷、街头事件、地下车库、胡同捷径、短信剧情、排行榜、地标打卡、计时赛、短任务、玩法 probe |
 | `npc.md` | 脚本 NPC、对话框、配音（CosyVoice 录制管线、VoiceManager）、街头遭遇、按时间的街头生活、熟人和好感度福利 |
-| `online.md` | 玩家反馈（`/fb`）、在线人数 |
+| `online.md` | 玩家反馈（`/fb`）和回复、在线人数、账号云存档、聊天、促销兑换码、联机 |
 | `home-park.md` | 我家别墅（楼梯、大门、车道的坑）、欢乐谷游乐设施和过山车 |
 | `landmarks.md` | Blender 地标管线（`import.mjs`、`Glb.ts` 命名约定、Blender 插件）、楼梯/挡车块、每个地标和每批次 |
 | `hosting-phones.md` | 静态托管第 1-5 轮（启动下载量和时间）、加载进度条、手机分辨率、触屏操作 |
@@ -54,7 +54,7 @@
 - Rapier 0.20 每步积分 4 个子步，靠每步冲量托住的刚体静止时会报 vy ≈ -0.375·g·dt（判断静止用水平速度）。冲量会立即改变速度：先收集所有车轮的力，再统一施加（见 `Vehicle.step`）。角色控制器会慢慢陷进巨大的碰撞体；`OnFoot.step` 用一条向下的射线把脚抬回地面。
 - zsh 里 `for a in "8 -60"; do node probe.mjs $a` 只传了一个参数；probe 会拒绝非数字参数。
 - 热路径性能：游戏里 `Matrix4.toArray` / `setMatrixAt` 比普通循环慢约 30 倍；`CarKit` 用 `put16`。热路径里每帧不分配内存。
-- 提交不等于部署：统计服务器（`../stats`）要把 `worker.js`、`server.mjs`、`schema.sql` 拷上去并重启（见 `../stats/README.md`）。伪造心跳的 probe 绝不能指向线上服务器。
+- 提交不等于部署：统计服务器（`../stats`）要把 `worker.js`、`server.mjs`、`schema.sql`、`mp.mjs`（联机，2026-10-29 起）拷上去并重启（见 `../stats/README.md`）。伪造心跳的 probe 绝不能指向线上服务器。
 - 配音台词：改了要说的台词后，依次重跑 `scripts/voice/lines.mts` / `dialogue.mts`、synth、`dialogue-pack.mjs`（见 `npc.md`）。改 `assets/voice/lines.json`，不要改 `bcity/` 里那份。
 
 ## 操控测试（M0 验收）

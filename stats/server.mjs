@@ -10,7 +10,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import worker, { maskIp } from './worker.js';
+import worker, { guestNo, maskIp, session } from './worker.js';
+import { attachMp } from './mp.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const db = new DatabaseSync(process.env.DB_FILE ?? join(HERE, '.dev.sqlite'));
@@ -113,7 +114,7 @@ const ring = (ms, res) => new Promise(r => {
   res.on('close', done);
 });
 
-createServer(async (req, res) => {
+const http = createServer(async (req, res) => {
   try {
     const chunks = [];
     let size = 0;
@@ -153,4 +154,10 @@ createServer(async (req, res) => {
     if (!res.headersSent) res.writeHead(500);
     res.end();
   }
-}).listen(port, '127.0.0.1', () => console.log(`统计服务在 127.0.0.1:${port}，看板 /?k=密钥`));
+});
+// 联机：/mp 的 WebSocket（mp.mjs）。名字和聊天一样：登录的用账号名，没登录是「游客」+ 编号。
+attachMp(http, async (g, pid, tk) => {
+  const s = tk ? await session(env, g, tk).catch(() => null) : null;
+  return s ? s.name : `游客${await guestNo(pid.replace(/[^a-z0-9]/gi, '').slice(0, 32) || 'anon')}`;
+});
+http.listen(port, '127.0.0.1', () => console.log(`统计服务在 127.0.0.1:${port}，看板 /?k=密钥`));
