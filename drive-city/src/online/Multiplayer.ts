@@ -3,6 +3,7 @@ import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
 import type { Blip, CameraApi, HudApi, NavApi, PlayerApi, RaceApi, RenderApi, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { CampaignApi } from '../campaign';
+import type { IntroApi } from '../intro';
 import { Fade } from '../campaign/Screens';
 import { bodyOfSpec } from '../vehicle/Bodies';
 import { statsEndpoint } from './Leaderboard';
@@ -19,6 +20,9 @@ import { cleanState, RemotePeer, type NetState } from './Remote';
  * Cars hit each other: a friend's car is a kinematic body here, so yours bounces off it; the hit is sent to them
  * (`{t:'e', k:'hit'}`) and their game pushes their car by the same impulse. A horn is sent and sounded where they are.
  * `goTo(id)` takes you beside a friend (a fade, the world there loaded, the nearest lane), as the 快速前往 does.
+ * Joining a room does it by itself (2026-10-30, 「进入房间的车辆还在它自己的地点，应该和创建房间的车辆离的不远」): once in
+ * the city, you are taken to the room's first player (its maker, while they are in it) - after the police, a race,
+ * a chapter or the opening getaway, if one is on.
  * A dropped link reconnects into the same room (if anyone is still in it). Off where the leaderboards are.
  */
 export interface MpPeerView { id: number; name: string; x: number; z: number; foot: boolean; dist: number }
@@ -45,6 +49,8 @@ export interface MultiplayerApi extends System {
 }
 
 const GAME = 'bcity', SEND_MS = 100, IDLE_SEND_MS = 1000, HIT_GAP = 400;
+/** Joining: nearer than this to the room's maker already, you stay where you are. */
+const MEET_NEAR = 80;
 const read = <T>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v) as T; } catch { return d; } };
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
@@ -115,6 +121,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
   const onMessage = (m: Record<string, unknown>) => {
     if (m.t === 'joined') {
       const first = api.room === null;
+      if (first && want?.kind === 'join') { meet = true; meetHinted = false; meetAt = 0; }
       api.room = String(m.room); api.me = { id: Number(m.id), name: String(m.name) };
       api.max = Number(m.max) || 4;
       api.status = 'in'; api.error = null; retries = 0;
@@ -199,6 +206,35 @@ body:not(.dc-playing) .mp-tags{display:none}`;
   };
 
   let fade: Fade | null = null, travelling = false;
+  /** Just joined a room: still to be taken to its maker. */
+  let meet = false, meetHinted = false, meetAt = 0;
+
+  /** Why the player cannot be taken anywhere now (an i18n key), or null. */
+  const busy = (): 'travel.wanted' | 'travel.busy' | null => {
+    const pl = engine.get<PlayerApi>('player');
+    if ((engine.get<WantedApi>('wanted')?.level ?? 0) > 0) return 'travel.wanted';
+    if (travelling || engine.get<RaceApi>('races')?.active || engine.get<CampaignApi>('campaign')?.running || pl?.riding) return 'travel.busy';
+    return null;
+  };
+
+  /** Joined a room: off to its first player once they show up in the city, as soon as nothing holds us here. */
+  const meetUp = (now: number) => {
+    if (now < meetAt) return;
+    meetAt = now + 1000;
+    let host: RemotePeer | null = null;
+    for (const p of peers.values()) if (p.state && (!host || p.id < host.id)) host = p;
+    const me = engine.get<PlayerApi>('player')?.position;
+    if (!host || !me) return;
+    if (Math.hypot(host.pos.x - me.x, host.pos.z - me.z) < MEET_NEAR) { meet = false; return; }
+    const intro = engine.get<IntroApi>('intro')?.step;
+    const why = busy() ?? (intro && intro !== 'off' && intro !== 'done' ? 'travel.busy' : null);
+    if (why) {
+      if (!meetHinted) { meetHinted = true; toast(t(why === 'travel.wanted' ? 'mp.meetWanted' : 'mp.meetBusy', { name: host.name }), 5); }
+      return;
+    }
+    meet = false;
+    api.goTo(host.id);
+  };
 
   const api: MultiplayerApi & { status: MpStatus; error: string | null; room: string | null; me: { id: number; name: string } | null; max: number } = {
     name: 'mp',
@@ -221,7 +257,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
     },
     leave() {
       clearTimeout(retryTimer);
-      want = null;
+      want = null; meet = false;
       if (ws) { send({ t: 'leave' }); const s = ws; ws = null; s.close(); }
       clearPeers();
       const was = api.room !== null;
@@ -232,8 +268,8 @@ body:not(.dc-playing) .mp-tags{display:none}`;
     goTo(id) {
       const p = peers.get(id), pl = engine.get<PlayerApi>('player'), v = engine.get<VehicleApi>('vehicle');
       if (!p || !p.state || !pl || !v) return t('mp.goNone');
-      if ((engine.get<WantedApi>('wanted')?.level ?? 0) > 0) return t('travel.wanted');
-      if (travelling || engine.get<RaceApi>('races')?.active || engine.get<CampaignApi>('campaign')?.running || pl.riding) return t('travel.busy');
+      const why = busy();
+      if (why) return t(why);
       if (Math.hypot(p.pos.x - pl.position.x, p.pos.z - pl.position.z) < 40) return t('mp.goHere');
       travelling = true;
       const driving = pl.mode === 'driving';
@@ -283,6 +319,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       for (const p of peers.values()) p.update(dt, now);
       // send ourselves: 10 a second while playing, once a second behind a menu (so they still see us standing there)
       const playing = engine.get<System & { state: string }>('ui')?.state === 'playing' && !engine.paused;
+      if (meet && playing) meetUp(now);
       if (now - lastSend >= (playing ? SEND_MS : IDLE_SEND_MS)) {
         lastSend = now;
         const s = myState();
