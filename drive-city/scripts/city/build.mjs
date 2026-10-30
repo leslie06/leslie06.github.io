@@ -882,6 +882,131 @@ for (let iter = 0; iter < 3; iter++) {
   dgrid.clear();
   for (const w of carWays) w._dense.forEach((d, i) => { const k = `${Math.floor(d.x / DGRID)},${Math.floor(d.z / DGRID)}`; (dgrid.get(k) ?? dgrid.set(k, []).get(k)).push([w, i]); });
 }
+// Slip roads merging into another road at an angle (15-46 degrees) at a node they share, still apart in height
+// short of it: the move above takes only rows running along each other, at the dense points 10 m apart, so a
+// slip road climbing to meet 复兴路 coming down off its bridge ran its left 2.3 m under that bridge's edge, 1-2 m
+// apart in height, between two dense points - a car keeping left drove under it and stuck (2026-10-30). Walk
+// each such slip road back from the node a metre at a time and move it aside by the overlap wherever the two
+// are 0.3 m or more apart in height, easing in over MERGE_EASE m and back to nothing at the node itself.
+const MERGE_EASE = 15;
+let squeezed = 0;
+{
+  const ends = new Map(); // node id -> ways ending there
+  for (const w of carWays) for (const id of [w._ids[0], w._ids.at(-1)]) (ends.get(id) ?? ends.set(id, []).get(id)).push(w);
+  const through = new Map(); // node id -> every way with it
+  for (const w of carWays) for (const id of w._ids) (through.get(id) ?? through.set(id, []).get(id)).push(w);
+  const hOf = (D, i, t) => (HT.get(D[i].key) ?? 0) * (1 - t) + (HT.get(D[i + 1].key) ?? 0) * t;
+  /** Point, height and dense segment of W at arc length s (its current, possibly moved, points). */
+  const pointAt = (W, s) => {
+    const D = W._dense;
+    let i = 0; while (i < D.length - 2 && D[i + 1].s < s) i++;
+    const L = D[i + 1].s - D[i].s || 1, t = clamp((s - D[i].s) / L, 0, 1);
+    return { x: D[i].x + (D[i + 1].x - D[i].x) * t, z: D[i].z + (D[i + 1].z - D[i].z) * t, h: hOf(D, i, t) };
+  };
+  const nearestOn = (W, x, z) => {
+    const D = W._dense; let best = null;
+    for (let i = 0; i < D.length - 1; i++) {
+      const p = D[i], q = D[i + 1], vx = q.x - p.x, vz = q.z - p.z, L2 = vx * vx + vz * vz || 1, t = clamp(((x - p.x) * vx + (z - p.z) * vz) / L2, 0, 1);
+      const cx = p.x + vx * t, cz = p.z + vz * t, d = Math.hypot(x - cx, z - cz);
+      if (!best || d < best.d) best = { d, x: cx, z: cz, h: hOf(D, i, t), end: (i === 0 && t === 0) || (i === D.length - 2 && t === 1) };
+    }
+    return best;
+  };
+  const want = new Map(); // way -> [{ s, dx, dz }]
+  for (const [id, ls] of ends) for (const L of ls) {
+    const atStart = L._ids[0] === id, D = L._dense, len = D.at(-1).s;
+    if (len < 5) continue;
+    const back = (k) => (atStart ? k : len - k); // arc length k m back from the node
+    const n0 = pointAt(L, back(0)), n5 = pointAt(L, back(Math.min(5, len)));
+    // not a road that runs on through the node as another way, in line (复兴路's deck ends there and goes on as
+    // the next way): only a slip road ends there
+    const runsOn = (through.get(id) ?? []).some((W) => {
+      if (W === L) return false;
+      const WD = W._dense, j = WD.findIndex((d) => d.key === String(id));
+      if (j < 0) return false;
+      const q = W._ids[0] === id ? WD[Math.min(WD.length - 1, j + 1)] : W._ids.at(-1) === id ? WD[Math.max(0, j - 1)] : null;
+      if (!q) return false;
+      const ax = n0.x - n5.x, az = n0.z - n5.z, bx = q.x - n0.x, bz = q.z - n0.z;
+      return (ax * bx + az * bz) / ((Math.hypot(ax, az) || 1) * (Math.hypot(bx, bz) || 1)) > 0.94;
+    });
+    if (runsOn) continue;
+    for (const O of through.get(id) ?? []) {
+      if (O === L) continue;
+      // the angle between them at the node
+      const oi = O._ids.indexOf(id), OD = O._dense, oj = OD.findIndex((d) => d.key === String(id));
+      if (oj < 0) continue;
+      const oa = OD[Math.max(0, oj - 1)], ob = OD[Math.min(OD.length - 1, oj + 1)];
+      const ox = ob.x - oa.x, oz = ob.z - oa.z, lx = n5.x - n0.x, lz = n5.z - n0.z;
+      const cos = Math.abs(ox * lx + oz * lz) / ((Math.hypot(ox, oz) || 1) * (Math.hypot(lx, lz) || 1)), ang = Math.acos(Math.min(1, cos));
+      if (ang < 0.26 || ang > 0.8 || oi < 0) continue;
+      const need = L._road.w / 2 + O._road.w / 2 + 0.45 + 0.2;
+      for (let k = 1; k <= Math.min(45, len); k += 1) {
+        const p = pointAt(L, back(k)), q = nearestOn(O, p.x, p.z);
+        if (!q || q.end) continue;
+        if (q.d > need + 10) break;
+        if (q.d >= need || Math.abs(p.h - q.h) < 0.3 || q.d < 0.3) continue;
+        const m = Math.min(SHIFT_MAX, need - q.d);
+        (want.get(L) ?? want.set(L, []).get(L)).push({ s: back(k), k, dx: (p.x - q.x) / q.d * m, dz: (p.z - q.z) / q.d * m, node: back(0) });
+      }
+    }
+  }
+  // (a few centimetres here and there is not worth moving a road for)
+  for (const [L, list] of want) if (Math.max(...list.map((w) => Math.hypot(w.dx, w.dz))) < 0.5) want.delete(L);
+  const touched = new Set();
+  const waysOf = new Map(); // dense key -> [way, index]
+  for (const w of carWays) w._dense.forEach((d, i) => (waysOf.get(d.key) ?? waysOf.set(d.key, []).get(d.key)).push([w, i]));
+  for (const [L, list] of want) {
+    const moves = [];
+    for (const d of L._dense) {
+      let v = null, vm = 0;
+      for (const w of list) {
+        // full over the stretch that needs it, easing out along the way, and nothing at the node
+        const f = Math.max(0, 1 - Math.max(0, Math.abs(d.s - w.s) - 1) / MERGE_EASE) * clamp(Math.abs(d.s - w.node) / Math.max(1, w.k), 0, 1);
+        const m = Math.hypot(w.dx, w.dz) * f;
+        if (m > vm) { vm = m; v = [w.dx * f, w.dz * f]; }
+      }
+      if (v && vm >= 0.02) moves.push([d, v]);
+    }
+    // The heights stay, so moving points closer together steepens what lies between them: as far as no segment
+    // touching a moved point gets steeper than 14% (or than it was) - at full shift 4 short ones reached 16-21%.
+    const pos = (d, k, mv) => { const v = mv.get(d.key); return v ? [d.x + v[0] * k, d.z + v[1] * k] : [d.x, d.z]; };
+    // Nor into a third road beside it at another height: moved off 复兴路's deck, the slip road at -8355,311 was
+    // moved onto the side road next to it.
+    const others = new Set();
+    for (const [d] of moves) { const gx = Math.floor(d.x / DGRID), gz = Math.floor(d.z / DGRID); for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (const [W] of dgrid.get(`${gx + dx},${gz + dz}`) ?? []) if (W !== L) others.add(W); }
+    const crowd = (x, z, h) => { let worst = 0; for (const W of others) { const D = W._dense; for (let i = 0; i < D.length - 1; i++) { const p = D[i], q = D[i + 1], vx = q.x - p.x, vz = q.z - p.z, L2 = vx * vx + vz * vz || 1, t = clamp(((x - p.x) * vx + (z - p.z) * vz) / L2, 0, 1); if ((i === 0 && t === 0) || (i === D.length - 2 && t === 1)) continue; const dd = Math.hypot(x - p.x - vx * t, z - p.z - vz * t), o = L._road.w / 2 + W._road.w / 2 + 0.45 - dd; if (o > 0 && Math.abs(h - hOf(D, i, t)) >= 0.3) worst = Math.max(worst, o); } } return worst; };
+    const ok = (k) => {
+      const mv = new Map(moves.map(([d, v]) => [d.key, v]));
+      for (const [d, v] of moves) { const h = HT.get(d.key) ?? 0; if (crowd(d.x + v[0] * k, d.z + v[1] * k, h) > crowd(d.x, d.z, h) + 0.1) return false; }
+      for (const [d] of moves) for (const [W, i] of waysOf.get(d.key) ?? []) for (const j of [i - 1, i + 1]) {
+        const e = W._dense[j];
+        if (!e) continue;
+        const dh = Math.abs((HT.get(d.key) ?? 0) - (HT.get(e.key) ?? 0));
+        if (dh < 0.05) continue;
+        const [ax, az] = pos(d, k, mv), [bx, bz] = pos(e, k, mv), was = dh / (Math.hypot(d.x - e.x, d.z - e.z) || 1e-6);
+        if (dh / (Math.hypot(ax - bx, az - bz) || 1e-6) > Math.max(0.14, was) + 1e-6) return false;
+      }
+      return true;
+    };
+    const k = [1, 0.85, 0.7, 0.55, 0.4, 0.25].find(ok) ?? 0;
+    for (const [d, v] of moves) {
+      if (!k) break;
+      const cur = shiftOf.get(d.key) ?? [0, 0];
+      shiftOf.set(d.key, [cur[0] + v[0] * k, cur[1] + v[1] * k]);
+      squeezed++;
+    }
+  }
+  for (const w of carWays) for (const d of w._dense) { const v = shiftOf.get(d.key); if (!v) continue; if (d.x !== d.x0 + v[0] || d.z !== d.z0 + v[1]) { touched.add(w); d.x = d.x0 + v[0]; d.z = d.z0 + v[1]; } }
+  for (const w of touched) {
+    w._pts = w._dense.map((d) => [d.x, d.z]);
+    w._ids = w._dense.map((d) => (/^\d+$/.test(d.key) ? Number(d.key) : `x${d.key}`));
+    let s0 = 0; w._dense.forEach((d, i) => { if (i) s0 += Math.hypot(d.x - w._dense[i - 1].x, d.z - w._dense[i - 1].z); d.s = s0; });
+  }
+  if (process.env.SQUEEZE_LOG) for (const [L, list] of want) { const mx = Math.max(...list.map((w) => Math.hypot(w.dx, w.dz))); const p = pointAt(L, list[0].s); console.log('SQUEEZE', L.id, L.tags.name ?? L._road.cls, Math.round(p.x), Math.round(p.z), 'max', mx.toFixed(2), 'samples', list.length); }
+  console.log(`merges squeezed: ${want.size} slip roads, ${squeezed} points moved`);
+  dgrid.clear();
+  for (const w of carWays) w._dense.forEach((d, i) => { const k = `${Math.floor(d.x / DGRID)},${Math.floor(d.z / DGRID)}`; (dgrid.get(k) ?? dgrid.set(k, []).get(k)).push([w, i]); });
+}
 if (process.env.ELEV_CONFLICTS) {
   const rows = overlapRows();
   if (process.env.CONF_AT) {
@@ -944,6 +1069,8 @@ if (process.env.ELEV_CONFLICTS) {
   }
   console.log('kinks', kinks.length, kinks.slice(0, 40));
 }
+// ELEV_ONLY=1: stop here (with ELEV_CONFLICTS / CONF_AT to look at one place), nothing written.
+if (process.env.ELEV_ONLY) process.exit(0);
 if (process.env.ELEV_WAY) for (const wid of process.env.ELEV_WAY.split(',')) {
   const w = carWays.find((q) => String(q.id) === wid), lf = lifted.get(w);
   if (!w) { console.log('WAY', wid, 'not a car way'); continue; }
