@@ -124,19 +124,44 @@ export function spans(len: number, blocked: [number, number][]): [number, number
   return out;
 }
 
+/**
+ * Where a raised road ends in another that runs on through the junction (a side road meeting a ramp): `y` at
+ * (x, z), s along ours, taken to the other road's surface across our mouth (see `mouthsOf`), with the stretches
+ * of ours it changes, which need cutting finely ([s0, s1, every so many metres]).
+ */
+interface Mouth { fit: (x: number, z: number, s: number, y: number) => number; zones: [number, number, number][] }
+
+/** Lateral offsets lo..hi to cut a stretch s0..s1 at: as finely as a zone of the fit it lies in asks (the road it ends in may crest or bend there), else just the edges. */
+function acrossOf(mouth: Mouth | null | undefined, s0: number, s1: number, lo: number, hi: number): number[] {
+  let step = Infinity;
+  if (mouth) for (const [a, b, st] of mouth.zones) if (s1 > a && s0 < b) step = Math.min(step, st);
+  if (step === Infinity) return [lo, hi];
+  const n = Math.max(1, Math.ceil((hi - lo) / step)), out: number[] = [];
+  for (let i = 0; i <= n; i++) out.push(lo + (hi - lo) * i / n);
+  return out;
+}
+
 /** Band between lateral offsets o0 and o1 (left positive) from s0 to s1, following the polyline. */
-function band(st: Strip, l: Line, s0: number, s1: number, o0: number, o1: number, y: number, colour?: THREE.Color): void {
+function band(st: Strip, l: Line, s0: number, s1: number, o0: number, o1: number, y: number, colour?: THREE.Color, mouth?: Mouth | null): void {
   const lo = Math.min(o0, o1), hi = Math.max(o0, o1);
   const cuts = [s0];
   for (const s of l.S) if (s > s0 + 0.01 && s < s1 - 0.01) cuts.push(s);
+  if (mouth) for (const [a, b, st] of mouth.zones) for (let s = a; s <= b; s += st) if (s > s0 + 0.01 && s < s1 - 0.01) cuts.push(s);
+  cuts.sort((p, q) => p - q);
   cuts.push(s1);
   for (let k = 0; k < cuts.length - 1; k++) {
     const [ax, az, anx, anz] = at(l, cuts[k]), [bx, bz, bnx, bnz] = at(l, cuts[k + 1]);
     const ya = y + hAt(l, cuts[k]), yb = y + hAt(l, cuts[k + 1]);
-    st.quad(
-      [ax + anx * lo, ya, az + anz * lo, cuts[k], lo], [bx + bnx * lo, yb, bz + bnz * lo, cuts[k + 1], lo],
-      [bx + bnx * hi, yb, bz + bnz * hi, cuts[k + 1], hi], [ax + anx * hi, ya, az + anz * hi, cuts[k], hi], UP, colour,
-    );
+    const f = (x: number, z: number, s: number, yy: number) => (mouth ? mouth.fit(x, z, s, yy) : yy);
+    const os = acrossOf(mouth, cuts[k], cuts[k + 1], lo, hi);
+    for (let i = 0; i < os.length - 1; i++) {
+      const p = os[i], q = os[i + 1];
+      const a0 = [ax + anx * p, az + anz * p], b0 = [bx + bnx * p, bz + bnz * p], b1 = [bx + bnx * q, bz + bnz * q], a1 = [ax + anx * q, az + anz * q];
+      st.quad(
+        [a0[0], f(a0[0], a0[1], cuts[k], ya), a0[1], cuts[k], p], [b0[0], f(b0[0], b0[1], cuts[k + 1], yb), b0[1], cuts[k + 1], p],
+        [b1[0], f(b1[0], b1[1], cuts[k + 1], yb), b1[1], cuts[k + 1], q], [a1[0], f(a1[0], a1[1], cuts[k], ya), a1[1], cuts[k], q], UP, colour,
+      );
+    }
   }
 }
 
@@ -348,9 +373,11 @@ const quad3 = (col: Soup, a: number[], b: number[], c: number[], d: number[]) =>
  * into `col`: the deck top (from where it leaves the ground, so a car drives up without a step),
  * the parapets, the embankment walls and the piers.
  */
-function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, runsOn: (r: RoadPiece, end: 0 | 1) => { hw: number; dot: number; inner: number; alone: boolean }[], below: (x: number, z: number, h: number, gap: number, maxGap?: number) => boolean, inJunction: (x: number, z: number, h: number) => boolean, joins: (x: number, z: number, h: number, step?: boolean | 'any' | 'off' | 'flush' | 'above', margin?: number) => boolean, lamps: number[], occupied: (x: number, z: number, y0: number, y1: number) => boolean): void {
+function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, runsOn: (r: RoadPiece, end: 0 | 1) => { hw: number; dot: number; inner: number; alone: boolean }[], below: (x: number, z: number, h: number, gap: number, maxGap?: number) => boolean, inJunction: (x: number, z: number, h: number) => boolean, joins: (x: number, z: number, h: number, step?: boolean | 'any' | 'off' | 'flush' | 'above' | 'shoulder', margin?: number) => boolean, lamps: number[], occupied: (x: number, z: number, y0: number, y1: number) => boolean, mouth: Mouth | null): void {
   const hw = r.w / 2, oo = hw + 0.05 + DECK.parapet;
   const P = (s: number, o: number, y: number): number[] => { const [x, z, nx, nz] = at(l, s); return [x + nx * o, y, z + nz * o]; };
+  /** P on the deck top: fitted to the road this one ends in across its mouth. */
+  const PT = (s: number, o: number, y: number): number[] => { const p = P(s, o, y); if (mouth) p[1] = mouth.fit(p[0], p[2], s, y); return p; };
   // How much wider the carriageway this deck runs on into is, each side, at each end (see TAPER): only where it
   // runs on into one other carriageway, flush with it and in line (a slip road forking off a wider road widened
   // towards the road it leaves, and its parapet stood across that road's lanes).
@@ -432,6 +459,11 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, runsOn: (r: RoadP
     const cuts: number[] = [];
     {
       const c4 = cutsOf(a, b);
+      // finely where the deck top is fitted to another road
+      if (mouth) {
+        for (const [z0, z1, st] of mouth.zones) for (let s = z0; s <= z1; s += st) if (s > a + 0.05 && s < b - 0.05 && !c4.some((c) => Math.abs(c - s) < 0.3)) c4.push(s);
+        c4.sort((x, y) => x - y);
+      }
       for (const k of [0, 1] as const) {
         const mt = mitre[k]; if (!mt) continue;
         for (const m of [mt.cut[-1], mt.cut[1]]) {
@@ -491,12 +523,42 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, runsOn: (r: RoadP
       }
       return d / NOSE;
     };
+    /**
+     * Where the deck top ends on one side: under the parapet's outer face - or, with no parapet there, where another
+     * carriageway at a different height (0.12-1.5 m) begins under that 0.45 m strip. A slip road's deck top ran on
+     * past its carriageway over the outer lane of the road beside it, a step a car could not climb (the lip audit
+     * of 2026-10-30: 128 of the 159 steps over 0.25 m in the city's lanes).
+     */
+    const edgeMemo = new Map<string, number>();
+    const edge = (k: number, sv: number, side: number) => {
+      if (kind[side][k] === 'rail') return OO(sv, side);
+      const key = `${sv}|${side}`;
+      let v = edgeMemo.get(key);
+      if (v !== undefined) return v;
+      const h = hAt(l, sv) + Y.road, base = hw + ex(sv, side);
+      const under = (g: number) => { const q = P(sv, side * (base + g), 0); return joins(q[0], q[2], h, 'shoulder', 0); };
+      v = OO(sv, side);
+      // (nothing under either end or the middle of the strip: nothing under it, as good as always)
+      if (under(0) || under(DECK.parapet / 2) || under(DECK.parapet + 0.05)) {
+        for (let g = 0; g <= DECK.parapet + 0.05 + 1e-6; g += 0.05) if (under(g)) { v = side * (base + g); break; }
+      }
+      edgeMemo.set(key, v);
+      return v;
+    };
     for (let k = 0; k < cuts.length - 1; k++) {
       const s0 = cuts[k], s1 = cuts[k + 1], h0 = hAt(l, s0) + Y.road, h1 = hAt(l, s1) + Y.road;
       const [, , n0x, n0z] = at(l, s0);
       // The deck top the wheels run on, parapet to parapet. (Leaving strips out over a road close
       // underneath was tried twice: both times it opened holes the car fell through.)
-      quad3(col, P(s0, OO(s0, -1), h0), P(s1, OO(s1, -1), h1), P(s1, OO(s1, 1), h1), P(s0, OO(s0, 1), h0));
+      {
+        // (across in strips where fitted: one quad from parapet to parapet missed the crest of the road it meets)
+        const o0a = edge(k, s0, -1), o0b = edge(k, s0, 1), o1a = edge(k, s1, -1), o1b = edge(k, s1, 1);
+        const os = acrossOf(mouth, s0, s1, o0a, o0b).map((o) => (o - o0a) / (o0b - o0a));
+        for (let i = 0; i < os.length - 1; i++) {
+          const u = os[i], v = os[i + 1], L0 = (t: number) => o0a + (o0b - o0a) * t, L1 = (t: number) => o1a + (o1b - o1a) * t;
+          quad3(col, PT(s0, L0(u), h0), PT(s1, L1(u), h1), PT(s1, L1(v), h1), PT(s0, L0(v), h0));
+        }
+      }
       if (Math.max(h0, h1) < 0.2) continue;
       // The taper's widening drawn as paving beside the carriageway (its collider is the deck top above).
       for (const side of [-1, 1]) {
@@ -534,11 +596,17 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, runsOn: (r: RoadP
         if (kd === 'gore') continue;
         const bot = (h: number) => (h > DECK.fill || (side < 0 ? openL : openR) ? Math.max(0.2, h - DECK.depth) : 0);
         const rail = kd === 'rail';
-        const r0 = h0 + (rail ? railOf(h0) * (full ? 1 : f0) : 0), r1 = h1 + (rail ? railOf(h1) * (full ? 1 : f1) : 0);
+        // (standing on the deck top as fitted: on its own height, the side of a road fitted down to the one it ends
+        // in stood 0.6 m over that road's lanes, 中关村南一街 on 北四环西路辅路)
+        const g0 = PT(s0, OI(s0, side), h0)[1], g1 = PT(s1, OI(s1, side), h1)[1];
+        const r0 = g0 + (rail ? railOf(h0) * (full ? 1 : f0) : 0), r1 = g1 + (rail ? railOf(h1) * (full ? 1 : f1) : 0);
         const n = [n0x * side, 0, n0z * side], inN = [-n[0], 0, -n[2]];
         // Inside face (towards the road), the top, the outside face down to the deck edge or the ground.
-        const i0 = P(s0, OI(s0, side), h0), i1 = P(s1, OI(s1, side), h1), i2 = P(s1, OI(s1, side), r1), i3 = P(s0, OI(s0, side), r0);
-        const o0 = P(s0, OO(s0, side), bot(h0)), o1 = P(s1, OO(s1, side), bot(h1)), o2 = P(s1, OO(s1, side), r1), o3 = P(s0, OO(s0, side), r0);
+        const i0 = P(s0, OI(s0, side), g0), i1 = P(s1, OI(s1, side), g1), i2 = P(s1, OI(s1, side), r1), i3 = P(s0, OI(s0, side), r0);
+        // (the outside face stands where the deck top ends: left at the parapet's outer face over a lower road the deck top
+        // no longer covers, it stood up through that road's surface as a wall across its outer lane)
+        const e0 = edge(k, s0, side), e1 = edge(k, s1, side);
+        const o0 = P(s0, e0, bot(h0)), o1 = P(s1, e1, bot(h1)), o2 = P(s1, e1, r1), o3 = P(s0, e0, r0);
         // The outside face: a collider only where it is more than a kerb (a car climbs 0.45 m).
         const face = !(side < 0 ? openL : openR) && Math.max(r0, r1) > 0.5;
         if (side > 0) {
@@ -550,7 +618,7 @@ function bridgeOf(st: Strip, col: Soup, l: Line, r: RoadPiece, runsOn: (r: RoadP
           st.quad(Y3(o1, s1), Y3(o0, s0), Y3(o3, s0), Y3(o2, s1), n, CONCRETE);
           if (face) quad3(col, o1, o0, o3, o2);
         }
-        const t0 = P(s0, OI(s0, side), r0), t1 = P(s1, OI(s1, side), r1), t2 = P(s1, OO(s1, side), r1), t3 = P(s0, OO(s0, side), r0);
+        const t0 = P(s0, OI(s0, side), r0), t1 = P(s1, OI(s1, side), r1), t2 = P(s1, rail ? OO(s1, side) : e1, r1), t3 = P(s0, rail ? OO(s0, side) : e0, r0);
         const oi = hw + 0.05;
         if (side > 0) st.quad(V(t0, s0, oi), V(t1, s1, oi), V(t2, s1, oo), V(t3, s0, oo), UP, CONCRETE);
         else st.quad(V(t1, s1, -oi), V(t0, s0, -oi), V(t3, s0, -oo), V(t2, s1, -oo), UP, CONCRETE);
@@ -663,21 +731,26 @@ function box(st: Strip, col: Soup | null, x: number, z: number, tx: number, tz: 
  * junctions, zebra crossings, the yellow tactile strip on pavements, manhole covers. Pavements and
  * lines stop where the crossing road begins, so junction corners stay open.
  */
-export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number[] = [], deckLamps: number[] = [], ctx: RoadPiece[] = [], trees: number[] = []): RoadMeshes {
+/** `owners`, when given, gets the index of the piece each collider triangle belongs to (for the audits). */
+export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number[] = [], deckLamps: number[] = [], ctx: RoadPiece[] = [], trees: number[] = [], owners?: number[]): RoadMeshes {
   const road = new Strip(true), walk = new Strip(true), curb = walk, paint = new Strip(true), bridge = new Strip(true);
   const J = junctions(pieces);
   // Every carriageway with its line, for the piers: none may stand on a road below its deck.
   // Each extended by its neighbour points where the road runs on into the next tile: a tile only
   // knows its own pieces, and the stretch of 国贸桥 across the tile edge was missing, so the slip
   // road beside it built its parapet straight across the main carriageway - a wall at x 4864.
-  const carLines: { r: RoadPiece; l: Line }[] = [];
+  // (sa..sb: the piece's own stretch of the extended line, whose ends are held level)
+  const carLines: { r: RoadPiece; l: Line; sa: number; sb: number; box: [number, number, number, number] }[] = [];
   for (const r of [...pieces, ...ctx]) if (isCar(r.c) && r.p.length >= 4) {
     const h = r.h, a = r.a, b = r.b;
     const ext: RoadPiece = { ...r, a: 0, b: 0,
       p: [...(a || []), ...r.p, ...(b || [])],
       j: [...(a ? [0] : []), ...r.j, ...(b ? [0] : [])],
       h: h ? [...(a ? [h[0]] : []), ...h, ...(b ? [h[h.length - 1]] : [])] : undefined };
-    carLines.push({ r, l: lineOf(ext) });
+    const l = lineOf(ext);
+    const box: [number, number, number, number] = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const [x, z] of l.P) { box[0] = Math.min(box[0], x); box[1] = Math.max(box[1], x); box[2] = Math.min(box[2], z); box[3] = Math.max(box[3], z); }
+    carLines.push({ r, l, sa: a ? l.S[1] : 0, sb: b ? l.S[l.S.length - 2] : l.len, box });
   }
   /**
    * The one carriageway a piece runs on into at its end (start 0, end 1), flush and in line, with its half width and
@@ -728,6 +801,187 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
     const y = hAt(l, Math.max(0, Math.min(l.len, p.s))) + Y.road;
     return y < y1 - 0.05 && y + HEADROOM > y0;
   });
+  /**
+   * A raised road ending in another that runs on through the junction (a side road meeting a ramp, a slip road's
+   * end) takes that road's surface across its mouth, blended back to its own over FIT m beyond that road's edge.
+   * Each carriageway is level across, so where the road it meets climbs at 10% our end stood up to 0.4 m over that
+   * road's lanes on the downhill side - a kerb a car could not take from a standstill (紫竹院路's side road at
+   * 车道沟桥, 2026-10-30, 「车从这开不上去」). Only at an end with nothing in line beyond it (`a`/`b` 0): a deck
+   * running on into the next piece is not a mouth.
+   */
+  const FIT = 3;
+  /** The carriageways each piece's mouths are fitted to (sidesOf leaves them alone). */
+  const mouthTo = new Map<RoadPiece, Set<(typeof carLines)[number]>>();
+  const mouthsOf = (r: RoadPiece, l: Line): Mouth | null => {
+    if (!l.H) return null;
+    const n = l.P.length - 1, at0: { end: 0 | 1; os: typeof carLines; reach: number }[] = [];
+    for (const end of [0, 1] as const) {
+      if (end ? r.b : r.a) continue;
+      const [x, z] = l.P[end ? n : 0], h = hAt(l, end ? l.len : 0), [, , , , tx, tz] = at(l, end ? l.len : 0);
+      const os = carLines.filter((o) => {
+        if (o.r === r) return false;
+        const p = project(o.l, x, z);
+        if (!(p.d < 0.5 && p.s > 0.3 && p.s < o.l.len - 0.3 && Math.abs(hAt(o.l, p.s) - h) < 0.25)) return false;
+        // across it (a T or a crossing, over 60 degrees), not forking off it: roads parting at a fork are tied level by the build
+        const [, , , , ux, uz] = at(o.l, p.s);
+        if (Math.abs(tx * ux + tz * uz) >= 0.5) return false;
+        // and only to take out a kerb: where ours climbs away from it (a slip road leaving a ramp going down) the
+        // two are a metre apart by its edge, and fitting ours to it built that metre as a step at its edge
+        for (let d = 0.5; d < l.len; d += 0.5) {
+          const sd = end ? l.len - d : d, [cx, cz] = at(l, sd), q = project(o.l, cx, cz);
+          if (q.d > o.r.w / 2) break;
+          if (Math.abs(hAt(o.l, Math.max(0, Math.min(o.l.len, q.s))) - hAt(l, sd)) > 0.5) return false;
+        }
+        return true;
+      });
+      if (os.length) { at0.push({ end, os, reach: Math.max(...os.map((o) => o.r.w / 2)) + FIT + 1 }); for (const o of os) (mouthTo.get(r) ?? mouthTo.set(r, new Set()).get(r)!).add(o); }
+    }
+    if (!at0.length) return null;
+    return {
+      zones: at0.map((m) => (m.end ? [Math.max(0, l.len - m.reach), l.len, 1] : [0, Math.min(l.len, m.reach), 1]) as [number, number, number]),
+      fit: (x, z, s, y) => {
+        for (const m of at0) {
+          if ((m.end ? l.len - s : s) > m.reach) continue;
+          // back to our own surface at our far end, which the next piece starts from
+          const far = Math.min(1, (m.end ? s : l.len - s) / 2);
+          let best = y, bw = 0;
+          for (const o of m.os) {
+            // on its own stretch: the extension past its end is held level (the next piece, sloping, is in `os` too)
+            const p = project(o.l, x, z), out = p.d - o.r.w / 2;
+            if (p.s < o.sa - 0.05 || p.s > o.sb + 0.05) continue;
+            const w = Math.min(far, out <= 0 ? 1 : Math.max(0, 1 - out / FIT));
+            if (w <= bw) continue;
+            const ho = hAt(o.l, p.s) + Y.road;
+            if (Math.abs(ho - y) > 1) continue;
+            best = y + (ho - y) * w; bw = w;
+          }
+          if (bw > 0) return best;
+        }
+        return y;
+      },
+    };
+  };
+  /**
+   * Carriageways overlapping in plan at a slightly different height (a slip road beside the road it leaves or joins,
+   * a side road climbing between two decks): where ours lies in a wider one - or one as wide and higher - ours takes
+   * its surface (a centimetre under, so the two never z-fight), and comes back to its own over FIT m beyond its edge,
+   * fully up to 0.6 m apart (1.2 near a node they share) and less and less to none 1.2 m further (real levels). The higher one's edge stood across the lower
+   * one's outer lane as a step, 38 of the 59 over 0.3 m in the city's wheel paths after the shoulders were trimmed
+   * (the lip audit of 2026-10-30, 「从辅路上高架桥，有高度差被挡着，上不去」).
+   */
+  const sidesOf = (r: RoadPiece, l: Line): Mouth | null => {
+    if (!l.H) return null;
+    const hw = r.w / 2;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const [x, z] of l.P) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    const near = carLines.filter((o) => {
+      if (o.r === r) return false;
+      const mm = o.r.w / 2 + hw + 13, [ba, bb, bc, bd] = o.box;
+      if (ba > x1 + mm || bb < x0 - mm || bc > z1 + mm || bd < z0 - mm) return false;
+      // not to a road ending in ours at a junction: that one fits itself to ours across its mouth (mouthsOf)
+      const on = o.r.p.length;
+      for (const [ex, ez, cont] of [[o.r.p[0], o.r.p[1], o.r.a], [o.r.p[on - 2], o.r.p[on - 1], o.r.b]] as const) {
+        if (cont) continue;
+        const q = project(l, ex, ez);
+        if (q.d < 0.5 && q.s > 0.3 && q.s < l.len - 0.3) return false;
+      }
+      // nor to one our mouth is fitted to already: both at once pulled a side street up into a 25% ramp at 紫竹院路
+      if (mouthTo.get(r)?.has(o)) return false;
+      return true;
+    });
+    if (!near.length) return null;
+    /** How much longer the blends are for a bigger difference: 1 up to 0.6 m, at most 3. */
+    const stretch = (dh: number) => Math.max(1, Math.min(3, dh / 0.6));
+    /** How far to take ours (surface y at x, z) to o: 0..1, and o's surface there. */
+    const pull = (o: (typeof carLines)[number], x: number, z: number, y: number): [number, number] => {
+      // beside it, on its own stretch: not off its end (the road ours runs on from), nor on its extension
+      const p = project(o.l, x, z);
+      if (p.s < Math.max(o.sa, 0.05) || p.s > Math.min(o.sb, o.l.len - 0.05)) return [0, 0];
+      const ho = hAt(o.l, p.s) + Y.road, dh = Math.abs(ho - y);
+      // (from the edge of its deck top, which runs out to its parapet's outer face; over FIT m per 0.6 m apart, so the
+      // slope back to ours stays near 20%: over 3 m a metre's pull was a ramp a car stalled on)
+      const out = p.d - (o.r.w / 2 + DECK.parapet + 0.05), ws = out <= 0 ? 1 : 1 - out / (FIT * stretch(dh));
+      if (ws <= 0) return [0, 0];
+      // Where ours climbs to meet it near here (a slip road merging up), they are one pavement: all the way up to 1.2 m apart.
+      // Elsewhere all the way up to 0.6 m; past that ours is moved less and less, to none at twice that and more:
+      // where a slip road climbs away from the road beside it, letting go between 0.75 and 1 m built a slope of 40 degrees.
+      // (Only up: pulled all the way down to the road it leaves, a slip road climbing off 东二环 left itself a steeper
+      // climb after and a step at the fork where it split.)
+      // Down, it lets go by twice the difference it takes fully.
+      const full = ho > y && (merges.get(o) ?? []).some(([mx, mz]) => Math.hypot(mx - x, mz - z) < 40) ? 1.2 : 0.6, none = ho > y ? full + 1.2 : full * 2;
+      if (dh < 0.03 || dh > none) return [0, 0];
+      if (!(o.r.w > r.w + 0.05 || (Math.abs(o.r.w - r.w) <= 0.05 && ho > y))) return [0, 0];
+      return [ws * (dh <= full ? 1 : full * (none - dh) / (none - full) / dh), ho - 0.01];
+    };
+    /** The nodes ours shares with each of them. */
+    const merges = new Map<(typeof carLines)[number], [number, number][]>();
+    for (const o of near) {
+      const m: [number, number][] = [];
+      for (let i = 0; i < o.r.p.length; i += 2) for (let j = 0; j < r.p.length; j += 2) if (Math.abs(o.r.p[i] - r.p[j]) < 0.05 && Math.abs(o.r.p[i + 1] - r.p[j + 1]) < 0.05) m.push([r.p[j], r.p[j + 1]]);
+      if (m.length) merges.set(o, m);
+    }
+    // where along ours (every SCAN m) each of them reaches into our carriageway, and the most they are apart there;
+    // it lets go over ALONG m (stretched) either side of that
+    const ALONG = 4, SCAN = 2;
+    const boxes = near.map((o) => { const m = o.r.w / 2 + 1; return [o.box[0] - m, o.box[1] + m, o.box[2] - m, o.box[3] + m]; });
+    const hits = new Map<(typeof carLines)[number], number[]>(), most = new Map<(typeof carLines)[number], number>();
+    for (let s = 0; s <= l.len + SCAN - 1e-6; s += SCAN) {
+      const sc = Math.min(s, l.len), [x, z, nx, nz] = at(l, sc), y = hAt(l, sc) + Y.road;
+      near.forEach((o, i) => {
+        const [a, b, c, d] = boxes[i];
+        if (x < a - hw || x > b + hw || z < c - hw || z > d + hw) return;
+        for (const u of [-1, -0.5, 0, 0.5, 1]) {
+          const px = x + nx * u * hw, pz = z + nz * u * hw, p = project(o.l, px, pz);
+          if (p.d > o.r.w / 2 + 0.05) continue;
+          const [w, ho] = pull(o, px, pz, y);
+          if (w > 0) { (hits.get(o) ?? hits.set(o, []).get(o)!).push(sc); most.set(o, Math.max(most.get(o) ?? 0, Math.abs(ho - y))); return; }
+        }
+      });
+      if (sc >= l.len) break;
+    }
+    if (!hits.size) return null;
+    const zones: [number, number, number][] = [];
+    for (const [o, ss] of hits) {
+      const reach = ALONG * stretch((most.get(o) ?? 0) + 0.2) + SCAN;
+      for (const v of ss) zones.push([Math.max(0, v - reach), Math.min(l.len, v + reach), 2]);
+    }
+    zones.sort((p, q) => p[0] - q[0]);
+    const merged: [number, number, number][] = [];
+    for (const zn of zones) { const last = merged[merged.length - 1]; if (last && zn[0] <= last[1]) last[1] = Math.max(last[1], zn[1]); else merged.push([...zn]); }
+    const along = (ss: number[], s: number, L: number) => { let d = Infinity; for (const v of ss) d = Math.min(d, Math.abs(v - s)); return Math.max(0, 1 - Math.max(0, d - SCAN) / L); };
+    return {
+      zones: merged,
+      // (several at once are averaged by weight: taking the strongest jumped between them where they crossed)
+      fit: (x, z, s, y) => {
+        let sw = 0, sum = 0;
+        for (const [o, ss] of hits) {
+          if (along(ss, s, ALONG * 3) <= 0) continue;
+          const [w, ho] = pull(o, x, z, y);
+          if (w <= 0) continue;
+          const a = along(ss, s, ALONG * stretch(Math.abs(ho - y)));
+          sw += w * a; sum += w * a * (ho - y);
+        }
+        return sw > 0 ? y + sum / Math.max(1, sw) : y;
+      },
+    };
+  };
+  /** Both: the mouth, then the overlaps on what the mouth made of it (one after the other, so it stays continuous). */
+  const fitOf = (r: RoadPiece, l: Line): Mouth | null => {
+    const m = mouthsOf(r, l), sd = sidesOf(r, l);
+    if (!m && !sd) return null;
+    // (each vertex is asked for by several quads and faces: once is enough)
+    const memo = new Map<string, number>();
+    const both = (x: number, z: number, s: number, y: number) => (sd ? sd.fit(x, z, s, m ? m.fit(x, z, s, y) : y) : m!.fit(x, z, s, y));
+    return {
+      zones: [...(m?.zones ?? []), ...(sd?.zones ?? [])],
+      fit: (x, z, s, y) => {
+        const k = `${x.toFixed(2)},${z.toFixed(2)},${y.toFixed(3)}`;
+        let v = memo.get(k);
+        if (v === undefined) { v = both(x, z, s, y); memo.set(k, v); }
+        return v;
+      },
+    };
+  };
   for (const r of pieces) {
     const n = r.p.length / 2;
     if (n < 2) continue;
@@ -735,14 +989,18 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
     const car = isCar(r.c);
     const hw = r.w / 2;
     if (!car) { band(walk, l, 0, l.len, -hw, hw, Y.path, PAVING); continue; }
-    band(road, l, 0, l.len, -hw, hw, Y.road, MAIN.has(r.c) ? MAIN_ASPHALT : OLD_ASPHALT);
+    const mouth = fitOf(r, l);
+    band(road, l, 0, l.len, -hw, hw, Y.road, MAIN.has(r.c) ? MAIN_ASPHALT : OLD_ASPHALT, mouth);
     const junctions = J.get(r) ?? [];
     const block = (extra: number, useRoad = false) => spans(l.len, junctions.map((j) => [j.s - (useRoad ? j.road : j.cut) - extra, j.s + (useRoad ? j.road : j.cut) + extra] as [number, number]));
     // Up on an interchange: parapets and the structure instead of pavements.
     // (and down in an underpass: its trench walls instead, city/visual/Tunnels.ts)
     const up = [...lifted(l, 0.15), ...sunk(l, 0.15)].map(([a, b]) => [a - 3, b + 3] as [number, number]);
+    const col0 = col.length;
     if (l.H) bridgeOf(bridge, col, l, r, runsOnAll, below, (x, z, h) => ends.some(([ex, ez, eh]) => eh < h - 2.5 && Math.hypot(ex - x, ez - z) < 24), (x, z, h, step, margin = 0.05) => carLines.some((o) => {
       if (o.r === r) return false;
+      const mb = o.r.w / 2 + margin;
+      if (x < o.box[0] - mb || x > o.box[1] + mb || z < o.box[2] - mb || z > o.box[3] + mb) return false;
       const p = project(o.l, x, z);
       // Real distance, not the lateral offset: at a node where a dozen short pieces of 建国门桥 meet,
       // the junction lies off the ends of them all, and an in-span test left their parapets standing.
@@ -753,8 +1011,9 @@ export function buildRoads(pieces: RoadPiece[], crossings: number[], col: number
       // One level (a merge), or with `step` a carriageway 0.3-1.5 m lower: a drop a car can take, where a
       // parapet would stand in its lanes. A carriageway lower still beside the edge is a real drop.
       const dh = h - hAt(o.l, p.s) - Y.road;
-      return step === 'above' ? dh < -0.2 && dh > -2.5 : step === 'any' ? Math.abs(dh) < 2.2 : step === 'off' ? Math.abs(dh) >= 0.15 && Math.abs(dh) < 5 : step === 'flush' ? Math.abs(dh) < 0.15 : step ? dh > 0.3 && dh < 1.5 : Math.abs(dh) < 0.5;
-    }), deckLamps, occupied);
+      return step === 'shoulder' ? Math.abs(dh) >= 0.12 && Math.abs(dh) < 1.5 : step === 'above' ? dh < -0.2 && dh > -2.5 : step === 'any' ? Math.abs(dh) < 2.2 : step === 'off' ? Math.abs(dh) >= 0.15 && Math.abs(dh) < 5 : step === 'flush' ? Math.abs(dh) < 0.15 : step ? dh > 0.3 && dh < 1.5 : Math.abs(dh) < 0.5;
+    }), deckLamps, occupied, mouth);
+    if (owners) for (let i = col0; i < col.length; i += 9) owners.push(pieces.indexOf(r));
     // Pavements with curbs, and the median of one-way main roads.
     const sw = SIDEWALK[r.c] ?? 0;
     const sides: number[] = sw ? (r.o ? [-1] : [1, -1]) : [];
