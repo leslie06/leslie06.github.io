@@ -6,7 +6,7 @@ import type { PlayerApi } from '../game/Contracts';
 import type { RenderSystem } from '../render';
 import { Gait, type Motion } from '../character/Animator';
 import { J, randomLook, SKELETON, type Look } from '../character/Body';
-import { buildCar, defaultLivery, type CarModel } from '../vehicle/CarModel';
+import { buildCar, defaultLivery, POLICE_LIVERY, type CarModel } from '../vehicle/CarModel';
 import { BODY_TYPES, bodySettled, readyBodies, type BodySource, type BodyType } from '../vehicle/Bodies';
 import { SPEC_OF, TAXI, type VehicleSpec } from '../vehicle/Spec';
 import { SEAT } from '../vehicle/TwoWheelers';
@@ -31,8 +31,10 @@ export interface NetState {
   wl?: [number, number, number, number];
   ln?: [number, number];
   sp?: number;
-  /** Brake, reverse and head lights. */
+  /** Brake, reverse and head lights; 8: the police light bar flashing. */
   li?: number;
+  /** A livery other than the body's own: 'police' (警匪追逃's police). */
+  lv?: 'police';
   /** On foot: ground speed (the walk), and an action ('punch'...) if any. */
   fs?: number;
   /** Their time of day (hours): the room's first player's is everyone's clock. */
@@ -64,7 +66,8 @@ export function cleanState(m: Record<string, unknown>): NetState | null {
     s.wl = (vec(m.wl, 4, 3) ?? undefined) as NetState['wl'];
     s.ln = (vec(m.ln, 2, 2) ?? [0, 0]) as NetState['ln'];
     s.sp = num(m.sp, 400) ?? 0;
-    s.li = num(m.li, 8) ?? 0;
+    s.li = num(m.li, 16) ?? 0;
+    if (m.lv === 'police') s.lv = 'police';
   } else {
     s.y = num(m.y, 100) ?? 0;
     s.fs = num(m.fs, 50) ?? 0;
@@ -104,6 +107,13 @@ const CATCH = 3;
  */
 const COAST = 450;
 const PELVIS_Y = SKELETON[J.pelvis].offset[1];
+/** The police light bar's flash (police/ flashes its cars the same way): red, blue, from a clock in seconds. */
+export const beaconFlash = (clock: number): [number, number] => {
+  const ph = (clock * 2.4) % 2, u = ph % 1, flash = u < 0.16 || (u > 0.28 && u < 0.44) ? 1 : 0;
+  return [0.25 + (ph < 1 ? flash : 0) * 9, 0.25 + (ph >= 1 ? flash : 0) * 9];
+};
+/** How long a line said stays over the head (ms). */
+const SAY_MS = 4500;
 const TAG_FAR = 1500;
 const _a = new THREE.Vector3(), _f = new THREE.Vector3(), _o = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
@@ -154,6 +164,8 @@ export class RemotePeer {
   private readonly tag: HTMLDivElement;
   private readonly tagName: HTMLSpanElement;
   private readonly tagDist: HTMLSpanElement;
+  private readonly tagSay: HTMLSpanElement;
+  private sayUntil = 0;
   private readonly motion: Motion = { speed: 0, action: 'move', t: 0 };
   private readonly riderMotion: Motion = { speed: 0, action: 'ride', t: 0, ride: 'ebike', lean: 0 };
   /** How far behind their newest state they are drawn (ms), sliding towards `wantDelay`. */
@@ -192,7 +204,10 @@ export class RemotePeer {
     this.tagName.textContent = name;
     this.tagDist = document.createElement('span');
     this.tagDist.className = 'd';
-    this.tag.append(this.tagName, this.tagDist);
+    this.tagSay = document.createElement('span');
+    this.tagSay.className = 'say';
+    this.tagSay.hidden = true;
+    this.tag.append(this.tagSay, this.tagName, this.tagDist);
     this.tag.hidden = true;
     tagLayer.appendChild(this.tag);
   }
@@ -282,7 +297,7 @@ export class RemotePeer {
   /** The full-detail model of this body, built once its Blender mesh is in. */
   private ensureModel(s: NetState): CarModel | null {
     const body = s.b!;
-    const key = `${body}`;
+    const key = `${body}${s.lv ?? ''}`;
     if (this.model && this.modelKey === key) return this.model;
     const blender = (BODY_TYPES as readonly string[]).includes(body) && !['moto', 'bike', 'ebike'].includes(body);
     if (blender && !bodySettled(body as BodySource)) {
@@ -291,7 +306,7 @@ export class RemotePeer {
     }
     this.dropModel();
     this.spec = SPEC_OF[body] ?? TAXI;
-    const m = buildCar(this.spec, defaultLivery(body), body);
+    const m = buildCar(this.spec, s.lv === 'police' ? POLICE_LIVERY : defaultLivery(body), body);
     this.engine.get<RenderSystem>('render')?.prepare(m.root);
     this.engine.scene.add(m.root);
     this.model = m; this.modelKey = key; this.paintKey = '';
@@ -403,7 +418,7 @@ export class RemotePeer {
   }
 
   /** Draw them this frame: the car, a rider on a two-wheeler, the person on foot, the name tag. */
-  update(dt: number, now: number, alpha: number): void {
+  update(dt: number, now: number, alpha: number, hidden = false): void {
     if (!this.sample(now)) { this.tag.hidden = true; return; }
     const pl = this.engine.get<PlayerApi>('player');
     const c = this.car();
@@ -431,6 +446,7 @@ export class RemotePeer {
         m.body.rotation.set(s.ln?.[0] ?? 0, 0, s.ln?.[1] ?? 0);
         const li = driving ? s.li ?? 0 : 0;
         m.setLights({ brake: !!(li & 1), reverse: !!(li & 2), head: !!(li & 4) });
+        if (s.lv === 'police') { const [r, b] = li & 8 ? beaconFlash(now / 1000) : [0.25, 0.25]; m.setBeacons(r, b); }
         // a two-wheeler's rider, as traffic draws theirs
         if (driving && this.spec.single && pl) {
           const seat = SEAT[s.b as 'moto' | 'bike' | 'ebike'] ?? SEAT.ebike;
@@ -450,10 +466,14 @@ export class RemotePeer {
       this.gait.update(this.motion, dt, this.seed % 997);
       pl.crowd.add(this.pos, this.yaw, this.gait, this.look);
     }
-    this.placeTag();
+    if (hidden) this.tag.hidden = true; else this.placeTag(now);
   }
 
-  private placeTag(): void {
+  /** A line over their head for SAY_MS. */
+  say(text: string): void { this.tagSay.textContent = text; this.tagSay.hidden = false; this.sayUntil = performance.now() + SAY_MS; }
+
+  private placeTag(now: number): void {
+    if (!this.tagSay.hidden && now > this.sayUntil) this.tagSay.hidden = true;
     const cam = this.engine.camera;
     const at = _a.set(this.pos.x, this.pos.y + (this.foot ? 2.15 : 2.0), this.pos.z);
     const d = cam.position.distanceTo(at);

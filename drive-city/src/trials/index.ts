@@ -21,8 +21,18 @@ interface Save { best: number; splits: number[]; medal: number }
 interface Run { c: number; t: number; next: number; maxS: number; off: number; hint: number; splits: number[] }
 interface Line { course: Course; p: Float32Array; cum: Float32Array; len: number; cps: number[]; hw: number }
 
+/** A course as the room's races use it (online/RoomPlay.ts): its line, checkpoints (arc lengths) and half width. */
+export interface TrialLine { id: string; name: string; p: Float32Array; cum: Float32Array; len: number; cps: readonly number[]; hw: number }
+
 export interface TrialApi extends System {
   readonly active: boolean;
+  /** The courses (联机 races run them too). */
+  readonly lines: readonly TrialLine[];
+  /** A starting-grid slot `back` m behind a course's gate and `side` m off its lane: [x, y, z, yaw]. */
+  grid(i: number, back: number, side: number): [number, number, number, number];
+  /** Arc length along a course nearest (x, z), searched round point `hint`, and the distance off it. */
+  along(i: number, x: number, z: number, hint: number, span?: number): { s: number; i: number; d: number };
+  pointAt(i: number, s: number): [number, number];
   readonly total: number;
   readonly medals: number;
   debug: { lines(): { id: string; len: number; start: [number, number]; dir: [number, number]; end: [number, number]; pts: number[]; runup: [number, number, number, number] }[]; state(): { course: string; t: number; next: number; of: number } | null; reset(): void };
@@ -122,6 +132,13 @@ export async function install(engine: Engine): Promise<void> {
     g.at(l, s, l.oneway ? 0 : g.laneOffset(l, 0), at);
     return [at.x, g.heightAt(l, s), at.z, Math.atan2(at.dx, at.dz)];
   };
+  const grid = (c: number, back: number, side: number): [number, number, number, number] => {
+    const ln = lines[c], l = g.links[ln.course.links[0]], s = Math.max(0, ln.course.s0 - back);
+    g.at(l, s, (l.oneway ? 0 : g.laneOffset(l, 0)) + side, at);
+    return [at.x, g.heightAt(l, s), at.z, Math.atan2(at.dx, at.dz)];
+  };
+  /** A room's game (online/RoomPlay.ts) is on: the gates do not start a run. */
+  const roomGame = () => !!engine.get<{ name: string; active: boolean }>('play')?.active;
   let run: Run | null = null;
   let clock = 0, cool = 0;
   const lastSide = lines.map(() => 0);
@@ -155,6 +172,10 @@ export async function install(engine: Engine): Promise<void> {
     name: 'trials',
     get active() { return !!run; },
     total: lines.length,
+    lines: lines.map((ln) => ({ id: ln.course.def.id, get name() { return nameOf(ln); }, p: ln.p, cum: ln.cum, len: ln.len, cps: ln.cps, hw: ln.hw })),
+    grid,
+    along: (i, x, z, hint, span) => along(lines[i], x, z, hint, span),
+    pointAt: (i, s) => pointAt(lines[i], s),
     get medals() { return Object.values(saved).reduce((a, s) => a + (s.medal + 1), 0); },
     debug: {
       lines: () => lines.map((ln) => ({ id: ln.course.def.id, len: ln.len, start: [ln.p[0], ln.p[1]] as [number, number], dir: [ln.p[2] - ln.p[0], ln.p[3] - ln.p[1]] as [number, number], end: pointAt(ln, ln.len), pts: Array.from(ln.p), runup: runup(ln) })),
@@ -204,7 +225,7 @@ export async function install(engine: Engine): Promise<void> {
         return;
       }
       // Idle: through a start gate, going the right way, in a car and moving.
-      if (!driving || cool > 0) return;
+      if (!driving || cool > 0 || roomGame()) return;
       const car = v!.car;
       for (let c = 0; c < lines.length; c++) {
         const ln = lines[c], sx = ln.p[0], sz = ln.p[1];
@@ -235,7 +256,7 @@ export async function install(engine: Engine): Promise<void> {
         blipsOn = true;
         nav.addBlips(() => {
           blips.length = 0;
-          if (run) return blips;
+          if (run || roomGame()) return blips;
           const p = pl.position;
           for (const ln of lines) if (nav.mapOpen || Math.hypot(ln.p[0] - p.x, ln.p[1] - p.z) < RADAR) blips.push({ kind: 'trial', x: ln.p[0], z: ln.p[1], label: nameOf(ln) });
           return blips;

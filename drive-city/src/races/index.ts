@@ -176,7 +176,7 @@ export async function install(engine: Engine): Promise<void> {
       const v = veh(), car = v.car;
       hintCd -= dt;
       if (stage === 'idle') {
-        const busy = !!engine.get<MissionApi>('missions')?.objective;
+        const busy = !!engine.get<MissionApi>('missions')?.objective || !!engine.get<{ name: string; active: boolean }>('play')?.active;
         if (busy || pl.mode !== 'driving' || !v.inputEnabled) return;
         for (let i = 0; i < spots.length; i++) {
           const d = Math.hypot(spots[i].x - car.pos.x, spots[i].z - car.pos.z);

@@ -1,6 +1,7 @@
 import type { Engine } from '../core/Engine';
 import { t } from '../core/I18n';
 import type { MultiplayerApi } from '../online/Multiplayer';
+import type { PlayApi } from '../online/RoomPlay';
 import { C, F, css, el } from './theme';
 
 css(`
@@ -30,6 +31,18 @@ css(`
 .mpk .p .you{color:${C.muted};font-weight:500}
 .mpk .p button{padding:7px 12px;background:#35e0c2;color:${C.ink};font:800 12px/1 ${F.ui}}
 .mpk .empty{font:500 13px/1.5 ${F.ui};color:${C.muted};padding:10px 0}
+.mpk .games{margin:6px 0 14px}
+.mpk .g{padding:10px 0;border-bottom:1px solid ${C.line}}
+.mpk .g b{font:800 15px/1.3 ${F.ui}}
+.mpk .g p{margin:3px 0 8px;font:500 12px/1.5 ${F.ui};color:${C.muted}}
+.mpk select{flex:1;min-width:0;padding:9px 10px;border-radius:8px;border:1px solid ${C.line};background:#20262a;color:${C.paper};font:600 14px/1.2 ${F.ui}}
+.mpk .go{padding:10px 16px;background:#35e0c2;color:${C.ink};font:800 14px/1 ${F.ui}}
+.mpk .on{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:8px 0;border-radius:8px;background:rgba(53,224,194,.12);font:700 14px/1.3 ${F.ui}}
+.mpk .on span{flex:1}
+.mpk .res{margin-top:10px;font:600 13px/1.6 ${F.ui}}
+.mpk .res .h{color:#35e0c2;font-weight:800}
+.mpk .res div{display:flex;gap:8px}.mpk .res div span:first-child{flex:1;color:${C.muted}}
+.mpk .hint{margin-top:10px;font:500 12px/1.5 ${F.ui};color:${C.muted}}
 @media (max-height:520px){
   .mpk{padding:8px}.mpk .box{padding:10px 14px}
   .mpk .intro{margin-bottom:8px;font-size:12px}
@@ -48,6 +61,9 @@ export class RoomPanel {
   private body: HTMLDivElement;
   private timer = 0;
   private status = '';
+  /** The choices in 一起玩, kept across the panel's redraws. */
+  private coursePick = 0;
+  private runnerPick = -1;
 
   constructor(private engine: Engine, container: HTMLElement, private mp: MultiplayerApi, private resume: () => void) {
     const root = this.root = el('div', 'mpk', container);
@@ -64,7 +80,77 @@ export class RoomPanel {
   }
 
   get open(): boolean { return !this.root.hidden; }
+  private play() { return this.engine.get<PlayApi & { listen(fn: () => void): void }>('play'); }
+  /** Off into the city to do it: the panel closes, a pause ends; an error comes back here. */
+  private launch(fn: () => string | null): void {
+    const ui = this.engine.get<{ name: string; state: string }>('ui');
+    if (ui?.state !== 'playing' && ui?.state !== 'paused') { this.status = t('mp.goFromCity'); this.render(); return; }
+    this.hide(); this.resume();
+    const err = fn();
+    if (err) { this.show(); this.status = err; this.render(); }
+  }
+
+  /** 一起玩 (online/RoomPlay.ts): a race on a course, a chase with a runner; what is on; the last game; the scores. */
+  private renderGames(b: HTMLElement): void {
+    const play = this.play(), mp = this.mp;
+    if (!play) return;
+    const box = el('div', 'games', b);
+    el('div', 'label', box).textContent = t('play.games');
+    const on = play.running;
+    if (on) {
+      const r = el('div', 'on', box);
+      el('span', '', r).textContent = on.title;
+      if (on.mine) { const x = el('button', 'ghost', r); x.textContent = t('play.stopBtn'); x.addEventListener('click', () => play.stop()); }
+    } else {
+      const race = el('div', 'g', box);
+      el('b', '', race).textContent = t('play.raceTitle');
+      el('p', '', race).textContent = t('play.raceHelp');
+      const rr = el('div', 'row', race);
+      const cs = el('select', '', rr) as HTMLSelectElement;
+      play.courses.forEach((c, i) => { const o = el('option', '', cs) as HTMLOptionElement; o.value = String(i); o.textContent = `${c.name} · ${(c.len / 1000).toFixed(1)} km`; });
+      cs.value = String(this.coursePick);
+      cs.addEventListener('change', () => { this.coursePick = Number(cs.value); });
+      const rg = el('button', 'go', rr); rg.textContent = t('play.start');
+      rg.addEventListener('click', () => this.launch(() => play.startRace(this.coursePick)));
+      const chase = el('div', 'g', box);
+      el('b', '', chase).textContent = t('play.chaseTitle');
+      el('p', '', chase).textContent = t('play.chaseHelp');
+      const cr = el('div', 'row', chase);
+      const who = el('select', '', cr) as HTMLSelectElement;
+      const people = [{ id: mp.me?.id ?? -1, name: `${mp.me?.name ?? ''}（${t('play.runnerMe')}）` }, ...mp.peers.filter((p) => p.dist >= 0).map((p) => ({ id: p.id, name: p.name }))];
+      for (const p of people) { const o = el('option', '', who) as HTMLOptionElement; o.value = String(p.id); o.textContent = p.name; }
+      if (!people.some((p) => p.id === this.runnerPick)) this.runnerPick = people[people.length > 1 ? 1 : 0].id;
+      who.value = String(this.runnerPick);
+      who.addEventListener('change', () => { this.runnerPick = Number(who.value); });
+      const cg = el('button', 'go', cr); cg.textContent = t('play.start');
+      cg.disabled = people.length < 2;
+      cg.addEventListener('click', () => {
+        const runner = this.runnerPick;
+        // the next round's runner: the next one along
+        const i = people.findIndex((p) => p.id === runner);
+        this.runnerPick = people[(i + 1) % people.length].id;
+        this.launch(() => play.startChase(runner));
+      });
+    }
+    const last = play.last;
+    if (last && last.rows.length) {
+      const r = el('div', 'res', box);
+      el('span', 'h', r).textContent = `${t('play.last')}：${last.title}`;
+      for (const row of last.rows) { const d = el('div', '', r); el('span', '', d).textContent = row.name; el('span', '', d).textContent = row.text; }
+    }
+    const sc = play.scores.filter((x) => x.raceWins || x.escapes || x.catches);
+    if (sc.length) {
+      const r = el('div', 'res', box);
+      el('span', 'h', r).textContent = t('play.scores');
+      for (const x of sc) { const d = el('div', '', r); el('span', '', d).textContent = x.name; el('span', '', d).textContent = t('play.scoreRow', { w: x.raceWins, e: x.escapes, c: x.catches }); }
+    }
+    el('div', 'hint', box).textContent = t('play.keyHint');
+  }
+  private heard = false;
   show(): void {
+    // the room's games are installed after the UI: heard from once there
+    const play = this.play();
+    if (play && !this.heard) { this.heard = true; play.listen(() => { if (this.open) this.render(); }); }
     this.root.hidden = false; this.status = '';
     this.render();
     clearInterval(this.timer);
@@ -109,6 +195,7 @@ export class RoomPanel {
           if (err) { this.show(); this.status = err; this.render(); }
         });
       }
+      this.renderGames(b);
       const leave = el('button', 'ghost', b); leave.textContent = t('mp.leave');
       leave.addEventListener('click', () => { mp.leave(); this.status = ''; this.render(); });
     } else {

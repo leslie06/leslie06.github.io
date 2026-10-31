@@ -19,7 +19,7 @@ import { WantedHud } from './WantedHud';
 const stronger = (s: VehicleSpec, k: number, kmh: number): VehicleSpec =>
   ({ ...s, engine: { ...s.engine, torque: s.engine.torque.map(([r, n]) => [r, n * k] as [number, number]), limiterKmh: kmh } });
 /** Police cars: the taxi chassis with a much stronger engine. */
-const POLICE = stronger(TAXI, 1.55, 230);
+export const POLICE = stronger(TAXI, 1.55, 230);
 /** 特警 (four stars and up): black SUVs, heavy and quick, built to ram. */
 const SWAT = stronger(SUV, 1.7, 210);
 const SWAT_LIVERY: Livery = { upper: '#17191c', lower: '#17191c', roofSign: null, beacons: true, plate: { text: '京A·0110警', bg: '#f2f2ee', fg: '#111111' }, doorText: '特警 SWAT', doorColor: '#e9e9e4' };

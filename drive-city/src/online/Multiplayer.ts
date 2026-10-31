@@ -8,6 +8,8 @@ import { Fade } from '../campaign/Screens';
 import { bodyOfSpec } from '../vehicle/Bodies';
 import { statsEndpoint } from './Leaderboard';
 import { cleanState, RemotePeer, type NetState } from './Remote';
+export { beaconFlash } from './Remote';
+import { POLICE_LIVERY } from '../vehicle/CarModel';
 
 /**
  * Playing with friends (2026-10-29, 「做成可以和朋友联机，可以同时开车，朋友也能上自己的车，做联机版」; the user chose a
@@ -30,7 +32,8 @@ import { cleanState, RemotePeer, type NetState } from './Remote';
  * a chapter or the opening getaway, if one is on.
  * A dropped link reconnects into the same room (if anyone is still in it). Off where the leaderboards are.
  */
-export interface MpPeerView { id: number; name: string; x: number; z: number; foot: boolean; dist: number }
+export interface MpPeerView { id: number; name: string; x: number; z: number; foot: boolean; dist: number; speed: number }
+export interface MpPose { x: number; y: number; z: number; yaw: number }
 export type MpStatus = 'off' | 'connecting' | 'in' | 'error';
 export interface MultiplayerApi extends System {
   readonly enabled: boolean;
@@ -49,6 +52,25 @@ export interface MultiplayerApi extends System {
   goTo(id: number): string | null;
   /** The link a friend opens to join this room. */
   inviteLink(): string;
+  /** A one-off event to the room (`{t:'e', k, ...data}`), for the room's games (online/RoomPlay.ts). */
+  send(k: string, data?: Record<string, unknown>): void;
+  /** Events from the others (any but the horn): who sent it, and it. */
+  onEvent(fn: (from: number, m: Record<string, unknown>) => void): void;
+  /** Someone left the room (or we did: every id). */
+  onGone(fn: (id: number) => void): void;
+  /**
+   * Black out, load the place and put the player there in their car: at `to` itself (`exact`, a starting grid) or on
+   * the nearest lane to it, facing `to.yaw`. Resolves true if done. `hold` leaves the car's input off (a countdown).
+   */
+  warp(to: MpPose, opts?: { exact?: boolean; hold?: boolean; caption?: string }): Promise<boolean>;
+  /** Why the player cannot be taken anywhere now, or null. */
+  busy(): string | null;
+  /** A line over a friend's head for a few seconds. */
+  say(id: number, text: string): void;
+  /** Friends kept off the name tags and the radar (the runner, from the police, in 警匪追逃). */
+  readonly hidden: Set<number>;
+  /** Our car flashes a police light bar, here and for the others. */
+  beacons: boolean;
   /** Called when the room, its people or the status change. */
   listen(fn: () => void): void;
   /** Probes: each friend's car body here. */
@@ -56,18 +78,22 @@ export interface MultiplayerApi extends System {
 }
 
 const GAME = 'bcity', SEND_MS = 100, IDLE_SEND_MS = 1000;
+
 /** Joining: nearer than this to the room's maker already, you stay where you are. */
 const MEET_NEAR = 80;
 const read = <T>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v) as T; } catch { return d; } };
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
 const hex = (c: THREE.Color) => `#${c.getHexString()}`;
+const yawOf = (q: THREE.Quaternion) => Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
 
 export function install(engine: Engine): MultiplayerApi | null {
   const { base, enabled } = statsEndpoint();
   if (!enabled) return null;
   const wsUrl = `${base.replace(/^http/, 'ws')}/mp`;
   const listeners: (() => void)[] = [];
+  const eventFns: ((from: number, m: Record<string, unknown>) => void)[] = [];
+  const goneFns: ((id: number) => void)[] = [];
   const changed = () => { for (const fn of listeners) fn(); };
   const toast = (s: string, secs = 3) => engine.get<HudApi>('hud')?.toast(s, secs);
   const peers = new Map<number, RemotePeer>();
@@ -86,11 +112,13 @@ export function install(engine: Engine): MultiplayerApi | null {
   style.textContent = `.mp-tags{position:fixed;inset:0;pointer-events:none;z-index:9;overflow:hidden}
 .mp-tag{position:absolute;left:0;top:0;padding:3px 9px;border-radius:999px;background:rgba(9,11,13,.62);color:#35e0c2;font:700 13px/1.3 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;white-space:nowrap;border:1px solid rgba(53,224,194,.55);will-change:transform}
 .mp-tag .d{color:rgba(244,241,232,.7);font-weight:600}
+.mp-tag .say{display:block;margin-bottom:3px;padding:4px 9px;border-radius:9px;background:#f4f1e8;color:#121417;font-weight:800;text-align:center}
+.mp-tag .say[hidden]{display:none}
 .mp-tag[hidden]{display:none}
 body:not(.dc-playing) .mp-tags{display:none}`;
   document.head.appendChild(style);
 
-  const clearPeers = () => { for (const p of peers.values()) p.dispose(); peers.clear(); };
+  const clearPeers = () => { for (const p of peers.values()) { p.dispose(); for (const fn of goneFns) fn(p.id); } peers.clear(); };
   const addPeer = (id: number, name: string) => { if (!peers.has(id)) peers.set(id, new RemotePeer(engine, id, name, layer())); };
 
   const open = () => {
@@ -145,7 +173,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       changed();
     } else if (m.t === 'gone') {
       const p = peers.get(Number(m.id));
-      if (p) { toast(t('mp.peerOut', { name: p.name })); p.dispose(); peers.delete(p.id); changed(); }
+      if (p) { toast(t('mp.peerOut', { name: p.name })); p.dispose(); peers.delete(p.id); for (const fn of goneFns) fn(p.id); changed(); }
     } else if (m.t === 's') {
       const p = peers.get(Number(m.id)), s = cleanState(m);
       if (p && s) {
@@ -155,7 +183,8 @@ body:not(.dc-playing) .mp-tags{display:none}`;
     } else if (m.t === 'e') {
       const p = peers.get(Number(m.id));
       if (!p) return;
-      if (m.k === 'horn') { p.sample(performance.now()); engine.events.emit('traffic:horn', { x: p.pos.x, z: p.pos.z }); }
+      if (m.k === 'horn') { p.sample(performance.now()); engine.events.emit('traffic:horn', { x: p.pos.x, z: p.pos.z }); return; }
+      for (const fn of eventFns) fn(p.id, m);
     }
   };
 
@@ -177,13 +206,14 @@ body:not(.dc-playing) .mp-tags{display:none}`;
     const ts = Math.round(performance.now()), tm = r2(engine.get<RenderApi>('render')?.timeOfDay ?? 15);
     if (pl.mode === 'driving' || !pl.foot) {
       const car = v.car, p = v.renderPos, q = v.renderQuat, c = v.controls;
-      const li = (c.brake > 0.1 ? 1 : 0) | (car.gear === -1 ? 2 : 0) | ((engine.get<RenderApi>('render')?.night ?? 0) > 0.35 ? 4 : 0);
+      const li = (c.brake > 0.1 ? 1 : 0) | (car.gear === -1 ? 2 : 0) | ((engine.get<RenderApi>('render')?.night ?? 0) > 0.35 ? 4 : 0) | (api.beacons ? 8 : 0);
       return {
         ts, m: 'd', p: [r2(p.x), r2(p.y), r2(p.z)], v: [r2(car.vel.x), r2(car.vel.y), r2(car.vel.z)],
         q: [r3(q.x), r3(q.y), r3(q.z), r3(q.w)], b: v.look.body ?? bodyOfSpec(car.spec), c: [hex(v.look.upper), hex(v.look.lower)], tx: v.look.taxi ? 1 : 0,
         ws: [r3(car.wheels[0]?.steer ?? 0), r3(car.wheels[1]?.steer ?? 0)],
         wl: [0, 1, 2, 3].map((i) => r3(car.wheels[i]?.springLen ?? 0)) as NetState['wl'],
         ln: [r3(v.lean.pitch), r3(v.lean.roll)], sp: r2(car.forwardSpeed), li, tm,
+        ...(v.look.livery === POLICE_LIVERY ? { lv: 'police' as const } : {}),
       };
     }
     const f = pl.foot;
@@ -231,7 +261,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
     max: 4,
     get peers() {
       const me = engine.get<PlayerApi>('player')?.position;
-      return [...peers.values()].map((p) => ({ id: p.id, name: p.name, x: p.pos.x, z: p.pos.z, foot: p.foot, dist: me && p.state ? Math.hypot(p.pos.x - me.x, p.pos.z - me.z) : -1 }));
+      return [...peers.values()].map((p) => ({ id: p.id, name: p.name, x: p.pos.x, z: p.pos.z, foot: p.foot, dist: me && p.state ? Math.hypot(p.pos.x - me.x, p.pos.z - me.z) : -1, speed: Math.hypot(p.vel.x, p.vel.z) }));
     },
     listen(fn) { listeners.push(fn); },
     debug: { bodies: () => [...peers.values()].map((p) => p.debugBody) },
@@ -252,41 +282,52 @@ body:not(.dc-playing) .mp-tags{display:none}`;
     },
     inviteLink() { return api.room ? `${location.origin}${location.pathname}?room=${api.room}` : ''; },
     goTo(id) {
-      const p = peers.get(id), pl = engine.get<PlayerApi>('player'), v = engine.get<VehicleApi>('vehicle');
-      if (!p || !p.state || !pl || !v) return t('mp.goNone');
+      const p = peers.get(id), pl = engine.get<PlayerApi>('player');
+      if (!p || !p.state || !pl) return t('mp.goNone');
       const why = busy();
       if (why) return t(why);
       if (Math.hypot(p.pos.x - pl.position.x, p.pos.z - pl.position.z) < 40) return t('mp.goHere');
-      travelling = true;
-      const driving = pl.mode === 'driving';
-      fade ??= new Fade();
-      fade.to(true);
-      void (async () => {
-        let ok = false;
-        try {
-          await new Promise((r) => setTimeout(r, 0));
-          v.inputEnabled = false;
-          await new Promise((r) => setTimeout(r, 700));
-          await engine.get<WorldApi>('world')?.preload?.(p.pos.x, p.pos.z);
-          p.sample(performance.now());
-          // a lane 15 m behind them (so that you do not land on their car), else the nearest one to them
-          const back = p.foot ? 6 : 15, yaw = p.foot ? p.yaw : Math.atan2(2 * (p.quat.x * p.quat.z + p.quat.w * p.quat.y), 1 - 2 * (p.quat.x * p.quat.x + p.quat.y * p.quat.y));
-          const bx = p.pos.x - Math.sin(yaw) * back, bz = p.pos.z - Math.cos(yaw) * back;
-          const lane = v.roadPoseNear?.(bx, p.pos.y + 0.5, bz) ?? v.roadPoseNear?.(p.pos.x, p.pos.y + 0.5, p.pos.z);
-          if (lane) {
-            if (driving) v.reset({ x: lane.pos.x, y: lane.pos.y + 0.3, z: lane.pos.z }, lane.yaw);
-            else pl.setRiding(null, { x: bx, y: p.pos.y + 0.3, z: bz, yaw: Math.atan2(p.pos.x - bx, p.pos.z - bz) });
-            engine.get<CameraApi>('camera')?.snap();
-            ok = true;
-          }
-        } finally {
-          v.inputEnabled = true;
-          fade?.to(false, ok ? t('mp.arrived', { name: p.name }) : t('mp.goFail'));
-          travelling = false;
-        }
-      })();
+      p.sample(performance.now());
+      // a lane 15 m behind them (so that you do not land on their car), else the nearest one to them
+      const back = p.foot ? 6 : 15, yaw = p.foot ? p.yaw : yawOf(p.quat);
+      const bx = p.pos.x - Math.sin(yaw) * back, bz = p.pos.z - Math.cos(yaw) * back;
+      void api.warp({ x: bx, y: p.pos.y, z: bz, yaw }, { caption: t('mp.arrived', { name: p.name }) });
       return null;
     },
+    async warp(to, opts = {}) {
+      const pl = engine.get<PlayerApi>('player'), v = engine.get<VehicleApi>('vehicle');
+      if (!pl || !v || travelling) return false;
+      travelling = true;
+      fade ??= new Fade();
+      fade.to(true);
+      let ok = false;
+      try {
+        await new Promise((r) => setTimeout(r, 0));
+        v.inputEnabled = false;
+        await new Promise((r) => setTimeout(r, 700));
+        await engine.get<WorldApi>('world')?.preload?.(to.x, to.z);
+        const lane = opts.exact ? null : v.roadPoseNear?.(to.x, to.y + 0.5, to.z);
+        const at = opts.exact ? { x: to.x, y: to.y + 0.3, z: to.z, yaw: to.yaw } : lane ? { x: lane.pos.x, y: lane.pos.y + 0.3, z: lane.pos.z, yaw: lane.yaw } : null;
+        if (at) {
+          // on foot: the reset puts the player back in their car, here
+          v.reset({ x: at.x, y: at.y, z: at.z }, at.yaw);
+          engine.get<CameraApi>('camera')?.snap();
+          ok = true;
+        }
+      } finally {
+        if (!opts.hold || !ok) v.inputEnabled = true;
+        fade.to(false, ok ? opts.caption : t('mp.goFail'));
+        travelling = false;
+      }
+      return ok;
+    },
+    busy() { const why = busy(); return why ? t(why) : null; },
+    send(k, data = {}) { send({ ...data, t: 'e', k }); },
+    onEvent(fn) { eventFns.push(fn); },
+    onGone(fn) { goneFns.push(fn); },
+    say(id, text) { peers.get(id)?.say(text); },
+    hidden: new Set<number>(),
+    beacons: false,
     fixedUpdate(dt) {
       if (api.status !== 'in') return;
       // the steps' own clock: a frame that runs several steps runs them at times dt apart, not all at the frame's
@@ -309,7 +350,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       document.body.classList.toggle('dc-playing', engine.get<System & { state: string }>('ui')?.state === 'playing');
       if (api.status !== 'in') return;
       const now = performance.now();
-      for (const p of peers.values()) p.update(dt, now, alpha);
+      for (const p of peers.values()) p.update(dt, now, alpha, api.hidden.has(p.id));
       // send ourselves: 10 a second while playing, once a second behind a menu (so they still see us standing there)
       const playing = engine.get<System & { state: string }>('ui')?.state === 'playing' && !engine.paused;
       if (meet && playing) meetUp(now);
@@ -335,8 +376,8 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       nav.addBlips(() => {
         blips.length = 0;
         for (const p of peers.values()) {
-          if (!p.state) continue;
-          const yaw = p.foot ? p.yaw : Math.atan2(2 * (p.quat.x * p.quat.z + p.quat.w * p.quat.y), 1 - 2 * (p.quat.x * p.quat.x + p.quat.y * p.quat.y));
+          if (!p.state || api.hidden.has(p.id)) continue;
+          const yaw = p.foot ? p.yaw : yawOf(p.quat);
           blips.push({ kind: 'friend', x: p.pos.x, z: p.pos.z, heading: yaw, label: p.name });
         }
         return blips;
