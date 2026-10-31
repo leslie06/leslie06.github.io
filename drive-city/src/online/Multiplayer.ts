@@ -17,8 +17,13 @@ import { cleanState, RemotePeer, type NetState } from './Remote';
  * driving or on foot, the pose, the car's body, paint, wheels and lights) and draws the others (online/Remote.ts).
  * Everything else stays each player's own: the traffic, people and police each game runs are not the others'.
  *
- * Cars hit each other: a friend's car is a kinematic body here, so yours bounces off it; the hit is sent to them
- * (`{t:'e', k:'hit'}`) and their game pushes their car by the same impulse. A horn is sent and sounded where they are.
+ * Cars hit each other: a friend's car is a body of its own mass here, pulled after where they are by a car's force
+ * (online/Remote.ts), so each game works the crash out with its own car - pushed by its share, or slowed by it - and it
+ * is a crash on both sides (the thump, the shake, the hit-stop, the damage). Nothing about it is sent. (Before
+ * 2026-10-30 their car was kinematic here, an immovable wall, and the push was sent: the car hit was shoved before the
+ * other was drawn reaching it, and the one hitting stopped dead.) A horn is sent and sounded where they are.
+ * One clock (2026-10-30, 「两个联机的车辆时间不一致，一个可能是白天，一个可能是夜晚」): the room's first player's time of
+ * day is everyone's - the others' follow it (not in a story chapter, which sets its own hour).
  * `goTo(id)` takes you beside a friend (a fade, the world there loaded, the nearest lane), as the 快速前往 does.
  * Joining a room does it by itself (2026-10-30, 「进入房间的车辆还在它自己的地点，应该和创建房间的车辆离的不远」): once in
  * the city, you are taken to the room's first player (its maker, while they are in it) - after the police, a race,
@@ -46,9 +51,11 @@ export interface MultiplayerApi extends System {
   inviteLink(): string;
   /** Called when the room, its people or the status change. */
   listen(fn: () => void): void;
+  /** Probes: each friend's car body here. */
+  debug: { bodies(): ({ v: number[]; coast: boolean; solid: boolean } | null)[] };
 }
 
-const GAME = 'bcity', SEND_MS = 100, IDLE_SEND_MS = 1000, HIT_GAP = 400;
+const GAME = 'bcity', SEND_MS = 100, IDLE_SEND_MS = 1000;
 /** Joining: nearer than this to the room's maker already, you stay where you are. */
 const MEET_NEAR = 80;
 const read = <T>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v) as T; } catch { return d; } };
@@ -66,10 +73,7 @@ export function install(engine: Engine): MultiplayerApi | null {
   const peers = new Map<number, RemotePeer>();
   let ws: WebSocket | null = null;
   let want: { kind: 'create' } | { kind: 'join'; room: string } | null = null;
-  let retries = 0, retryTimer = 0, lastSend = 0, hornWas = false;
-  const hitAt = new Map<number, number>();
-  /** Our car's velocity a step ago: a contact is seen a step late, after the solver has already slowed the car. */
-  const prevVel = new THREE.Vector3();
+  let retries = 0, retryTimer = 0, lastSend = 0, hornWas = false, stepClock = 0;
   let tagLayer: HTMLDivElement | null = null;
   const layer = () => {
     if (tagLayer) return tagLayer;
@@ -144,21 +148,24 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       if (p) { toast(t('mp.peerOut', { name: p.name })); p.dispose(); peers.delete(p.id); changed(); }
     } else if (m.t === 's') {
       const p = peers.get(Number(m.id)), s = cleanState(m);
-      if (p && s) p.push(s);
+      if (p && s) {
+        p.push(s);
+        if (s.tm !== undefined && api.me && p.id < api.me.id && [...peers.keys()].every((k) => k >= p.id)) followClock(s.tm);
+      }
     } else if (m.t === 'e') {
       const p = peers.get(Number(m.id));
       if (!p) return;
       if (m.k === 'horn') { p.sample(performance.now()); engine.events.emit('traffic:horn', { x: p.pos.x, z: p.pos.z }); }
-      if (m.k === 'hit' && m.to === api.me?.id) {
-        // they ran into us: our car takes the push in our world
-        const j = m.j as number[] | undefined, v = engine.get<VehicleApi>('vehicle');
-        const pl = engine.get<PlayerApi>('player');
-        if (v && pl?.mode === 'driving' && Array.isArray(j) && j.length === 3 && j.every((x) => Number.isFinite(x) && Math.abs(x) < 1e6)) {
-          v.car.body.applyImpulse({ x: j[0], y: j[1], z: j[2] }, true);
-          engine.get<CameraApi>('camera')?.shake(Math.min(1, Math.hypot(j[0], j[2]) / 20000));
-        }
-      }
     }
+  };
+
+  /** The room's first player's time of day, followed: a jump is taken at once, a drift eased. */
+  const followClock = (tm: number) => {
+    const r = engine.get<RenderApi>('render');
+    if (!r || engine.get<CampaignApi>('campaign')?.running) return;
+    let d = tm - r.timeOfDay;
+    d -= 24 * Math.round(d / 24);
+    if (Math.abs(d) > 0.25) { r.timeOfDay = tm; r.settle?.(); } else if (Math.abs(d) > 0.01) r.timeOfDay = (r.timeOfDay + d * 0.2 + 24) % 24;
   };
 
   const send = (o: object) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
@@ -167,7 +174,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
   const myState = (): NetState | null => {
     const pl = engine.get<PlayerApi>('player'), v = engine.get<VehicleApi>('vehicle');
     if (!pl || !v) return null;
-    const ts = Math.round(performance.now());
+    const ts = Math.round(performance.now()), tm = r2(engine.get<RenderApi>('render')?.timeOfDay ?? 15);
     if (pl.mode === 'driving' || !pl.foot) {
       const car = v.car, p = v.renderPos, q = v.renderQuat, c = v.controls;
       const li = (c.brake > 0.1 ? 1 : 0) | (car.gear === -1 ? 2 : 0) | ((engine.get<RenderApi>('render')?.night ?? 0) > 0.35 ? 4 : 0);
@@ -176,33 +183,11 @@ body:not(.dc-playing) .mp-tags{display:none}`;
         q: [r3(q.x), r3(q.y), r3(q.z), r3(q.w)], b: v.look.body ?? bodyOfSpec(car.spec), c: [hex(v.look.upper), hex(v.look.lower)], tx: v.look.taxi ? 1 : 0,
         ws: [r3(car.wheels[0]?.steer ?? 0), r3(car.wheels[1]?.steer ?? 0)],
         wl: [0, 1, 2, 3].map((i) => r3(car.wheels[i]?.springLen ?? 0)) as NetState['wl'],
-        ln: [r3(v.lean.pitch), r3(v.lean.roll)], sp: r2(car.forwardSpeed), li,
+        ln: [r3(v.lean.pitch), r3(v.lean.roll)], sp: r2(car.forwardSpeed), li, tm,
       };
     }
     const f = pl.foot;
-    return { ts, m: 'f', p: [r2(f.pos.x), r2(f.pos.y), r2(f.pos.z)], v: [r2(f.vel.x), r2(f.vel.y), r2(f.vel.z)], y: r3(f.yaw), fs: r2(Math.hypot(f.vel.x, f.vel.z)) };
-  };
-
-  /** Our car touching a friend's: tell them, with the push their car should take (once per HIT_GAP). */
-  const checkHits = (now: number) => {
-    const v = engine.get<VehicleApi>('vehicle'), pl = engine.get<PlayerApi>('player');
-    if (!v || pl?.mode !== 'driving') return;
-    const before = prevVel.clone();
-    prevVel.copy(v.car.vel);
-    const world = engine.physics.world, mine = v.car.colliders;
-    for (const p of peers.values()) {
-      if (now - (hitAt.get(p.id) ?? 0) < HIT_GAP || now - p.jumpedAt < 500) continue;
-      let touching = false;
-      for (const a of mine) for (const b of p.colliders()) world.contactPair(a, b, (man) => { if (man.numContacts() > 0) touching = true; });
-      if (!touching) continue;
-      const dx = p.pos.x - v.car.pos.x, dz = p.pos.z - v.car.pos.z, L = Math.hypot(dx, dz) || 1;
-      const nx = dx / L, nz = dz / L;
-      const rel = Math.max((v.car.vel.x - p.vel.x) * nx + (v.car.vel.z - p.vel.z) * nz, (before.x - p.vel.x) * nx + (before.z - p.vel.z) * nz);
-      if (rel < 1.5) continue;
-      const m1 = v.car.spec.mass, m2 = p.mass, k = rel * (m1 * m2) / (m1 + m2);
-      hitAt.set(p.id, now);
-      send({ t: 'e', k: 'hit', to: p.id, j: [Math.round(nx * k), 0, Math.round(nz * k)] });
-    }
+    return { ts, m: 'f', p: [r2(f.pos.x), r2(f.pos.y), r2(f.pos.z)], v: [r2(f.vel.x), r2(f.vel.y), r2(f.vel.z)], y: r3(f.yaw), fs: r2(Math.hypot(f.vel.x, f.vel.z)), tm };
   };
 
   let fade: Fade | null = null, travelling = false;
@@ -249,6 +234,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       return [...peers.values()].map((p) => ({ id: p.id, name: p.name, x: p.pos.x, z: p.pos.z, foot: p.foot, dist: me && p.state ? Math.hypot(p.pos.x - me.x, p.pos.z - me.z) : -1 }));
     },
     listen(fn) { listeners.push(fn); },
+    debug: { bodies: () => [...peers.values()].map((p) => p.debugBody) },
     create() { if (api.status === 'connecting') return; api.leave(); want = { kind: 'create' }; retries = 0; open(); },
     join(code) {
       const room = String(code).replace(/\D/g, '');
@@ -301,22 +287,29 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       })();
       return null;
     },
-    fixedUpdate() {
+    fixedUpdate(dt) {
       if (api.status !== 'in') return;
-      const now = performance.now();
-      const mine = engine.get<VehicleApi>('vehicle')?.car.pos;
+      // the steps' own clock: a frame that runs several steps runs them at times dt apart, not all at the frame's
+      // time (their cars, pulled after a target that stood still and then leapt, went half as fast again)
+      const wall = performance.now();
+      stepClock = Math.min(wall, Math.max(stepClock + dt * 1000, wall - 200));
+      const now = stepClock;
+      const car = engine.get<VehicleApi>('vehicle')?.car, mine = car?.pos, cols = car?.colliders ?? [];
       for (const p of peers.values()) {
-        p.fixed(now);
+        p.fixed(now, dt, cols);
         const at = p.carAt();
-        if (mine && at) p.clearOf(Math.hypot(at.x - mine.x, at.z - mine.z));
+        if (mine && at) { const d = Math.hypot(at.x - mine.x, at.z - mine.z); p.clearOf(d); p.setNear(d); }
       }
-      checkHits(now);
     },
-    update(dt) {
+    postStep() {
+      if (api.status !== 'in') return;
+      for (const p of peers.values()) p.afterStep();
+    },
+    update(dt, alpha) {
       document.body.classList.toggle('dc-playing', engine.get<System & { state: string }>('ui')?.state === 'playing');
       if (api.status !== 'in') return;
       const now = performance.now();
-      for (const p of peers.values()) p.update(dt, now);
+      for (const p of peers.values()) p.update(dt, now, alpha);
       // send ourselves: 10 a second while playing, once a second behind a menu (so they still see us standing there)
       const playing = engine.get<System & { state: string }>('ui')?.state === 'playing' && !engine.paused;
       if (meet && playing) meetUp(now);

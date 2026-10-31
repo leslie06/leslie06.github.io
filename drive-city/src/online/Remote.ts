@@ -35,6 +35,8 @@ export interface NetState {
   li?: number;
   /** On foot: ground speed (the walk), and an action ('punch'...) if any. */
   fs?: number;
+  /** Their time of day (hours): the room's first player's is everyone's clock. */
+  tm?: number;
 }
 
 const num = (x: unknown, lim = 1e6): number | null => (typeof x === 'number' && Number.isFinite(x) && Math.abs(x) < lim ? x : null);
@@ -49,6 +51,8 @@ export function cleanState(m: Record<string, unknown>): NetState | null {
   const ts = num(m.ts, 1e12), p = vec(m.p, 3), v = vec(m.v, 3, 400);
   if (ts === null || !p || !v || (m.m !== 'd' && m.m !== 'f')) return null;
   const s: NetState = { ts, m: m.m, p: p as NetState['p'], v: v as NetState['v'] };
+  const tm = num(m.tm, 25);
+  if (tm !== null && tm >= 0) s.tm = tm;
   if (m.m === 'd') {
     const q = vec(m.q, 4, 2);
     if (!q || !BODY_TYPES.includes(m.b as BodyType)) return null;
@@ -76,9 +80,39 @@ const DELAY = 160;
 const EXTRA = 300;
 /** Further than this between two states is a jump (a teleport, a respawn): no blending across it. */
 const JUMP = 25;
+/**
+ * A car this near yours is drawn where it is now, not `DELAY` ago: carried on from the newest state along its
+ * velocity (2026-10-30, 「一个碰另外一个，看不到撞击感，被撞时只会撞一段距离，但看不到是另一个车撞的」 - 160 ms late, the
+ * car that hit you was still 2 m short of you when you were pushed). The delay slides there and back at half speed.
+ */
+const NEAR = 30;
+/** A new state moves the drawn car at most this much (m) without a jump; the step is eased away over SMOOTH (ms). */
+const SNAP_MAX = 3, SMOOTH = 120;
+/**
+ * Their car here is a body with their car's mass, pulled towards where they are (velocity matched, the gap closed at
+ * PULL per second) by at most AMAX m/s² - a car's worth, not a wall's. So a crash between yours and theirs is worked
+ * out by the physics on each side, each with its own car (2026-10-30): the car hit is pushed by its share and the one
+ * hitting slows by its share, here as there, and nothing has to be sent. It floats (no gravity, not set against the
+ * ground), its height following theirs; further than JUMP_BODY off, it jumps.
+ */
+const PULL = 6, AMAX = 14, ROT_K = 10, JUMP_BODY = 8;
+/** Closing the gap adds at most this to their speed (m/s): a car fallen behind does not overtake them at a rush. */
+const CATCH = 3;
+/**
+ * Touching your car, it is let go for COAST ms (a free body, sliding as the crash left it): their states from before
+ * the crash, carried on at the speed it had, would have it drive on into you and shove your car on and on.
+ */
+const COAST = 450;
 const PELVIS_Y = SKELETON[J.pelvis].offset[1];
 const TAG_FAR = 1500;
-const _a = new THREE.Vector3(), _f = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+const _a = new THREE.Vector3(), _f = new THREE.Vector3(), _o = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+/** A rotation as a vector: its axis times its angle (the shorter way round). */
+const rotVec = (q: THREE.Quaternion, out: THREE.Vector3): THREE.Vector3 => {
+  const w = Math.min(1, Math.abs(q.w)), sgn = q.w < 0 ? -1 : 1, sin = Math.sqrt(1 - w * w);
+  if (sin < 1e-6) return out.set(q.x, q.y, q.z).multiplyScalar(2 * sgn);
+  return out.set(q.x, q.y, q.z).multiplyScalar(sgn * 2 * Math.acos(w) / sin);
+};
 const _c1 = new THREE.Color(), _c2 = new THREE.Color();
 
 const hashOf = (s: string) => { let h = 2166136261; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -86,7 +120,7 @@ const rng = (seed: number) => () => { seed = (seed + 0x6d2b79f5) | 0; let t = se
 
 /**
  * A friend in the room, as this game draws them: their car (the full-detail model, as the player's own, with a
- * kinematic body of the car's shape so that you can hit it) or themselves on foot (one of the crowd), a name over
+ * body of the car's shape and mass so that you can hit it) or themselves on foot (one of the crowd), a name over
  * their head, a blip on the radar. Drawn `DELAY` behind what they sent, blended between the two states either side.
  * The car they got out of stays where they left it, while they are near it.
  */
@@ -122,11 +156,29 @@ export class RemotePeer {
   private readonly tagDist: HTMLSpanElement;
   private readonly motion: Motion = { speed: 0, action: 'move', t: 0 };
   private readonly riderMotion: Motion = { speed: 0, action: 'ride', t: 0, ride: 'ebike', lean: 0 };
-  /** Last time the kinematic body was jumped (a teleport): hits are not counted for a moment. */
+  /** How far behind their newest state they are drawn (ms), sliding towards `wantDelay`. */
+  private delay = DELAY;
+  private wantDelay = DELAY;
+  private lastNow = 0;
+  /** What a new state moved the drawn car by, eased away (`SMOOTH`). */
+  private readonly offset = new THREE.Vector3();
+  private offsetAt = 0;
+  /** The body's pose before and after the last physics step, to draw it between them. */
+  private readonly prevPos = new THREE.Vector3();
+  private readonly prevQuat = new THREE.Quaternion();
+  private readonly curPos = new THREE.Vector3();
+  private readonly curQuat = new THREE.Quaternion();
+  private readonly drawPos = new THREE.Vector3();
+  private readonly drawQuat = new THREE.Quaternion();
+  /** Let go until then (`COAST`). */
+  private coastUntil = 0;
+  /** Their car's rotation at the last step (its turn rate). */
+  private readonly lastQuat = new THREE.Quaternion();
+  /** Last time the body was jumped (a teleport). */
   jumpedAt = 0;
   /**
    * The car is solid to yours. It starts as a ghost (passing through) and after every jump, and turns solid only once
-   * it is clear of your car: two players start on the same spot, and a kinematic body made inside your car would throw
+   * it is clear of your car: two players start on the same spot, and a body made inside your car would throw
    * it tens of metres.
    */
   private solid = false;
@@ -149,6 +201,8 @@ export class RemotePeer {
 
   push(s: NetState): void {
     const now = performance.now(), off = now - s.ts;
+    const had = this.snaps.length > 0 && this.sample(now);
+    if (had) _o.copy(this.pos);
     // the lower envelope of the delay, rising 2 ms a state if the link gets slower
     this.off = this.off === null ? off : Math.min(off, this.off + 2);
     const last = this.snaps[this.snaps.length - 1];
@@ -165,13 +219,30 @@ export class RemotePeer {
     if (!foot) this.carState = s;
     this.snaps.push(snap);
     if (this.snaps.length > 30) this.snaps.splice(0, this.snaps.length - 30);
+    // what this state moved the drawn car by is eased away, not jumped
+    if (had) {
+      this.offsetAt = 0;
+      this.sample(now);
+      _o.sub(this.pos);
+      if (_o.length() < SNAP_MAX && foot === (last?.foot ?? foot)) { this.offset.copy(_o); this.offsetAt = now; }
+    }
   }
+
+  /** Their car is `dist` from yours: near, it is drawn where it is now. */
+  setNear(dist: number): void { this.wantDelay = dist < NEAR ? 0 : DELAY; }
+
+
 
   /** Where they are at `now` (our clock), into pos / quat / vel / yaw / foot / state. False before the first state. */
   sample(now: number): boolean {
     const S = this.snaps;
     if (!S.length) return false;
-    const rt = now - DELAY;
+    if (now > this.lastNow) {
+      const step = this.lastNow ? now - this.lastNow : 0;
+      this.delay += Math.max(-step / 2, Math.min(step / 2, this.wantDelay - this.delay));
+      this.lastNow = now;
+    }
+    const rt = now - this.delay;
     let i = S.length - 1;
     while (i > 0 && S[i].t > rt) i--;
     const a = S[i], b = S[i + 1];
@@ -189,6 +260,11 @@ export class RemotePeer {
       this.pos.copy(s.p).addScaledVector(s.v, ahead);
       this.quat.copy(s.q); this.vel.copy(s.v); this.yaw = s.yaw; this.foot = s.foot;
       this.state = s.s;
+    }
+    if (this.offsetAt) {
+      const e = Math.exp(-Math.max(0, now - this.offsetAt) / SMOOTH);
+      if (e < 0.01) this.offsetAt = 0;
+      else this.pos.addScaledVector(this.offset, e);
     }
     return true;
   }
@@ -223,29 +299,40 @@ export class RemotePeer {
     return m;
   }
 
-  /** A kinematic body of the car's shape: your car bumps into theirs (they feel it through Multiplayer's hit events). */
+  /** A body of the car's shape and mass (see PULL): your car and theirs crash as two cars do. */
   private makeBody(): void {
     this.dropBody();
     const { R, world } = this.engine.physics;
-    const at = this.car()?.pos ?? this.pos;
-    this.kin = world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y, at.z));
-    for (const c of this.spec.chassis) {
-      const cd = R.ColliderDesc.roundCuboid(c.half[0] - c.round, c.half[1] - c.round, c.half[2] - c.round, c.round)
-        .setTranslation(c.at[0], c.at[1], c.at[2]).setFriction(0.3).setRestitution(0.05)
-        .setCollisionGroups(groups(CG.CAR, CG.WORLD | CG.CAR | CG.PROP));
+    const c = this.car(), at = c?.pos ?? this.pos, s = this.spec;
+    this.kin = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(at.x, at.y, at.z).setGravityScale(0)
+      .setAdditionalMassProperties(s.mass, { x: s.com[0], y: s.com[1], z: s.com[2] }, { x: s.inertia[0], y: s.inertia[1], z: s.inertia[2] }, { x: 0, y: 0, z: 0, w: 1 })
+      .setCcdEnabled(true));
+    if (c) this.kin.setRotation(c.quat, false);
+    for (const ch of s.chassis) {
+      const cd = R.ColliderDesc.roundCuboid(ch.half[0] - ch.round, ch.half[1] - ch.round, ch.half[2] - ch.round, ch.round)
+        .setTranslation(ch.at[0], ch.at[1], ch.at[2]).setDensity(0).setFriction(0.3).setRestitution(0.05);
       const col = world.createCollider(cd, this.kin);
       this.engine.physics.tag(col, { tag: 'car', surface: 'metal' });
     }
-    this.jumpedAt = performance.now();
+    this.jumped(c?.pos ?? at, c?.quat ?? this.quat, performance.now());
+  }
+
+  /** Put the body there at once (a first sight, a teleport, a car got back into): a ghost until clear of yours. */
+  private jumped(pos: THREE.Vector3, quat: THREE.Quaternion, now: number): void {
+    const k = this.kin!;
+    k.setTranslation(pos, true); k.setRotation(quat, true);
+    k.setLinvel(this.foot ? { x: 0, y: 0, z: 0 } : this.vel, true); k.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.prevPos.copy(pos); this.curPos.copy(pos); this.prevQuat.copy(quat); this.curQuat.copy(quat); this.lastQuat.copy(quat);
+    this.jumpedAt = now;
     this.setSolid(false);
   }
 
-  /** Solid to cars (and the world's props), or a ghost that only the world's static geometry is set against. */
+  /** Solid to cars and the world's props, or a ghost (set against nothing). Never against the ground: it floats. */
   private setSolid(on: boolean): void {
     this.solid = on;
     if (!this.kin) return;
     for (let i = 0; i < this.kin.numColliders(); i++) {
-      this.kin.collider(i).setCollisionGroups(on ? groups(CG.CAR, CG.WORLD | CG.CAR | CG.PROP) : groups(CG.CAR, 0));
+      this.kin.collider(i).setCollisionGroups(on ? groups(CG.CAR, CG.CAR | CG.PROP) : groups(CG.CAR, 0));
     }
   }
 
@@ -254,32 +341,69 @@ export class RemotePeer {
     if (!this.solid && this.kin?.isEnabled() && dist > 6) this.setSolid(true);
   }
 
-  /** The car's colliders (for Multiplayer's contact check), or none. */
-  colliders(): RAPIER_NS.Collider[] {
-    if (!this.kin || !this.kin.isEnabled() || !this.solid) return [];
-    const out: RAPIER_NS.Collider[] = [];
-    for (let i = 0; i < this.kin.numColliders(); i++) out.push(this.kin.collider(i));
-    return out;
-  }
-  get mass(): number { return this.spec.mass; }
-
-  /** Physics step: the kinematic body follows the drawn car (a jump is a jump, not a sweep). */
-  fixed(now: number): void {
+  /** Physics step, before it: the body is pulled towards their car (or the one they left), by a car's force. */
+  fixed(now: number, dt: number, mine: readonly RAPIER_NS.Collider[]): void {
     if (!this.kin || !this.sample(now)) return;
-    const c = this.car();
-    if (!c) { if (this.kin.isEnabled()) this.kin.setEnabled(false); return; }
-    if (!this.kin.isEnabled()) { this.kin.setEnabled(true); this.kin.setTranslation(c.pos, true); this.jumpedAt = now; this.setSolid(false); }
-    const t = this.kin.translation();
-    if (Math.hypot(t.x - c.pos.x, t.y - c.pos.y, t.z - c.pos.z) > 8) {
-      this.kin.setTranslation(c.pos, true); this.kin.setRotation(c.quat, true); this.jumpedAt = now; this.setSolid(false);
-    } else {
-      this.kin.setNextKinematicTranslation(c.pos);
-      this.kin.setNextKinematicRotation(c.quat);
+    const c = this.car(), k = this.kin;
+    if (!c) { if (k.isEnabled()) k.setEnabled(false); return; }
+    if (!k.isEnabled()) { k.setEnabled(true); this.jumped(c.pos, c.quat, now); return; }
+    const t = k.translation();
+    if (Math.hypot(t.x - c.pos.x, t.y - c.pos.y, t.z - c.pos.z) > JUMP_BODY) { this.jumped(c.pos, c.quat, now); return; }
+    this.prevPos.copy(this.curPos); this.prevQuat.copy(this.curQuat);
+    if (this.solid && this.touching(mine)) this.coastUntil = now + COAST;
+    const lv = k.linvel();
+    if (now < this.coastUntil) {
+      // let go: only its height still follows theirs
+      this.lastQuat.copy(c.quat);
+      k.setLinvel({ x: lv.x, y: (c.pos.y - t.y) * PULL, z: lv.z }, true);
+      return;
     }
+    // the speed to have: theirs, and the gap closed at PULL; a ghost takes it outright, a solid car by AMAX at most
+    const driving = c.s === this.state && !this.foot;
+    _a.set(c.pos.x - t.x, c.pos.y - t.y, c.pos.z - t.z).multiplyScalar(PULL);
+    if (_a.length() > CATCH) _a.setLength(CATCH);
+    if (driving) _a.add(this.vel);
+    _f.set(_a.x - lv.x, _a.y - lv.y, _a.z - lv.z);
+    const most = AMAX * dt;
+    if (this.solid && _f.length() > most) _f.setLength(most);
+    k.setLinvel({ x: lv.x + _f.x, y: lv.y + _f.y, z: lv.z + _f.z }, true);
+    // turning: their turn rate, and what is left of the angle closed at ROT_K
+    _q1.copy(c.quat).multiply(_q2.copy(this.lastQuat).invert());
+    this.lastQuat.copy(c.quat);
+    rotVec(_q1, _a).divideScalar(Math.max(dt, 1e-3));
+    const r = k.rotation();
+    _q1.copy(c.quat).multiply(_q2.set(r.x, r.y, r.z, r.w).invert());
+    _a.addScaledVector(rotVec(_q1, _f), ROT_K);
+    k.setAngvel(_a, true);
+  }
+
+  /** Probes: the body's speed and whether it is let go. */
+  get debugBody(): { v: number[]; coast: boolean; solid: boolean } | null {
+    if (!this.kin?.isEnabled()) return null;
+    const v = this.kin.linvel();
+    return { v: [v.x, v.y, v.z], coast: performance.now() < this.coastUntil, solid: this.solid };
+  }
+
+  /** In contact with one of these colliders (your car's) after the last step. */
+  private touching(mine: readonly RAPIER_NS.Collider[]): boolean {
+    const k = this.kin!, world = this.engine.physics.world;
+    let hit = false;
+    for (let i = 0; i < k.numColliders() && !hit; i++) {
+      const a = k.collider(i);
+      for (const b of mine) world.contactPair(a, b, (m) => { if (m.numContacts() > 0) hit = true; });
+    }
+    return hit;
+  }
+
+  /** Physics step, after it: where the body ended up, to draw. */
+  afterStep(): void {
+    if (!this.kin?.isEnabled()) return;
+    const t = this.kin.translation(), r = this.kin.rotation();
+    this.curPos.set(t.x, t.y, t.z); this.curQuat.set(r.x, r.y, r.z, r.w);
   }
 
   /** Draw them this frame: the car, a rider on a two-wheeler, the person on foot, the name tag. */
-  update(dt: number, now: number): void {
+  update(dt: number, now: number, alpha: number): void {
     if (!this.sample(now)) { this.tag.hidden = true; return; }
     const pl = this.engine.get<PlayerApi>('player');
     const c = this.car();
@@ -287,8 +411,13 @@ export class RemotePeer {
       const m = this.ensureModel(c.s);
       if (m) {
         if (!this.kin) this.makeBody();
+        // where the body is (pushed by a crash here), between the last two steps
+        const k = this.kin!;
+        if (k.isEnabled()) { this.drawPos.lerpVectors(this.prevPos, this.curPos, alpha); this.drawQuat.slerpQuaternions(this.prevQuat, this.curQuat, alpha); }
+        else { this.drawPos.copy(c.pos); this.drawQuat.copy(c.quat); }
+        const P = this.drawPos, Q = this.drawQuat;
         m.root.visible = true;
-        m.root.position.copy(c.pos); m.root.quaternion.copy(c.quat);
+        m.root.position.copy(P); m.root.quaternion.copy(Q);
         const s = c.s, driving = c.s === this.state && !this.foot;
         const pk = `${s.c![0]}${s.c![1]}${s.tx}`;
         if (pk !== this.paintKey) { this.paintKey = pk; m.setPaint(_c1.set(s.c![0]), _c2.set(s.c![1]), s.tx === 1); }
@@ -305,8 +434,8 @@ export class RemotePeer {
         // a two-wheeler's rider, as traffic draws theirs
         if (driving && this.spec.single && pl) {
           const seat = SEAT[s.b as 'moto' | 'bike' | 'ebike'] ?? SEAT.ebike;
-          const at = _a.set(seat[0], seat[1], seat[2]).applyQuaternion(c.quat).add(c.pos);
-          const fwd = _f.set(0, 0, 1).applyQuaternion(c.quat);
+          const at = _a.set(seat[0], seat[1], seat[2]).applyQuaternion(Q).add(P);
+          const fwd = _f.set(0, 0, 1).applyQuaternion(Q);
           this.riderMotion.speed = s.sp ?? 0;
           this.riderMotion.ride = s.b as 'moto' | 'bike' | 'ebike';
           this.riderMotion.lean = s.ln?.[1] ?? 0;
@@ -314,7 +443,7 @@ export class RemotePeer {
           at.y -= PELVIS_Y * this.rider.scale;
           pl.crowd.add(at, Math.atan2(fwd.x, fwd.z), this.rider, this.look);
         }
-      }
+      } else if (this.model) this.model.root.visible = false;
     } else if (this.model) this.model.root.visible = false;
     if (this.foot && pl) {
       this.motion.speed = this.state?.fs ?? 0;
