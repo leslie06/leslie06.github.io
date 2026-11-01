@@ -29,11 +29,19 @@ import { beaconFlash, type MultiplayerApi } from './Multiplayer';
  *   the map every PULSE s. The runner is caught when a police car is within CATCH_D m while they are all but stopped
  *   (under CATCH_V) for CATCH_T s; they win by lasting CHASE_S s. The runner's game decides: it says caught or escaped.
  *
+ * - **抢兔儿爷** (2026-11-01, the 4th idea): a 兔儿爷 on a lane near the one who starts it, everyone put RABBIT_RING m
+ *   round it; after 3-2-1 the first to drive through it has it on their roof (the starter's game says who: `grab`
+ *   asks, `hold` tells), on everyone's map. Rammed by a friend (an impact over STEAL_HIT with a friend's car within
+ *   STEAL_D m), it goes to them - the holder's game says so, not within IMMUNE s of getting it. Out of the car for
+ *   DROP_T s, it is dropped there. The holder's game counts the seconds held (`pts`, every second); RABBIT_WIN first
+ *   wins, else the most when RABBIT_S runs out (the starter's game ends it).
+ *
  * The one who starts a game runs it (the go, the end); if they leave, it ends. Stars are wiped at the start; a story
  * chapter, a street race or a time trial keeps a player out.
  */
-export interface PlayResult { kind: 'race' | 'chase'; title: string; rows: { name: string; text: string; win: boolean }[] }
-export interface PlayScore { name: string; raceWins: number; escapes: number; catches: number }
+export type GameKind = 'race' | 'chase' | 'rabbit';
+export interface PlayResult { kind: GameKind; title: string; rows: { name: string; text: string; win: boolean }[] }
+export interface PlayScore { name: string; raceWins: number; escapes: number; catches: number; rabbitWins: number }
 export interface PlayApi extends System {
   /** A game is running with this player in it. */
   readonly active: boolean;
@@ -45,6 +53,8 @@ export interface PlayApi extends System {
   /** Start a race on this course / a chase with this runner: what is wrong, or null. */
   startRace(course: number): string | null;
   startChase(runner: number): string | null;
+  /** Start 抢兔儿爷 round where this player is: what is wrong, or null. */
+  startRabbit(): string | null;
   /** The one who started it calls it off. */
   stop(): void;
   /** The quick menu's things, for probes. */
@@ -52,6 +62,8 @@ export interface PlayApi extends System {
   gather(): void;
   follow(id: number | null): void;
   readonly following: number | null;
+  /** Probes: the game on now. */
+  debug: { game(): { kind: GameKind; phase: string; rx: number; rz: number; holder: number | null; held: [number, number][] } | null };
 }
 
 const SHOUTS = 4;
@@ -59,6 +71,8 @@ const READY_WAIT = 14, FINISH_WAIT = 90, RACE_OFF = 90, RACE_OFF_T = 8, OUT_OF_C
 const CHASE_S = 180, HEAD_START = 15, COP_RING = 220, SEEN = 150, PULSE = 10, PULSE_SHOW = 3;
 const CATCH_D = 8, CATCH_V = 1.6, CATCH_T = 3;
 const FOLLOW_EVERY = 2, FOLLOW_NEAR = 40;
+const RABBIT_RING = 150, RABBIT_REACH = 4.5, RABBIT_WIN = 60, RABBIT_S = 300, STEAL_HIT = 3, STEAL_D = 7.5, IMMUNE = 3, DROP_T = 2;
+const RABBIT_COLOR = '#ffc21f';
 const RACE_COLOR = '#35e0c2', FINISH_COLOR = '#7dff8a';
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -85,7 +99,7 @@ body.dc-touch.mp-in .chat-feed{left:calc(220px + env(safe-area-inset-left,0px))}
 .mpg{position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:30;pointer-events:none;min-width:240px;padding:8px 16px 9px;border-radius:10px;
   background:rgba(9,11,13,.7);color:#f4f1e8;font:600 13px ${F.ui};text-align:center;border-top:3px solid ${RACE_COLOR}}
 .mpg[hidden]{display:none}
-.mpg.cop{border-top-color:#3d7bff}.mpg.run{border-top-color:#ff5a4a}
+.mpg.cop{border-top-color:#3d7bff}.mpg.run{border-top-color:#ff5a4a}.mpg.rab{border-top-color:${RABBIT_COLOR}}
 .mpg .n{font-size:12px;color:#9fdcf2;letter-spacing:1px}
 .mpg .t{font:800 30px/1.1 ${F.num};letter-spacing:1px}
 .mpg .s{font-size:12px;color:#cfcac0}
@@ -107,7 +121,7 @@ body:not(.dc-playing) .mpg-res,body:not(.dc-playing) .mpg{display:none}
 
 type Phase = 'prep' | 'count' | 'run' | 'over';
 interface Game {
-  kind: 'race' | 'chase'; gid: string; org: number; ps: number[];
+  kind: GameKind; gid: string; org: number; ps: number[];
   /** Still in it (not out, not gone). */
   in: Set<number>;
   ready: Set<number>;
@@ -120,6 +134,8 @@ interface Game {
   /** Race: who is in, with their time (null: out of it). */
   fin: Map<number, number | null>;
   firstFin: number;
+  /** 抢兔儿爷: where it lies (when nobody has it), who has it, the order of its changes of hand, the seconds each held it. */
+  rx: number; rz: number; holder: number | null; seq: number; held: Map<number, number>;
 }
 
 export function install(engine: Engine): PlayApi | null {
@@ -160,7 +176,7 @@ export function install(engine: Engine): PlayApi | null {
 
   // --- scores for this room ------------------------------------------------------------------------------------
   const scores = new Map<number, PlayScore>();
-  const score = (id: number) => { let s = scores.get(id); if (!s) { s = { name: nameOf(id), raceWins: 0, escapes: 0, catches: 0 }; scores.set(id, s); } s.name = nameOf(id); return s; };
+  const score = (id: number) => { let s = scores.get(id); if (!s) { s = { name: nameOf(id), raceWins: 0, escapes: 0, catches: 0, rabbitWins: 0 }; scores.set(id, s); } s.name = nameOf(id); return s; };
   let last: PlayResult | null = null;
 
   // --- the game ------------------------------------------------------------------------------------------------
@@ -168,6 +184,9 @@ export function install(engine: Engine): PlayApi | null {
   const hint = new Map<number, number>();
   let myS = 0, myHint = 0, next = 0, raceT = 0, offT = 0, outT = 0, myFin = false;
   let chaseT = 0, pulseT = 0, pulseAt: { x: number; z: number } | null = null, pulseShow = 0, holdT = 0, pulseTold = false;
+  let gotAt = 0, grabT = 0, ptsT = 0, footT = 0, mineHeld = 0, navT = 0;
+  /** The 兔儿爷 of 抢兔儿爷: collect/'s figure, on the ground or on the holder's roof. */
+  let figure: THREE.Mesh | null = null, spin = 0;
   /** The player's own car while they drive a police car, and the police car (kept for the next round). */
   let ownCar: { car: Vehicle; look: CarLook } | null = null, copCar: Vehicle | null = null;
 
@@ -231,6 +250,14 @@ export function install(engine: Engine): PlayApi | null {
       rows: rows.map(([id, tm], i) => ({ name: nameOf(id), text: tm === null ? t('play.dnf') : i === 0 ? fmt(tm) : `${fmt(tm)}  +${(tm - best!).toFixed(1)}`, win: i === 0 && tm !== null })),
     };
   };
+  const rabbitResult = (g: Game, winner: number | null): PlayResult => {
+    const rows = [...g.held.entries()].filter(([id]) => g.ready.has(id)).sort((a, b) => b[1] - a[1]);
+    for (const id of g.ready) if (!g.held.has(id)) rows.push([id, 0]);
+    const top = winner ?? (rows[0] && rows[0][1] > 0 ? rows[0][0] : null);
+    if (top !== null) score(top).rabbitWins++;
+    return { kind: 'rabbit', title: top !== null ? t('play.rabbitWon', { name: nameOf(top) }) : t('play.rabbitNone'),
+      rows: rows.map(([id, sec]) => ({ name: nameOf(id), text: t('play.heldFor', { n: Math.floor(sec) }), win: id === top })) };
+  };
   const chaseResult = (g: Game, how: string, by: number, tm: number): PlayResult => {
     const runner = nameOf(g.runner);
     if (how === 'caught') { score(by).catches++; return { kind: 'chase', title: t('play.caughtTitle', { runner, cop: nameOf(by) }), rows: [{ name: runner, text: t('play.lasted', { t: mmss(tm) }), win: false }, { name: nameOf(by), text: t('play.gotHim'), win: true }] }; }
@@ -245,8 +272,10 @@ export function install(engine: Engine): PlayApi | null {
     if (!g.mine) { changed(); return; }
     const why = free();
     if (why) { g.mine = false; sendG('out'); toast(t('play.sittingOut', { why }), 4); changed(); return; }
+    engine.get<{ name: string; stop(): void }>('ride')?.stop();
     engine.get<WantedApi>('wanted')?.clear();
     res.hidden = true;
+    gotAt = 0; grabT = 0; ptsT = 0; footT = 0; mineHeld = 0;
     myFin = false; next = 0; myS = 0; myHint = 0; raceT = 0; offT = 0; outT = 0; chaseT = 0; pulseT = 0; holdT = 0; pulseTold = false;
     const tr = trials();
     if (g.kind === 'race' && tr) {
@@ -258,6 +287,22 @@ export function install(engine: Engine): PlayApi | null {
         if (!ok) { g.mine = false; sendG('out'); changed(); return; }
         ready(g, meId());
         sendG('ready');
+      });
+    } else if (g.kind === 'rabbit') {
+      // round the 兔儿爷, each from their own side, facing it
+      const v = veh(), k = Math.max(0, g.ps.indexOf(meId()));
+      let at: { x: number; y: number; z: number; yaw: number } | null = null;
+      for (let j = 0; !at && j < 12; j++) {
+        const a = (k / Math.max(1, g.ps.length)) * Math.PI * 2 + j * 0.5, d = RABBIT_RING * (j < 6 ? 1 : 0.7);
+        const lane = v.roadPoseNear?.(g.rx + Math.sin(a) * d, 2, g.rz + Math.cos(a) * d);
+        if (lane) at = { x: lane.pos.x, y: lane.pos.y, z: lane.pos.z, yaw: lane.yaw };
+      }
+      toast(t('play.rabbitStart', { who: nameOf(g.org) }), 4);
+      const went = at ? mp.warp(at, { exact: true, hold: true }) : Promise.resolve(true);
+      void went.then((ok) => {
+        if (game !== g || !g.mine) { if (ok) veh().inputEnabled = true; return; }
+        veh().inputEnabled = false;
+        ready(g, meId()); sendG('ready');
       });
     } else if (g.kind === 'chase') {
       if (g.runner === meId()) {
@@ -301,7 +346,7 @@ export function install(engine: Engine): PlayApi | null {
     g.phase = 'count'; g.clock = 0;
     if (g.mine) {
       panel.hidden = false;
-      panel.className = g.kind === 'race' ? 'mpg' : g.runner === meId() ? 'mpg run' : 'mpg cop';
+      panel.className = g.kind === 'race' ? 'mpg' : g.kind === 'rabbit' ? 'mpg rab' : g.runner === meId() ? 'mpg run' : 'mpg cop';
       if (g.kind === 'chase' && g.runner === meId()) veh().inputEnabled = true;
     }
   };
@@ -330,9 +375,9 @@ export function install(engine: Engine): PlayApi | null {
     if (m.op === 'start') {
       if (game && game.phase !== 'over') return;
       const ps = Array.isArray(m.ps) ? (m.ps as unknown[]).map(Number).filter(Number.isFinite) : [];
-      const kind = m.g === 'chase' ? 'chase' : 'race';
-      const g: Game = { kind, gid, org: from, ps, in: new Set(ps), ready: new Set(), phase: 'prep', mine: ps.includes(meId()), clock: 0,
-        course: Number(m.c) || 0, runner: Number(m.runner), fin: new Map(), firstFin: -1 };
+      const kind: GameKind = m.g === 'chase' ? 'chase' : m.g === 'rabbit' ? 'rabbit' : 'race';
+      const g = newGame(kind, gid, from, ps);
+      g.course = Number(m.c) || 0; g.runner = Number(m.runner); g.rx = Number(m.x) || 0; g.rz = Number(m.z) || 0;
       if (kind === 'race' && !trials()?.lines[g.course]) return;
       begin(g);
       return;
@@ -358,6 +403,8 @@ export function install(engine: Engine): PlayApi | null {
       finish(raceResult(g, list));
     } else if (m.op === 'chase' && g.kind === 'chase' && (from === g.runner || from === g.org)) {
       finish(chaseResult(g, String(m.how), Number(m.by), Number(m.tm) || 0));
+    } else if (g.kind === 'rabbit' && (m.op === 'grab' || m.op === 'hold' || m.op === 'drop' || m.op === 'pts' || m.op === 'win' || m.op === 'end')) {
+      rabbitHeard(g, from, m);
     } else if (m.op === 'stop' && from === g.org) {
       if (g.mine) toast(t('play.stopped', { name: nameOf(from) }));
       finish({ kind: g.kind, title: t('play.called'), rows: [] });
@@ -371,6 +418,11 @@ export function install(engine: Engine): PlayApi | null {
     if (id === g.org && id !== meId()) { toast(t('play.orgLeft', { name: nameOf(id) })); finish({ kind: g.kind, title: t('play.called'), rows: [] }); return; }
     g.in.delete(id);
     if (g.kind === 'chase' && id === g.runner) { finish(chaseResult(g, 'left', 0, 0)); return; }
+    // the holder gone: the starter drops it where they were last seen
+    if (g.kind === 'rabbit' && id === g.holder && g.org === meId()) {
+      const p = lastSeen.get(id);
+      setHolder(g, null, g.seq + 1, p?.x ?? g.rx, p?.z ?? g.rz, true);
+    }
     if (g.kind === 'race') { if (!g.fin.has(id)) g.fin.set(id, null); raceMaybeDone(g); }
     if (g.org === meId() && g.phase === 'prep' && [...g.in].every((p) => g.ready.has(p))) go(g);
   });
@@ -385,6 +437,123 @@ export function install(engine: Engine): PlayApi | null {
     g.phase = 'over';
     mp.send('g', { op: 'end', gid: g.gid, res: list });
     finish(raceResult(g, list));
+  };
+
+  // --- 抢兔儿爷 --------------------------------------------------------------------------------------------------------
+  const newGame = (kind: GameKind, gid: string, org: number, ps: number[]): Game => ({ kind, gid, org, ps, in: new Set(ps), ready: new Set(), phase: 'prep', mine: ps.includes(meId()), clock: 0,
+    course: 0, runner: -1, fin: new Map(), firstFin: -1, rx: 0, rz: 0, holder: null, seq: 0, held: new Map() });
+  /** Where each friend was last seen (a holder who leaves drops it there). */
+  const lastSeen = new Map<number, { x: number; z: number }>();
+  /** A change of hands (or a drop at x, z): applied here, and told to the room if this game decided it. */
+  const setHolder = (g: Game, id: number | null, seq: number, x: number, z: number, tell: boolean) => {
+    if (seq <= g.seq) return;
+    const was = g.holder;
+    g.seq = seq; g.holder = id;
+    if (id === null) { g.rx = x; g.rz = z; }
+    if (tell) mp.send('g', id === null ? { op: 'drop', gid: g.gid, seq, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10 } : { op: 'hold', gid: g.gid, seq, who: id, from: was });
+    if (id === meId()) { gotAt = g.clock; footT = 0; banner.show(t('play.gotRabbit'), RABBIT_COLOR); setTimeout(() => banner.hide(), 1800); }
+    if (!g.mine) return;
+    if (id === null) toast(t('play.rabbitDropped'));
+    else if (id !== meId()) toast(was === meId() ? t('play.rabbitStolen', { name: nameOf(id) }) : t('play.rabbitTaken', { name: nameOf(id) }));
+  };
+  const rabbitHeard = (g: Game, from: number, m: Record<string, unknown>) => {
+    const seq = Number(m.seq);
+    if (m.op === 'grab') {
+      // the starter's call: the first to ask, while nobody has it
+      if (g.org === meId() && g.holder === null && g.phase === 'run' && g.in.has(from)) setHolder(g, from, g.seq + 1, 0, 0, true);
+    } else if (m.op === 'hold') {
+      // `who`, not `id`: the relay writes the sender's id over a message's own
+      const id = Number(m.who);
+      if (Number.isFinite(seq) && g.in.has(id)) setHolder(g, id, seq, 0, 0, false);
+    } else if (m.op === 'drop') {
+      const x = Number(m.x), z = Number(m.z);
+      if (Number.isFinite(seq) && Number.isFinite(x) && Number.isFinite(z)) setHolder(g, null, seq, x, z, false);
+    } else if (m.op === 'pts') {
+      const n = Number(m.s);
+      if (Number.isFinite(n) && n >= 0) g.held.set(from, Math.max(g.held.get(from) ?? 0, n));
+    } else if (m.op === 'win') {
+      g.held.set(from, Math.max(g.held.get(from) ?? 0, RABBIT_WIN));
+      finish(rabbitResult(g, from));
+    } else if (m.op === 'end' && from === g.org) {
+      const held = m.held as Record<string, number> | undefined;
+      if (held && typeof held === 'object') for (const [id, n] of Object.entries(held)) if (Number.isFinite(Number(n))) g.held.set(Number(id), Math.max(g.held.get(Number(id)) ?? 0, Number(n)));
+      finish(rabbitResult(g, null));
+    }
+  };
+  // rammed while holding it: to the friend who did it
+  engine.events.on('vehicle:impact', ({ strength }) => {
+    const g = game;
+    if (!g || g.kind !== 'rabbit' || g.phase !== 'run' || g.holder !== meId() || strength < STEAL_HIT || g.clock - gotAt < IMMUNE) return;
+    let by: number | null = null, bd = STEAL_D;
+    for (const p of mp.peers) {
+      if (!g.in.has(p.id) || p.foot) continue;
+      const c = mp.carPose(p.id), me = veh().car.pos;
+      const d = c ? Math.hypot(c.pos.x - me.x, c.pos.z - me.z) : p.dist;
+      if (d >= 0 && d < bd) { bd = d; by = p.id; }
+    }
+    if (by !== null) { sendG('pts', { s: Math.floor(mineHeld) }); setHolder(g, by, g.seq + 1, 0, 0, true); }
+  });
+  const rabbitStep = (g: Game, dt: number) => {
+    const v = veh(), car = v.car;
+    if (g.phase === 'count') {
+      const n = 3 - Math.floor(g.clock);
+      banner.show(n > 0 ? String(n) : t('play.rabbitGo'), n > 0 ? '#f4f4f1' : RABBIT_COLOR);
+      if (g.clock >= 3) { g.phase = 'run'; g.clock = 0; v.inputEnabled = true; }
+      return;
+    }
+    if (g.phase !== 'run') return;
+    if (g.clock > 1.5 && g.holder !== meId()) banner.hide();
+    const driving = pl.mode === 'driving';
+    if (g.holder === null) {
+      // through it: ask the starter (who may be us)
+      grabT -= dt;
+      if (driving && grabT <= 0 && Math.hypot(car.pos.x - g.rx, car.pos.z - g.rz) < RABBIT_REACH) {
+        grabT = 1;
+        if (g.org === meId()) setHolder(g, meId(), g.seq + 1, 0, 0, true); else sendG('grab');
+      }
+    } else if (g.holder === meId()) {
+      mineHeld += driving ? dt : 0;
+      g.held.set(meId(), mineHeld);
+      ptsT -= dt;
+      if (ptsT <= 0) { ptsT = 1; sendG('pts', { s: Math.floor(mineHeld) }); }
+      if (mineHeld >= RABBIT_WIN) { sendG('win'); finish(rabbitResult(g, meId())); return; }
+      // out of the car: dropped where we stand
+      footT = driving ? 0 : footT + dt;
+      if (footT > DROP_T) { const p = pl.position; setHolder(g, null, g.seq + 1, p.x, p.z, true); }
+    }
+    // the starter's clock: the most held when it runs out
+    if (g.org === meId() && g.clock > RABBIT_S) {
+      const held: Record<string, number> = {};
+      for (const [id, n] of g.held) held[id] = Math.floor(n);
+      g.phase = 'over';
+      mp.send('g', { op: 'end', gid: g.gid, held });
+      finish(rabbitResult(g, null));
+    }
+  };
+  /** Where the 兔儿爷 is now (on the ground, or over its holder's car). */
+  const rabbitAt = (g: Game): { x: number; y: number; z: number } | null => {
+    if (g.holder === null) return { x: g.rx, y: 0.6, z: g.rz };
+    if (g.holder === meId()) { const p = veh().renderPos; return { x: p.x, y: p.y + 1.75, z: p.z }; }
+    const c = mp.carPose(g.holder);
+    if (c) return { x: c.pos.x, y: c.pos.y + 1.75, z: c.pos.z };
+    const p = mp.peers.find((q) => q.id === g.holder);
+    return p ? { x: p.x, y: p.y + 1.75, z: p.z } : null;
+  };
+  const drawRabbit = (dt: number) => {
+    const g = game;
+    const at = g && g.kind === 'rabbit' && (g.phase === 'count' || g.phase === 'run') ? rabbitAt(g) : null;
+    if (!at) { if (figure) figure.visible = false; finishMark.hide(); return; }
+    const fig = engine.get<{ name: string; figure?: { geometry: THREE.BufferGeometry; material: THREE.Material } }>('collect')?.figure;
+    if (!fig) return;
+    if (!figure) { figure = new THREE.Mesh(fig.geometry, fig.material); figure.name = 'room-rabbit'; figure.castShadow = true; figure.frustumCulled = false; engine.scene.add(figure); }
+    if (figure.geometry !== fig.geometry) figure.geometry = fig.geometry;
+    spin += dt;
+    figure.visible = true;
+    const ground = g!.holder === null;
+    figure.position.set(at.x, at.y + Math.sin(spin * 2) * 0.08, at.z);
+    figure.rotation.set(0, spin * (ground ? 1.4 : 0.6), 0);
+    figure.scale.setScalar(ground ? 1.5 : 0.85);
+    if (ground) finishMark.show(at.x, at.z, RABBIT_COLOR, 1.6); else finishMark.hide();
   };
 
   // --- each step ---------------------------------------------------------------------------------------------------
@@ -550,7 +719,7 @@ export function install(engine: Engine): PlayApi | null {
     get active() { return !!game?.mine && game.phase !== 'over'; },
     get running() {
       if (!game || game.phase === 'over') return null;
-      const title = game.kind === 'race' ? t('play.runningRace', { course: trials()?.lines[game.course]?.name ?? '' }) : t('play.runningChase', { runner: nameOf(game.runner) });
+      const title = game.kind === 'race' ? t('play.runningRace', { course: trials()?.lines[game.course]?.name ?? '' }) : game.kind === 'rabbit' ? t('play.runningRabbit') : t('play.runningChase', { runner: nameOf(game.runner) });
       return { title, mine: game.org === meId() };
     },
     get last() { return last; },
@@ -564,7 +733,8 @@ export function install(engine: Engine): PlayApi | null {
       const ps = [meId(), ...mp.peers.filter((p) => p.dist >= 0).map((p) => p.id)];
       const gid = `${meId()}-${Date.now().toString(36)}`;
       mp.send('g', { op: 'start', g: 'race', gid, ps, c: course });
-      begin({ kind: 'race', gid, org: meId(), ps, in: new Set(ps), ready: new Set(), phase: 'prep', mine: true, clock: 0, course, runner: -1, fin: new Map(), firstFin: -1 });
+      const g = newGame('race', gid, meId(), ps); g.course = course;
+      begin(g);
       return null;
     },
     startChase(runner) {
@@ -575,7 +745,24 @@ export function install(engine: Engine): PlayApi | null {
       if (!ps.includes(runner)) return t('play.noRunner');
       const gid = `${meId()}-${Date.now().toString(36)}`;
       mp.send('g', { op: 'start', g: 'chase', gid, ps, runner });
-      begin({ kind: 'chase', gid, org: meId(), ps, in: new Set(ps), ready: new Set(), phase: 'prep', mine: true, clock: 0, course: 0, runner, fin: new Map(), firstFin: -1 });
+      const g = newGame('chase', gid, meId(), ps); g.runner = runner;
+      begin(g);
+      return null;
+    },
+    startRabbit() {
+      if (game && game.phase !== 'over') return t('play.already');
+      const why = free(); if (why) return why;
+      const ps = [meId(), ...mp.peers.filter((p) => p.dist >= 0).map((p) => p.id)];
+      if (ps.length < 2) return t('play.needTwo');
+      // on a lane a little ahead of the one starting it
+      const v = veh(), c = v.car, ahead = 40;
+      const lane = v.roadPoseNear?.(c.pos.x + c.fwd.x * ahead, c.pos.y + 0.5, c.pos.z + c.fwd.z * ahead) ?? v.roadPoseNear?.(c.pos.x, c.pos.y + 0.5, c.pos.z);
+      if (!lane) return t('play.noLane');
+      const gid = `${meId()}-${Date.now().toString(36)}`;
+      const x = Math.round(lane.pos.x * 10) / 10, z = Math.round(lane.pos.z * 10) / 10;
+      mp.send('g', { op: 'start', g: 'rabbit', gid, ps, x, z });
+      const g = newGame('rabbit', gid, meId(), ps); g.rx = x; g.rz = z;
+      begin(g);
       return null;
     },
     stop() {
@@ -600,12 +787,14 @@ export function install(engine: Engine): PlayApi | null {
       toast(t('play.following', { name: nameOf(id) }));
     },
     get following() { return following; },
+    debug: { game: () => (game ? { kind: game.kind, phase: game.phase, rx: game.rx, rz: game.rz, holder: game.holder, held: [...game.held.entries()] } : null) },
     fixedUpdate(dt) {
       const g = game;
       if (g) {
         g.clock += dt;
         if (g.phase === 'prep' && g.org === meId() && g.clock > READY_WAIT) go(g);
-        if (g.mine && g.phase !== 'prep' && g.phase !== 'over') { if (g.kind === 'race') raceStep(g, dt); else chaseStep(g, dt); }
+        if (g.mine && g.phase !== 'prep' && g.phase !== 'over') { if (g.kind === 'race') raceStep(g, dt); else if (g.kind === 'rabbit') rabbitStep(g, dt); else chaseStep(g, dt); }
+        for (const p of mp.peers) if (p.dist >= 0) lastSeen.set(p.id, { x: p.x, z: p.z });
         if (g.kind === 'race' && g.phase === 'run') raceMaybeDone(g);
       }
       // the GPS after a friend
@@ -629,12 +818,18 @@ export function install(engine: Engine): PlayApi | null {
       if (!inRoom && !menu.hidden) menu.hidden = true;
       if (!inRoom && game) { if (game.mine) wrapUp(); game = null; changed(); }
       nextMark.update(dt); finishMark.update(dt);
+      drawRabbit(dt);
       const n = nav();
       if (n && !blipsOn) {
         blipsOn = true;
         n.addBlips(() => {
           blips.length = 0;
           if (pulseAt && pulseShow > 0 && game?.kind === 'chase' && game.runner !== meId()) blips.push({ kind: 'suspect', x: pulseAt.x, z: pulseAt.z, flash: true, label: nameOf(game.runner) });
+          const g = game;
+          if (g?.kind === 'rabbit' && g.phase === 'run' && g.holder !== meId()) {
+            const at = rabbitAt(g);
+            if (at) blips.push({ kind: 'collect', x: at.x, z: at.z, flash: true, label: g.holder === null ? t('play.rabbit') : t('play.rabbitWith', { name: nameOf(g.holder) }) });
+          }
           return blips;
         });
       }
@@ -650,7 +845,20 @@ export function install(engine: Engine): PlayApi | null {
         const total = g.in.size;
         pSub.textContent = myFin ? t('play.waitOthers') : t('play.raceSub', { i: next, n: ln.cps.length, pos: racePlace(g), of: total });
         pBar.hidden = true;
+      } else if (g.kind === 'rabbit') {
+        pName.textContent = t('play.rabbitName', { n: RABBIT_WIN });
+        pTime.textContent = t('play.heldFor', { n: Math.floor(mineHeld) });
+        let top: number | null = null, topN = -1;
+        for (const [id, n] of g.held) if (id !== meId() && n > topN) { topN = n; top = id; }
+        const where = g.holder === null ? t('play.rabbitFree') : g.holder === meId() ? t('play.rabbitYours') : t('play.rabbitWith', { name: nameOf(g.holder) });
+        pSub.textContent = `${where}${top !== null ? ` · ${t('play.rabbitTop', { name: nameOf(top), n: Math.floor(topN) })}` : ''} · ${mmss(Math.max(0, RABBIT_S - g.clock))}`;
+        pBar.hidden = false; pFill.style.width = `${Math.min(100, (mineHeld / RABBIT_WIN) * 100)}%`; pFill.style.background = RABBIT_COLOR;
+        // the GPS to it: on the ground, or after whoever has it
+        const at = g.phase === 'run' && g.holder !== meId() ? rabbitAt(g) : null;
+        if (at) { navT -= dt; if (navT <= 0) { navT = 1; nav()?.setTarget({ x: at.x, z: at.z, kind: 'mission', label: t('play.rabbit') }); } }
+        else if (g.holder === meId() && nav()?.goal?.kind === 'mission') nav()?.clearTarget('mission');
       } else {
+        pFill.style.background = '';
         const runner = g.runner === meId();
         const left = Math.max(0, CHASE_S - (g.phase === 'run' ? g.clock : 0));
         pName.textContent = runner ? t('play.youAreRunner') : t('play.youAreCop', { runner: nameOf(g.runner) });

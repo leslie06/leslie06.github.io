@@ -2,6 +2,7 @@ import type { Engine } from '../core/Engine';
 import { t } from '../core/I18n';
 import type { MultiplayerApi } from '../online/Multiplayer';
 import type { PlayApi } from '../online/RoomPlay';
+import type { FeatApi } from '../online/RoomFeats';
 import { C, F, css, el } from './theme';
 
 css(`
@@ -131,6 +132,13 @@ export class RoomPanel {
         this.runnerPick = people[(i + 1) % people.length].id;
         this.launch(() => play.startChase(runner));
       });
+      const rab = el('div', 'g', box);
+      el('b', '', rab).textContent = t('play.rabbitTitle');
+      el('p', '', rab).textContent = t('play.rabbitHelp');
+      const rr2 = el('div', 'row', rab);
+      const rg2 = el('button', 'go', rr2); rg2.textContent = t('play.start');
+      rg2.disabled = people.length < 2;
+      rg2.addEventListener('click', () => this.launch(() => play.startRabbit()));
     }
     const last = play.last;
     if (last && last.rows.length) {
@@ -138,11 +146,21 @@ export class RoomPanel {
       el('span', 'h', r).textContent = `${t('play.last')}：${last.title}`;
       for (const row of last.rows) { const d = el('div', '', r); el('span', '', d).textContent = row.name; el('span', '', d).textContent = row.text; }
     }
-    const sc = play.scores.filter((x) => x.raceWins || x.escapes || x.catches);
+    const bests = this.engine.get<FeatApi>('feats')?.bests ?? [];
+    if (bests.length) {
+      const r = el('div', 'res', box);
+      el('span', 'h', r).textContent = t('play.records');
+      for (const b of bests) {
+        const d = el('div', '', r);
+        el('span', '', d).textContent = t(`feat.${b.kind}` as 'feat.drift');
+        el('span', '', d).textContent = `${b.name} · ${b.kind === 'jump' ? t('feat.metres', { m: Math.round(b.v) }) : t('feat.points', { n: Math.round(b.v).toLocaleString() })}`;
+      }
+    }
+    const sc = play.scores.filter((x) => x.raceWins || x.escapes || x.catches || x.rabbitWins);
     if (sc.length) {
       const r = el('div', 'res', box);
       el('span', 'h', r).textContent = t('play.scores');
-      for (const x of sc) { const d = el('div', '', r); el('span', '', d).textContent = x.name; el('span', '', d).textContent = t('play.scoreRow', { w: x.raceWins, e: x.escapes, c: x.catches }); }
+      for (const x of sc) { const d = el('div', '', r); el('span', '', d).textContent = x.name; el('span', '', d).textContent = t('play.scoreRow', { w: x.raceWins, e: x.escapes, c: x.catches, r: x.rabbitWins }); }
     }
     el('div', 'hint', box).textContent = t('play.keyHint');
   }

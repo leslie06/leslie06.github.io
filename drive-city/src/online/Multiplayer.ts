@@ -32,7 +32,9 @@ import { POLICE_LIVERY } from '../vehicle/CarModel';
  * a chapter or the opening getaway, if one is on.
  * A dropped link reconnects into the same room (if anyone is still in it). Off where the leaderboards are.
  */
-export interface MpPeerView { id: number; name: string; x: number; z: number; foot: boolean; dist: number; speed: number }
+export interface MpPeerView { id: number; name: string; x: number; y: number; z: number; yaw: number; foot: boolean; dist: number; speed: number;
+  /** Sitting in this friend's car (online/RoomRide.ts), or null. */
+  aboard: number | null }
 export interface MpPose { x: number; y: number; z: number; yaw: number }
 export type MpStatus = 'off' | 'connecting' | 'in' | 'error';
 export interface MultiplayerApi extends System {
@@ -71,6 +73,10 @@ export interface MultiplayerApi extends System {
   readonly hidden: Set<number>;
   /** Our car flashes a police light bar, here and for the others. */
   beacons: boolean;
+  /** We sit in this friend's car (online/RoomRide.ts): sent, so that they do not draw us standing in it. */
+  aboard: number | null;
+  /** A friend's car as drawn here, or null. */
+  carPose(id: number): { pos: THREE.Vector3; quat: THREE.Quaternion } | null;
   /** Called when the room, its people or the status change. */
   listen(fn: () => void): void;
   /** Probes: each friend's car body here. */
@@ -217,7 +223,8 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       };
     }
     const f = pl.foot;
-    return { ts, m: 'f', p: [r2(f.pos.x), r2(f.pos.y), r2(f.pos.z)], v: [r2(f.vel.x), r2(f.vel.y), r2(f.vel.z)], y: r3(f.yaw), fs: r2(Math.hypot(f.vel.x, f.vel.z)), tm };
+    return { ts, m: 'f', p: [r2(f.pos.x), r2(f.pos.y), r2(f.pos.z)], v: [r2(f.vel.x), r2(f.vel.y), r2(f.vel.z)], y: r3(f.yaw), fs: r2(Math.hypot(f.vel.x, f.vel.z)), tm,
+      ...(api.aboard !== null ? { rd: api.aboard } : {}) };
   };
 
   let fade: Fade | null = null, travelling = false;
@@ -261,7 +268,8 @@ body:not(.dc-playing) .mp-tags{display:none}`;
     max: 4,
     get peers() {
       const me = engine.get<PlayerApi>('player')?.position;
-      return [...peers.values()].map((p) => ({ id: p.id, name: p.name, x: p.pos.x, z: p.pos.z, foot: p.foot, dist: me && p.state ? Math.hypot(p.pos.x - me.x, p.pos.z - me.z) : -1, speed: Math.hypot(p.vel.x, p.vel.z) }));
+      return [...peers.values()].map((p) => ({ id: p.id, name: p.name, x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.foot ? p.yaw : yawOf(p.quat), foot: p.foot,
+        dist: me && p.state ? Math.hypot(p.pos.x - me.x, p.pos.z - me.z) : -1, speed: Math.hypot(p.vel.x, p.vel.z), aboard: p.aboard }));
     },
     listen(fn) { listeners.push(fn); },
     debug: { bodies: () => [...peers.values()].map((p) => p.debugBody) },
@@ -328,6 +336,8 @@ body:not(.dc-playing) .mp-tags{display:none}`;
     say(id, text) { peers.get(id)?.say(text); },
     hidden: new Set<number>(),
     beacons: false,
+    aboard: null,
+    carPose(id) { return peers.get(id)?.drawnCar() ?? null; },
     fixedUpdate(dt) {
       if (api.status !== 'in') return;
       // the steps' own clock: a frame that runs several steps runs them at times dt apart, not all at the frame's

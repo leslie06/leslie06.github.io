@@ -53,6 +53,8 @@ import * as presence from './online/Presence';
 import * as promo from './online/Promo';
 import * as mp from './online/Multiplayer';
 import * as roomPlay from './online/RoomPlay';
+import * as roomRide from './online/RoomRide';
+import * as roomFeats from './online/RoomFeats';
 import * as cloud from './online/Cloud';
 import * as chat from './online/Chat';
 import * as campaign from './campaign';
@@ -151,7 +153,7 @@ async function boot() {
   if (worldName === 'city') chat.install(engine);
   await ui.install(engine, container);
   // things to do together in a room (online/RoomPlay.ts): after ui, whose HUD its button sits in
-  if (worldName === 'city' && engine.get('mp')) roomPlay.install(engine);
+  if (worldName === 'city' && engine.get('mp')) { roomPlay.install(engine); roomRide.install(engine); roomFeats.install(engine); }
   if (worldName === 'city') { registerCityPoses(); registerTrafficPoses(); registerPeoplePoses(); registerCharacterPoses(); registerNavPoses(); registerPolicePoses(); registerVehiclePoses(); registerMissionPoses(); registerRacePoses(); registerParkPoses(); registerHomePoses(); registerTitlePose(); } else registerPoses();
   engine.resize();
   (window as unknown as { drivecity?: Engine }).drivecity = engine;

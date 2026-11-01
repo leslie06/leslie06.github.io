@@ -22,6 +22,8 @@ export interface CollectApi extends System {
   /** The ones not found yet (where; the street's gossip points at them: life/). */
   left?(): { x: number; z: number }[];
   debug: { spots(): { x: number; z: number }[]; reset(): void };
+  /** The figure's mesh parts, for another 兔儿爷 (online/RoomPlay.ts's 抢兔儿爷): the geometry arrives after the title. */
+  readonly figure?: { readonly geometry: THREE.BufferGeometry; readonly material: THREE.Material };
 }
 
 /**
@@ -115,6 +117,7 @@ export async function install(engine: Engine): Promise<void> {
     left: () => RABBITS.filter((_, i) => !found.has(i)),
     total: n,
     debug: { spots: () => RABBITS, reset: () => { found.clear(); save(); } },
+    figure: { get geometry() { return mesh.geometry; }, material: mat },
     fixedUpdate() {
       const at = pl.position;
       for (let i = 0; i < n; i++) {

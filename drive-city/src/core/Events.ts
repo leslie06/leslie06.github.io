@@ -51,6 +51,8 @@ export interface GameEvents {
   'combat:counter': { x: number; z: number };
   /** A move that scores in the street combo (stunts/): a near miss, a drift, a jump... `points` before the multiplier. */
   'stunt:event': { kind: 'near' | 'drift' | 'air' | 'oncoming' | 'redlight' | 'smash' | 'evade' | 'shortcut' | 'takedown'; points: number };
+  /** A stunt ramp or overpass flown (stunts/Jumps.ts): which (`ramp`), from where, how far (m). */
+  'stunt:jump': { ramp: number; x: number; z: number; dist: number; over: boolean };
   /** The combo ended: banked as `cash`, or `lost` in a crash (cash 0). */
   'stunt:bank': { points: number; cash: number; lost: boolean };
   /** A 兔儿爷 collectible was picked up (collect/). */

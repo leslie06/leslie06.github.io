@@ -142,6 +142,7 @@ export function installJumps(engine: Engine): void {
     const dist = Math.hypot(car.pos.x - f.x, car.pos.z - f.z);
     if (dist < MIN_FLIGHT) return;
     last = { ramp: f.ramp, dist };
+    engine.events.emit('stunt:jump', { ramp: f.ramp, x: f.l.x, z: f.l.z, dist, over: f.l.over });
     if (!done.has(f.ramp)) {
       done.add(f.ramp); save();
       engine.get<MissionApi>('missions')?.addCash(f.l.prize);

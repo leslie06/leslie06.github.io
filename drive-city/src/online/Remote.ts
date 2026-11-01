@@ -35,6 +35,8 @@ export interface NetState {
   li?: number;
   /** A livery other than the body's own: 'police' (警匪追逃's police). */
   lv?: 'police';
+  /** On foot, sitting in this friend's car (online/RoomRide.ts): not drawn, no name tag. */
+  rd?: number;
   /** On foot: ground speed (the walk), and an action ('punch'...) if any. */
   fs?: number;
   /** Their time of day (hours): the room's first player's is everyone's clock. */
@@ -70,6 +72,8 @@ export function cleanState(m: Record<string, unknown>): NetState | null {
     if (m.lv === 'police') s.lv = 'police';
   } else {
     s.y = num(m.y, 100) ?? 0;
+    const rd = num(m.rd, 1e9);
+    if (rd !== null) s.rd = rd;
     s.fs = num(m.fs, 50) ?? 0;
   }
   return s;
@@ -461,13 +465,21 @@ export class RemotePeer {
         }
       } else if (this.model) this.model.root.visible = false;
     } else if (this.model) this.model.root.visible = false;
-    if (this.foot && pl) {
+    const aboard = this.foot && this.state?.rd !== undefined;
+    if (this.foot && pl && !aboard) {
       this.motion.speed = this.state?.fs ?? 0;
       this.gait.update(this.motion, dt, this.seed % 997);
       pl.crowd.add(this.pos, this.yaw, this.gait, this.look);
     }
-    if (hidden) this.tag.hidden = true; else this.placeTag(now);
+    if (hidden || aboard) this.tag.hidden = true; else this.placeTag(now);
   }
+
+  /** Their car as drawn here (the body's pose, pushed by a crash here, or their state's), or null. */
+  drawnCar(): { pos: THREE.Vector3; quat: THREE.Quaternion } | null {
+    return this.model?.root.visible ? { pos: this.model.root.position, quat: this.model.root.quaternion } : null;
+  }
+  /** Sitting in someone's car (their id), or null. */
+  get aboard(): number | null { return this.foot ? this.state?.rd ?? null : null; }
 
   /** A line over their head for SAY_MS. */
   say(text: string): void { this.tagSay.textContent = text; this.tagSay.hidden = false; this.sayUntil = performance.now() + SAY_MS; }
