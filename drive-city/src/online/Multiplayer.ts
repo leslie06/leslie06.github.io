@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
-import type { Blip, CameraApi, HudApi, NavApi, PlayerApi, RaceApi, RenderApi, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { Blip, CameraApi, HudApi, NavApi, PlayerApi, RaceApi, RenderApi, VehicleApi, WantedApi, Wear, WorldApi } from '../game/Contracts';
 import type { CampaignApi } from '../campaign';
 import type { IntroApi } from '../intro';
 import { Fade } from '../campaign/Screens';
@@ -37,6 +37,14 @@ export interface MpPeerView { id: number; name: string; x: number; y: number; z:
   aboard: number | null }
 export interface MpPose { x: number; y: number; z: number; yaw: number }
 export type MpStatus = 'off' | 'connecting' | 'in' | 'error';
+/** A friend's wear as sent, kept to ids and colours. */
+function cleanWear(v: unknown): Wear {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const id = (x: unknown) => (typeof x === 'string' && /^[a-z]{2,12}$/.test(x) ? x : null);
+  const col = (x: unknown) => (typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x) ? x : null);
+  return { hat: id(o.hat), hatColor: col(o.hatColor), glasses: id(o.glasses), jacket: col(o.jacket), pants: col(o.pants), hair: col(o.hair) };
+}
+
 export interface MultiplayerApi extends System {
   readonly enabled: boolean;
   readonly status: MpStatus;
@@ -166,6 +174,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       want = { kind: 'join', room: api.room };
       clearPeers();
       for (const p of (m.peers as { id: number; name: string }[]) ?? []) addPeer(p.id, String(p.name));
+      shareWear();
       if (first) toast(t('mp.joinedToast', { room: api.room }));
       changed();
     } else if (m.t === 'err') {
@@ -175,6 +184,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       changed();
     } else if (m.t === 'peer') {
       addPeer(Number(m.id), String(m.name));
+      shareWear();
       toast(t('mp.peerIn', { name: String(m.name) }));
       changed();
     } else if (m.t === 'gone') {
@@ -190,6 +200,7 @@ body:not(.dc-playing) .mp-tags{display:none}`;
       const p = peers.get(Number(m.id));
       if (!p) return;
       if (m.k === 'horn') { p.sample(performance.now()); engine.events.emit('traffic:horn', { x: p.pos.x, z: p.pos.z }); return; }
+      if (m.k === 'wear') { p.dress(cleanWear(m.w)); return; }
       for (const fn of eventFns) fn(p.id, m);
     }
   };
@@ -204,6 +215,10 @@ body:not(.dc-playing) .mp-tags{display:none}`;
   };
 
   const send = (o: object) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o)); };
+  // What we wear (南锣鼓巷's clothes shop, 2026-11-03): to everyone in the room when it changes, when we join, when
+  // someone else does (an event is not kept: a newcomer would never see it)
+  const shareWear = () => { const w = engine.get<PlayerApi>('player')?.wear; if (w && Object.keys(w).length) send({ t: 'e', k: 'wear', w }); };
+  engine.events.on('player:dress', () => { if (api.status === 'in') shareWear(); });
 
   /** Ourselves, as the others draw us. */
   const myState = (): NetState | null => {

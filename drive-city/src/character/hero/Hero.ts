@@ -364,6 +364,18 @@ export class Hero {
 
   hide(): void { this.root.visible = false; }
 
+  /**
+   * Bone `name` and its bind pose in the model's space (metres, feet at the origin): a hat or glasses built in that
+   * space hangs on it as `inverse(bind) * placement` (character/hero/Wear.ts). Not the skin's inverse bind matrices: a
+   * quantized glb (meshopt) folds its positions' dequantization into those.
+   */
+  boneBind(name: string): { bone: THREE.Bone; bind: THREE.Matrix4 } | null {
+    const i = this.byName.get(name);
+    if (i === undefined) return null;
+    const b = this.bones[i];
+    return { bone: b.obj, bind: new THREE.Matrix4().compose(b.pb, b.qb, new THREE.Vector3(1, 1, 1)) };
+  }
+
   /** The skeleton at rest, for retargeting clips onto it. */
   rig(): Rig {
     return {

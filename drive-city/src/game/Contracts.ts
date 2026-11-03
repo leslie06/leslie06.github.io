@@ -133,6 +133,9 @@ export interface TrafficCars extends System {
   rentBike?(b: SharedBike): Vehicle;
 }
 
+/** What the player wears (PlayerApi.dress): a hat or glasses by id, colours as '#rrggbb'; null or missing is the default. */
+export interface Wear { hat?: string | null; hatColor?: string | null; glasses?: string | null; jacket?: string | null; pants?: string | null; hair?: string | null }
+
 export interface PlayerApi extends System {
   readonly mode: 'driving' | 'onfoot';
   /** Where the player is: the car, or the feet. Streaming, HUD and AI use this. */
@@ -157,6 +160,13 @@ export interface PlayerApi extends System {
   guard?(scale: number, secs: number): void;
   /** Seconds the guard has left (0: none). */
   readonly guarded?: number;
+  /**
+   * Dress the player (district/: 南锣鼓巷's clothes shop and barber, 2026-11-03): a hat and glasses on the model's head,
+   * the jacket, trousers and hair recoloured (character/hero/Wear.ts). Applied to the model when it has loaded; emits
+   * `player:dress` (online/ shows friends).
+   */
+  dress?(w: Wear): void;
+  readonly wear?: Readonly<Wear>;
   /** Strapped into a fairground ride: the character is parked in a seat and physics is off. */
   readonly riding: boolean;
   /**

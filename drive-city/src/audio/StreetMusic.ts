@@ -6,14 +6,23 @@
  *   taichi  slow plucked pentatonic notes, sparse, a guzheng's colour;
  *   guitar  a busker strumming C-G-Am-F;
  *   erhu    a slow sliding melody, bowed: a sawtooth through a nasal band-pass, vibrato;
- *   birds   a thrush in a cage: bursts of chirps.
+ *   birds   a thrush in a cage: bursts of chirps;
+ *   ballad  南锣鼓巷's bar singer (district/, 2026-11-03): fingerpicked chords and a sung line, one of three songs
+ *           (`song`), each its own progression and tune; a song is 16 bars, then it starts over.
  */
-export type MusicKind = 'dance' | 'taichi' | 'guitar' | 'erhu' | 'birds';
-export interface MusicSource { id: string; kind: MusicKind; x: number; z: number; t: number }
+export type MusicKind = 'dance' | 'taichi' | 'guitar' | 'erhu' | 'birds' | 'ballad';
+export interface MusicSource { id: string; kind: MusicKind; x: number; z: number; t: number; song?: number }
 
-const BPM: Record<MusicKind, number> = { dance: 128, taichi: 72, guitar: 92, erhu: 66, birds: 120 };
-const REACH: Record<MusicKind, number> = { dance: 75, taichi: 40, guitar: 55, erhu: 55, birds: 30 };
-const LEVEL: Record<MusicKind, number> = { dance: 0.16, taichi: 0.07, guitar: 0.1, erhu: 0.09, birds: 0.05 };
+const BPM: Record<MusicKind, number> = { dance: 128, taichi: 72, guitar: 92, erhu: 66, birds: 120, ballad: 80 };
+const REACH: Record<MusicKind, number> = { dance: 75, taichi: 40, guitar: 55, erhu: 55, birds: 30, ballad: 28 };
+const LEVEL: Record<MusicKind, number> = { dance: 0.16, taichi: 0.07, guitar: 0.1, erhu: 0.09, birds: 0.05, ballad: 0.12 };
+/** The bar's songs: four chords (MIDI roots, minor where flagged), the key's scale for the tune, the tune's seed. */
+const SONGS: { roots: number[]; minor: boolean[]; seed: number }[] = [
+  { roots: [48, 43, 45, 41], minor: [false, false, true, false], seed: 3.1 },    // C G Am F
+  { roots: [45, 41, 48, 43], minor: [true, false, false, false], seed: 7.7 },    // Am F C G
+  { roots: [41, 43, 40, 45], minor: [false, false, true, true], seed: 5.3 },     // F G Em Am
+];
+const MAJOR = [0, 2, 4, 5, 7, 9, 11];
 const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
 const PENTA = [0, 2, 4, 7, 9];
 
@@ -65,6 +74,7 @@ export class StreetMusic {
       case 'guitar': return this.guitar(v, step, t);
       case 'erhu': return this.erhu(v, step, t, dur);
       case 'birds': if (this.rand(v) < 0.09) this.chirps(v, t); return;
+      case 'ballad': return this.ballad(v, step, t, dur);
     }
   }
 
@@ -90,6 +100,45 @@ export class StreetMusic {
       const down = s16 !== 6;
       chord.forEach((n, i) => this.pluck(v.gain, midi(n), t + (down ? i : chord.length - i) * 0.012, 0.9, 'sawtooth', 0.28, 1800));
     }
+  }
+
+  private ballad(v: Voice, step: number, t: number, dur: number): void {
+    const song = SONGS[(v.src.song ?? 0) % SONGS.length];
+    const s16 = step % 16, bar = Math.floor(step / 16), ci = bar % 4, root = song.roots[ci];
+    const third = song.minor[ci] ? 3 : 4;
+    const chord = [root, root + 7, root + 12, root + 12 + third, root + 19];
+    // fingerpicking: the bass on 1 and 3, the strings in between
+    const pick = [0, -1, 2, 3, 1, -1, 3, 4, 0, -1, 2, 3, 1, 3, 4, 2][s16];
+    if (pick >= 0) this.pluck(v.gain, midi(chord[pick] + (pick === 0 && s16 === 8 ? 7 : 0)), t, 1.4, 'triangle', pick === 0 ? 0.32 : 0.2, 2400);
+    // the sung line: a seeded phrase over two bars, a note on most eighths, held over the bar's end; the last two
+    // bars of each four rest (a breath), the tune lands on the chord's root
+    const phrase = Math.floor(bar / 2) % 8;
+    if (s16 % 2 !== 0 || bar % 4 === 3) return;
+    const h = Math.sin((s16 + 1) * 12.9 + phrase * 78.2 + song.seed * 37.7) * 43758.5, r = h - Math.floor(h);
+    if (r < 0.28) return;
+    const deg = Math.floor(r * 9) % 7;
+    const scaleRoot = song.roots[0] + 24;
+    const near = (n: number) => { // the chord tone nearest the scale note on strong beats
+      if (s16 % 8 !== 0) return n;
+      const tones = chord.map((c) => c + 24);
+      return tones.reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a));
+    };
+    const note = near(scaleRoot + (song.minor[0] ? [0, 2, 3, 5, 7, 8, 10] : MAJOR)[deg]);
+    const len = dur * (s16 === 12 ? 6 : r > 0.8 ? 4 : 2);
+    this.voice(v.gain, midi(note), t, len);
+  }
+
+  /** A sung note: a soft triangle with vibrato after the onset, through two vowel formants. */
+  private voice(out: AudioNode, f: number, t: number, d: number): void {
+    const c = this.ctx, o = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain(), f1 = c.createBiquadFilter(), f2 = c.createBiquadFilter(), g = c.createGain(), mix = c.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(f * 0.985, t); o.frequency.setTargetAtTime(f, t, 0.04);
+    lfo.frequency.value = 5.2; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(f * 0.012, t + Math.min(0.35, d * 0.6)); lfo.connect(lg).connect(o.frequency);
+    f1.type = 'bandpass'; f1.frequency.value = 700; f1.Q.value = 2.2;
+    f2.type = 'bandpass'; f2.frequency.value = 1150; f2.Q.value = 3;
+    mix.gain.value = 1;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55, t + 0.06); g.gain.setValueAtTime(0.5, t + d * 0.75); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(f1).connect(mix); o.connect(f2).connect(mix); mix.connect(g).connect(out);
+    o.start(t); lfo.start(t); o.stop(t + d + 0.05); lfo.stop(t + d + 0.05);
   }
 
   private erhu(v: Voice, step: number, t: number, dur: number): void {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { blocked, CATALOG, dancePrize, loadSave, SHOP_IDS } from './Shops';
+import { blocked, CATALOG, dancePrize, DEFAULT_WORN, HAIR, loadSave, ownKey, SHOP_IDS, WARDROBE } from './Shops';
 
 describe('南锣鼓巷 shops', () => {
-  it('every shop but the arcade sells something, at a price', () => {
+  it('every shop but the arcade and the clothes shop sells something, at a price', () => {
     for (const id of SHOP_IDS) {
       const items = CATALOG[id].items;
-      if (id === 'arcade') expect(items.length).toBe(0);
+      if (id === 'arcade' || id === 'clothes') expect(items.length).toBe(0);
       else expect(items.length).toBeGreaterThan(0);
       for (const it of items) expect(it.price).toBeGreaterThan(0);
     }
@@ -31,9 +31,29 @@ describe('南锣鼓巷 shops', () => {
   });
 
   it('reads a save, and survives a broken one', () => {
-    expect(loadSave(null)).toEqual({ souvenirs: 0, photos: 0, danceBest: 0, visited: [] });
-    expect(loadSave('{oops')).toEqual({ souvenirs: 0, photos: 0, danceBest: 0, visited: [] });
+    const empty = { souvenirs: 0, photos: 0, danceBest: 0, visited: [], owned: [], worn: DEFAULT_WORN, yard: false };
+    expect(loadSave(null)).toEqual(empty);
+    expect(loadSave('{oops')).toEqual(empty);
+    // a round-1 save reads with round 2's defaults
     expect(loadSave(JSON.stringify({ souvenirs: 2.7, photos: -1, danceBest: 40, visited: ['tea', 'bank', 'photo'] })))
-      .toEqual({ souvenirs: 2, photos: 0, danceBest: 16, visited: ['tea', 'photo'] });
+      .toEqual({ ...empty, souvenirs: 2, danceBest: 16, visited: ['tea', 'photo'] });
+  });
+
+  it('wears only what was bought (or is free)', () => {
+    const s = loadSave(JSON.stringify({ owned: ['hat:cap', 'jacket:wine', 'bogus:x'], worn: { hat: 'cap', glasses: 'aviator', jacket: 'wine', pants: 'khaki', hair: 'blue' } }));
+    expect(s.owned).toEqual(['hat:cap', 'jacket:wine']);
+    expect(s.worn).toEqual({ hat: 'cap', glasses: null, jacket: 'wine', pants: DEFAULT_WORN.pants, hair: DEFAULT_WORN.hair });
+  });
+
+  it('sells each look once, the starting ones free', () => {
+    for (const list of [WARDROBE, HAIR]) {
+      const keys = list.map(ownKey);
+      expect(new Set(keys).size).toBe(keys.length);
+      for (const w of list) {
+        const start = (DEFAULT_WORN as unknown as Record<string, string | null>)[w.kind] === w.id;
+        expect(w.price === 0).toBe(start);
+        if (w.kind !== 'glasses') expect(w.color).toMatch(/^#[0-9a-f]{6}$/);
+      }
+    }
   });
 });

@@ -21,7 +21,7 @@
 | `npc.md` | 脚本 NPC、对话框、配音（CosyVoice 录制管线、VoiceManager）、街头遭遇、按时间的街头生活、熟人和好感度福利 |
 | `online.md` | 玩家反馈（`/fb`）和回复、在线人数、账号云存档、聊天、促销兑换码、联机 |
 | `home-park.md` | 我家别墅（楼梯、大门、车道的坑）、欢乐谷游乐设施和过山车 |
-| `district.md` | 精华街区南锣鼓巷：Blender 脚本 `nanluo.py`、能进的 5 家店、店主和人流、室内相机、照相馆和跳舞机 |
+| `district.md` | 精华街区南锣鼓巷：Blender 脚本 `nanluo.py`（南段 + 中段，中段拐了 2.49°）、能进的 9 家店、店主和人流、室内相机、照相馆和跳舞机、换装（`character/hero/Wear.ts`）、小酒馆驻唱、四合院 |
 | `landmarks.md` | Blender 地标管线（`import.mjs`、`Glb.ts` 命名约定、Blender 插件）、楼梯/挡车块、每个地标和每批次 |
 | `hosting-phones.md` | 静态托管第 1-5 轮（启动下载量和时间）、加载进度条、手机分辨率、触屏操作 |
 

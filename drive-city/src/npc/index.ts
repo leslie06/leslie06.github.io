@@ -213,7 +213,9 @@ export async function install(engine: Engine): Promise<void> {
     const v = vehicle(), m = missions(), intro = engine.get<IntroApi>('intro')?.step;
     return !calm() && v.inputEnabled && !v.autopilot && !pl.riding && (wanted()?.level ?? 0) === 0 && !engine.get<RaceApi>('races')?.active
       && !m?.busy && !m?.story && !engine.get<GarageApi>('garage')?.open && (intro === undefined || intro === 'off' || intro === 'done')
-      && !engine.get<{ name: string; active: unknown }>('events')?.active && !dlg()?.busy;
+      && !engine.get<{ name: string; active: unknown }>('events')?.active && !dlg()?.busy
+      // not in a shop, a chair or a courtyard of 南锣鼓巷 (district/)
+      && !engine.get<{ name: string; busy?: boolean }>('district')?.busy;
   };
 
   // ---------------------------------------------------------------- thief

@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import type RAPIER_NS from '@dimforge/rapier3d-compat';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
-import type { PlayerApi } from '../game/Contracts';
+import type { PlayerApi, Wear } from '../game/Contracts';
 import type { RenderSystem } from '../render';
 import { Gait, type Motion } from '../character/Animator';
 import { J, randomLook, SKELETON, type Look } from '../character/Body';
+import { wearOnLook } from '../character/hero/Wear';
 import { buildCar, defaultLivery, POLICE_LIVERY, type CarModel } from '../vehicle/CarModel';
 import { BODY_TYPES, bodySettled, readyBodies, type BodySource, type BodyType } from '../vehicle/Bodies';
 import { SPEC_OF, TAXI, type VehicleSpec } from '../vehicle/Spec';
@@ -162,6 +163,8 @@ export class RemotePeer {
   private readonly gait = new Gait();
   private readonly rider = new Gait();
   private readonly look: Look;
+  /** The look as drawn from their name, before what they wear. */
+  private readonly base: Look;
   private readonly seed: number;
   private spin = 0;
   private paintKey = '';
@@ -202,6 +205,7 @@ export class RemotePeer {
   constructor(private readonly engine: Engine, readonly id: number, public name: string, tagLayer: HTMLElement) {
     this.seed = hashOf(name + id);
     this.look = randomLook(rng(this.seed));
+    this.base = { ...this.look, shirt: this.look.shirt.clone(), pants: this.look.pants.clone(), hair: this.look.hair.clone() };
     this.tag = document.createElement('div');
     this.tag.className = 'mp-tag';
     this.tagName = document.createElement('span');
@@ -217,6 +221,9 @@ export class RemotePeer {
   }
 
   rename(name: string): void { this.name = name; this.tagName.textContent = name; }
+
+  /** What they wear (南锣鼓巷's clothes shop and barber), over the look drawn from their name. */
+  dress(w: Wear): void { wearOnLook(this.look, w, this.base); }
 
   push(s: NetState): void {
     const now = performance.now(), off = now - s.ts;

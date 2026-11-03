@@ -4,7 +4,7 @@ import { J, SKELETON } from '../character/Body';
 import { SEAT, type TwoWheeler } from '../vehicle/TwoWheelers';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
-import type { CameraApi, CarLook, CombatApi, HudApi, Interaction, MissionApi, ParkApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { CameraApi, CarLook, CombatApi, HudApi, Interaction, MissionApi, ParkApi, PeopleApi, PlayerApi, SharedBike, TrafficCars, VehicleApi, WantedApi, Wear, WorldApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import { project } from '../city/Geo';
 import { t } from '../core/I18n';
@@ -16,6 +16,7 @@ import { Crowd, CROWD_CAP } from '../character/Crowd';
 import type { Look } from '../character/Body';
 import { Hero } from '../character/hero/Hero';
 import { CAST_ON, castModel } from '../character/Cast';
+import { Wardrobe, wearOnLook } from '../character/hero/Wear';
 import type { RenderSystem } from '../render/RenderSystem';
 
 /** The player: a Beijing cabbie in a slate jacket over a white tee. */
@@ -53,11 +54,14 @@ export async function install(engine: Engine): Promise<void> {
   // The player's own model (character/hero), loaded in the background; until it arrives (or with
   // ?hero=0) the player is drawn by the crowd like everyone else.
   let hero: Hero | null = null;
+  // what the player wears (district/'s clothes shop and barber): on Chen Ye's model, or on the crowd's look until then
+  let wardrobe: Wardrobe | null = null, wear: Wear = {};
+  const baseLook = { ...look, shirt: look.shirt.clone(), pants: look.pants.clone(), hair: look.hair.clone() };
   const oldHero = () => Hero.load(`${import.meta.env.BASE_URL}models/hero/`, look)
     .then((h) => { engine.get<RenderSystem>('render')?.prepare(h.root); engine.scene.add(h.root); hero = h; });
   const heroReady: Promise<void> = new URLSearchParams(location.search).get('hero') === '0' ? Promise.resolve()
     // Chen Ye, the realistic cast's model (character/Cast.ts); the old placeholder with ?cast=0 or if his fails
-    : (CAST_ON ? castModel(engine, 'chenye', look).then((h) => { hero = h; foot.getupSecs = h.getupSecs ?? 0.9; })
+    : (CAST_ON ? castModel(engine, 'chenye', look).then((h) => { hero = h; foot.getupSecs = h.getupSecs ?? 0.9; wardrobe = new Wardrobe(h); wardrobe.apply(wear); })
       .catch((e) => { console.warn('cast model failed to load; the old player model instead', e); return oldHero(); })
       : oldHero())
     .catch((e) => console.warn('hero model failed to load; drawing the player with the crowd', e));
@@ -257,6 +261,13 @@ export async function install(engine: Engine): Promise<void> {
     get foot() { return mode === 'onfoot' ? footView : null; },
     get nearCar() { return nearCar; },
     offer(o) { offers.push(o); },
+    dress(w) {
+      wear = { ...w };
+      wardrobe?.apply(wear);
+      wearOnLook(look, wear, baseLook);
+      engine.events.emit('player:dress', { wear });
+    },
+    get wear() { return wear; },
     get prompt() { return prompt; },
     setPose(a, t = 0) { pose = a; poseT = t; },
     crowd,

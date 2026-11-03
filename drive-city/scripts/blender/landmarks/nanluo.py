@@ -39,11 +39,19 @@ LAYOUT = os.path.join(REPO, "src", "district", "nanluo.layout.json")
 
 GX, GZ, HEADING = -61.0, -2601.0, 2.34
 HALF = 3.8                    # the lane's half width, front to front
-Y0, Y1 = 1.0, 144.5           # the stretch's ends along the lane
 DEPTH = 7.0                   # the front row's depth
 BACK0, BACK1 = 8.2, 12.0      # the back row's (courtyard houses behind; east of it a 6-storey block stays)
 OVER = 0.75                   # the eaves' reach over the lane
-FUXIANG = (65.5, 70.5)        # 福祥胡同's mouth on the west
+# Round 2 (2026-11-03): the middle stretch on to 东棉花 / 雨儿胡同. The lane turns 2.49 degrees west at 板厂胡同 (OSM: due
+# north from there), so the middle stretch is built in the south's frame turned about (0, BEND_Y) - every point here
+# is in "lane" coordinates (x across, y along, unbent), `bent()` puts it in Blender's.
+Y0, Y1 = 1.0, 144.5           # the south stretch's lots (地安门东大街 -> 板厂 / 蓑衣胡同, which cross at 147)
+M0, M1 = 149.6, 218.2         # the middle stretch's (-> 东棉花 / 雨儿胡同, crossing at 221.2)
+BEND_Y, BEND = 147.0, math.radians(2.49)
+# Hutongs that cross the lane: roads in the driving network, so nothing stands in them (no lot, no bollard). 福祥胡同 on
+# the west goes on east as 炒豆胡同 (round 1 had lots over that side).
+FUXIANG = (65.5, 70.5)
+CROSSINGS = [FUXIANG, (Y1, M0), (M1, 224.2)]
 
 # The shops you can go into: side, from, to (along the lane), what they are.
 SHOPS = {
@@ -52,14 +60,46 @@ SHOPS = {
     "tea": ("e", 30.0, 35.5),
     "photo": ("w", 38.0, 44.0),
     "arcade": ("e", 57.5, 65.0),
+    # round 2
+    "clothes": ("e", 152.5, 159.5),
+    "barber": ("w", 157.0, 162.5),
+    "bar": ("e", 175.5, 184.5),
+    "grill": ("w", 186.0, 190.5),   # a stall open to the lane, not a room
 }
-SHOP_SIGN = {"snack": "老北京小吃", "crafts": "锣鼓文创", "tea": "槐下茶事", "photo": "北平照相馆", "arcade": "锣鼓游戏厅"}
+SHOP_SIGN = {"snack": "老北京小吃", "crafts": "锣鼓文创", "tea": "槐下茶事", "photo": "北平照相馆", "arcade": "锣鼓游戏厅",
+             "clothes": "胡同衣帽间", "barber": "老剃头铺", "bar": "锣鼓小酒馆", "grill": "京味烤串"}
+# The courtyard you can walk into (east): its gate's lot on the lane, and the yard's span behind the front row.
+YARD_GATE = (199.0, 203.0)
+YARD = (189.5, 215.0)
 # The other boards along the lane (made-up names, no real shop's).
-DECO_SIGNS = ["京韵茶馆", "吉祥酸奶", "老街布鞋", "剪纸坊", "兔儿爷坊", "小院书屋", "京味烤串", "瑞丰绸缎", "如意客栈",
+DECO_SIGNS = ["京韵茶馆", "吉祥酸奶", "老街布鞋", "剪纸坊", "兔儿爷坊", "小院书屋", "胡同小炒", "瑞丰绸缎", "如意客栈",
               "锣鼓咖啡", "糖葫芦", "胡同酒馆", "福禄斋", "老北京炸酱面", "鼓楼酱肉", "青砖小馆", "槐荫书坊", "云片糕",
               "铜锅涮肉", "北京布艺", "胡同手作", "京城扇庄", "醉花阴", "一壶茶", "南锣酒肆", "老唱片", "皮影坊",
-              "胡同照相", "京八件", "绿豆糕", "豆汁焦圈", "宫廷糕点"]
+              "胡同照相", "京八件", "绿豆糕", "豆汁焦圈", "宫廷糕点", "鼓楼书店", "布老虎", "京剧脸谱", "炒肝包子",
+              "胡同里", "老北京布鞋", "风筝坊", "铜器铺"]
 BANNERS = ["茶", "酒", "面", "糖葫芦", "酸奶", "烤串", "布鞋", "书", "糕点", "咖啡", "扇", "饺子"]
+
+BENDM = Matrix.Translation((0, BEND_Y, 0)) @ Matrix.Rotation(BEND, 4, "Z") @ Matrix.Translation((0, -BEND_Y, 0))
+IDM = Matrix.Identity(4)
+
+
+def seg_m(y):
+    """The frame a point at lane y is built in: the south stretch's, or the middle's turned one."""
+    return BENDM if y > BEND_Y else IDM
+
+
+def bent(x, y, z=0.0):
+    """A lane point (x across, y along) in Blender's frame."""
+    return seg_m(y) @ Vector((x, y, z))
+
+
+def cbox(coll, name, x0, x1, y0, y1, z0, z1, m=None):
+    """A collider box given in lane coordinates, turned with its stretch (a yawed box stays a box in the game)."""
+    m = seg_m((y0 + y1) / 2) if m is None else m
+    o = collider_box(coll, name, x0, x1, y0, y1, z0, z1)
+    o.matrix_world = m @ o.matrix_world
+    return o
+
 
 FONT_DATA = None
 
@@ -421,6 +461,40 @@ def backdrop_atlas():
     return image("NL_Backdrops", np.flipud(cv.a).copy())
 
 
+# jackets, then trousers, then hats (src/district/Shops.ts sells these colours)
+GARMENTS = ["#25262a", "#3e4a32", "#5a1e22", "#1e2840", "#8a7552", "#cfc8b8", "#1c1c1f", "#7c6a4a", "#55585c", "#24314a",
+            "#b3221c", "#b8a47a", "#c8902a", "#d9bf7a"]
+# Flat colours that would each be a material (a draw call): one 8 x 4 palette texture instead, every face of a part at
+# one cell's middle. The garments first, then the rest by name.
+PALETTE = GARMENTS + ["#5a1216", "#7a3018", "#d8d4cc", "#e8e4da", "#3a5a8a", "#b8483a"]
+PAL = {**{f"cloth{i}": i for i in range(len(GARMENTS))}, "curtain": 14, "meat": 15, "tilewhite": 16, "laundry0": 17, "laundry1": 18, "laundry2": 19}
+
+
+def palette_image():
+    cv = Canvas(64, 32, "#808080")
+    for i, c in enumerate(PALETTE):
+        cv.rect((i % 8) * 8, (i // 8) * 8, (i % 8) * 8 + 8, (i // 8) * 8 + 8, c)
+    return image("NL_Palette", np.flipud(cv.a).copy())
+
+
+def pal_uv(key):
+    """The UV of a palette colour's cell middle (v up)."""
+    i = PAL[key]
+    return ((i % 8) * 8 + 4) / 64, 1 - ((i // 8) * 8 + 4) / 32
+
+
+def awning_image():
+    """The grill stall's awning: red and white stripes with a scalloped hem, 256 x 128."""
+    cv = Canvas(256, 128, "#f1efe8")
+    for k in range(8):
+        if k % 2 == 0:
+            cv.rect(k * 32, 0, k * 32 + 32, 128, "#c8261e")
+    for k in range(8):
+        cv.ellipse(k * 32 + 16, 120, 16, 10, "#c8261e" if k % 2 == 0 else "#f1efe8")
+    cv.noise(0.05, 431)
+    return image("NL_Awning", np.flipud(cv.a).copy())
+
+
 def goods_atlas():
     """The shops' insides, 2048 x 2048 (cells named below): menu boards, the photo studio's painted backdrop and its
     portraits, arcade screens, the dance pad, posters, the crafts shelves' backs. Drawn dim (interiors), see `dimmed`."""
@@ -439,9 +513,15 @@ def goods_atlas():
         "menu_arcade": ["跳舞机  一局 ¥10", "破纪录有奖"],
         "menu_photo": ["老照片  一张 ¥30", "民国布景 · 当场取相"],
         "menu_crafts": ["兔儿爷  ¥60", "胡同地图  ¥40"],
+        # round 2
+        "menu_clothes": ["帽子 · 墨镜 · 外套 · 裤子", "试穿不要钱"],
+        "menu_barber": ["染发  ¥50", "洗头按摩  ¥30", "修面  ¥20"],
+        "menu_bar": ["橘子汽水  ¥8", "炸花生米  ¥15", "点歌  ¥20"],
+        "menu_grill": ["羊肉串  ¥15", "烤馒头片  ¥8", "大腰子  ¥25"],
     }
     for i, (name, lines) in enumerate(menus.items()):
-        x0, y0 = (i % 4) * 512, (i // 4) * 256
+        # two rows at the top, the rest along the bottom (the backdrop and portraits are in between)
+        x0, y0 = ((i % 4) * 512, (i // 4) * 256) if i < 8 else (((i - 8) % 4) * 512, 1664 + ((i - 8) // 4) * 256)
         cv.rect(x0, y0, x0 + 512, y0 + 256, "#1b1712")
         cv.frame(x0 + 6, y0 + 6, x0 + 506, y0 + 250, 6, "#8c6a3a")
         lh = 220 // len(lines)
@@ -521,6 +601,50 @@ def goods_atlas():
         x = rng.uniform(0, 256)
         seg(cv, px + x, py, px + x + rng.uniform(-6, 6), py + 256, 1.6, ["#8d6c30", "#d4b46a", "#a3803e"][k % 3])
     cell("straw", px, py, px + 256, py + 256)
+    # the bar's back shelf, 512 x 256: three boards of bottles, lit from below
+    px, py = 1536, 512
+    cv.rect(px, py, px + 512, py + 256, "#1e1612")
+    for k, sy in enumerate((70, 150, 230)):
+        cv.rect(px, py + sy, px + 512, py + sy + 10, "#5a3b22")
+        x = px + 10
+        while x < px + 500:
+            bw = int(rng.integers(14, 24))
+            bh = int(rng.integers(36, 62))
+            col = ["#2f6b3a", "#6b3a1c", "#c8b890", "#8c1c1c", "#2a4a6b", "#d8a040"][int(rng.integers(6))]
+            cv.rect(x, py + sy - bh + 14, x + bw, py + sy, col)
+            cv.rect(x + bw // 3, py + sy - bh, x + bw - bw // 3, py + sy - bh + 14, col)
+            cv.rect(x + 2, py + sy - bh // 2, x + bw - 2, py + sy - bh // 2 + 10, "#e8dcb8")
+            x += bw + int(rng.integers(3, 9))
+    cell("bottles", px, py, px + 512, py + 256)
+    # the barber's pole: red, white and blue spiralling, 64 x 256 (wraps round the cylinder)
+    px, py = 1536, 768
+    for y in range(256):
+        for x in range(64):
+            k = int(((x + y * 0.75) // 16) % 4)
+            cv.a[py + y, px + x] = srgb3(["#c4231c", "#f2efe8", "#1d3f8c", "#f2efe8"][k])
+    cell("pole", px, py, px + 64, py + 256)
+    # the bar's poster of tonight's singer: a figure with a guitar under a spotlight, 192 x 256
+    px, py = 1600, 768
+    cv.rect(px, py, px + 192, py + 256, "#1a1430")
+    cv.ellipse(px + 96, py + 70, 70, 60, "#3a3060")
+    cv.ellipse(px + 96, py + 80, 18, 22, "#e8c8a0")
+    cv.rect(px + 72, py + 102, px + 120, py + 180, "#c8423a")
+    cv.ellipse(px + 110, py + 160, 30, 22, "#c98a3a")
+    ink(cv, text_cover("今晚驻唱", 160, 44), px + 16, py + 196, "#f2d27a")
+    cell("singer", px, py, px + 192, py + 256)
+    # a 象棋 board, 256 x 256: buff paper, the river, the grid
+    px, py = 1792, 768
+    cv.rect(px, py, px + 256, py + 256, "#d8b878")
+    for i in range(9):
+        cv.rect(px + 16 + i * 28, py + 16, px + 18 + i * 28, py + 240, "#5a3018")
+    for j in range(10):
+        cv.rect(px + 16, py + 16 + j * 25, px + 242, py + 18 + j * 25, "#5a3018")
+    cv.rect(px + 18, py + 117, px + 240, py + 139, "#d8b878")
+    for k in range(14):
+        cx, cy = px + 16 + int(rng.integers(9)) * 28, py + 16 + int(rng.integers(10)) * 25
+        cv.ellipse(cx, cy, 11, 11, "#e8d0a0")
+        cv.ellipse(cx, cy, 7, 7, "#a3261c" if k % 2 else "#1a1410")
+    cell("chess", px, py, px + 256, py + 256)
     cv.noise(0.04, 412)
     return image("NL_Goods", np.flipud(cv.a).copy()), cells
 
@@ -532,27 +656,33 @@ class Lot:
     lane looking at it), `d` into it from the front (the lane is at d < 0), z up. Both sides are proper turns of
     each other, so windings and normals carry over."""
 
-    def __init__(self, side, y0, y1):
+    def __init__(self, side, y0, y1, m=None):
         self.side, self.y0, self.y1, self.w = side, y0, y1, y1 - y0
         if side == "w":
             self.o, self.ea, self.ed = Vector((-HALF, y0, 0)), Vector((0, 1, 0)), Vector((-1, 0, 0))
         else:
             self.o, self.ea, self.ed = Vector((HALF, y1, 0)), Vector((0, -1, 0)), Vector((1, 0, 0))
+        # the stretch's frame (the middle stretch is turned at the bend); `xy` stays in lane coordinates
+        self.m = seg_m((y0 + y1) / 2) if m is None else m
+        self.r = self.m.to_3x3()
 
-    def P(self, a, d, z):
+    def lane(self, a, d, z=0.0):
         return self.o + self.ea * a + self.ed * d + Vector((0, 0, z))
 
+    def P(self, a, d, z):
+        return self.m @ self.lane(a, d, z)
+
     def N(self, na, nd, nz):
-        v = self.ea * na + self.ed * nd + Vector((0, 0, nz))
+        v = self.r @ (self.ea * na + self.ed * nd + Vector((0, 0, nz)))
         return (v.x, v.y, v.z)
 
     def M(self, a, d, z, yaw=0.0, s=1.0):
         """Matrix for a part modelled with x along a, y along d (into the lot), z up."""
-        p = self.P(a, d, z)
+        p = self.lane(a, d, z)
         ca, sa = math.cos(yaw), math.sin(yaw)
         ex = self.ea * ca + self.ed * sa
         ey = -self.ea * sa + self.ed * ca
-        return Matrix(((ex.x * s, ey.x * s, 0, p.x), (ex.y * s, ey.y * s, 0, p.y), (0, 0, s, p.z), (0, 0, 0, 1)))
+        return self.m @ Matrix(((ex.x * s, ey.x * s, 0, p.x), (ex.y * s, ey.y * s, 0, p.y), (0, 0, s, p.z), (0, 0, 0, 1)))
 
     def quad(self, g, pts, key, n, uvs=None):
         g.polyn([self.P(*p) for p in pts], key, self.N(*n), uvs=uvs)
@@ -573,12 +703,13 @@ class Lot:
                 self.quad(g, pts, key, nrm[k], (uvs or {}).get(k))
 
     def col(self, coll, name, a0, a1, d0, d1, z0, z1):
-        """A collider box in this frame (lots are axis-aligned in Blender, so it stays a box)."""
-        ps = [self.P(a0, d0, z0), self.P(a1, d1, z1)]
-        collider_box(coll, name, min(p.x for p in ps), max(p.x for p in ps), min(p.y for p in ps), max(p.y for p in ps), z0, z1)
+        """A collider box in this frame (lots are axis-aligned in lane coordinates; the stretch's turn is a yaw)."""
+        ps = [self.lane(a0, d0, z0), self.lane(a1, d1, z1)]
+        cbox(coll, name, min(p.x for p in ps), max(p.x for p in ps), min(p.y for p in ps), max(p.y for p in ps), z0, z1, self.m)
 
     def xy(self, a, d):
-        p = self.P(a, d, 0)
+        """A point for the layout, in lane coordinates (the game turns it with the stretch)."""
+        p = self.lane(a, d, 0)
         return [round(p.x, 3), round(p.y, 3)]
 
 
@@ -698,36 +829,43 @@ def cup_geo():
 # --- the build -------------------------------------------------------------------------------------------
 
 def lot_plan():
-    """Every lot on both sides: (side, y0, y1, kind, storeys, sign, banner, seed)."""
+    """Every lot on both sides of both stretches: (side, y0, y1, kind, storeys, sign, banner, seed)."""
     rng = np.random.default_rng(501)
     lots = []
-    for side in ("w", "e"):
-        fixed = sorted([(y0, y1, k) for k, (s, y0, y1) in SHOPS.items() if s == side] + ([(FUXIANG[0], FUXIANG[1], "gap")] if side == "w" else []))
-        y = Y0
-        for (f0, f1, k) in fixed + [(Y1, Y1, None)]:
-            # fill y..f0 with lots 3.6-6.6 m wide
-            span = f0 - y
-            widths = []
-            while span > 0.01:
-                if span < 7.2:
-                    widths.append(span)
+    for (s0, s1) in ((Y0, Y1), (M0, M1)):
+        for side in ("w", "e"):
+            fixed = [(y0, y1, k) for k, (sd, y0, y1) in SHOPS.items() if sd == side and s0 <= y0 < s1]
+            fixed += [(c0, c1, "gap") for (c0, c1) in CROSSINGS if s0 < c0 < s1]
+            if side == "e" and s0 <= YARD_GATE[0] < s1:
+                fixed.append((YARD_GATE[0], YARD_GATE[1], "yard"))
+            fixed.sort()
+            y = s0
+            for (f0, f1, k) in fixed + [(s1, s1, None)]:
+                # fill y..f0 with lots 3.6-6.6 m wide
+                span = f0 - y
+                widths = []
+                while span > 0.01:
+                    if span < 7.2:
+                        widths.append(span)
+                        break
+                    wd = float(rng.choice([3.6, 4.2, 4.8, 5.4, 6.0, 6.6]))
+                    if span - wd < 3.4:
+                        wd = span / 2 if span > 7.0 else span
+                    widths.append(wd)
+                    span -= wd
+                for wd in widths:
+                    r = rng.random()
+                    kind = "wood" if r < 0.42 else "modern" if r < 0.62 else "brick" if r < 0.8 else "gate"
+                    storeys = 2 if kind in ("wood", "modern") and rng.random() < 0.3 else 1
+                    lots.append(dict(side=side, y0=y, y1=y + wd, kind=kind, storeys=storeys, seed=int(rng.integers(1 << 30))))
+                    y += wd
+                if k is None:
                     break
-                wd = float(rng.choice([3.6, 4.2, 4.8, 5.4, 6.0, 6.6]))
-                if span - wd < 3.4:
-                    wd = span / 2 if span > 7.0 else span
-                widths.append(wd)
-                span -= wd
-            for wd in widths:
-                r = rng.random()
-                kind = "wood" if r < 0.42 else "modern" if r < 0.62 else "brick" if r < 0.8 else "gate"
-                storeys = 2 if kind in ("wood", "modern") and rng.random() < 0.3 else 1
-                lots.append(dict(side=side, y0=y, y1=y + wd, kind=kind, storeys=storeys, seed=int(rng.integers(1 << 30))))
-                y += wd
-            if k is None:
-                break
-            if k != "gap":
-                lots.append(dict(side=side, y0=f0, y1=f1, kind="shop", shop=k, storeys=1, seed=int(rng.integers(1 << 30))))
-            y = f1
+                if k == "yard":
+                    lots.append(dict(side=side, y0=f0, y1=f1, kind="yard", storeys=1, seed=int(rng.integers(1 << 30))))
+                elif k != "gap":
+                    lots.append(dict(side=side, y0=f0, y1=f1, kind="shop", shop=k, storeys=1, seed=int(rng.integers(1 << 30))))
+                y = f1
     # the corner lots on 地安门东大街 are two storeys, faced on both streets
     for lt in lots:
         if abs(lt["y0"] - Y0) < 1e-6 and lt["kind"] != "shop":
@@ -739,7 +877,7 @@ def lot_plan():
     for lt in lots:
         if lt["kind"] == "shop":
             lt["sign"] = SHOP_SIGN[lt["shop"]]
-        elif lt["kind"] != "gate":
+        elif lt["kind"] not in ("gate", "yard"):
             lt["sign"] = DECO_SIGNS[di % len(DECO_SIGNS)]
             di += 1
     bi = 0
@@ -774,6 +912,8 @@ def build():
     stele, stele_n = stele_image()
     goods, gcell = goods_atlas()
     goods_dim = dimmed(goods, "NL_GoodsDim", (0.85, 0.82, 0.78))
+    goods_e = dimmed(goods, "NL_GoodsE", (0.3, 0.27, 0.24))
+    pal_img = palette_image()
     backd = backdrop_atlas()
     brk_in = dimmed(brk, "NL_BrickIn", (0.55, 0.52, 0.48))
     wod_in = dimmed(wod, "NL_WoodIn", (0.75, 0.68, 0.62))
@@ -786,6 +926,12 @@ def build():
             b.inputs["Emission Color"].default_value = (*linear(emit), 1.0)
         b.inputs["Emission Strength"].default_value = 1.0
         return m
+
+    def inlit(name, color, rough=0.85):
+        """A flat colour indoors: a little light of its own, like the dimmed pictures (nothing else lights a room)."""
+        c = srgb3(color)
+        e = "#%02x%02x%02x" % tuple(int(v * 255 * 0.16) for v in c)
+        return lit(name, color, rough, e, {"glow": "none", "wet": "none"})
 
     flood = lambda s: {"glow": "flood", "glowStrength": s}  # noqa: E731
     M = {
@@ -827,7 +973,7 @@ def build():
         "infloor": lit("NL_infloor", "#ffffff", 0.7, "#140f0b", {"glow": "none", "wet": "none"}, tex=pav_in),
         "inwood": lit("NL_inwood", "#ffffff", 0.6, "#1a120c", {"glow": "none", "wet": "none"}, tex=wod_in),
         "ceiling": lit("NL_ceiling", "#a89a84", 0.9, "#221a12", {"glow": "none", "wet": "none"}),
-        "goods": lit("NL_goods", "#ffffff", 0.6, "#000000", {"glow": "none", "wet": "none"}, tex=goods_dim, emit_tex=dimmed(goods, "NL_GoodsE", (0.3, 0.27, 0.24))),
+        "goods": lit("NL_goods", "#ffffff", 0.6, "#000000", {"glow": "none", "wet": "none"}, tex=goods_dim, emit_tex=goods_e),
         "screen": lit("NL_screen", "#000000", 0.2, "#000000", {"glow": "none", "wet": "none"}, tex=goods, emit_tex=goods),
         "tube": lit("NL_tube", "#fff6e0", 0.3, "#fff1d0", {"glow": "none", "wet": "none"}),
         "neon": lit("NL_neon", "#ff3a9c", 0.3, "#ff3a9c", {"glow": "none", "wet": "none"}),
@@ -842,7 +988,15 @@ def build():
         "lid": material("NL_lid", "#c98a3a", 0.4, props={"glow": "none", "wet": "none"}),
         "cushion": material("NL_cushion", "#7a2a20", 0.8, props={"glow": "none", "wet": "none"}),
         "chrome": material("NL_chrome", "#b8bcc0", 0.2, 1.0, props={"glow": "none", "wet": "none"}),
+        # round 2
+        "mirror": material("NL_mirror", "#d0d6da", 0.03, 1.0, props={"glow": "none", "wet": "none"}),
+        "pole": lit("NL_pole", "#ffffff", 0.3, "#000000", {"emit": "night", "glow": "none"}, tex=goods, emit_tex=goods_e),
+        "coal": lit("NL_coal", "#3a1206", 0.9, "#ff4a10", {"glow": "lamp", "glowColor": "#ff6a20", "glowStrength": 0.5}),
+        "awning": material("NL_awning", "#ffffff", 0.8, tex=awning_image(), props=flood(0.45)),
+        "spot": lit("NL_spot", "#fff0d0", 0.3, "#ffd8a0", {"glow": "none", "wet": "none"}),
+        "palette": lit("NL_palette", "#ffffff", 0.85, "#000000", {"glow": "none", "wet": "none"}, tex=pal_img, emit_tex=dimmed(pal_img, "NL_PaletteE", (0.16, 0.16, 0.16))),
     }
+    M["rack"], M["steps"] = M["chrome"], M["granite"]
     TILE = {"paving": 4.0, "brick": 1.0, "tiles": 1.0, "lacquer": 1.0, "wood": 1.0, "plaster": 2.0, "granite": 1.0,
             "inbrick": 1.0, "infloor": 4.0, "inwood": 1.0, "inwall": 2.0, "ridge": 1.0, "steel": 1.0}
 
@@ -873,16 +1027,20 @@ def build():
         return [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
 
     rng = np.random.default_rng(601)
-    layout = {"shops": {}, "lane": {"half": HALF, "y0": Y0, "y1": Y1}}
+    layout = {"shops": {}}
     lamps_at, lantern_n = [], 0
 
-    # ---- the lane's paving ----
-    g.polyn([(-HALF, -1.0, 0.03), (HALF, -1.0, 0.03), (HALF, Y1 + 1.5, 0.03), (-HALF, Y1 + 1.5, 0.03)], "paving", (0, 0, 1),
-            uvs=[(-HALF / 4, -0.25), (HALF / 4, -0.25), (HALF / 4, (Y1 + 1.5) / 4), (-HALF / 4, (Y1 + 1.5) / 4)])
-    far.polyn([(-HALF, -1.0, 0.03), (HALF, -1.0, 0.03), (HALF, Y1 + 1.5, 0.03), (-HALF, Y1 + 1.5, 0.03)], "paving", (0, 0, 1),
-              uvs=[(-HALF / 4, -0.25), (HALF / 4, -0.25), (HALF / 4, (Y1 + 1.5) / 4), (-HALF / 4, (Y1 + 1.5) / 4)])
-    # 福祥胡同's mouth paved into the side lane a little
-    g.polyn([(-HALF - 6, FUXIANG[0], 0.03), (-HALF, FUXIANG[0], 0.03), (-HALF, FUXIANG[1], 0.03), (-HALF - 6, FUXIANG[1], 0.03)], "paving", (0, 0, 1))
+    # ---- the lane's paving: up to each crossing hutong (a road: the city draws it) ----
+    def pave(y0, y1):
+        m = seg_m((y0 + y1) / 2)
+        pts = [m @ Vector(p) for p in ((-HALF, y0, 0.03), (HALF, y0, 0.03), (HALF, y1, 0.03), (-HALF, y1, 0.03))]
+        uv = [(-HALF / 4, y0 / 4), (HALF / 4, y0 / 4), (HALF / 4, y1 / 4), (-HALF / 4, y1 / 4)]
+        for G in (g, far):
+            G.polyn(pts, "paving", (0, 0, 1), uvs=uv)
+
+    pave(-1.0, FUXIANG[0])
+    pave(FUXIANG[1], Y1 + 0.1)
+    pave(M0 - 0.1, M1 + 0.1)
 
     # ---- each lot ----
     for li, lt in enumerate(lots):
@@ -916,8 +1074,13 @@ def build():
         for a, na in ((0.0, -1), (w, 1)):
             L.quad(g, [(a, 0, 0), (a, dep, 0), (a, dep, EZ - 0.2), (a, rd, RZ), (a, 0, EZ - 0.2)], "brick", (na, 0, 0))
             L.quad(far, [(a, 0, 0), (a, dep, 0), (a, dep, EZ - 0.2), (a, rd, RZ), (a, 0, EZ - 0.2)], "brick", (na, 0, 0))
-        # back wall to the courtyard
-        L.quad(g, [(0, dep, 0), (w, dep, 0), (w, dep, EZ - 0.2), (0, dep, EZ - 0.2)], "brick", (0, 1, 0))
+        # back wall to the courtyard (the yard's gate has its passage through it)
+        if kind == "yard":
+            pg0, pg1 = w / 2 - 0.7, w / 2 + 0.7
+            for (b0, b1, c0, c1) in ((0, pg0, 0, EZ - 0.2), (pg1, w, 0, EZ - 0.2), (pg0, pg1, 2.55, EZ - 0.2)):
+                L.quad(g, [(b0, dep, c0), (b1, dep, c0), (b1, dep, c1), (b0, dep, c1)], "brick", (0, 1, 0))
+        else:
+            L.quad(g, [(0, dep, 0), (w, dep, 0), (w, dep, EZ - 0.2), (0, dep, EZ - 0.2)], "brick", (0, 1, 0))
         L.quad(far, [(0, dep, 0), (w, dep, 0), (w, dep, EZ - 0.2), (0, dep, EZ - 0.2)], "brick", (0, 1, 0))
         # the far level's front: one brick face with the sign
         L.front(far, 0, w, 0, EZ - 0.2, "brick")
@@ -981,7 +1144,7 @@ def build():
                 L.box(g, b0, b1, -0.06, 0.12, c0, c1, "lacquer", skip=("+d",))
             # a brick cornice under the eave
             L.box(g, 0, w, -0.12, 0.0, EZ - 0.5, EZ - 0.3, "brick", skip=("+d",))
-        elif kind == "gate":
+        elif kind in ("gate", "yard"):
             gw, gd = 1.4, 0.75
             g0, g1 = w / 2 - gw / 2, w / 2 + gw / 2
             for (a0, a1) in ((0, g0), (g1, w)):
@@ -992,8 +1155,18 @@ def build():
             L.quad(g, [(g1, 0, 0), (g1, 0, 2.55), (g1, gd, 2.55), (g1, gd, 0)], "brick", (-1, 0, 0))
             L.quad(g, [(g0, 0, 2.55), (g1, 0, 2.55), (g1, gd, 2.55), (g0, gd, 2.55)], "wood", (0, 0, -1))
             L.quad(g, [(g0, 0.03, 0.03), (g1, 0.03, 0.03), (g1, gd, 0.03), (g0, gd, 0.03)], "granite", (0, 0, 1))
-            L.front(g, g0 + 0.05, w / 2 - 0.01, 0.12, 2.35, "reddoor", d=gd)
-            L.front(g, w / 2 + 0.01, g1 - 0.05, 0.12, 2.35, "reddoor", d=gd)
+            if kind == "yard":
+                # the doors stand open against the passage's sides; the passage runs through to the yard
+                for (a, n) in ((g0 + 0.06, 1), (g1 - 0.06, -1)):
+                    L.quad(g, [(a, gd, 0.12), (a, gd + 0.62, 0.12), (a, gd + 0.62, 2.35), (a, gd, 2.35)] if n > 0 else
+                           [(a, gd, 0.12), (a, gd, 2.35), (a, gd + 0.62, 2.35), (a, gd + 0.62, 0.12)], "reddoor", (n, 0, 0))
+                L.quad(g, [(g0, gd, 0.035), (g1, gd, 0.035), (g1, dep, 0.035), (g0, dep, 0.035)], "granite", (0, 0, 1))
+                L.quad(g, [(g0, gd, 0), (g0, dep, 0), (g0, dep, 2.55), (g0, gd, 2.55)], "brick", (1, 0, 0))
+                L.quad(g, [(g1, gd, 0), (g1, gd, 2.55), (g1, dep, 2.55), (g1, dep, 0)], "brick", (-1, 0, 0))
+                L.quad(g, [(g0, gd, 2.55), (g1, gd, 2.55), (g1, dep, 2.55), (g0, dep, 2.55)], "wood", (0, 0, -1))
+            else:
+                L.front(g, g0 + 0.05, w / 2 - 0.01, 0.12, 2.35, "reddoor", d=gd)
+                L.front(g, w / 2 + 0.01, g1 - 0.05, 0.12, 2.35, "reddoor", d=gd)
             L.front(g, g0 + 0.12, g0 + 0.32, 0.6, 2.1, "couplet", d=gd - 0.01, uvs=sub_uv(0, 0.29, 0.5, 1))
             L.front(g, g1 - 0.32, g1 - 0.12, 0.6, 2.1, "couplet", d=gd - 0.01, uvs=sub_uv(0.5, 0.29, 1, 1))
             L.front(g, w / 2 - 0.2, w / 2 + 0.2, 1.3, 1.7, "couplet", d=gd - 0.01, uvs=sub_uv(0, 0, 1, 0.27))
@@ -1012,6 +1185,42 @@ def build():
             rows = plate_h // 128
             L.front(g, g1 + 0.2, g1 + 0.6, 1.9, 2.1, "plate", d=-0.01, uvs=atlas_uv((c, r), 4, rows))
             L.box(g, 0, w, -0.12, 0.0, EZ - 0.5, EZ - 0.3, "brick", skip=("+d",))
+        elif shop == "grill":
+            # a stall open to the lane: a counter with the grill on it under a striped awning, a little room behind
+            SD = 3.2
+            L.front(g, 0, 0.2, 0, BZ, "brick")
+            L.front(g, w - 0.2, w, 0, BZ, "brick")
+            L.front(g, 0, w, 2.6, BZ - 0.32, "wood", d=0.04)
+            L.box(g, 0, w, -0.14, 0.04, BZ - 0.32, BZ, "beam", skip=("+d",), uvs={"-d": [(0, 0), (w / 1.5, 0), (w / 1.5, 1), (0, 1)]})
+            L.front(g, 0, w, BZ, EZ - 0.2, "wood")
+            L.box(g, 0.3, w - 0.3, 0.05, 0.65, 0, 0.9, "wood", skip=("-z",))
+            L.box(g, 0.25, w - 0.25, 0.0, 0.7, 0.9, 0.95, "steel")
+            L.box(g, 0.55, w - 1.1, 0.12, 0.5, 0.95, 1.08, "iron", skip=("-z", "+z"))
+            L.quad(g, [(0.55, 0.12, 1.06), (w - 1.1, 0.12, 1.06), (w - 1.1, 0.5, 1.06), (0.55, 0.5, 1.06)], "coal", (0, 0, 1))
+            for k in range(int((w - 1.85) / 0.17)):
+                a = 0.68 + k * 0.17
+                L.box(g, a - 0.006, a + 0.006, 0.02, 0.6, 1.1, 1.112, "bamboo")
+                for j in range(4):
+                    dd = 0.18 + j * 0.075
+                    L.box(g, a - 0.016, a + 0.016, dd - 0.025, dd + 0.025, 1.09, 1.13, "meat")
+            # a tray of skewers waiting at the counter's end
+            L.box(g, w - 1.0, w - 0.4, 0.1, 0.55, 0.95, 0.99, "steel")
+            for k in range(8):
+                L.box(g, w - 0.95 + k * 0.07, w - 0.93 + k * 0.07, 0.12, 0.52, 0.99, 1.02, "meat")
+            # the awning
+            L.quad(g, [(0, -1.15, 2.3), (w, -1.15, 2.3), (w, 0.02, 2.62), (0, 0.02, 2.62)], "awning", (0, -0.4, 1), [(0, 0), (w / 1.2, 0), (w / 1.2, 1), (0, 1)])
+            L.quad(g, [(0, 0.02, 2.6), (w, 0.02, 2.6), (w, -1.15, 2.28), (0, -1.15, 2.28)], "awning", (0, 0.4, -1), [(0, 0), (w / 1.2, 0), (w / 1.2, 1), (0, 1)])
+            L.front(g, 0, w, 2.05, 2.3, "awning", d=-1.15, uvs=[(0, 0), (w / 1.2, 0), (w / 1.2, 1), (0, 1)])
+            for a in (0.1, w - 0.1):
+                L.box(g, a - 0.025, a + 0.025, -1.15, -1.1, 0, 2.3, "iron")
+            # the little room: floor, ceiling, walls, the menu, a lamp
+            L.quad(g, [(0.2, 0.0, 0.035), (w - 0.2, 0.0, 0.035), (w - 0.2, SD, 0.035), (0.2, SD, 0.035)], "infloor", (0, 0, 1))
+            L.quad(g, [(0.2, 0.0, 2.6), (0.2, SD, 2.6), (w - 0.2, SD, 2.6), (w - 0.2, 0.0, 2.6)], "ceiling", (0, 0, -1))
+            L.quad(g, [(0.2, 0.0, 0), (0.2, SD, 0), (0.2, SD, 2.6), (0.2, 0.0, 2.6)], "inbrick", (1, 0, 0))
+            L.quad(g, [(w - 0.2, 0.0, 0), (w - 0.2, 0.0, 2.6), (w - 0.2, SD, 2.6), (w - 0.2, SD, 0)], "inbrick", (-1, 0, 0))
+            L.front(g, 0.2, w - 0.2, 0, 2.6, "backdrop", d=SD, uvs=sub_uv(0, 0, 0.5, 1 / 3))
+            L.front(g, w / 2 - 0.85, w / 2 + 0.85, 1.55, 2.4, "goods", d=SD - 0.02, uvs=sub_uv(*gcell["menu_grill"]))
+            L.box(g, w / 2 - 0.6, w / 2 + 0.6, 1.6, 1.68, 2.54, 2.59, "tube")
         else:
             # timber fronts: wood, modern, shop, and the upper storey of the two-storey ones
             bays = []
@@ -1119,27 +1328,39 @@ def build():
                 L.box(g, a - 0.02, a + 0.02, -0.85, -0.1, 2.85, 2.9, "iron")
 
         # lanterns under the eave, one at each post (or a pair on a narrow brick front)
-        la = posts if kind not in ("brick", "gate") else [w * 0.25, w * 0.75]
+        la = posts if kind not in ("brick", "gate", "yard") else [w * 0.25, w * 0.75]
         for a in la:
             put("lantern", L.M(a, -0.5, EZ - 1.05))
             lantern_n += 1
 
-        # colliders: the whole mass for a front you cannot enter
-        if not shop:
+        # colliders: the whole mass for a front you cannot enter; the yard's gate round its passage
+        if kind == "yard":
+            L.col(helpers, f"lot{li}a", 0, w / 2 - 0.7, 0, dep, 0, EZ)
+            L.col(helpers, f"lot{li}b", w / 2 + 0.7, w, 0, dep, 0, EZ)
+            L.col(helpers, f"lot{li}c", w / 2 - 0.7, w / 2 + 0.7, 0, dep, 2.55, EZ)
+        elif not shop:
             L.col(helpers, f"lot{li}", 0, w, 0, dep, 0, EZ)
         lt["EZ"], lt["L"] = EZ, L
 
     # ---- the back row: courtyard houses behind (seen over the front roofs and from the air) ----
-    for side in ("w", "e"):
-        y = Y0 + 0.5
-        while y < Y1 - 3:
+    def back_runs(side):
+        """The stretches of the back row: between the crossings, and on the east round the courtyard."""
+        cuts = list(CROSSINGS) + ([YARD] if side == "e" else [])
+        for (s0, s1) in ((Y0, Y1), (M0, M1)):
+            y = s0 + 0.5
+            for (c0, c1) in sorted(c for c in cuts if c[1] > s0 and c[0] < s1) + [(s1, s1)]:
+                if c0 - y > 3:
+                    yield y, min(c0, s1)
+                y = max(y, c1 + 0.5)
+
+    back = [(side, a, b) for side in ("w", "e") for (a, b) in back_runs(side)]
+    for side, r0, r1 in back:
+        y = r0
+        while y < r1 - 3:
             wd = float(rng.uniform(7, 12))
-            y1 = min(Y1, y + wd)
-            if side == "w" and y < FUXIANG[1] and y1 > FUXIANG[0]:
-                y1 = FUXIANG[0] if y < FUXIANG[0] - 3 else y1
-                if y >= FUXIANG[0] - 3:
-                    y = FUXIANG[1] + 0.5
-                    continue
+            y1 = min(r1, y + wd)
+            if r1 - y1 < 3:
+                y1 = r1
             L = Lot(side, y, y1)
             EZ, RZ = 3.0 + float(rng.uniform(-0.2, 0.2)), 4.7 + float(rng.uniform(-0.2, 0.2))
             d0, d1 = BACK0, BACK1
@@ -1167,17 +1388,21 @@ def build():
     sg.box(-0.95, 0.95, -0.24, 0.24, 1.45, 1.55, "granite")
     g.add(sg, T(2.3, 2.6, 0, math.radians(-25)))
     collider_box(helpers, "stele", 1.3, 3.3, 2.0, 3.2, 0, 1.6)
-    bollards = [(x, 0.4) for x in (-3.0, -1.5, 0.0, 1.5, 3.0)] + [(-HALF - 0.4, y) for y in (66.2, 68.0, 69.8)] + [(x, Y1 + 1.0) for x in (-3.0, -1.5, 0.0, 1.5, 3.0)]
+    # bollards across the lane at the south mouth and either side of each crossing hutong, never in the hutong itself
+    # (a road cars use: round 1 had three across 福祥胡同 and a row in 板厂胡同's eastbound lane)
+    rows = [0.4, FUXIANG[0] - 0.6, FUXIANG[1] + 0.6, Y1 - 0.5, M0 + 0.5, M1 - 0.5]
+    bollards = [(x, y) for y in rows for x in (-3.0, -1.5, 0.0, 1.5, 3.0)]
     for i, (x, y) in enumerate(bollards):
-        put("bollard", T(x, y, 0))
-        collider_box(helpers, f"bollard{i}", x - 0.21, x + 0.21, y - 0.21, y + 0.21, 0, 0.56)
+        put("bollard", seg_m(y) @ T(x, y, 0))
+        cbox(helpers, f"bollard{i}", x - 0.21, x + 0.21, y - 0.21, y + 0.21, 0, 0.56)
 
     # ---- palace lamps, bikes, pots, the trees' places ----
-    for k, y in enumerate((9.0, 27.0, 45.0, 63.0, 81.0, 99.0, 117.0, 135.0)):
+    for k, y in enumerate((9.0, 27.0, 45.0, 63.0, 81.0, 99.0, 117.0, 135.0, 154.0, 172.0, 190.0, 208.0)):
         x = 3.15 if k % 2 == 0 else -3.15
-        put("lamp", T(x, y, 0))
-        collider_box(helpers, f"lamp{k}", x - 0.2, x + 0.2, y - 0.2, y + 0.2, 0, 3.3)
-        lamps_at.append([x, y])
+        # not in front of a shop's door or the stall
+        put("lamp", seg_m(y) @ T(x, y, 0))
+        cbox(helpers, f"lamp{k}", x - 0.2, x + 0.2, y - 0.2, y + 0.2, 0, 3.3)
+        lamps_at.append(list(bent(x, y).xy))
     shop_spans = [(s, y0 - 0.5, y1 + 0.5) for s, y0, y1 in SHOPS.values()]
     free = lambda side, y: not any(s == side and y0 <= y <= y1 for s, y0, y1 in shop_spans)  # noqa: E731
     bk = 0
@@ -1191,40 +1416,236 @@ def build():
             put("pot", L.M(0.45, -0.35, 0))
             put("pot", L.M(L.w - 0.45, -0.35, 0))
     # strings of small lanterns across the lane, eave to eave, sagging a little
-    for k, y in enumerate([12.0 + 11.5 * i for i in range(12)]):
-        if y > Y1 - 4:
-            break
+    strings = [y for y in [12.0 + 11.5 * i for i in range(12)] + [155.0 + 11.5 * i for i in range(6)]
+               if (y < Y1 - 4 or M0 + 3 < y < M1 - 3) and not any(c0 - 1.5 < y < c1 + 1.5 for c0, c1 in CROSSINGS)]
+    for k, y in enumerate(strings):
+        m = seg_m(y)
+        sgeo = Geo()
         z0, sag, n = 3.15, 0.35, 6
         pts = [(-HALF + 0.2 + (2 * HALF - 0.4) * i / 10, y, z0 - sag * (1 - ((i / 10) * 2 - 1) ** 2)) for i in range(11)]
         for (x0, _, za), (x1, _, zb) in zip(pts, pts[1:]):
-            g.poly([(x0, y - 0.006, za), (x1, y - 0.006, zb), (x1, y + 0.006, zb), (x0, y + 0.006, za)], "iron")
-            g.poly([(x0, y, za + 0.008), (x1, y, zb + 0.008), (x1, y, zb - 0.008), (x0, y, za - 0.008)], "iron")
+            sgeo.poly([(x0, y - 0.006, za), (x1, y - 0.006, zb), (x1, y + 0.006, zb), (x0, y + 0.006, za)], "iron")
+            sgeo.poly([(x0, y, za + 0.008), (x1, y, zb + 0.008), (x1, y, zb - 0.008), (x0, y, za - 0.008)], "iron")
+        g.add(sgeo, m)
         for i in range(n):
             u = (i + 0.5) / n
             x = -HALF + 0.2 + (2 * HALF - 0.4) * u
             z = z0 - sag * (1 - (u * 2 - 1) ** 2)
-            put("lantern", T(x, y, z - 0.75 * 0.62) @ Matrix.Diagonal((0.62, 0.62, 0.62, 1)))
+            put("lantern", m @ T(x, y, z - 0.75 * 0.62) @ Matrix.Diagonal((0.62, 0.62, 0.62, 1)))
             lantern_n += 1
     trees = []
-    for k, y in enumerate((18.0, 36.5, 54.0, 72.0, 90.0, 108.0, 126.0)):
-        x = -2.75 if k % 2 == 0 else 2.75
-        trees.append([x, y, 0, 0.85])
+    for k, (x, y) in enumerate([(-2.75, 18.0), (2.75, 36.5), (-2.75, 54.0), (2.75, 74.0), (-2.75, 90.0), (2.75, 108.0), (-2.75, 126.0),
+                                (-2.75, 152.5), (2.75, 168.0), (-2.75, 180.0), (2.75, 196.0), (-2.75, 211.0)]):
+        p = bent(x, y)
+        trees.append([p.x, p.y, 0, 0.85])
 
     # ---- the shops' insides ----
+    def table(L, sid, ta, td):
+        tg = Geo()
+        cyl(tg, 0, 0, 0.72, 0.76, 0.42, 0.42, 14, "inwood")
+        cyl(tg, 0, 0, 0.0, 0.72, 0.05, 0.05, 6, "iron")
+        g.add(tg, L.M(ta, td, 0))
+        L.col(helpers, f"{sid}_t{int(ta * 10)}_{int(td * 10)}", ta - 0.42, ta + 0.42, td - 0.42, td + 0.42, 0, 0.76)
+
+    def hat_geo(kind, key):
+        """A hat on the wall, crown along +z: a cap with a peak, a bucket hat, a beanie, a straw hat."""
+        hg = Geo()
+        if kind == 0:
+            lathe(hg, [(0.1, 0.0), (0.098, 0.05), (0.08, 0.1), (0.0, 0.115)], 10, key)
+            hg.box(-0.07, 0.07, 0.08, 0.17, 0.0, 0.012, key)
+        elif kind == 1:
+            lathe(hg, [(0.16, 0.0), (0.105, 0.025), (0.095, 0.1), (0.0, 0.11)], 10, key)
+        elif kind == 2:
+            lathe(hg, [(0.1, 0.0), (0.104, 0.04), (0.096, 0.06), (0.08, 0.12), (0.0, 0.14)], 10, key)
+        else:
+            lathe(hg, [(0.22, 0.0), (0.21, 0.012), (0.105, 0.02), (0.095, 0.1), (0.0, 0.105)], 12, key)
+        return hg
+
+    def new_interior(lt, L, w, sid, info, a_in0, a_in1, d_in, d_back, CZ):
+        """The round-2 shops: the clothes shop's racks, hats and mirror; the barber's chair and mirror; the bar's stage."""
+        if sid == "clothes":
+            # jackets on a rail along the left wall, trousers folded on shelves on the right, hats on the back wall
+            ra = a_in0 + 0.36
+            L.box(g, ra - 0.015, ra + 0.015, 1.35, 5.25, 1.6, 1.63, "rack")
+            for dd in (1.35, 5.25):
+                L.box(g, ra - 0.015, ra + 0.015, dd - 0.015, dd + 0.015, 0, 1.6, "rack")
+            for k in range(11):
+                dd = 1.55 + k * 0.34
+                L.box(g, a_in0 + 0.12, a_in0 + 0.6, dd - 0.03, dd + 0.03, 0.78, 1.55, f"cloth{k % 6}")
+                L.box(g, ra - 0.01, ra + 0.01, dd - 0.01, dd + 0.01, 1.55, 1.62, "rack")
+            L.col(helpers, f"{sid}_rack", a_in0, a_in0 + 0.65, 1.3, 5.3, 0, 1.9)
+            sa0 = a_in1 - 0.48
+            for z in (0.45, 0.95, 1.45, 1.95):
+                L.box(g, sa0, a_in1, 1.35, 4.45, z - 0.03, z, "inwood")
+                if z < 1.9:
+                    for k in range(5):
+                        dd = 1.55 + k * 0.58
+                        for j in range(3):
+                            L.box(g, sa0 + 0.06, a_in1 - 0.06, dd, dd + 0.4, z + j * 0.07, z + j * 0.07 + 0.065, f"cloth{6 + (k + j + int(z * 2)) % 4}")
+            for dd in (1.35, 4.45):
+                L.box(g, sa0, a_in1, dd - 0.03, dd, 0, 2.0, "inwood")
+            L.col(helpers, f"{sid}_shelf", sa0, a_in1, 1.32, 4.48, 0, 2.0)
+            for r in range(3):
+                for c in range(6):
+                    a = 2.6 + c * 0.44
+                    put_hat = hat_geo((r + c) % 4, f"cloth{10 + (r * 2 + c) % 4}")
+                    g.add(put_hat, L.M(a, d_back - 0.02, 1.35 + r * 0.42) @ Matrix.Rotation(math.pi / 2, 4, "X"))
+                    L.box(g, a - 0.01, a + 0.01, d_back - 0.06, d_back, 1.52 + r * 0.42, 1.54 + r * 0.42, "rack")
+            # the counter in the back-left corner, a fitting room in the back-right
+            L.box(g, 0.5, 2.2, 5.2, 5.75, 0, 0.95, "inwood", skip=("-z",))
+            L.box(g, 0.46, 2.24, 5.15, 5.8, 0.95, 1.0, "inwood")
+            L.col(helpers, f"{sid}_counter", 0.46, 2.24, 5.15, 5.8, 0, 1.0)
+            L.box(g, 5.4, a_in1, 5.2, 5.25, 0.05, 2.3, "curtain", skip=())
+            L.box(g, 5.38, 5.42, 5.2, d_back, 0, 2.4, "inwood")
+            L.box(g, 5.38, a_in1, 5.18, 5.22, 2.3, 2.4, "rack")
+            L.col(helpers, f"{sid}_fit", 5.38, a_in1, 5.18, d_back, 0, 2.4)
+            L.front(g, 0.5, 2.1, 1.95, 2.75, "goods", d=d_back - 0.01, uvs=sub_uv(*gcell["menu_clothes"]))
+            # the mirror, freestanding, facing in: the panel's camera looks back from it at the one trying things on
+            ma, md = 4.6, 1.0
+            L.box(g, ma - 0.42, ma + 0.42, md - 0.06, md + 0.04, 0.05, 2.0, "inwood")
+            L.quad(g, [(ma - 0.36, md + 0.045, 0.12), (ma - 0.36, md + 0.045, 1.94), (ma + 0.36, md + 0.045, 1.94), (ma + 0.36, md + 0.045, 0.12)][::-1], "mirror", (0, 1, 0))
+            for s_ in (-1, 1):
+                L.box(g, ma + s_ * 0.35 - 0.03, ma + s_ * 0.35 + 0.03, md - 0.35, md + 0.3, 0, 0.05, "inwood")
+            L.col(helpers, f"{sid}_mirror", ma - 0.45, ma + 0.45, md - 0.38, md + 0.32, 0, 2.0)
+            info["stand"] = L.xy(ma, 3.0)
+            info["mirror"] = L.xy(ma, md + 0.2)
+            info["counter"] = L.xy(ma, 3.05)
+            info["keeper"] = L.xy(1.35, 6.25)
+            info["keeperFace"] = L.xy(1.35, 0)
+        elif sid == "barber":
+            # the chair before a mirror on the left wall, a bench on the right, a basin at the back
+            ca, cd = 1.65, 3.0
+            L.quad(g, [(a_in0 + 0.02, cd - 0.6, 0.95), (a_in0 + 0.02, cd + 0.6, 0.95), (a_in0 + 0.02, cd + 0.6, 2.05), (a_in0 + 0.02, cd - 0.6, 2.05)], "mirror", (1, 0, 0))
+            L.box(g, a_in0, a_in0 + 0.05, cd - 0.66, cd + 0.66, 0.89, 0.95, "inwood")
+            L.box(g, a_in0, a_in0 + 0.05, cd - 0.66, cd + 0.66, 2.05, 2.11, "inwood")
+            L.box(g, a_in0, a_in0 + 0.3, cd - 0.8, cd + 0.8, 0.82, 0.86, "inwood")
+            for k in range(5):
+                put("cup", L.M(a_in0 + 0.15, cd - 0.6 + k * 0.3, 0.86))
+            L.col(helpers, f"{sid}_shelf", a_in0, a_in0 + 0.32, cd - 0.82, cd + 0.82, 0, 0.9)
+            # the chair: chrome foot and column, red leather seat, back and headrest, chrome arms, a footrest
+            cg = Geo()
+            cyl(cg, 0, 0, 0.0, 0.06, 0.28, 0.28, 12, "chrome")
+            cyl(cg, 0, 0, 0.06, 0.36, 0.06, 0.06, 8, "chrome")
+            cg.box(-0.27, 0.27, -0.26, 0.26, 0.36, 0.52, "cushion")
+            cg.box(0.2, 0.3, -0.25, 0.25, 0.52, 1.18, "cushion")
+            cg.box(0.22, 0.3, -0.12, 0.12, 1.2, 1.38, "cushion")
+            cg.box(0.25, 0.27, -0.02, 0.02, 1.15, 1.22, "chrome")
+            for s_ in (-1, 1):
+                cg.box(-0.25, 0.2, s_ * 0.27 - 0.03, s_ * 0.27 + 0.03, 0.66, 0.7, "chrome")
+                cg.box(-0.02, 0.02, s_ * 0.27 - 0.02, s_ * 0.27 + 0.02, 0.52, 0.68, "chrome")
+            cg.box(-0.5, -0.3, -0.18, 0.18, 0.12, 0.15, "chrome")
+            cg.box(-0.32, -0.28, -0.02, 0.02, 0.12, 0.38, "chrome")
+            g.add(cg, L.M(ca, cd, 0))
+            L.col(helpers, f"{sid}_chair", ca - 0.5, ca + 0.32, cd - 0.32, cd + 0.32, 0, 0.55)
+            L.box(g, a_in1 - 0.45, a_in1, 1.2, 3.6, 0, 0.45, "inwood")
+            L.box(g, a_in1 - 0.06, a_in1, 1.2, 3.6, 0.45, 0.95, "inwood")
+            L.col(helpers, f"{sid}_bench", a_in1 - 0.45, a_in1, 1.2, 3.6, 0, 0.5)
+            L.box(g, a_in0, 1.05, 5.9, d_back, 0, 0.85, "inwood", skip=("-z",))
+            L.box(g, a_in0 + 0.12, 0.93, 6.0, d_back - 0.08, 0.85, 0.9, "chrome")
+            L.col(helpers, f"{sid}_basin", a_in0, 1.05, 5.9, d_back, 0, 0.9)
+            L.front(g, 2.5, 4.3, 1.75, 2.65, "goods", d=d_back - 0.01, uvs=sub_uv(*gcell["menu_barber"]))
+            for (b0, b1, b2) in ((a_in0 + 0.6, 1.0, "poster1"),):
+                pu = gcell[b2]
+                L.quad(g, [(a_in1 - 0.01, 4.2, 1.2), (a_in1 - 0.01, 4.2, 2.2), (a_in1 - 0.01, 4.95, 2.2), (a_in1 - 0.01, 4.95, 1.2)], "goods", (-1, 0, 0), uvs=sub_uv(*pu))
+            # the barber's pole by the door, out on the front
+            pa = 0.32
+            n = 12
+            pts = []
+            for i in range(n + 1):
+                ang = 2 * math.pi * i / n
+                pts.append((pa + 0.07 * math.cos(ang), -0.22 + 0.07 * math.sin(ang)))
+            u0, v0, u1, v1 = gcell["pole"]
+            for i in range(n):
+                (xa, ya), (xb, yb) = pts[i], pts[i + 1]
+                ua, ub = u0 + (u1 - u0) * i / n, u0 + (u1 - u0) * (i + 1) / n
+                L.quad(g, [(xa, ya, 1.25), (xb, yb, 1.25), (xb, yb, 2.05), (xa, ya, 2.05)], "pole", (math.cos(2 * math.pi * (i + 0.5) / n), math.sin(2 * math.pi * (i + 0.5) / n), 0),
+                       [(ua, v0), (ub, v0), (ub, v1), (ua, v1)])
+            pc = Geo()
+            cyl(pc, 0, 0, 0, 0.08, 0.085, 0.085, 12, "chrome")
+            g.add(pc, L.M(pa, -0.22, 1.17))
+            g.add(pc, L.M(pa, -0.22, 2.05))
+            L.box(g, pa - 0.02, pa + 0.02, -0.22, 0.0, 1.6, 1.64, "chrome")
+            info["chair"] = L.xy(ca, cd)
+            info["chairFace"] = L.xy(a_in0, cd)
+            info["camera"] = L.xy(a_in0 + 0.3, cd)
+            info["counter"] = L.xy(2.45, 2.3)
+            info["keeper"] = L.xy(ca + 0.7, cd + 0.55)
+            info["keeperFace"] = L.xy(ca, cd)
+        elif sid == "bar":
+            # the stage in the back-left corner: a rug, a curtain, a stool, the mic, an amp, a spotlight
+            sa, sd = 1.9, 5.65
+            L.quad(g, [(0.4, 4.4, 0.045), (3.4, 4.4, 0.045), (3.4, d_back, 0.045), (0.4, d_back, 0.045)], "curtain", (0, 0, 1))
+            L.front(g, 0.4, 3.4, 0.05, 2.9, "curtain", d=d_back - 0.03)
+            put("stool", L.M(sa, sd, 0))
+            mg = Geo()
+            cyl(mg, 0, 0, 0.0, 0.02, 0.14, 0.14, 10, "chrome")
+            cyl(mg, 0, 0, 0.02, 1.12, 0.012, 0.012, 6, "chrome")
+            ell(mg, (0, 0, 1.16), (0.03, 0.03, 0.05), "cabinet", nu=6, nv=4)
+            g.add(mg, L.M(sa, sd - 0.62, 0))
+            L.box(g, 2.8, 3.3, 6.1, 6.5, 0, 0.55, "cabinet")
+            L.col(helpers, f"{sid}_amp", 2.8, 3.3, 6.1, 6.5, 0, 0.55)
+            L.box(g, sa - 0.25, sa + 0.25, sd - 0.25, sd + 0.25, CZ - 0.08, CZ - 0.02, "spot")
+            pu = gcell["singer"]
+            L.quad(g, [(a_in0 + 0.01, 3.3, 1.2), (a_in0 + 0.01, 4.05, 1.2), (a_in0 + 0.01, 4.05, 2.2), (a_in0 + 0.01, 3.3, 2.2)], "goods", (1, 0, 0), uvs=sub_uv(*pu))
+            # the bar along the right wall, bottles on the wall behind it, three stools before it
+            L.box(g, 6.6, 7.2, 1.2, 5.2, 0, 1.0, "inwood", skip=("-z",))
+            L.box(g, 6.52, 7.28, 1.15, 5.25, 1.0, 1.06, "inwood")
+            L.col(helpers, f"{sid}_counter", 6.52, 7.28, 1.15, 5.25, 0, 1.06)
+            L.quad(g, [(a_in1 - 0.01, 1.2, 1.1), (a_in1 - 0.01, 1.2, 2.45), (a_in1 - 0.01, 5.2, 2.45), (a_in1 - 0.01, 5.2, 1.1)], "goods", (-1, 0, 0), uvs=sub_uv(*gcell["bottles"]))
+            L.box(g, a_in1 - 0.32, a_in1, 1.2, 5.2, 0, 1.0, "inwood")
+            L.col(helpers, f"{sid}_back", a_in1 - 0.32, a_in1, 1.2, 5.2, 0, 2.45)
+            for k in range(3):
+                hg = Geo()
+                cyl(hg, 0, 0, 0.74, 0.8, 0.2, 0.2, 10, "cushion")
+                cyl(hg, 0, 0, 0.0, 0.74, 0.03, 0.03, 6, "chrome")
+                cyl(hg, 0, 0, 0.0, 0.03, 0.2, 0.2, 10, "chrome")
+                g.add(hg, L.M(6.15, 2.0 + k * 1.2, 0))
+            L.front(g, 4.6, 6.4, 1.8, 2.7, "goods", d=d_back - 0.01, uvs=sub_uv(*gcell["menu_bar"]))
+            for k in range(3):
+                put("lantern", L.M(3.0 + k * 1.6, 2.6, CZ - 0.75))
+            # tables, each with two stools, the seats facing the stage
+            seats = []
+            for (ta, td) in ((1.5, 2.2), (3.4, 3.3), (5.0, 4.9)):
+                table(L, sid, ta, td)
+                for s_ in (-1, 1):
+                    put("stool", L.M(ta + s_ * 0.66, td, 0))
+                    seats.append(L.xy(ta + s_ * 0.66, td))
+            info["seats"] = seats
+            info["stage"] = L.xy(sa, sd)
+            info["stageFace"] = L.xy(sa, 0)
+            info["mic"] = L.xy(sa, sd - 0.62)
+            info["counter"] = L.xy(5.95, 3.2)
+            info["keeper"] = L.xy(7.85, 3.2)
+            info["keeperFace"] = L.xy(5.5, 3.2)
+
     layout["shops"] = {}
     for lt in lots:
         if lt["kind"] != "shop":
             continue
         L, w, sid = lt["L"], lt["L"].w, lt["shop"]
+        if sid == "grill":
+            # the stall: its colliders, the vendor behind the grill, F from the lane in front
+            EZ_, SD = lt["EZ"], 3.2
+            L.col(helpers, "grill_counter", 0.25, w - 0.25, 0, 0.7, 0, 1.12)
+            L.col(helpers, "grill_sl", 0, 0.2, 0, DEPTH, 0, EZ_)
+            L.col(helpers, "grill_sr", w - 0.2, w, 0, DEPTH, 0, EZ_)
+            L.col(helpers, "grill_bk", 0, w, SD, DEPTH, 0, EZ_)
+            L.col(helpers, "grill_roof", 0, w, 0, DEPTH, 2.6, EZ_)
+            for a in (0.1, w - 0.1):
+                L.col(helpers, f"grill_post{int(a * 10)}", a - 0.05, a + 0.05, -1.17, -1.08, 0, 2.3)
+            layout["shops"][sid] = {"side": lt["side"], "y0": lt["y0"], "y1": lt["y1"], "stall": True, "door": L.xy(w / 2, -0.8),
+                                    "counter": L.xy(w / 2 - 0.3, -0.75), "keeper": L.xy(w / 2 - 0.3, 1.2), "keeperFace": L.xy(w / 2 - 0.3, -3),
+                                    "smoke": L.xy(w / 2 - 0.3, 0.3)}
+            continue
         d_in, d_back = 0.16, DEPTH - 0.22
         a_in0, a_in1 = 0.22, w - 0.22
         CZ = 3.0
         d0, d1 = w / 2 - 0.85, w / 2 + 0.85
-        floor_key = "inwood" if sid in ("tea", "photo", "crafts") else "infloor"
+        floor_key = "inwood" if sid in ("tea", "photo", "crafts", "clothes", "bar") else "infloor"
         L.quad(g, [(a_in0, d_in, 0.035), (a_in1, d_in, 0.035), (a_in1, d_back, 0.035), (a_in0, d_back, 0.035)], floor_key, (0, 0, 1),
                uvs=[(0, 0), ((a_in1 - a_in0) / 1.5, 0), ((a_in1 - a_in0) / 1.5, (d_back - d_in) / 1.5), (0, (d_back - d_in) / 1.5)] if floor_key == "inwood" else None)
         L.quad(g, [(a_in0, d_in, CZ), (a_in0, d_back, CZ), (a_in1, d_back, CZ), (a_in1, d_in, CZ)], "ceiling", (0, 0, -1))
-        wall_key = "inbrick" if sid in ("snack", "arcade") else "inwall"
+        wall_key = "inbrick" if sid in ("snack", "arcade", "bar") else "tilewhite" if sid == "barber" else "inwall"
         L.quad(g, [(a_in0, d_in, 0), (a_in0, d_back, 0), (a_in0, d_back, CZ), (a_in0, d_in, CZ)], wall_key, (1, 0, 0))
         L.quad(g, [(a_in1, d_in, 0), (a_in1, d_in, CZ), (a_in1, d_back, CZ), (a_in1, d_back, 0)], wall_key, (-1, 0, 0))
         L.front(g, a_in0, a_in1, 0, CZ, wall_key, d=d_back, n=(0, -1, 0))
@@ -1247,6 +1668,10 @@ def build():
                 "room": [L.xy(a_in0 + 0.3, d_in + 0.3), L.xy(a_in1 - 0.3, d_back - 0.3)], "yawIn": 0}
         # the yaw (radians, about +Z in Blender; the game converts) that faces into the shop from the door
         info["inward"] = [round(L.ed.x, 3), round(L.ed.y, 3)]
+        if sid in ("clothes", "barber", "bar"):
+            new_interior(lt, L, w, sid, info, a_in0, a_in1, d_in, d_back, CZ)
+            layout["shops"][sid] = info
+            continue
 
         cb0, cb1 = DEPTH - 2.5, DEPTH - 1.9        # the counter's depth
         if sid == "photo":
@@ -1400,25 +1825,182 @@ def build():
             L.front(g, d1 + 0.15, a_in1 - 0.15, 0.9, 2.1, "screen", d=0.1, uvs=sub_uv(*pu))
         layout["shops"][sid] = info
 
+    # ---- the courtyard behind the gate (east, middle stretch): a 四合院 you can walk into ----
+    Y = Lot("e", YARD[0], YARD[1])      # a from the north end (y 215) southwards, d eastwards from the fronts
+
+    def sub(o, ea, ed, w):
+        """A frame for one of the yard's houses: o its front's left end, ea along the front, ed into it (lane vectors)."""
+        F = Lot("e", YARD[0], YARD[1], m=Y.m)
+        F.o, F.ea, F.ed, F.w = Vector((o[0], o[1], 0)), Vector((ea[0], ea[1], 0)), Vector((ed[0], ed[1], 0)), w
+        return F
+
+    def house(F, name, dep, EZ, RZ):
+        """A yard house: a porch of red posts, lattice windows and a closed door, a gabled tiled roof, brick behind."""
+        w, rd = F.w, dep / 2
+        for G in (g, far):
+            F.quad(G, [(0, -0.95, EZ - 0.18), (w, -0.95, EZ - 0.18), (w, rd, RZ), (0, rd, RZ)], "tiles", (0, -1, 1.6), [(0, 0), (w, 0), (w, 3), (0, 3)])
+            F.quad(G, [(w, dep + 0.5, EZ - 0.18), (0, dep + 0.5, EZ - 0.18), (0, rd, RZ), (w, rd, RZ)], "tiles", (0, 1, 1.6), [(0, 0), (w, 0), (w, 3), (0, 3)])
+            for a, na in ((0.0, -1), (w, 1)):
+                F.quad(G, [(a, -0.6, 0), (a, dep, 0), (a, dep, EZ - 0.2), (a, rd, RZ), (a, -0.6, EZ - 0.2)], "brick", (na, 0, 0))
+            F.quad(G, [(0, dep, 0), (w, dep, 0), (w, dep, EZ - 0.2), (0, dep, EZ - 0.2)], "brick", (0, 1, 0))
+        F.front(far, 0, w, 0, EZ - 0.2, "brick")
+        F.box(g, -0.05, w + 0.05, rd - 0.16, rd + 0.16, RZ - 0.05, RZ + 0.28, "ridge", skip=("-z",))
+        F.quad(g, [(0, -0.95, EZ - 0.34), (w, -0.95, EZ - 0.34), (w, 0, EZ - 0.2), (0, 0, EZ - 0.2)], "wood", (0, 0, -1))
+        F.quad(g, [(0, -0.9, 0.1), (w, -0.9, 0.1), (w, 0.0, 0.1), (0, 0.0, 0.1)], "steps", (0, 0, 1))
+        F.front(g, 0, w, 0, 0.1, "steps", d=-0.9)
+        nb = max(3, int(w // 3.2))
+        posts = [w * k / nb for k in range(nb + 1)]
+        for p in posts:
+            cg = Geo()
+            cyl(cg, 0, 0, 0.1, EZ - 0.35, 0.11, 0.11, 10, "lacquer", caps=(False, False))
+            g.add(cg, F.M(min(max(p, 0.15), w - 0.15), -0.6, 0))
+            F.col(helpers, f"{name}_p{int(p * 10)}", min(max(p, 0.15), w - 0.15) - 0.12, min(max(p, 0.15), w - 0.15) + 0.12, -0.72, -0.48, 0, EZ - 0.3)
+        F.box(g, 0, w, -0.7, -0.5, EZ - 0.75, EZ - 0.35, "beam", skip=("+d",), uvs={"-d": [(0, 0), (w / 1.5, 0), (w / 1.5, 1), (0, 1)]})
+        mid = nb // 2
+        for k in range(nb):
+            a0, a1 = posts[k] + 0.15, posts[k + 1] - 0.15
+            if k == mid:
+                # the door: two leaves of lattice over panels, closed
+                for j in range(2):
+                    e0, e1 = a0 + j * (a1 - a0) / 2 + 0.02, a0 + (j + 1) * (a1 - a0) / 2 - 0.02
+                    F.front(g, e0, e1, 0.1, 1.0, "wood", d=0.0)
+                    F.front(g, e0, e1, 1.0, EZ - 0.8, "lattice", d=0.0, uvs=[(0, 0), ((e1 - e0) / 1.1, 0), ((e1 - e0) / 1.1, 2), (0, 2)])
+                    F.front(g, e0, e1, 1.0, EZ - 0.8, "backdrop", d=0.6, uvs=sub_uv(0.5, 2 / 3, 1, 1))
+            else:
+                F.front(g, a0, a1, 0.1, 0.9, "brick")
+                F.front(g, a0, a1, 0.9, EZ - 0.8, "lattice", d=0.0, uvs=[(0, 0), ((a1 - a0) / 1.1, 0), ((a1 - a0) / 1.1, 2), (0, 2)])
+                F.front(g, a0, a1, 0.9, EZ - 0.8, "glass", d=0.05)
+            F.front(g, posts[k] - 0.15 if k else 0, a0, 0.1, EZ - 0.8, "lacquer")
+            F.front(g, a1, posts[k + 1] + 0.15 if k < nb - 1 else w, 0.1, EZ - 0.8, "lacquer")
+        F.front(g, 0, w, EZ - 0.8, EZ - 0.2, "wood")
+        F.col(helpers, f"{name}", 0, w, 0, dep, 0, EZ)
+        for a in (w * 0.3, w * 0.7):
+            put("lantern", F.M(a, -0.75, EZ - 1.2))
+
+    X0 = HALF + DEPTH                    # the front row's back walls
+    north = sub((X0, YARD[1] - 5.2), (1, 0), (0, 1), 12.9)
+    house(north, "yard_n", 5.2, 3.7, 5.6)
+    south = sub((X0 + 12.9, YARD[0] + 4.9), (-1, 0), (0, -1), 12.9)
+    house(south, "yard_s", 4.9, 3.3, 5.0)
+    east = sub((X0 + 13.4, YARD[1] - 6.0), (0, -1), (1, 0), 14.0)
+    house(east, "yard_e", 4.6, 3.3, 5.0)
+    # the west side: the front row's back walls dressed as the 西厢房's front (posts under their eave, lattice windows),
+    # open where the passage from the gate comes through
+    pass_y = ((YARD_GATE[0] + YARD_GATE[1]) / 2 - 0.7, (YARD_GATE[0] + YARD_GATE[1]) / 2 + 0.7)
+    wy0, wy1 = YARD[0] + 4.9 + 0.4, YARD[1] - 5.2 - 0.4
+    west = sub((X0, wy0), (0, 1), (-1, 0), wy1 - wy0)
+    ww, wz = west.w, 2.95
+    gap = (pass_y[0] - wy0, pass_y[1] - wy0)
+    cuts = sorted({0.0, ww, gap[0], gap[1], *[ww * k / 4 for k in range(1, 4)]})
+    cuts = [c for c in cuts if not (gap[0] < c < gap[1])]
+    for a0, a1 in zip(cuts, cuts[1:]):
+        if a0 >= gap[0] - 1e-6 and a1 <= gap[1] + 1e-6:
+            west.box(g, a0 - 0.04, a1 + 0.04, -0.12, 0.0, 2.55, 2.75, "lacquer", skip=("+d",))
+            continue
+        west.front(g, a0 + 0.05, a1 - 0.05, 0.0, 0.85, "brick", d=-0.02)
+        west.front(g, a0 + 0.15, a1 - 0.15, 0.85, 2.45, "lattice", d=-0.03, uvs=[(0, 0), ((a1 - a0 - 0.3) / 1.1, 0), ((a1 - a0 - 0.3) / 1.1, 1.5), (0, 1.5)])
+        west.front(g, a0 + 0.15, a1 - 0.15, 0.85, 2.45, "glass", d=-0.01)
+        west.front(g, a0 + 0.05, a1 - 0.05, 2.45, wz - 0.25, "wood", d=-0.02)
+    for c in cuts:
+        cg = Geo()
+        cyl(cg, 0, 0, 0.1, wz, 0.1, 0.1, 10, "lacquer", caps=(False, False))
+        a = min(max(c, 0.12), ww - 0.12)
+        g.add(cg, west.M(a, -0.6, 0))
+        west.col(helpers, f"yard_w{int(c * 10)}", a - 0.11, a + 0.11, -0.71, -0.49, 0, wz)
+    west.box(g, 0, ww, -0.7, -0.5, wz - 0.35, wz, "beam", skip=("+d",), uvs={"-d": [(0, 0), (ww / 1.5, 0), (ww / 1.5, 1), (0, 1)]})
+    west.quad(g, [(0, -0.8, 0.08), (ww, -0.8, 0.08), (ww, 0.0, 0.08), (0, 0.0, 0.08)], "steps", (0, 0, 1))
+    # the corners: a brick mass with a flat tiled top each, so the yard is closed
+    for (a0, a1) in ((0.0, 6.0), (19.6, YARD[1] - YARD[0])):
+        Y.box(g, a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0, "brick", skip=("-z",))
+        Y.box(far, a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0, "brick", skip=("-z",))
+        Y.col(helpers, f"yard_c{int(a0)}", a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0)
+    # the ground: grey paving, a stone path from the gate
+    ga = YARD[1] - (YARD_GATE[0] + YARD_GATE[1]) / 2      # the gate's middle, as a
+    Y.quad(g, [(5.15, 7.0, 0.03), (20.7, 7.0, 0.03), (20.7, 20.45, 0.03), (5.15, 20.45, 0.03)], "paving", (0, 0, 1),
+           [(0, 0), (15.55 / 4, 0), (15.55 / 4, 13.45 / 4), (0, 13.45 / 4)])
+    Y.quad(g, [(ga - 0.6, 7.0, 0.04), (ga + 0.6, 7.0, 0.04), (ga + 0.6, 19.5, 0.04), (ga - 0.6, 19.5, 0.04)], "granite", (0, 0, 1))
+    Y.quad(g, [(6.0, 13.0, 0.041), (19.6, 13.0, 0.041), (19.6, 14.2, 0.041), (6.0, 14.2, 0.041)], "granite", (0, 0, 1))
+    # the screen wall facing the gate (you go round it)
+    Y.box(g, ga - 1.4, ga + 1.4, 8.3, 8.62, 0, 2.6, "brick", skip=("-z",))
+    Y.box(g, ga - 1.5, ga + 1.5, 8.22, 8.7, 2.6, 2.8, "tiles")
+    Y.quad(g, [(ga - 0.35, 8.29, 1.2), (ga + 0.35, 8.29, 1.2), (ga + 0.35, 8.29, 1.9), (ga - 0.35, 8.29, 1.9)], "couplet", (0, -1, 0), sub_uv(0, 0, 1, 0.27))
+    Y.col(helpers, "yard_screen", ga - 1.5, ga + 1.5, 8.22, 8.7, 0, 2.8)
+    # the stone table with its 象棋 board and four drum stools; the old man sits at the one facing the gate
+    ta, td = 9.2, 11.6
+    tg = Geo()
+    cyl(tg, 0, 0, 0.0, 0.7, 0.22, 0.3, 10, "granite")
+    cyl(tg, 0, 0, 0.7, 0.78, 0.5, 0.5, 14, "granite")
+    g.add(tg, Y.M(ta, td, 0))
+    Y.quad(g, [(ta - 0.3, td - 0.3, 0.785), (ta + 0.3, td - 0.3, 0.785), (ta + 0.3, td + 0.3, 0.785), (ta - 0.3, td + 0.3, 0.785)], "goods", (0, 0, 1), sub_uv(*gcell["chess"]))
+    Y.col(helpers, "yard_table", ta - 0.5, ta + 0.5, td - 0.5, td + 0.5, 0, 0.78)
+    for (oa, od) in ((0, 0.72), (0, -0.72), (0.72, 0), (-0.72, 0)):
+        sg2 = Geo()
+        cyl(sg2, 0, 0, 0.0, 0.42, 0.17, 0.17, 10, "granite")
+        g.add(sg2, Y.M(ta + oa, td + od, 0))
+    # a bird cage on a stand by him, two pots of pomegranate, bikes against the south house, washing on a line
+    cg = Geo()
+    cyl(cg, 0, 0, 0.0, 1.55, 0.025, 0.025, 6, "inwood")
+    cg.box(-0.02, 0.32, -0.02, 0.02, 1.52, 1.56, "inwood")
+    cyl(cg, 0.3, 0, 1.0, 1.36, 0.14, 0.14, 12, "bamboo", caps=(True, False))
+    lathe(cg, [(0.14, 1.36), (0.08, 1.44), (0.0, 1.47)], 12, "bamboo", x=0.3)
+    cyl(cg, 0.3, 0, 1.47, 1.52, 0.006, 0.006, 4, "iron")
+    g.add(cg, Y.M(ta + 1.3, td + 1.1, 0))
+    for (pa_, pd_) in ((6.7, 9.6), (6.7, 17.8)):
+        put("pot", Y.M(pa_, pd_, 0))
+        Y.col(helpers, f"yard_pot{int(pd_)}", pa_ - 0.3, pa_ + 0.3, pd_ - 0.3, pd_ + 0.3, 0, 0.9)
+    for k in range(2):
+        put("bike", Y.M(19.3, 15.4 + k * 1.4, 0, yaw=math.pi / 2 + 0.1))
+    la_ = 17.4
+    Y.box(g, la_ - 0.01, la_ + 0.01, 9.8, 17.2, 1.95, 1.965, "iron")
+    for k, dd in enumerate((10.6, 11.9, 13.3, 14.6, 15.9)):
+        key = f"laundry{k % 3}"
+        hw = 0.28 if k % 2 == 0 else 0.22
+        for sgn in (1, -1):
+            Y.quad(g, [(la_ + 0.004 * sgn, dd - hw, 1.25 if k % 2 else 1.35), (la_ + 0.004 * sgn, dd + hw, 1.25 if k % 2 else 1.35),
+                       (la_ + 0.004 * sgn, dd + hw, 1.95), (la_ + 0.004 * sgn, dd - hw, 1.95)], key, (sgn, 0, 0))
+    for dd in (9.8, 17.2):
+        Y.box(g, la_ - 0.03, la_ + 0.03, dd - 0.03, dd + 0.03, 0, 2.0, "iron")
+    # the jujube in the middle (the city plants it with the lane's 国槐)
+    tp = Y.P(13.0, 15.5, 0)
+    trees.append([tp.x, tp.y, 0, 0.8])
+    layout["yard"] = {"gate": Y.xy(ga, -0.6), "inside": Y.xy(ga, 9.6), "area": [Y.xy(5.2, 7.0), Y.xy(20.6, 20.4)],
+                      "passage": [Y.xy(ga - 0.7, 0.0), Y.xy(ga + 0.7, 7.0)],
+                      "elder": Y.xy(ta, td + 0.72), "elderFace": Y.xy(ta, td), "cage": Y.xy(ta + 1.6, td + 1.1)}
+
     # ---- far level, colliders, markers ----
+    # the flat colours onto the palette
+    g.f = [(idx, [pal_uv(k)] * len(idx), "palette", sm) if k in PAL else (idx, uv, k, sm) for idx, uv, k, sm in g.f]
     far.build("Massing", collection("LOD1", main), M, TILE)
     tris = g.tris()
     g.build("Lane", detail, M, TILE)
 
-    for side in ("w", "e"):
-        sx = -1 if side == "w" else 1
-        x_in, x_out = sx * (HALF + 0.05), sx * (HALF + BACK1 + 0.1)
-        rings = [(min(x_in, x_out), Y0 - 0.2, max(x_in, x_out), Y1 + 0.2)]
-        if side == "w":
-            rings = [(min(x_in, x_out), Y0 - 0.2, max(x_in, x_out), FUXIANG[0]), (min(x_in, x_out), FUXIANG[1], max(x_in, x_out), Y1 + 0.2)]
-        for i, (x0, y0, x1, y1) in enumerate(rings):
-            flat_marker(helpers, f"nanluo_{side}{i}", rect(x0, x1, y0, y1), "FOOTPRINT")
-    flat_marker(helpers, "nanluo_lane", rect(-HALF - 0.1, HALF + 0.1, -1.2, Y1 + 2.0), "CLEAR")
-    flat_marker(helpers, "nanluo_fuxiang", rect(-HALF - 6.5, -HALF, FUXIANG[0], FUXIANG[1]), "CLEAR")
+    # footprints (the OSM houses under the rows go) and clear zones (no city trees, lamps or benches in the lane), each
+    # stretch's turned with it; nothing over the crossing hutongs
+    def marker(name, x0, x1, y0, y1, role):
+        m = seg_m((y0 + y1) / 2)
+        flat_marker(helpers, name, [tuple((m @ Vector((x, y, 0))).xy) for x, y in rect(x0, x1, y0, y1)], role)
+
+    for (s0, s1) in ((Y0, Y1), (M0, M1)):
+        cuts = [(c0, c1) for (c0, c1) in CROSSINGS if s0 < c0 < s1]
+        runs, y = [], s0 - 0.2
+        for (c0, c1) in cuts + [(s1 + 0.2, s1 + 0.2)]:
+            runs.append((y, c0))
+            y = c1
+        for side in ("w", "e"):
+            sx = -1 if side == "w" else 1
+            x_in, x_out = sx * (HALF + 0.05), sx * (HALF + BACK1 + 0.1)
+            for i, (r0, r1) in enumerate(runs):
+                marker(f"nanluo_{side}{int(s0)}_{i}", min(x_in, x_out), max(x_in, x_out), r0, r1, "FOOTPRINT")
+        for i, (r0, r1) in enumerate(runs):
+            marker(f"nanluo_lane{int(s0)}_{i}", -HALF - 0.1, HALF + 0.1, r0 - (1.0 if r0 < 1 else 0), r1, "CLEAR")
+    marker("nanluo_yard", HALF + DEPTH, HALF + DEPTH + 18.2, YARD[0], YARD[1], "FOOTPRINT")
+    marker("nanluo_yardclear", HALF + DEPTH, HALF + DEPTH + 13.4, YARD[0] + 4.9, YARD[1] - 5.2, "CLEAR")
 
     layout["trees"] = trees
     layout["lamps"] = lamps_at
-    layout["mouths"] = {"south": [0.0, -0.5], "north": [0.0, Y1 + 2.0], "fuxiang": [-HALF - 2.0, (FUXIANG[0] + FUXIANG[1]) / 2]}
+    layout["lane"] = {"half": HALF, "stretches": [[Y0, Y1], [M0, M1]], "bend": [BEND_Y, round(math.degrees(BEND), 4)], "crossings": CROSSINGS}
+    layout["mouths"] = {"south": [0.0, -0.5], "fuxiang": [-HALF - 2.0, sum(FUXIANG) / 2], "chaodou": [HALF + 2.0, sum(FUXIANG) / 2],
+                        "banchang": [0.0, (Y1 + M0) / 2], "dongmianhua": [0.0, M1 + 2.5]}
     layout["frame"] = {"gx": GX, "gz": GZ, "heading": HEADING}
     os.makedirs(os.path.dirname(LAYOUT), exist_ok=True)
     with open(LAYOUT, "w") as f:
@@ -1428,7 +2010,7 @@ def build():
     s = bpy.context.scene.bcity
     s.lm_id, s.name_zh, s.name_en = "nanluo", "南锣鼓巷", "Nanluoguxiang"
     s.coord_mode, s.game_x, s.game_z, s.heading = "GAME", GX, GZ, HEADING
-    s.far_distance = 240
+    s.far_distance = 270
     s.max_texture = "2048"
     s.repo_path = REPO
     return dict(tris=tris, far=far.tris(), lots=len(lots), lanterns=lantern_n, parts=counts)

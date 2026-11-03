@@ -20,6 +20,12 @@ css(`
 .nl-panel button:disabled{opacity:.5;cursor:default}.nl-panel button:disabled .p{color:${C.red};font-size:12px}
 .nl-panel .leave{margin-top:12px;display:block;width:100%;text-align:center;background:transparent;grid-template-columns:1fr}
 @media(max-height:470px){.nl-panel{padding:8px}.nl-panel .sheet{max-height:calc(100dvh - 16px);padding:12px}.nl-panel .greet{margin:8px 0 2px}}
+.nl-panel .sec{margin:12px 2px 2px;color:#d4af55;font:700 13px/1.2 ${F.ui};letter-spacing:2px}
+.nl-panel .items .sec:first-child{margin-top:0}
+.nl-panel button.on{border-color:#e2c066;background:#4a3018}.nl-panel button.on .p{color:#9fe08a}
+.nl-panel.side{background:linear-gradient(90deg,rgba(4,8,12,.55),rgba(4,8,12,0) 62%);place-items:center start}
+.nl-panel.side .sheet{width:min(400px,46vw)}
+@media(max-width:640px) and (min-height:561px){.nl-panel.side{place-items:end center;background:linear-gradient(0deg,rgba(4,8,12,.6),rgba(4,8,12,0) 70%)}.nl-panel.side .sheet{width:100%;max-height:52dvh}}
 .nl-photo{position:fixed;inset:0;z-index:46;background:rgba(4,8,12,.55);display:grid;place-items:center;padding:16px;box-sizing:border-box}
 .nl-photo .card{background:#f2ecdf;padding:12px 12px 10px;box-shadow:0 14px 40px rgba(0,0,0,.55);transform:rotate(-1.5deg);max-width:min(420px,100%);box-sizing:border-box}
 .nl-photo canvas{display:block;width:100%;height:auto;background:#3a2e22}
@@ -32,7 +38,13 @@ css(`
   .nl-photo canvas{height:calc(100dvh - 40px);width:auto}.nl-photo .side{width:170px}.nl-photo .acts{flex-direction:column}}
 `);
 
-export interface Row { label: string; detail: string; price: string; disabled: boolean; buy(): void }
+export interface Row {
+  label: string; detail: string; price: string; disabled: boolean; buy(): void;
+  /** A heading over this row (a new group: hats, glasses...). */
+  section?: string;
+  /** Worn now (the clothes shop, the barber): highlighted. */
+  on?: boolean;
+}
 
 /** A modal the world pauses under (the garage's and the adventure panel's way): `ui.overlay` plus `engine.paused`. */
 abstract class Modal {
@@ -91,9 +103,14 @@ export class ShopPanel extends Modal {
     const n = Number(e.key);
     if (n >= 1 && n <= this.rows.length && !this.rows[n - 1].disabled) { e.preventDefault(); e.stopImmediatePropagation(); this.rows[n - 1].buy(); }
   }
-  /** Open (or redraw while open) with these contents. */
-  render(sign: string, greet: string, cash: number, rows: Row[], onClose?: () => void): boolean {
+  /**
+   * Open (or redraw while open) with these contents. `side`: the sheet at the left and the room left in view on the
+   * right (the mirror's camera shows the player trying things on).
+   */
+  render(sign: string, greet: string, cash: number, rows: Row[], onClose?: () => void, side = false): boolean {
     if (!this.open && !this.show(onClose)) return false;
+    this.root.classList.toggle('side', side);
+    const keepScroll = this.items.parentElement?.scrollTop ?? 0;
     this.rows = rows;
     this.sign.textContent = sign;
     this.greet.textContent = greet;
@@ -101,13 +118,15 @@ export class ShopPanel extends Modal {
     this.leave.textContent = t('nl.panel.close');
     this.items.replaceChildren();
     rows.forEach((r, i) => {
-      const b = el('button', '', this.items); b.type = 'button'; b.disabled = r.disabled;
-      el('span', 'n', b).textContent = `${i + 1}. ${r.label}`;
+      if (r.section) el('div', 'sec', this.items).textContent = r.section;
+      const b = el('button', r.on ? 'on' : '', this.items); b.type = 'button'; b.disabled = r.disabled;
+      el('span', 'n', b).textContent = i < 9 ? `${i + 1}. ${r.label}` : r.label;
       el('span', 'p', b).textContent = r.price;
       el('span', 'd', b).textContent = r.detail;
       b.addEventListener('click', () => r.buy());
     });
-    (this.items.querySelector('button:not(:disabled)') as HTMLButtonElement | null ?? this.leave).focus();
+    if (this.items.parentElement) this.items.parentElement.scrollTop = keepScroll;
+    if (!keepScroll) (this.items.querySelector('button:not(:disabled)') as HTMLButtonElement | null ?? this.leave).focus({ preventScroll: true });
     return true;
   }
 }
