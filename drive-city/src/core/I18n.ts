@@ -23,6 +23,7 @@ export const LANG_NAME: Record<Lang, string> = { zh: '中文', en: 'EN' };
 import { NPC_EN, NPC_ZH } from './i18n/npc';
 import { ADVENTURE_EN, ADVENTURE_ZH } from './i18n/adventure';
 import { CAMPAIGN_EN, CAMPAIGN_ZH } from './i18n/campaign';
+import { DISTRICT_EN, DISTRICT_ZH } from './i18n/district';
 
 const STORE_KEY = 'drivecity.lang.v1';
 
@@ -30,6 +31,7 @@ const EN = {
   ...NPC_EN,
   ...ADVENTURE_EN,
   ...CAMPAIGN_EN,
+  ...DISTRICT_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
@@ -747,6 +749,7 @@ const ZH: Record<TKey, string> = {
   ...NPC_ZH,
   ...ADVENTURE_ZH,
   ...CAMPAIGN_ZH,
+  ...DISTRICT_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',

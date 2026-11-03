@@ -23,6 +23,7 @@ import { RoomPanel } from './RoomPanel';
 import type { MultiplayerApi } from '../online/Multiplayer';
 import type { FeedbackApi } from '../online/Feedback';
 import type { PresenceApi } from '../online/Presence';
+import type { DistrictApi } from '../district';
 import { journalOf } from '../npc/Journal';
 import { steppedDownFrom } from '../core/Quality';
 
@@ -206,7 +207,10 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       let taxiBest = 0;
       try { taxiBest = Number(localStorage.getItem('drivecity.taxi.best') ?? 0) || 0; } catch { /* private mode */ }
       const played = t('pause.playtime', { time: formatPlaytime(readPlaytime()) });
-      menu.setProgress(played + '\n' + (jumps && rabbits ? t('pause.progress', { j: jumps.done, jt: jumps.total, r: rabbits.found, rt: rabbits.total, c: checkins?.found ?? 0, ct: checkins?.total ?? 0, m: trials?.medals ?? 0, mt: (trials?.total ?? 0) * 3, taxi: taxiBest, combo: (combo?.best ?? 0).toLocaleString(), npc: journal.count, npct: journal.total }) : ''));
+      // 南锣鼓巷 (district/): once anything has been done there
+      const lane = engine.get<DistrictApi>('district')?.saved;
+      const laneLine = lane && (lane.photos || lane.souvenirs || lane.danceBest) ? '\n' + t('nl.stats', { photos: lane.photos, souvenirs: lane.souvenirs, best: lane.danceBest }) : '';
+      menu.setProgress(played + '\n' + (jumps && rabbits ? t('pause.progress', { j: jumps.done, jt: jumps.total, r: rabbits.found, rt: rabbits.total, c: checkins?.found ?? 0, ct: checkins?.total ?? 0, m: trials?.medals ?? 0, mt: (trials?.total ?? 0) * 3, taxi: taxiBest, combo: (combo?.best ?? 0).toLocaleString(), npc: journal.count, npct: journal.total }) : '') + laneLine);
       menu.set('paused');
       v().inputEnabled = false;
       engine.paused = true;

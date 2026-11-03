@@ -59,6 +59,10 @@ export interface GameEvents {
   'collect:found': { x: number; z: number; found: number; total: number };
   /** A landmark checked in (checkin/): the first visit to it. */
   'checkin': { id: string; x: number; z: number; found: number; total: number };
+  /** 南锣鼓巷 (district/): something bought at a counter, the studio's camera going off, a go on the dance machine. */
+  'district:buy': { shop: string; item: string; price: number };
+  'district:photo': Record<string, never>;
+  'district:dance': { hits: number; of: number; prize: number };
   /** The police got the player (police/), just before the respawn: fines and the impound hang off it. */
   'wanted:busted': { level: number };
   /** A traffic car blew its horn at (x, z). */

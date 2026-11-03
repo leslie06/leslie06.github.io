@@ -21,6 +21,8 @@ export const BLIP_COLOR: Record<MarkKind, string> = {
   jump: '#ff8a1f', collect: '#ff5a8a', parking: '#2f7bff', shortcut: '#e0342a', encounter: '#ff9f1c', suspect: '#ff3b30', contact: '#b07cff',
   /** A friend in your room (online/Multiplayer.ts): the name tags' teal. */
   friend: '#35e0c2',
+  /** 南锣鼓巷 and its shops (district/): a red lantern. */
+  shop: '#d8322a',
 };
 
 /** Police lights: red/blue at ~2.5 Hz. */
@@ -158,6 +160,15 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(x, y - r * 0.22, r * 0.3, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(x, y + r * 0.42, r * 0.5, r * 0.3, 0, Math.PI, 0); ctx.fill();
+      break;
+    }
+    case 'shop': {
+      // A red lantern: an oval with gold caps and a tassel (南锣鼓巷's shops, district/).
+      ctx.fillStyle = '#e0b84a'; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, r * 0.2);
+      ctx.fillRect(x - r * 0.38, y - r * 1.05, r * 0.76, r * 0.3); ctx.strokeRect(x - r * 0.38, y - r * 1.05, r * 0.76, r * 0.3);
+      ctx.beginPath(); ctx.ellipse(x, y, r * 0.95, r * 0.8, 0, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0b84a'; ctx.fillRect(x - r * 0.38, y + r * 0.72, r * 0.76, r * 0.26);
+      ctx.beginPath(); ctx.moveTo(x, y + r * 0.95); ctx.lineTo(x, y + r * 1.45); ctx.strokeStyle = '#e0b84a'; ctx.lineWidth = Math.max(1, r * 0.18); ctx.stroke();
       break;
     }
     case 'friend': {

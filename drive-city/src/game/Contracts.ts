@@ -80,6 +80,11 @@ export interface CameraApi extends System {
   snap(orbit?: number): void;
   /** While set, the rig hands the camera to this function (shot poses, title screen). */
   override: ((camera: THREE.PerspectiveCamera, dt: number) => void) | null;
+  /**
+   * 0 outdoors .. 1 in a small room (南锣鼓巷's shops, district/, 2026-11-03): the on-foot camera comes in close over the
+   * shoulder and widens, eased. The owner sets it every frame it knows; nobody else touches it.
+   */
+  indoor?: number;
 }
 
 /** A shared bike standing in a street rack (city/): the player rides off on one with F. */
@@ -148,6 +153,10 @@ export interface PlayerApi extends System {
   /** Patch the player up, clamped at 100 (a spell at home). `hurt` clamps at 0 but not at 100, so
    *  healing is not hurt(-n). */
   heal(n: number): void;
+  /** Take only `scale` of every hurt for `secs` (a drink in 南锣鼓巷's tea shop, district/); a later call replaces it. */
+  guard?(scale: number, secs: number): void;
+  /** Seconds the guard has left (0: none). */
+  readonly guarded?: number;
   /** Strapped into a fairground ride: the character is parked in a seat and physics is off. */
   readonly riding: boolean;
   /**
@@ -214,7 +223,7 @@ export interface HomeApi extends System {
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------
 
-export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact' | 'story' | 'friend';
+export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact' | 'story' | 'friend' | 'shop';
 /** A marker on the minimap and map. `heading` (atan2(x, z)) turns it into an arrow. */
 export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string;
   /** The label's colour (a contact's own), else the map's default. */

@@ -65,7 +65,9 @@ export async function install(engine: Engine): Promise<void> {
   let health = 100, hurtT = 99, wastedT = -1;
   const banner = new Banner();
   let hpEl: HTMLDivElement | null = null, hpBar: HTMLElement | null = null, hpShown = -1;
-  const hurt = (n: number) => { if (wastedT >= 0) return; health = Math.max(0, health - n); hurtT = 0; };
+  // a guard (district/: 南锣鼓巷's tea, 2026-11-03) takes the edge off every hurt for a while
+  let guardScale = 1, guardT = 0;
+  const hurt = (n: number) => { if (wastedT >= 0) return; health = Math.max(0, health - n * (guardT > 0 ? guardScale : 1)); hurtT = 0; };
   /** Patched up at home. Clamped at 100, which hurt(-n) would not be. */
   const heal = (n: number) => { if (wastedT >= 0) return; health = Math.min(100, health + Math.abs(n)); hurtT = 99; };
   /** A lane on the hospital's street, facing along it; the world spawn outside the city. */
@@ -299,6 +301,8 @@ export async function install(engine: Engine): Promise<void> {
     get health() { return health; },
     hurt,
     heal,
+    guard(scale, secs) { guardScale = scale; guardT = secs; },
+    get guarded() { return Math.max(0, guardT); },
     get riding() { return !!rideSeat; },
     setRiding(seat, at) {
       rideSeat = seat;
@@ -308,6 +312,7 @@ export async function install(engine: Engine): Promise<void> {
     fixedUpdate(dt) {
       // Health: back up to half on its own after a quiet spell; at zero, wasted.
       hurtT += dt;
+      if (guardT > 0) guardT -= dt;
       if (hurtT > 6 && health < 50) health = Math.min(50, health + 3 * dt);
       if (health <= 0 && wastedT < 0) {
         wastedT = 0; foot.dead = true;

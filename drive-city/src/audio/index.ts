@@ -368,6 +368,12 @@ export async function install(engine: Engine): Promise<void> {
     burst(t0, 3200, 1.6, 0.45, 0.025); burst(t0 + 0.075, 2200, 1.3, 0.35, 0.035);
     [1319, 1760, 2093].forEach((f, i) => ring(t0 + 0.18 + i * 0.08, f, 0.1, 0.55));
   });
+  // The photo studio's camera in 南锣鼓巷 (district/): the shutter alone.
+  engine.events.on('district:photo', () => {
+    if (!ctx || muted) return;
+    const t0 = ctx.currentTime;
+    burst(t0, 3200, 1.6, 0.45, 0.025); burst(t0 + 0.075, 2200, 1.3, 0.35, 0.035);
+  });
   // Time trials: a beep through each checkpoint, three rising notes at the start and the finish.
   engine.events.on('trial:checkpoint', () => { if (!ctx || muted) return; ring(ctx.currentTime, 1760, 0.12, 0.18, 'square'); });
   engine.events.on('trial:start', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; [880, 880, 1760].forEach((f, i) => ring(t0 + i * 0.12, f, 0.1, 0.12, 'square')); });
@@ -416,7 +422,9 @@ export async function install(engine: Engine): Promise<void> {
         const cam = engine.camera.position;
         engine.camera.getWorldDirection(camF);
         const fl = Math.hypot(camF.x, camF.z) || 1;
-        street.update(engine.get<{ name: string; music: readonly MusicSource[] }>('life')?.music ?? [], cam.x, cam.z, camF.x / fl, camF.z / fl, paused);
+        // the lane's dance machine (district/) plays through the same voices as the squares' dancing (life/)
+        const lm = engine.get<{ name: string; music: readonly MusicSource[] }>('life')?.music ?? [], dm = engine.get<{ name: string; music: readonly MusicSource[] }>('district')?.music;
+        street.update(dm?.length ? [...lm, ...dm] : lm, cam.x, cam.z, camF.x / fl, camF.z / fl, paused);
       }
       // Engine off while the player is out of the car, and a bicycle or an electric scooter has none.
       const off = !v.occupied || car.spec.name === 'bike' || car.spec.name === 'ebike';

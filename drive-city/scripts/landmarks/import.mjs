@@ -73,6 +73,8 @@ const meta = {
   file: `${id}.glb`, version: crypto.createHash('sha1').update(bytes).digest('hex').slice(0, 8),
   footprint: info.footprint, ...(info.moreFootprints.length ? { moreFootprints: info.moreFootprints } : {}), ...(info.clear.length ? { clear: info.clear } : {}), height: info.height,
   ...(opt('far') ? { farDistance: Number(opt('far')) } : old?.farDistance ? { farDistance: old.farDistance } : {}),
+  // trees are written into the meta by the landmark's own script after the export (Blender has no marker for them)
+  ...(old?.trees ? { trees: old.trees } : {}),
   stats: { ...info.stats, bytes: bytes.length, source: path.basename(file) },
 };
 // number arrays on one line: a footprint point per line, not three

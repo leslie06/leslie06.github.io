@@ -25,6 +25,9 @@ export class CameraRig implements CameraApi {
   name = 'camera';
   mode: CameraMode = 'chase';
   override: CameraApi['override'] = null;
+  indoor = 0;
+  /** `indoor` eased: the room's camera comes in over a second. */
+  private inK = 0;
   private yaw = 0;
   private y = 0;
   private orbitYaw = 0;
@@ -178,12 +181,16 @@ export class CameraRig implements CameraApi {
     const speed = Math.hypot(f.vel.x, f.vel.z);
     if (this.sinceOrbit > 2 && speed > 1.5) this.footYaw += wrapAngle(f.yaw - this.footYaw) * (1 - Math.exp(-dt * 1.2));
     this.y += (f.pos.y - this.y) * (1 - Math.exp(-dt * 8));
-    const dist = 3.3 + smoothstep(3, 6.5, speed) * 0.7;
-    this.look.set(f.pos.x, this.y + 1.55, f.pos.z);
-    const horiz = dist * Math.cos(this.footPitch);
+    // in a small room (a shop: `indoor`) closer and wider, lower over the shoulder, else the walls push it onto his head
+    this.inK += (THREE.MathUtils.clamp(this.indoor, 0, 1) - this.inK) * (1 - Math.exp(-dt * 3));
+    const k = this.inK;
+    const dist = (3.3 + smoothstep(3, 6.5, speed) * 0.7) * (1 - 0.48 * k);
+    this.look.set(f.pos.x, this.y + 1.55 - 0.12 * k, f.pos.z);
+    const pitch = Math.min(this.footPitch, 0.55 - 0.25 * k);
+    const horiz = dist * Math.cos(pitch);
     // Over the right shoulder: the camera's right is -X of its heading frame.
-    const rx = -Math.cos(this.footYaw), rz = Math.sin(this.footYaw);
-    this.pos.set(this.look.x - Math.sin(this.footYaw) * horiz + rx * 0.45, this.look.y + dist * Math.sin(this.footPitch), this.look.z - Math.cos(this.footYaw) * horiz + rz * 0.45);
+    const rx = -Math.cos(this.footYaw), rz = Math.sin(this.footYaw), sh = 0.45 - 0.15 * k;
+    this.pos.set(this.look.x - Math.sin(this.footYaw) * horiz + rx * sh, this.look.y + dist * Math.sin(pitch), this.look.z - Math.cos(this.footYaw) * horiz + rz * sh);
     this.tmp.subVectors(this.pos, this.look);
     const len = this.tmp.length();
     this.tmp.divideScalar(len);
@@ -194,8 +201,8 @@ export class CameraRig implements CameraApi {
     const a = this.shakeAmt * this.shakeAmt * 0.3;
     this.pos.x += Math.sin(this.t * 31) * a; this.pos.y += Math.sin(this.t * 37 + 2) * a;
     cam.position.copy(this.pos);
-    cam.lookAt(this.look.x + rx * 0.45, this.look.y, this.look.z + rz * 0.45);
-    this.fov += (60 - this.fov) * (1 - Math.exp(-dt * 4));
+    cam.lookAt(this.look.x + rx * sh, this.look.y, this.look.z + rz * sh);
+    this.fov += (60 + 12 * k - this.fov) * (1 - Math.exp(-dt * 4));
     cam.fov = this.fov;
     cam.updateProjectionMatrix();
     this.snapNext = false;

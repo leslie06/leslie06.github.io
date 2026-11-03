@@ -44,6 +44,7 @@ import * as contacts from './contacts';
 import * as dialogue from './dialogue';
 import * as story from './story';
 import * as adventure from './adventure';
+import * as district from './district';
 import * as resume from './resume';
 import * as tollPlazas from './city/visual/TollPlazas';
 import * as funnel from './online/Funnel';
@@ -140,6 +141,7 @@ async function boot() {
   if (worldName === 'city') await nav.install(engine);
   if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await checkin.install(engine); await trials.install(engine); await intro.install(engine); await events.install(engine); await npc.install(engine); await life.install(engine); await contacts.install(engine); leaderboard.install(engine); await story.install(engine); campaign.install(engine); }
   if (worldName === 'city') await adventure.install(engine);
+  if (worldName === 'city') await district.install(engine);
   if (worldName === 'city') resume.install(engine);
   await fx.install(engine);
   await audio.install(engine);

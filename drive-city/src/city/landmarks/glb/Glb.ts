@@ -55,6 +55,9 @@ export interface GlbMeta {
   clear?: [number, number][][];
   height: number;
   farDistance?: number;
+  /** Trees the city's pools draw, [x, z, species, scale] per tree in the local frame (LandmarkModel.trees): a landmark
+   *  script writes them into its meta after the export (南锣鼓巷's 国槐), and a re-import keeps them. */
+  trees?: number[];
   stats?: Record<string, unknown>;
 }
 
@@ -433,7 +436,7 @@ export function glbLandmark(meta: GlbMeta): LandmarkDef {
     build: () => {
       const group = new THREE.Group();
       group.name = meta.id;
-      return { group, colliders: [], footprint: meta.footprint, moreFootprints: meta.moreFootprints, clear: meta.clear, height: meta.height };
+      return { group, colliders: [], footprint: meta.footprint, moreFootprints: meta.moreFootprints, clear: meta.clear, trees: meta.trees, height: meta.height };
     },
     load: async (env) => {
       loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
