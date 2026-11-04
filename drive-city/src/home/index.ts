@@ -6,7 +6,8 @@ import { CG, groups } from '../core/Physics';
 import type { HomeApi, HudApi, MissionApi, PlayerApi, RenderApi, VehicleApi, WantedApi } from '../game/Contracts';
 import type { RenderSystem } from '../render/RenderSystem';
 import type { TravelApi } from '../travel';
-import { ANCHOR, DOOR, GARAGE, HOUSE, PLOT } from './Layout';
+import type { EstateApi } from '../estate';
+import { ANCHOR, BED, DOOR, GARAGE, HOUSE, LEVEL, PLOT } from './Layout';
 import { garageDoor, villaMaterials } from './Villa';
 
 /**
@@ -45,7 +46,7 @@ export function readHomeSave(): HomeSave | null {
 
 /** The villa with the handles poses and probes drive it by. */
 export interface HomeSystem extends HomeApi {
-  debug: { save(): void; setDoor(u: number): void; state(): { door: number; atHome: boolean; savedAt: number } };
+  debug: { save(): void; bed(): { x: number; z: number }; setDoor(u: number): void; state(): { door: number; atHome: boolean; savedAt: number } };
 }
 
 export async function install(engine: Engine): Promise<void> {
@@ -89,6 +90,8 @@ export async function install(engine: Engine): Promise<void> {
 
   let open = 0, want = 0, savedAt = 0, cooldown = 0, atHome = false, greeted = 0;
   const here = new THREE.Vector2();
+  // the master bed (estate/'s sleep, as in the courtyard's 东厢房): standing at its side, upstairs
+  const mb = BED.master, bedAt = { x: ax + mb.wallX + mb.len * 0.55, z: az + mb.z + mb.w / 2 + 0.45 };
 
   const save = () => {
     const v = engine.get<VehicleApi>('vehicle');
@@ -123,6 +126,7 @@ export async function install(engine: Engine): Promise<void> {
     get savedAt() { return savedAt; },
     debug: {
       save,
+      bed: () => bedAt,
       setDoor(u) { open = want = Math.max(0, Math.min(1, u)); doorCol.setEnabled(open < 0.35); },
       state() { return { door: open, atHome, savedAt }; },
     },
@@ -154,6 +158,10 @@ export async function install(engine: Engine): Promise<void> {
     update() {
       // A zero scale is degenerate; leave a sliver of panel in the head.
       doorPivot.scale.y = Math.max(0.02, 1 - open);
+      const f = player.foot;
+      if (atHome && f && !player.riding && f.pos.y > LEVEL.floor1 - 0.6 && Math.hypot(f.pos.x - bedAt.x, f.pos.z - bedAt.z) < 1.4) {
+        player.offer?.({ x: bedAt.x, z: bedAt.z, r: 1.4, label: t('est.offer.bed'), use: () => { const why = engine.get<EstateApi>('estate')?.sleep(); if (why) hud()?.toast(why, 3); } });
+      }
     },
   };
   engine.add(api);

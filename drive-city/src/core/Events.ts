@@ -68,6 +68,14 @@ export interface GameEvents {
   'district:meow': { x: number; z: number };
   /** A 快速前往 (travel/) to (x, z): checkin/ holds the landmarks round it until the player has left. */
   'travel:jump': { x: number; z: number; id: string };
+  /** 产业 (estate/): bought, improved, takings collected, the 东厢房 rented, a raid begun and over, a night's sleep. */
+  'estate:bought': { id: string };
+  'estate:upgraded': { id: string; up: string };
+  'estate:collected': { id: string; n: number };
+  'estate:safehouse': Record<string, never>;
+  'estate:raid': { id: string };
+  'estate:raidOver': { id: string; won: boolean };
+  'estate:slept': { hours: number; wake: number };
   'district:racket': { shop: string; result: 'won' | 'lost' | 'fled' | 'paid' };
   'district:delivered': { pay: number; late: boolean };
   /** The police got the player (police/), just before the respawn: fines and the impound hang off it. */

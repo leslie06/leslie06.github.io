@@ -213,7 +213,8 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       // 南锣鼓巷 (district/): once anything has been done there
       const lane = engine.get<DistrictApi>('district')?.saved;
       const laneLine = lane && (lane.photos || lane.souvenirs || lane.danceBest) ? '\n' + t('nl.stats', { photos: lane.photos, souvenirs: lane.souvenirs, best: lane.danceBest }) : '';
-      menu.setProgress(played + '\n' + (jumps && rabbits ? t('pause.progress', { j: jumps.done, jt: jumps.total, r: rabbits.found, rt: rabbits.total, c: checkins?.found ?? 0, ct: checkins?.total ?? 0, m: trials?.medals ?? 0, mt: (trials?.total ?? 0) * 3, taxi: taxiBest, combo: (combo?.best ?? 0).toLocaleString(), npc: journal.count, npct: journal.total }) : '') + laneLine);
+      const estateLine = engine.get<{ name: string; line: string }>('estate')?.line;
+      menu.setProgress(played + '\n' + (jumps && rabbits ? t('pause.progress', { j: jumps.done, jt: jumps.total, r: rabbits.found, rt: rabbits.total, c: checkins?.found ?? 0, ct: checkins?.total ?? 0, m: trials?.medals ?? 0, mt: (trials?.total ?? 0) * 3, taxi: taxiBest, combo: (combo?.best ?? 0).toLocaleString(), npc: journal.count, npct: journal.total }) : '') + laneLine + (estateLine ? '\n' + estateLine : ''));
       menu.set('paused');
       v().inputEnabled = false;
       engine.paused = true;

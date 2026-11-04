@@ -23,6 +23,8 @@ export const BLIP_COLOR: Record<MarkKind, string> = {
   friend: '#35e0c2',
   /** 南锣鼓巷 and its shops (district/): a red lantern. */
   shop: '#d8322a',
+  /** 产业 (estate/): yours, gold; for sale, grey; the safehouse a green house. */
+  estate: '#e8b93a', estateSale: '#9a958a', safehouse: '#3ccf72',
 };
 
 /** Police lights: red/blue at ~2.5 Hz. */
@@ -169,6 +171,23 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       ctx.beginPath(); ctx.ellipse(x, y, r * 0.95, r * 0.8, 0, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#e0b84a'; ctx.fillRect(x - r * 0.38, y + r * 0.72, r * 0.76, r * 0.26);
       ctx.beginPath(); ctx.moveTo(x, y + r * 0.95); ctx.lineTo(x, y + r * 1.45); ctx.strokeStyle = '#e0b84a'; ctx.lineWidth = Math.max(1, r * 0.18); ctx.stroke();
+      break;
+    }
+    case 'estate':
+    case 'estateSale': {
+      // A coin with ¥ on it.
+      disc(ctx, x, y, r, col);
+      ctx.fillStyle = INK; ctx.font = `900 ${Math.round(r * 1.3)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('¥', x, y + r * 0.08);
+      break;
+    }
+    case 'safehouse': {
+      // A house: a square under a roof.
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.75, y + r * 0.8); ctx.lineTo(x - r * 0.75, y - r * 0.1); ctx.lineTo(x - r * 1.05, y - r * 0.1); ctx.lineTo(x, y - r * 1.05);
+      ctx.lineTo(x + r * 1.05, y - r * 0.1); ctx.lineTo(x + r * 0.75, y - r * 0.1); ctx.lineTo(x + r * 0.75, y + r * 0.8); ctx.closePath();
+      ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1.5, r * 0.22); ctx.strokeStyle = INK; ctx.stroke();
+      ctx.fillStyle = INK; ctx.fillRect(x - r * 0.2, y + r * 0.2, r * 0.4, r * 0.6);
       break;
     }
     case 'friend': {

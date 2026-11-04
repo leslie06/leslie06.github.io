@@ -8,7 +8,7 @@
   "lon": 116.3861317,
   "headingDeg": -76.9,
   "file": "houhai.glb",
-  "version": "bb5bfe47",
+  "version": "84ec5b09",
   "footprint": [
     [-17.3, -88],
     [-5.25, -88],
@@ -39,20 +39,20 @@
   "farDistance": 130,
   "trees": [3.72, 80.0, 0, 0.8, 3.64, 68.0, 0, 0.8, 3.56, 56.0, 0, 0.8, 3.48, 44.0, 0, 0.8, 3.39, 32.0, 0, 0.8, 3.31, 20.0, 0, 0.8, 3.23, 8.0, 0, 0.8, 3.15, -4.0, 0, 0.8, 3.07, -16.0, 0, 0.8, 2.99, -28.0, 0, 0.8, 2.91, -40.0, 0, 0.8, 2.83, -52.0, 0, 0.8, 2.75, -64.0, 0, 0.8, 2.67, -76.0, 0, 0.8],
   "stats": {
-    "triangles": 41794,
+    "triangles": 43228,
     "farTriangles": 604,
-    "materials": 35,
+    "materials": 42,
     "farMaterials": 3,
     "colliders": {
-      "solid": 75,
+      "solid": 87,
       "walk": 0,
       "mesh": 0
     },
     "instancedMeshes": 4,
-    "textures": 22,
+    "textures": 25,
     "maxTexture": 2048,
     "footprintArea": 2000,
-    "bytes": 934524,
+    "bytes": 1260376,
     "source": "houhai.glb"
   }
 }

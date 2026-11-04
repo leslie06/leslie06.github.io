@@ -5,10 +5,12 @@ import { Rng } from '../core/Rng';
 import type { Actor, Blip, CameraApi, CombatApi, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RenderApi, Speaker, VehicleApi, WantedApi, Wear, WorldApi } from '../game/Contracts';
 import type { ContactsApi } from '../contacts';
 import type { TravelApi } from '../travel';
+import type { EstateApi, EstateId } from '../estate';
 import { CAST_ON, castModel, hasModel } from '../character/Cast';
 import { journalOf } from '../npc/Journal';
 import { Cats, type CatPose, type CatState } from './Cats';
 import { installHouhai } from './Houhai';
+import { installOwned, type OwnedApi, type RaidSpot } from './Owned';
 import type { CollectApi } from '../collect';
 import type { MusicSource } from '../audio/StreetMusic';
 import { Gait } from '../character/Animator';
@@ -59,6 +61,7 @@ export interface DistrictApi extends System {
     racket(): boolean; deliver(): { x: number; z: number } | null; cat(): { x: number; z: number } | null; tasks(): Record<string, unknown>;
     catHere(): void; catSeats(): { x: number; z: number }[];
     houhai(): import('./Houhai').HouhaiApi['debug'];
+    owned(): OwnedApi['debug'];
   };
 }
 
@@ -116,7 +119,9 @@ const runsIn = (a: number, b: number): XY[] => RUNS.map(([r0, r1]): XY => [Math.
 interface Keeper { id: ShopId; actor: Actor | null; barkT: number; faceT: number }
 interface Walker { u: number; s: number; lo: number; hi: number; dir: number; speed: number; pause: number; lookT: number; gait: Gait; look: Look; seed: number; pos: THREE.Vector3; prev: THREE.Vector3; yaw: number }
 /** A chair the player is held in: the barber's, a seat at the bar's tables (listening). */
-type Seated = { kind: 'barber'; t: number } | { kind: 'listen' | 'pet'; t: number; seat: number } | null;
+type Seated = { kind: 'barber'; t: number } | { kind: 'listen' | 'pet'; t: number; seat: number }
+  /** Any other seat (蓝莲花's: district/Owned.ts): where it is, what it faces, where F puts you back on your feet. */
+  | { kind: 'perch'; t: number; at: { x: number; z: number }; face: { x: number; z: number }; out: { x: number; z: number } } | null;
 
 /**
  * 南锣鼓巷 (2026-11-03, docs/gta-plan.md §12, 「先做精华街区，要求街区精美，可以进入商店，让用户不只是开车，还能下车活动」): the
@@ -150,6 +155,8 @@ export async function install(engine: Engine): Promise<void> {
   const rnd = new Rng(7307);
   // 后海 (round 4): the bar street's tables, the pier's boats, the winter rink (Houhai.ts)
   const houhai = installHouhai(engine, { toast: (s2, secs) => toast(s2, secs) });
+  /** The player's property here (district/Owned.ts), installed once the panels and the racket below exist. */
+  let owned: OwnedApi;
 
   // --- what the player wears (bought here; kept in the save, put on at boot) ---
   const wearOf = (w: Worn): Wear => {
@@ -235,10 +242,10 @@ export async function install(engine: Engine): Promise<void> {
   const buy = (id: ShopId, it: Item): string | null => {
     const m = missions();
     if (!m) return 'no missions';
-    const price = priceOf(it, regular(id));
+    const price = owned.free(id) ? 0 : priceOf(it, regular(id));
     const why = blocked(it, { cash: m.cash, health: pl.health, rabbitsLeft: rabbitsLeft().length, price });
     if (why) return t(why.key, { n: why.n ?? 0 });
-    m.addCash(-price);
+    if (price) m.addCash(-price);
     engine.events.emit('district:buy', { shop: id, item: it.id, price });
     if (it.heal) pl.heal(it.heal);
     if (it.guard) { pl.guard?.(it.guard.scale, it.guard.secs); toast(t('nl.guard', { m: Math.round(it.guard.secs / 60) }), 3); }
@@ -257,9 +264,9 @@ export async function install(engine: Engine): Promise<void> {
   const itemRows = (id: ShopId, again: () => void, section?: string): Row[] => {
     const m = missions();
     return CATALOG[id].items.map((it, i) => {
-      const price = priceOf(it, regular(id));
+      const free = owned.free(id), price = free ? 0 : priceOf(it, regular(id));
       const why = blocked(it, { cash: m?.cash ?? 0, health: pl.health, rabbitsLeft: rabbitsLeft().length, price });
-      return { label: t(it.name), detail: describe(it), price: why ? t(why.key, { n: why.n ?? 0 }) : regular(id) ? t('nl.regularPrice', { n: price }) : `¥${price}`, disabled: !!why,
+      return { label: t(it.name), detail: describe(it), price: why ? t(why.key, { n: why.n ?? 0 }) : free ? t('est.free') : regular(id) ? t('nl.regularPrice', { n: price }) : `¥${price}`, disabled: !!why,
         section: i === 0 ? section : undefined, buy: () => { if (!buy(id, it) && panel.open) again(); } };
     });
   };
@@ -274,10 +281,10 @@ export async function install(engine: Engine): Promise<void> {
       rows.push({ label: t('nl.offer.dance', { n: DANCE_PRICE }), detail: t('nl.greet.arcade'), price: short ? t('nl.panel.short', { n: DANCE_PRICE - (m?.cash ?? 0) }) : `¥${DANCE_PRICE}`,
         disabled: short, buy: () => { panel.close(); startDance(); } });
     }
-    if (id === 'grill') visit('grill');
+    if (id === 'grill') { visit('grill'); rows.push(...owned.rows('grill', () => { if (panel.open) openShop('grill'); })); }
     if (id === 'noodle') rows.push(deliveryRow());
     if (id === 'cats') rows.push(catRow());
-    panel.render(t(shop.name), regular(id) ? t('nl.greet.regular') : t(shop.greet), m?.cash ?? 0, rows);
+    panel.render(t(shop.name), owned.free(id) ? t('est.greetOwner') : regular(id) ? t('nl.greet.regular') : t(shop.greet), m?.cash ?? 0, rows);
     keeperOf(id)?.act('talk', { t: 0 });
   };
 
@@ -356,6 +363,8 @@ export async function install(engine: Engine): Promise<void> {
     if (was.kind === 'barber') {
       const s = SHOPS.barber, c = W(s.chair!), d = W(s.counter);
       pl.setRiding(null, { x: d.x, y: 0.2, z: d.z, yaw: Math.atan2(d.x - c.x, d.z - c.z) });
+    } else if (was.kind === 'perch') {
+      pl.setRiding(null, { x: was.out.x, y: 0.2, z: was.out.z, yaw: Math.atan2(was.face.x - was.at.x, was.face.z - was.at.z) });
     } else {
       const s = SHOPS[was.kind === 'pet' ? 'cats' : 'bar'], p = W(s.seats![was.seat]), st = W(was.kind === 'pet' ? s.seatFace! : s.stage!);
       // a step back from the table, towards the room's middle
@@ -372,21 +381,23 @@ export async function install(engine: Engine): Promise<void> {
   const openBar = () => {
     const m = missions(), cash = m?.cash ?? 0;
     const rows = itemRows('bar', openBar, t('nl.sec.drinks'));
+    const songPrice = owned.free('bar') ? 0 : SONG_PRICE;
     SONGS.forEach((k, i) => {
-      const playing = i === song, short = cash < SONG_PRICE;
+      const playing = i === song, short = cash < songPrice;
       rows.push({ label: `《${t(k)}》`, detail: playing ? t('nl.song.playing') : t('nl.song.d'), on: playing, section: i === 0 ? t('nl.sec.songs') : undefined,
-        price: playing ? t('nl.song.playing') : short ? t('nl.panel.short', { n: SONG_PRICE - cash }) : `¥${SONG_PRICE}`, disabled: playing || short,
+        price: playing ? t('nl.song.playing') : short ? t('nl.panel.short', { n: songPrice - cash }) : songPrice ? `¥${songPrice}` : t('est.free'), disabled: playing || short,
         buy: () => {
           const mm = missions();
-          if (!mm || mm.cash < SONG_PRICE) return;
-          mm.addCash(-SONG_PRICE);
+          if (!mm || mm.cash < songPrice) return;
+          if (songPrice) mm.addCash(-songPrice);
           song = i; songT = 0;
-          engine.events.emit('district:buy', { shop: 'bar', item: `song${i}`, price: SONG_PRICE });
+          engine.events.emit('district:buy', { shop: 'bar', item: `song${i}`, price: songPrice });
           if (singer?.alive) singer.say(t('nl.song.next', { song: t(k) }), 4);
           if (panel.open) openBar();
         } });
     });
-    panel.render(t(CATALOG.bar.name), t(CATALOG.bar.greet), cash, rows);
+    rows.push(...owned.rows('bar', () => { if (panel.open) openBar(); }));
+    panel.render(t(CATALOG.bar.name), owned.free('bar') ? t('est.greetOwner') : t(CATALOG.bar.greet), cash, rows);
     keeperOf('bar')?.act('talk', { t: 0 });
   };
   const sitToListen = (i: number) => {
@@ -400,6 +411,16 @@ export async function install(engine: Engine): Promise<void> {
     const dx = p.x - st.x, dz = p.z - st.z, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
     shot({ x: p.x + ux * 1.25 - uz * 0.75, z: p.z + uz * 1.25 + ux * 0.75 }, 1.6, st, 1.1, 0, 56);
     toast(t('nl.listen'), 4);
+  };
+  /** Any seat facing something (蓝莲花's): over the shoulder at what it faces, health back a second like the bar's. */
+  const perch = (at: { x: number; z: number }, face: { x: number; z: number }, out: { x: number; z: number }, line: string, cam?: { x: number; z: number }) => {
+    if (seated) return;
+    pl.setRiding({ pos: new THREE.Vector3(at.x, 0.04, at.z), yaw: Math.atan2(face.x - at.x, face.z - at.z) });
+    pl.setPose?.('sit', 0);
+    seated = { kind: 'perch', t: 0, at, face, out };
+    const dx = at.x - face.x, dz = at.z - face.z, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
+    shot(cam ?? { x: at.x + ux * 1.25 - uz * 0.75, z: at.z + uz * 1.25 + ux * 0.75 }, 1.6, cam ? at : face, cam ? 0.9 : 1.1, 0, 56);
+    toast(line, 4);
   };
   /** The café's table: sit with the cats (one hops up beside you), health back a second like the bar's. */
   const sitWithCats = (i: number) => {
@@ -517,6 +538,7 @@ export async function install(engine: Engine): Promise<void> {
     if (singer?.alive) music.push({ id: `nl-bar${song}`, kind: 'ballad', x: stageAt.x, z: stageAt.z, t: songT, song });
     if (elder?.alive) music.push({ id: 'nl-cage', kind: 'birds', x: cageAt.x, z: cageAt.z, t: songT });
     houhai.music(music, songT);
+    owned?.music(music, songT);
   };
 
   // --- the lane's crowd: strolling up and down, stopping at the windows, turning at the crossings and the ends ---
@@ -661,6 +683,7 @@ export async function install(engine: Engine): Promise<void> {
     for (const id of SHOP_IDS) { const d = W(SHOPS[id].door); if (Math.hypot(P.x - d.x, P.z - d.z) < 300) blips.push({ kind: 'shop', x: d.x, z: d.z }); }
     taskBlips(blips);
     houhai.blips(blips);
+    owned.blips(blips);
     for (const m of marks) blips.push({ kind: 'collect', x: m.x, z: m.z, flash: true });
     return blips;
   });
@@ -810,67 +833,81 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   // --- 黑豹's collectors at a shop's door: the keeper out in the lane, three of them round him, a fight if you step in ---
-  interface Racket { shop: ShopId; u: number; s: number; brawl: ReturnType<CombatApi['brawl']>; keeper: Actor | null; t: number; fight: boolean; lineT: number; line: number; over: boolean }
+  // (a raid on one of the player's own - estate/ - is the same scene at that door: district/Owned.ts starts it)
+  interface Racket {
+    shop: ShopId | null; estate: EstateId | null; name: string; kp: { x: number; z: number }; back: { x: number; z: number }; u: number; s: number;
+    brawl: ReturnType<CombatApi['brawl']>; keeper: Actor | null; t: number; fight: boolean; lineT: number; line: number; over: boolean;
+  }
   let racket: Racket | null = null, racketCool = 50;
   const RACKET_WAIT = 150;
-  const startRacket = (): boolean => {
-    const cb = engine.get<CombatApi>('combat'), f = pl.foot;
-    if (!cb || !f) return false;
-    const ps = laneS(f.pos);
-    // a shop 25-95 m along from the player (not one already stood up for, if there is another)
-    const cands = RACKET_SHOPS.filter((id) => { const d = Math.abs(laneS(W(SHOPS[id].door)) - ps); return d > 25 && d < 95; })
-      .sort((a, b) => Number(regular(a)) - Number(regular(b)) || Math.abs(laneS(W(SHOPS[a].door)) - ps) - Math.abs(laneS(W(SHOPS[b].door)) - ps));
-    const id = cands[0];
-    if (!id) return false;
-    const [du, ds] = SHOPS[id].door, side = du > 0 ? 1 : -1, ku = du - side * 0.9;
-    const kp = world(ku, ds), at = [world(du - side * 2.3, ds), world(du - side * 1.8, ds - 1.3), world(du - side * 1.8, ds + 1.3)];
+  /** The scene at a door: `out` points from the door to where they stand (the lane, the road). */
+  const racketAt = (spot: Omit<RaidSpot, 'estate'> & { shop: ShopId | null; estate: EstateId | null }): boolean => {
+    const cb = engine.get<CombatApi>('combat');
+    if (!cb || racket) return false;
+    const L = Math.hypot(spot.out.x, spot.out.z) || 1, ox = spot.out.x / L, oz = spot.out.z / L, tx = oz, tz = -ox;
+    const P = (o: number, s2: number) => ({ x: spot.door.x + ox * o + tx * s2, z: spot.door.z + oz * o + tz * s2 });
+    const kp = P(0.9, 0), at = [P(2.3, 0), P(1.8, -1.3), P(1.8, 1.3)];
     const b = cb.brawl(kp.x, kp.z, engine.lite ? 2 : 3, { at, wait: kp });
     if (!b.actors.length) return false;
     // the keeper steps out (a fresh one of the same face: the one at the counter is put away)
-    const k = keepers.find((q) => q.id === id)!;
-    keeperDrop(k);
-    const ka = people.spawnActor!(kp.x, kp.z, { yaw: Math.atan2(at[0].x - kp.x, at[0].z - kp.z), seed: 911 + SHOP_IDS.indexOf(id) * 37 }) ?? null;
+    spot.dropKeeper?.();
+    const ka = people.spawnActor!(kp.x, kp.z, { yaw: Math.atan2(at[0].x - kp.x, at[0].z - kp.z), seed: spot.seed }) ?? null;
     if (ka) { ka.stop(); ka.face(at[0].x, at[0].z); ka.act('talk', { t: 0 }); }
-    racket = { shop: id, u: ku, s: ds, brawl: b, keeper: ka, t: 0, fight: false, lineT: 0.5, line: 0, over: false };
+    const [ku, ks] = spot.shop ? local(kp.x, kp.z) : [NaN, NaN];
+    racket = { shop: spot.shop, estate: spot.estate, name: spot.name, kp, back: P(0.2, 0), u: ku, s: ks, brawl: b, keeper: ka, t: 0, fight: false, lineT: 0.5, line: 0, over: false };
     const r = racket;
-    toast(t('nl.racket.news', { shop: t(CATALOG[id].name) }), 4);
+    toast(t(r.estate ? 'est.raid.obj' : 'nl.racket.news', { shop: r.name, name: r.name }), 4);
     void b.done.then((res) => {
       if (racket !== r) return;
       r.over = true;
       unsay();
-      const name = t(CATALOG[r.shop].name);
+      const won = res === 'won' || (res === 'fled' && r.fight);
       if (res === 'won') {
         const pay = RACKET_PAY * b.actors.length;
         missions()?.addCash(pay);
-        const first = !regular(r.shop);
-        if (first) save.regulars.push(r.shop);
+        const first = !!r.shop && !r.estate && !regular(r.shop);
+        if (first && r.shop) save.regulars.push(r.shop);
         save.rackets++; store();
-        if (r.keeper?.alive) { r.keeper.say(t('nl.racket.thanks'), 4); r.keeper.act('cheer', { t: 0 }); }
+        if (r.keeper?.alive) { r.keeper.say(t(r.estate ? 'est.greetOwner' : 'nl.racket.thanks'), 4); r.keeper.act('cheer', { t: 0 }); }
         toast(t('nl.racket.won', { n: pay }), 3.5);
-        if (first) after(3.2, () => toast(t('nl.racket.regular', { shop: name }), 4.5));
+        if (first) after(3.2, () => toast(t('nl.racket.regular', { shop: r.name }), 4.5));
         journal.meet('nl.racket');
         racketCool = 600;
       } else if (res === 'fled' && !r.fight) {
         // nobody stepped in: they took the money and went
         if (r.keeper?.alive) r.keeper.say(t('nl.racket.paid'), 3.5);
-        toast(t('nl.racket.gone', { shop: name }), 3.5);
+        if (!r.estate) toast(t('nl.racket.gone', { shop: r.name }), 3.5);
         racketCool = 300;
       } else {
         if (res === 'fled') toast(t('npc.gang.fled'), 2.5);
         racketCool = 300;
       }
-      engine.events.emit('district:racket', { shop: r.shop, result: res === 'fled' && !r.fight ? 'paid' : res });
+      if (r.estate) after(won ? 3.2 : 0.5, () => engine.get<EstateApi>('estate')?.raidOver(won));
+      engine.events.emit('district:racket', { shop: r.shop ?? r.estate ?? '', result: res === 'fled' && !r.fight ? 'paid' : res });
       // back behind the counter in a while (the keeper loop puts the indoor one back once this is gone)
       after(6, () => { if (r.keeper?.alive) r.keeper.release('vanish'); if (racket === r) racket = null; });
     });
     return true;
+  };
+  const startRacket = (): boolean => {
+    const f = pl.foot;
+    if (!f) return false;
+    const ps = laneS(f.pos);
+    // a shop 25-95 m along from the player (not one already stood up for, if there is another; never one of theirs)
+    const cands = RACKET_SHOPS.filter((id) => { const d = Math.abs(laneS(W(SHOPS[id].door)) - ps); return d > 25 && d < 95 && !owned.free(id); })
+      .sort((a, b) => Number(regular(a)) - Number(regular(b)) || Math.abs(laneS(W(SHOPS[a].door)) - ps) - Math.abs(laneS(W(SHOPS[b].door)) - ps));
+    const id = cands[0];
+    if (!id) return false;
+    const [du, ds] = SHOPS[id].door, side = du > 0 ? 1 : -1, door = world(du, ds), o = world(du - side, ds);
+    const k = keepers.find((q) => q.id === id)!;
+    return racketAt({ shop: id, estate: null, name: t(CATALOG[id].name), door, out: { x: o.x - door.x, z: o.z - door.z }, seed: 911 + SHOP_IDS.indexOf(id) * 37, dropKeeper: () => keeperDrop(k) });
   };
   const racketStep = (dt: number) => {
     const r = racket;
     if (!r || r.over) return;
     r.t += dt;
     const lead = r.brawl.actors[0], f = pl.foot;
-    say(t(r.fight ? 'nl.racket.fight' : 'nl.racket.obj', { shop: t(CATALOG[r.shop].name) }));
+    say(t(r.fight ? 'nl.racket.fight' : r.estate ? 'est.raid.obj' : 'nl.racket.obj', { shop: r.name, name: r.name }));
     if (r.fight) return;
     // leaning on him: a line from them, a plea from him, turn about
     r.lineT -= dt;
@@ -885,15 +922,15 @@ export async function install(engine: Engine): Promise<void> {
       r.fight = true;
       r.brawl.go();
       if (lead?.alive) lead.say(t('nl.racket.go'), 2.5);
-      if (r.keeper?.alive) { const kp = world(r.u + (r.u > 0 ? 0.7 : -0.7), r.s); r.keeper.goTo(kp.x, kp.z, 1.6); r.keeper.act(null); }
+      if (r.keeper?.alive) { r.keeper.goTo(r.back.x, r.back.z, 1.6); r.keeper.act(null); }
       return;
     }
     // nobody came (or the player went off): they collect and go
-    if (r.t > RACKET_WAIT || !near(world(r.u, r.s), 220)) r.brawl.end();
+    if (r.t > RACKET_WAIT || !near(r.kp, 220)) r.brawl.end();
   };
   engine.events.on('combat:swing', ({ x, z }) => {
     const r = racket;
-    if (r && !r.fight && !r.over && Math.hypot(x - world(r.u, r.s).x, z - world(r.u, r.s).z) < 7) { r.fight = true; r.brawl.go(); }
+    if (r && !r.fight && !r.over && Math.hypot(x - r.kp.x, z - r.kp.z) < 7) { r.fight = true; r.brawl.go(); }
   });
 
   // --- 小飞龙 and 小雨 at a 象棋 table in the north stretch (contacts/: their looks, models, friendship) ---
@@ -947,7 +984,7 @@ export async function install(engine: Engine): Promise<void> {
   const taskBlips = (out: Blip[]) => {
     if (order && order.done < 0) { const d = W(order.gate.door); out.push({ kind: 'dropoff', x: d.x, z: d.z, flash: true }); }
     if (lost) out.push(lost.follow ? { kind: 'dropoff', x: cafeDoor.x, z: cafeDoor.z, flash: true } : { kind: 'target', x: lost.hint.x, z: lost.hint.z, flash: true });
-    if (racket && !racket.over) { const p = world(racket.u, racket.s); out.push({ kind: 'encounter', x: p.x, z: p.z, flash: true }); }
+    if (racket && !racket.over && !racket.estate) out.push({ kind: 'encounter', x: racket.kp.x, z: racket.kp.z, flash: true });
     if (contacts() && Math.hypot(pl.position.x - meetAt.x, pl.position.z - meetAt.z) < 400) out.push({ kind: 'contact', x: meetAt.x, z: meetAt.z, label: t('nl.meet.map'), color: '#ff3b6b' });
   };
 
@@ -961,6 +998,18 @@ export async function install(engine: Engine): Promise<void> {
   let smokeT = 0;
   const fx = () => engine.get<{ name: string; smoke(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, shade?: number): void }>('fx');
 
+  // 产业和安全屋 (estate/: the books; district/Owned.ts: the panels, the improvements, 蓝莲花, the 东厢房, the raids)
+  const ownedWear = (again: () => void) => wearRows(WARDROBE.filter((w) => w.price === 0 || save.owned.includes(ownKey(w))), again);
+  owned = installOwned(engine, {
+    W, shops: { grill: SHOPS.grill, bar: SHOPS.bar }, rnd, panel, toast, after, shot, unshot, sit: perch, wearRows: ownedWear,
+    racket: (spot) => {
+      const shop = spot.estate === 'hhbar' ? null : spot.estate;
+      const k = shop ? keepers.find((q) => q.id === shop) : undefined;
+      return racketAt({ ...spot, shop, dropKeeper: spot.dropKeeper ?? (() => { if (k) keeperDrop(k); }) });
+    },
+    racketOn: () => !!racket,
+  });
+
   // 快速前往 (travel/): the lane's two mouths, district places
   const tr = engine.get<TravelApi>('travel');
   tr?.register({ id: 'nanluo', group: 'district', label: 'travel.nanluo', x: south.x, z: south.z, go: () => { void travel(0); } });
@@ -972,7 +1021,7 @@ export async function install(engine: Engine): Promise<void> {
     get inShop() { return inShop; },
     get music() { return music; },
     get saved() { return save; },
-    get busy() { return !!inShop || !!seated || !!photo || dancing || panel.open || card.open || yardNow || near(W(SHOPS.grill.counter), 3) || taskOn() || houhai.busy; },
+    get busy() { return !!inShop || !!seated || !!photo || dancing || panel.open || card.open || yardNow || near(W(SHOPS.grill.counter), 3) || taskOn() || houhai.busy || owned.busy; },
     get onJob() { return taskOn(); },
     debug: {
       shops: () => Object.fromEntries(SHOP_IDS.map((id) => [id, { door: W(SHOPS[id].door), counter: W(SHOPS[id].counter), keeper: !!keeperOf(id)?.alive }])),
@@ -992,6 +1041,7 @@ export async function install(engine: Engine): Promise<void> {
       catHere: () => { const f = pl.foot; if (lost && f) { lost.x = f.pos.x - Math.sin(f.yaw); lost.z = f.pos.z - Math.cos(f.yaw); } },
       catSeats: () => (SHOPS.cats.seats ?? []).map(W),
       houhai: () => houhai.debug,
+      owned: () => owned.debug,
       tasks: () => ({
         racket: racket ? { shop: racket.shop, fight: racket.fight, over: racket.over, thugs: racket.brawl.actors.map((a) => ({ x: a.pos.x, z: a.pos.z, alive: a.alive })) } : null,
         order: order ? { no: order.gate.no, left: order.left, done: order.done, resident: !!order.resident?.alive } : null,
@@ -1021,6 +1071,7 @@ export async function install(engine: Engine): Promise<void> {
       // round 3: the jobs on, the collectors, the friends at their table
       deliveryStep(dt); catStep(dt); racketStep(dt);
       houhai.fixedUpdate(dt);
+      owned.fixedUpdate(dt);
       catCool = Math.max(0, catCool - dt);
       if (!racket) {
         const f = pl.foot;
@@ -1040,7 +1091,7 @@ export async function install(engine: Engine): Promise<void> {
       // the grill's smoke while anyone is near enough to see it
       smokeT -= dt;
       if (smokeT <= 0 && near(smokeAt, 70)) { smokeT = 0.28; fx()?.smoke(smokeAt.x + (rnd.next() - 0.5) * 0.6, 1.2, smokeAt.z + (rnd.next() - 0.5) * 0.3, 0, 0.55, 0, 0.45, 2.6, 0.18); }
-      if (seated?.kind === 'listen' || seated?.kind === 'pet') { seated.t += dt; if (pl.health < 100) pl.heal(LISTEN_HEAL * dt); }
+      if (seated?.kind === 'listen' || seated?.kind === 'pet' || seated?.kind === 'perch') { seated.t += dt; if (pl.health < 100) pl.heal(LISTEN_HEAL * dt); }
       if (seated?.kind === 'barber') seated.t += dt;
       if (photo) {
         photo.t += dt;
@@ -1075,6 +1126,7 @@ export async function install(engine: Engine): Promise<void> {
         lifeProps.place('chess', meetAt.x, 0.03, meetAt.z, yaw);
         for (const fr of friends) { const p = world(MEET.u, MEET.s + fr.ds * 1.08); lifeProps.place('stool', p.x, 0.03, p.z, yaw); }
       }
+      owned.props(lifeProps, _m);
       lifeProps.commit();
       drawCats();
       houhai.update(dt, pl.riding ? null : pl.foot ?? null);
@@ -1082,11 +1134,12 @@ export async function install(engine: Engine): Promise<void> {
       const foot = pl.foot;
       const was = inShop;
       inShop = foot ? shopAt(foot.pos.x, foot.pos.z) : null;
-      if (cam) cam.indoor = inShop && !photo && !seated && !panel.open ? 1 : 0;
+      owned.update(dt, foot && !pl.riding && !seated && !photo && !dancing ? foot : null);
+      if (cam) cam.indoor = (inShop || owned.indoor) && !photo && !seated && !panel.open ? 1 : 0;
       // into a shop: the keeper's welcome, the visit noted (all of them: a prize)
       if (inShop && inShop !== was) {
         const a = keeperOf(inShop);
-        if (a?.alive) { a.say(t(CATALOG[inShop].greet), 3.5); if (inShop !== 'grill') a.act('wave', { t: 0 }); }
+        if (a?.alive) { a.say(t(owned.free(inShop) ? 'est.greetOwner' : CATALOG[inShop].greet), 3.5); if (inShop !== 'grill') a.act('wave', { t: 0 }); }
         visit(inShop);
       }
       for (const k of keepers) {
@@ -1104,11 +1157,13 @@ export async function install(engine: Engine): Promise<void> {
         k.barkT -= dt;
         if (foot && inShop !== k.id && k.barkT <= 0) {
           const d = W(SHOPS[k.id].door);
-          if (Math.hypot(foot.pos.x - d.x, foot.pos.z - d.z) < BARK_R) { a.say(t(CATALOG[k.id].bark), 3); k.barkT = BARK_EVERY; }
+          // a place for sale says so every other time (estate/)
+          const sale = (k.id === 'grill' || k.id === 'bar') && !owned.free(k.id) && rnd.next() < 0.5;
+          if (Math.hypot(foot.pos.x - d.x, foot.pos.z - d.z) < BARK_R) { a.say(t(sale ? 'est.sale' : CATALOG[k.id].bark), 3); k.barkT = BARK_EVERY; }
         }
       }
       // held in a seat: F (or Esc on a seat with no panel) stands up
-      if ((seated?.kind === 'listen' || seated?.kind === 'pet') && seated.t > 0.5 && engine.input.state.enterPressed) standUp();
+      if ((seated?.kind === 'listen' || seated?.kind === 'pet' || seated?.kind === 'perch') && seated.t > 0.5 && engine.input.state.enterPressed) standUp();
       if (!foot || pl.riding || photo || dancing) {
         // the hint for a car at the mouth
         if (!hintedCar && pl.mode === 'driving' && Math.hypot(pl.position.x - south.x, pl.position.z - south.z) < 22) {
@@ -1137,7 +1192,7 @@ export async function install(engine: Engine): Promise<void> {
         }
         if ((inShop === 'bar' || inShop === 'cats') && s.seats) s.seats.forEach((xy, i) => {
           const p = W(xy), cafe = inShop === 'cats';
-          if (Math.hypot(foot.pos.x - p.x, foot.pos.z - p.z) < 0.95) pl.offer?.({ x: p.x, z: p.z, r: 0.95, label: t(cafe ? 'nl.offer.pet' : 'nl.offer.seat'), use: () => (cafe ? sitWithCats(i) : sitToListen(i)) });
+          if (!(inShop === 'bar' && owned.taken(i)) && Math.hypot(foot.pos.x - p.x, foot.pos.z - p.z) < 0.95) pl.offer?.({ x: p.x, z: p.z, r: 0.95, label: t(cafe ? 'nl.offer.pet' : 'nl.offer.seat'), use: () => (cafe ? sitWithCats(i) : sitToListen(i)) });
         });
       }
       // the jobs: the bag handed over at the gate, 大橘 picked up, the friends' table

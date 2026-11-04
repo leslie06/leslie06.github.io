@@ -76,7 +76,8 @@ HH_HALF = 5.2                             # road 2.7 + pavement 2.5: the bars' f
 HH_S = (10.0, 176.0)                      # the bars along it
 HH_ALLEYS = [(92.0, 95.5)]
 HH_PIER = (38.3, 40.7, 14.0)              # its sides along the road, how far out it goes
-HH_BRIDGE = (14.25, -3.87)                # 银锭桥's north end from its south one (lane u, s): the road over the canal
+HH_BRIDGE = (14.25, -3.87)
+HH_BAR = "蓝莲花"                          # the bar you can go into (37.6-44.8, across from the pier)                # 银锭桥's north end from its south one (lane u, s): the road over the canal
 PARTS["houhai"] = (0.0, 200.0, 88.0, 130)
 BAR_SIGNS = ["银锭酒吧", "后海小院", "荷塘月色", "湖畔", "老船长", "蓝莲花", "鼓楼印象", "水岸", "月亮湾", "望海楼", "胡同深处",
              "晚风", "听涛", "九号院", "白塔", "醉后海", "乌篷", "柳岸", "银锭观山", "船坞", "夜色", "老槐树", "半山",
@@ -929,6 +930,9 @@ def houhai_lots():
         lt["sign"] = BAR_SIGNS[i % len(BAR_SIGNS)]
         if lt["kind"] in ("wood", "modern") and i % 3 == 1:
             lt["banner"] = ["酒", "茶", "咖啡"][i % 3]
+        # the one bar you can go into (and buy, estate/): across the road from the pier, a timber front 7.2 m wide
+        if lt["sign"] == HH_BAR:
+            lt["shop"] = "hhbar"
     return lots
 
 
@@ -1220,7 +1224,7 @@ def build():
 
         # ---- the front ----
         posts = [0.14, w - 0.14]
-        if w > 5.0:
+        if w > 5.0 and shop != "hhbar":
             posts.insert(1, w / 2)
         door = (w / 2 - 0.85, w / 2 + 0.85)
         if shop:
@@ -1764,9 +1768,56 @@ def build():
             info["counter"] = L.xy(5.95, 3.2)
             info["keeper"] = L.xy(7.85, 3.2)
             info["keeperFace"] = L.xy(5.5, 3.2)
+        elif sid == "hhbar":
+            # 后海's bar (estate/): the bar along the right wall, bottles behind it; a corner stage at the back left; three
+            # tables by the windows and the stage; lanterns and a neon strip over the bottles
+            ca0, ca1, cd0, cd1 = 5.3, 5.9, 1.6, 5.4
+            L.box(g, ca0, ca1, cd0, cd1, 0, 1.0, "inwood", skip=("-z",))
+            L.box(g, ca0 - 0.08, ca1 + 0.04, cd0 - 0.05, cd1 + 0.05, 1.0, 1.06, "inwood")
+            L.col(helpers, f"{sid}_counter", ca0 - 0.08, ca1 + 0.04, cd0 - 0.05, cd1 + 0.05, 0, 1.06)
+            L.quad(g, [(a_in1 - 0.01, cd0, 1.1), (a_in1 - 0.01, cd0, 2.45), (a_in1 - 0.01, cd1, 2.45), (a_in1 - 0.01, cd1, 1.1)], "goods", (-1, 0, 0), uvs=sub_uv(*gcell["bottles"]))
+            L.box(g, a_in1 - 0.3, a_in1, cd0, cd1, 0, 1.0, "inwood")
+            L.col(helpers, f"{sid}_back", a_in1 - 0.3, a_in1, cd0, cd1, 0, 2.45)
+            L.box(g, a_in1 - 0.06, a_in1 - 0.02, cd0, cd1, 2.5, 2.56, "neon2")
+            for k in range(3):
+                hg = Geo()
+                cyl(hg, 0, 0, 0.74, 0.8, 0.2, 0.2, 10, "cushion")
+                cyl(hg, 0, 0, 0.0, 0.74, 0.03, 0.03, 6, "chrome")
+                cyl(hg, 0, 0, 0.0, 0.03, 0.2, 0.2, 10, "chrome")
+                g.add(hg, L.M(4.85, 2.0 + k * 1.3, 0))
+            # the stage: a rug and a curtain in the corner, a stool, the mic, an amp, a spotlight
+            sa, sd = 1.4, 6.0
+            L.quad(g, [(a_in0 + 0.02, 5.0, 0.045), (2.6, 5.0, 0.045), (2.6, d_back, 0.045), (a_in0 + 0.02, d_back, 0.045)], "curtain", (0, 0, 1))
+            L.front(g, a_in0 + 0.02, 2.6, 0.05, 2.9, "curtain", d=d_back - 0.03)
+            put("stool", L.M(sa, sd, 0))
+            mg = Geo()
+            cyl(mg, 0, 0, 0.0, 0.02, 0.14, 0.14, 10, "chrome")
+            cyl(mg, 0, 0, 0.02, 1.12, 0.012, 0.012, 6, "chrome")
+            ell(mg, (0, 0, 1.16), (0.03, 0.03, 0.05), "cabinet", nu=6, nv=4)
+            g.add(mg, L.M(sa, sd - 0.62, 0))
+            L.box(g, 2.1, 2.55, 6.2, 6.6, 0, 0.55, "cabinet")
+            L.col(helpers, f"{sid}_amp", 2.1, 2.55, 6.2, 6.6, 0, 0.55)
+            L.box(g, sa - 0.25, sa + 0.25, sd - 0.25, sd + 0.25, CZ - 0.08, CZ - 0.02, "spot")
+            L.quad(g, [(a_in0 + 0.01, 3.9, 1.2), (a_in0 + 0.01, 4.65, 1.2), (a_in0 + 0.01, 4.65, 2.2), (a_in0 + 0.01, 3.9, 2.2)], "goods", (1, 0, 0), uvs=sub_uv(*gcell["singer"]))
+            L.front(g, 3.2, 5.0, 1.8, 2.7, "goods", d=d_back - 0.01, uvs=sub_uv(*gcell["menu_bar"]))
+            for k in range(3):
+                put("lantern", L.M(1.6 + k * 1.6, 2.4, CZ - 0.75))
+            seats = []
+            for (ta, td) in ((1.3, 1.6), (1.3, 3.4), (3.5, 4.6)):
+                table(L, sid, ta, td)
+                for s_ in (-1, 1):
+                    put("stool", L.M(ta + s_ * 0.66, td, 0))
+                    seats.append(L.xy(ta + s_ * 0.66, td))
+            info["seats"] = seats
+            info["stage"] = L.xy(sa, sd)
+            info["stageFace"] = L.xy(sa + 1.0, 2.0)
+            info["mic"] = L.xy(sa, sd - 0.62)
+            info["counter"] = L.xy(4.75, 3.3)
+            info["keeper"] = L.xy(6.35, 3.3)
+            info["keeperFace"] = L.xy(4.0, 3.3)
 
     for lt in lots:
-        if lt["kind"] != "shop" or "L" not in lt or not in_part(lt["y0"]):
+        if not lt.get("shop") or "L" not in lt or not in_part(lt["y0"]):
             continue
         L, w, sid = lt["L"], lt["L"].w, lt["shop"]
         if sid == "grill":
@@ -1787,11 +1838,11 @@ def build():
         a_in0, a_in1 = 0.22, w - 0.22
         CZ = 3.0
         d0, d1 = w / 2 - 0.85, w / 2 + 0.85
-        floor_key = "inwood" if sid in ("tea", "photo", "crafts", "clothes", "bar", "cats") else "infloor"
+        floor_key = "inwood" if sid in ("tea", "photo", "crafts", "clothes", "bar", "cats", "hhbar") else "infloor"
         L.quad(g, [(a_in0, d_in, 0.035), (a_in1, d_in, 0.035), (a_in1, d_back, 0.035), (a_in0, d_back, 0.035)], floor_key, (0, 0, 1),
                uvs=[(0, 0), ((a_in1 - a_in0) / 1.5, 0), ((a_in1 - a_in0) / 1.5, (d_back - d_in) / 1.5), (0, (d_back - d_in) / 1.5)] if floor_key == "inwood" else None)
         L.quad(g, [(a_in0, d_in, CZ), (a_in0, d_back, CZ), (a_in1, d_back, CZ), (a_in1, d_in, CZ)], "ceiling", (0, 0, -1))
-        wall_key = "inbrick" if sid in ("snack", "arcade", "bar", "noodle") else "tilewhite" if sid == "barber" else "inwall"
+        wall_key = "inbrick" if sid in ("snack", "arcade", "bar", "noodle", "hhbar") else "tilewhite" if sid == "barber" else "inwall"
         L.quad(g, [(a_in0, d_in, 0), (a_in0, d_back, 0), (a_in0, d_back, CZ), (a_in0, d_in, CZ)], wall_key, (1, 0, 0))
         L.quad(g, [(a_in1, d_in, 0), (a_in1, d_in, CZ), (a_in1, d_back, CZ), (a_in1, d_back, 0)], wall_key, (-1, 0, 0))
         L.front(g, a_in0, a_in1, 0, CZ, wall_key, d=d_back, n=(0, -1, 0))
@@ -1814,9 +1865,12 @@ def build():
                 "room": [L.xy(a_in0 + 0.3, d_in + 0.3), L.xy(a_in1 - 0.3, d_back - 0.3)], "yawIn": 0}
         # the yaw (radians, about +Z in Blender; the game converts) that faces into the shop from the door
         info["inward"] = [round(L.ed.x, 3), round(L.ed.y, 3)]
-        if sid in ("clothes", "barber", "bar"):
+        if sid in ("clothes", "barber", "bar", "hhbar"):
             new_interior(lt, L, w, sid, info, a_in0, a_in1, d_in, d_back, CZ)
-            layout["shops"][sid] = info
+            if sid == "hhbar":
+                layout["hhbar"] = info
+            else:
+                layout["shops"][sid] = info
             continue
 
         cb0, cb1 = DEPTH - 2.5, DEPTH - 1.9        # the counter's depth
@@ -2042,8 +2096,9 @@ def build():
             F.o, F.ea, F.ed, F.w = Vector((o[0], o[1], 0)), Vector((ea[0], ea[1], 0)), Vector((ed[0], ed[1], 0)), w
             return F
 
-        def house(F, name, dep, EZ, RZ):
-            """A yard house: a porch of red posts, lattice windows and a closed door, a gabled tiled roof, brick behind."""
+        def house(F, name, dep, EZ, RZ, room=False):
+            """A yard house: a porch of red posts, lattice windows and a closed door, a gabled tiled roof, brick behind.
+            `room`: the door open onto a room you can go into (the 东厢房, the player's safehouse: estate/)."""
             w, rd = F.w, dep / 2
             for G in (g, far):
                 F.quad(G, [(0, -0.95, EZ - 0.18), (w, -0.95, EZ - 0.18), (w, rd, RZ), (0, rd, RZ)], "tiles", (0, -1, 1.6), [(0, 0), (w, 0), (w, 3), (0, 3)])
@@ -2067,7 +2122,24 @@ def build():
             mid = nb // 2
             for k in range(nb):
                 a0, a1 = posts[k] + 0.15, posts[k + 1] - 0.15
-                if k == mid:
+                if k == mid and room:
+                    # the doorway in the middle of the bay, a lattice window either side, the leaves open inwards
+                    da = (a0 + a1) / 2
+                    o0, o1 = da - 0.75, da + 0.75
+                    for (b0, b1) in ((a0, o0), (o1, a1)):
+                        F.front(g, b0, b1, 0.1, 0.9, "brick")
+                        F.front(g, b0 + 0.04, b1 - 0.04, 0.9, EZ - 0.8, "lattice", d=0.0, uvs=[(0, 0), ((b1 - b0) / 1.1, 0), ((b1 - b0) / 1.1, 2), (0, 2)])
+                        F.front(g, b0 + 0.04, b1 - 0.04, 0.9, EZ - 0.8, "glass", d=0.05)
+                    F.front(g, o0, o1, 2.3, EZ - 0.8, "lattice", d=0.0, uvs=[(0, 0), ((o1 - o0) / 1.1, 0), ((o1 - o0) / 1.1, 0.4), (0, 0.4)])
+                    for (b0, b1) in ((o0 - 0.06, o0), (o1, o1 + 0.06)):
+                        F.box(g, b0, b1, -0.05, 0.12, 0.1, 2.3, "lacquer", skip=("+d",))
+                    F.box(g, o0 - 0.06, o1 + 0.06, -0.05, 0.12, 2.24, 2.3, "lacquer", skip=("+d",))
+                    for (a, na) in ((o0 + 0.04, 1), (o1 - 0.04, -1)):
+                        F.quad(g, [(a, 0.12, 0.12), (a, 0.82, 0.12), (a, 0.82, 2.25), (a, 0.12, 2.25)] if na > 0 else
+                               [(a, 0.12, 0.12), (a, 0.12, 2.25), (a, 0.82, 2.25), (a, 0.82, 0.12)], "reddoor", (na, 0, 0))
+                    F.quad(g, [(o0, -0.05, 0.1), (o1, -0.05, 0.1), (o1, 0.12, 0.1), (o0, 0.12, 0.1)], "granite", (0, 0, 1))
+                    F.door = (o0, o1)
+                elif k == mid:
                     # the door: two leaves of lattice over panels, closed
                     for j in range(2):
                         e0, e1 = a0 + j * (a1 - a0) / 2 + 0.02, a0 + (j + 1) * (a1 - a0) / 2 - 0.02
@@ -2081,9 +2153,84 @@ def build():
                 F.front(g, posts[k] - 0.15 if k else 0, a0, 0.1, EZ - 0.8, "lacquer")
                 F.front(g, a1, posts[k + 1] + 0.15 if k < nb - 1 else w, 0.1, EZ - 0.8, "lacquer")
             F.front(g, 0, w, EZ - 0.8, EZ - 0.2, "wood")
-            F.col(helpers, f"{name}", 0, w, 0, dep, 0, EZ)
             for a in (w * 0.3, w * 0.7):
                 put("lantern", F.M(a, -0.75, EZ - 1.2))
+            if not room:
+                F.col(helpers, f"{name}", 0, w, 0, dep, 0, EZ)
+                return
+            # ---- the room inside: a bed at the north end, a wardrobe at the south, a desk with the ledger, a tea table ----
+            o0, o1 = F.door
+            # (the south end stops short of the yard's corner mass, whose face is 0.25 m into the house)
+            IN0, IN1, DI, DB, CZ = 0.15, w - 0.45, 0.12, dep - 0.15, 2.85
+            F.quad(g, [(IN0, DI, 0.035), (IN1, DI, 0.035), (IN1, DB, 0.035), (IN0, DB, 0.035)], "inwood", (0, 0, 1),
+                   [(0, 0), ((IN1 - IN0) / 1.5, 0), ((IN1 - IN0) / 1.5, (DB - DI) / 1.5), (0, (DB - DI) / 1.5)])
+            F.quad(g, [(IN0, DI, CZ), (IN0, DB, CZ), (IN1, DB, CZ), (IN1, DI, CZ)], "ceiling", (0, 0, -1))
+            F.quad(g, [(IN0, DI, 0), (IN0, DB, 0), (IN0, DB, CZ), (IN0, DI, CZ)], "inwall", (1, 0, 0))
+            F.quad(g, [(IN1, DI, 0), (IN1, DI, CZ), (IN1, DB, CZ), (IN1, DB, 0)], "inwall", (-1, 0, 0))
+            F.front(g, IN0, IN1, 0, CZ, "inwall", d=DB, n=(0, -1, 0))
+            # the front wall's inside: under the windows (not the doorway), the posts between them, over them
+            for (b0, b1) in ((IN0, o0 - 0.06), (o1 + 0.06, IN1)):
+                F.front(g, b0, b1, 0, 0.9, "inwall", d=DI, n=(0, 1, 0))
+            F.front(g, IN0, IN1, 2.5, CZ, "inwall", d=DI, n=(0, 1, 0))
+            for k in range(nb + 1):
+                b0, b1 = max(IN0, posts[k] - 0.15), min(IN1, posts[k] + 0.15)
+                F.front(g, b0, b1, 0.9, 2.5, "inwall", d=DI, n=(0, 1, 0))
+            F.front(g, o0 - 0.06, o1 + 0.06, 2.3, 2.5, "inwall", d=DI, n=(0, 1, 0))
+            F.box(g, w / 2 - 0.7, w / 2 + 0.7, dep / 2 - 0.04, dep / 2 + 0.04, CZ - 0.06, CZ - 0.01, "tube")
+            for a in (3.6, 7.4):
+                put("lantern", F.M(a, 2.0, CZ - 0.72))
+            # the bed: a timber frame, a mattress, the quilt, a pillow, its head on the north wall
+            ba0, ba1, bd0, bd1 = IN0, IN0 + 2.1, dep - 0.15 - 1.6, dep - 0.15
+            F.box(g, ba0, ba1, bd0, bd1, 0, 0.42, "inwood", skip=("-z",))
+            F.box(g, ba0, ba0 + 0.1, bd0, bd1, 0.42, 1.0, "inwood")
+            F.box(g, ba0 + 0.1, ba1 - 0.02, bd0 + 0.04, bd1 - 0.04, 0.42, 0.58, "tilewhite", skip=("-z",))
+            F.box(g, ba0 + 0.62, ba1, bd0 + 0.01, bd1 - 0.01, 0.56, 0.64, "cloth2", skip=("-z",))
+            F.box(g, ba0 + 0.16, ba0 + 0.52, bd0 + 0.35, bd1 - 0.35, 0.58, 0.7, "laundry1", skip=("-z",))
+            F.col(helpers, f"{name}_bed", ba0, ba1, bd0, bd1, 0, 0.64)
+            # the wardrobe at the south end, doors to the room
+            wa0, wa1, wd0, wd1 = IN1 - 0.6, IN1, 1.2, 3.4
+            F.box(g, wa0, wa1, wd0, wd1, 0, 2.1, "inwood", skip=("-z",))
+            F.quad(g, [(wa0 - 0.005, (wd0 + wd1) / 2 - 0.005, 0.1), (wa0 - 0.005, (wd0 + wd1) / 2 + 0.005, 0.1), (wa0 - 0.005, (wd0 + wd1) / 2 + 0.005, 2.0),
+                       (wa0 - 0.005, (wd0 + wd1) / 2 - 0.005, 2.0)], "iron", (-1, 0, 0))
+            for dd in ((wd0 + wd1) / 2 - 0.12, (wd0 + wd1) / 2 + 0.08):
+                F.box(g, wa0 - 0.04, wa0, dd, dd + 0.04, 0.95, 1.2, "gold")
+            F.col(helpers, f"{name}_wardrobe", wa0, wa1, wd0, wd1, 0, 2.1)
+            # the desk against the back wall, the ledger open on it, a drum stool before it
+            ka0, ka1 = 4.3, 5.7
+            F.box(g, ka0, ka1, DB - 0.6, DB, 0.72, 0.77, "inwood")
+            for (pa_, pd_) in ((ka0 + 0.05, DB - 0.55), (ka1 - 0.05, DB - 0.55), (ka0 + 0.05, DB - 0.05), (ka1 - 0.05, DB - 0.05)):
+                F.box(g, pa_ - 0.03, pa_ + 0.03, pd_ - 0.03, pd_ + 0.03, 0, 0.72, "inwood")
+            F.box(g, 4.75, 5.15, DB - 0.45, DB - 0.15, 0.77, 0.79, "cloth3")
+            F.box(g, 4.77, 5.13, DB - 0.44, DB - 0.16, 0.79, 0.8, "tilewhite")
+            F.col(helpers, f"{name}_desk", ka0, ka1, DB - 0.6, DB, 0, 0.77)
+            put("stool", F.M(5.0, DB - 1.0, 0))
+            # 福 and a couplet on the back wall over the tea table
+            F.front(g, 8.4, 9.1, 1.45, 2.15, "couplet", d=DB - 0.01, uvs=sub_uv(0, 0, 1, 0.27))
+            F.front(g, 7.7, 7.92, 0.9, 2.3, "couplet", d=DB - 0.01, uvs=sub_uv(0, 0.29, 0.5, 1))
+            F.front(g, 9.58, 9.8, 0.9, 2.3, "couplet", d=DB - 0.01, uvs=sub_uv(0.5, 0.29, 1, 1))
+            tg = Geo()
+            tg.box(-0.45, 0.45, -0.45, 0.45, 0.74, 0.8, "inwood")
+            for (sx, sy) in ((-0.4, -0.4), (0.4, -0.4), (0.4, 0.4), (-0.4, 0.4)):
+                tg.box(sx - 0.03, sx + 0.03, sy - 0.03, sy + 0.03, 0, 0.74, "inwood")
+            g.add(tg, F.M(10.8, 2.8, 0))
+            F.col(helpers, f"{name}_table", 10.35, 11.25, 2.35, 3.25, 0, 0.8)
+            for (pa_, pd_) in ((10.8, 2.0), (10.0, 2.8)):
+                put("stool", F.M(pa_, pd_, 0))
+            for (cx_, cy_) in ((10.7, 2.75), (10.9, 2.9)):
+                put("cup", F.M(cx_, cy_, 0.8))
+            # its walls (round the doorway), the ceiling slab
+            F.col(helpers, f"{name}_fl", 0, o0 - 0.03, -0.05, DI, 0, EZ)
+            F.col(helpers, f"{name}_fr", o1 + 0.03, w, -0.05, DI, 0, EZ)
+            F.col(helpers, f"{name}_ft", o0 - 0.03, o1 + 0.03, -0.05, DI, 2.3, EZ)
+            F.col(helpers, f"{name}_sl", 0, IN0, 0, dep, 0, EZ)
+            F.col(helpers, f"{name}_sr", IN1, w, 0, dep, 0, EZ)
+            F.col(helpers, f"{name}_bk", 0, w, DB, dep, 0, EZ)
+            F.col(helpers, f"{name}_cz", 0, w, 0, dep, CZ, EZ)
+            da = (o0 + o1) / 2
+            return {"door": F.xy(da, -0.5), "inside": F.xy(da, 1.0), "doorway": [F.xy(o0, 0.0), F.xy(o1, 0.0)], "area": [F.xy(IN0 + 0.2, DI + 0.1), F.xy(IN1 - 0.2, DB - 0.1)],
+                    "bed": F.xy(ba1 + 0.15, bd0 - 0.1), "bedFace": F.xy(ba0 + 1.0, (bd0 + bd1) / 2), "wardrobe": F.xy(wa0 - 0.55, (wd0 + wd1) / 2),
+                    "wardrobeFace": F.xy(wa1, (wd0 + wd1) / 2), "ledger": F.xy(4.95, DB - 1.0), "ledgerFace": F.xy(4.95, DB),
+                    "camera": F.xy(w / 2 + 2.6, DI + 0.5)}
 
         X0 = HALF + DEPTH                    # the front row's back walls
         north = sub((X0, YARD[1] - 5.2), (1, 0), (0, 1), 12.9)
@@ -2091,7 +2238,7 @@ def build():
         south = sub((X0 + 12.9, YARD[0] + 4.9), (-1, 0), (0, -1), 12.9)
         house(south, "yard_s", 4.9, 3.3, 5.0)
         east = sub((X0 + 13.4, YARD[1] - 6.0), (0, -1), (1, 0), 14.0)
-        house(east, "yard_e", 4.6, 3.3, 5.0)
+        room = house(east, "yard_e", 4.6, 3.3, 5.0, room=True)
         # the west side: the front row's back walls dressed as the 西厢房's front (posts under their eave, lattice windows),
         # open where the passage from the gate comes through
         pass_y = ((YARD_GATE[0] + YARD_GATE[1]) / 2 - 0.7, (YARD_GATE[0] + YARD_GATE[1]) / 2 + 0.7)
@@ -2173,7 +2320,7 @@ def build():
         trees.append([tp.x, tp.y, 0, 0.8])
         layout["yard"] = {"gate": Y.xy(ga, -0.6), "inside": Y.xy(ga, 9.6), "area": [Y.xy(5.2, 7.0), Y.xy(20.6, 20.4)],
                           "passage": [Y.xy(ga - 0.7, 0.0), Y.xy(ga + 0.7, 7.0)],
-                          "elder": Y.xy(ta, td + 0.72), "elderFace": Y.xy(ta, td), "cage": Y.xy(ta + 1.6, td + 1.1)}
+                          "elder": Y.xy(ta, td + 0.72), "elderFace": Y.xy(ta, td), "cage": Y.xy(ta + 1.6, td + 1.1), "room": room}
 
     # ---- 后海: the white stone railing along the water, willows, the boats' pier, 银锭桥, the bars' tables ----
     if not LANE:

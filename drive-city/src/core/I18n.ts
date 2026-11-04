@@ -24,6 +24,7 @@ import { NPC_EN, NPC_ZH } from './i18n/npc';
 import { ADVENTURE_EN, ADVENTURE_ZH } from './i18n/adventure';
 import { CAMPAIGN_EN, CAMPAIGN_ZH } from './i18n/campaign';
 import { DISTRICT_EN, DISTRICT_ZH } from './i18n/district';
+import { ESTATE_EN, ESTATE_ZH } from './i18n/estate';
 
 const STORE_KEY = 'drivecity.lang.v1';
 
@@ -32,6 +33,7 @@ const EN = {
   ...ADVENTURE_EN,
   ...CAMPAIGN_EN,
   ...DISTRICT_EN,
+  ...ESTATE_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
@@ -757,6 +759,7 @@ const ZH: Record<TKey, string> = {
   ...ADVENTURE_ZH,
   ...CAMPAIGN_ZH,
   ...DISTRICT_ZH,
+  ...ESTATE_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',
