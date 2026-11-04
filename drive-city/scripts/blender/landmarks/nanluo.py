@@ -1223,8 +1223,10 @@ def build():
                   uvs={("-a" if nrm < 0 else "+a"): [(0, 0), (dep / 1.5, 0), (dep / 1.5, 1), (0, 1)]})
 
         # ---- the front ----
+        # a shop you go into has its door in the middle, so no post there (with one, no bay held the middle: every shop's
+        # door was drawn as a lattice window you walked through, from round 1 to 2026-11-04)
         posts = [0.14, w - 0.14]
-        if w > 5.0 and shop != "hhbar":
+        if w > 5.0 and not shop:
             posts.insert(1, w / 2)
         door = (w / 2 - 0.85, w / 2 + 0.85)
         if shop:
@@ -1438,6 +1440,13 @@ def build():
                 sw = min(2.6, w - 0.9)
                 sh = sw / 4
                 z0 = BZ - 0.3 - sh * 0.2 if kind != "modern" else 2.62
+                # under the eave's soffit (one storey) or the balcony's floor (two): its top was hidden behind them; a
+                # board that would then start below the door's transom is made smaller instead
+                top = BZ - 0.03 if two else EZ - 0.33
+                if z0 + sh > top:
+                    z0 = max(2.45 if kind != "modern" else 2.6, top - sh)
+                    sh = top - z0
+                    sw = min(sw, sh * 4)
                 key = "lightbox" if kind == "modern" else "sign"
                 L.box(g, w / 2 - sw / 2 - 0.04, w / 2 + sw / 2 + 0.04, -0.24, -0.15, z0 - 0.04, z0 + sh + 0.04, "wood" if key == "sign" else "steel", skip=("+d",))
                 L.front(g, w / 2 - sw / 2, w / 2 + sw / 2, z0, z0 + sh, key, d=-0.245, uvs=atlas_uv((c, r), 4, 16))

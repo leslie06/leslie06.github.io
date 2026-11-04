@@ -8,7 +8,7 @@
   "lon": 116.3861317,
   "headingDeg": -76.9,
   "file": "houhai.glb",
-  "version": "84ec5b09",
+  "version": "46b8e88e",
   "footprint": [
     [-17.3, -88],
     [-5.25, -88],
@@ -52,7 +52,7 @@
     "textures": 25,
     "maxTexture": 2048,
     "footprintArea": 2000,
-    "bytes": 1260376,
+    "bytes": 1260408,
     "source": "houhai.glb"
   }
 }
