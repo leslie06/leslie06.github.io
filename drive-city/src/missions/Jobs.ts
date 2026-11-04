@@ -147,6 +147,8 @@ export class Jobs {
     this.aim(s);
   }
 
+  /** Finished and paid (daily/ counts these): before `end` clears which it was. */
+  private done(): void { if (this.active) this.engine.events.emit('job:done', { kind: this.active }); }
   private end(msg: string | null): void {
     if (msg) this.deps.toast(msg);
     if (this.runner) { this.runner.release(); this.runner = null; }
@@ -190,7 +192,7 @@ export class Jobs {
       if (d < 7 && c.speed < 6) {
         const pay = 60 + Math.round(Math.max(0, left) * 0.5);
         this.earned += pay; this.deps.addCash(pay); this.deps.toast(t('job.delivered', { n: pay }));
-        if (++this.idx >= this.stops.length) { const bonus = 80; this.deps.addCash(bonus); this.end(t('job.done', { n: this.earned + bonus })); }
+        if (++this.idx >= this.stops.length) { const bonus = 80; this.deps.addCash(bonus); this.done(); this.end(t('job.done', { n: this.earned + bonus })); }
         else this.nextStop();
       } else if (left <= 0) this.end(t('job.late'));
     } else if (this.active === 'chase') {
@@ -199,7 +201,7 @@ export class Jobs {
       this.objective = t('job.chaseGo', { time: fmt(left), hits: this.hits });
       this.stillT = d < 8 && r.speed < 2.5 && pl.mode === 'driving' ? this.stillT + dt : 0;
       if ((this.aimT -= dt) <= 0) { this.aimT = 0.5; this.nav()?.setTarget({ x: r.pos.x, z: r.pos.z, kind: 'mission', label: t('job.chaseTarget') }); }
-      if (this.stillT > 1.5 || this.hits >= 3) { this.deps.addCash(300); this.end(t('job.chaseWin', { n: 300 })); }
+      if (this.stillT > 1.5 || this.hits >= 3) { this.deps.addCash(300); this.done(); this.end(t('job.chaseWin', { n: 300 })); }
       else if (left <= 0 || (this.t > 30 && d > 800)) this.end(t('job.chaseLost'));
     } else {
       const s = this.stops[this.idx];
@@ -209,6 +211,7 @@ export class Jobs {
           const under = this.par - this.t;
           const pay = under > 0 ? 200 + Math.round(under) : 80;
           this.deps.addCash(pay);
+          this.done();
           this.end(t(under > 0 ? 'job.trialWin' : 'job.trialSlow', { time: fmt(this.t), n: pay }));
         } else this.aim(this.stops[this.idx]);
       } else if (this.t > this.limit) this.end(t('job.late'));

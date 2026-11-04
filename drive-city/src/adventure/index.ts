@@ -285,6 +285,9 @@ export async function install(engine: Engine): Promise<void> {
       if (race) { race = null; state.phase = 'parked'; returningToYard = true; driver.reset(); }
       state.tracking = false; nav.clearTarget('mission'); persist();
     } });
+    // 每日任务 (daily/, 2026-11-04): today's three
+    const daily = engine.get<{ name: string; open: boolean; done: number; show?: () => void }>('daily');
+    if (daily?.open && daily.show) a.push({ label: t('dly.nearby', { done: daily.done }), run: () => daily.show?.() });
     a.push({ label: t('adv.messages'), run: () => engine.get<StoryApi>('story')?.phone.toggle() });
     // the 车行 delivers wherever you are (garage/, 2026-10-19)
     a.push({ label: t('garage.dealerApp'), run: () => engine.get<{ name: string; dealer(): void }>('garage')?.dealer() });

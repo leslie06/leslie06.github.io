@@ -73,6 +73,7 @@ export async function install(engine: Engine): Promise<void> {
   if (!pl) return;
   const [ax, az] = project(ANCHOR.lat, ANCHOR.lon);
   const menu = new GarageMenu();
+  menu.giftPaints = () => engine.get<{ name: string; paints: readonly { color: string; name: string }[] }>('daily')?.paints ?? [];
   const thumbs = new CarThumbs(engine.renderer);
   menu.thumb = (look, ready) => thumbs.get(look, ready);
   const fleet: Mine[] = readSaved().map((p) => ({ p, car: null }));

@@ -23,6 +23,7 @@ css(`
 .garage button:disabled{background:rgba(244,241,232,.12);color:${C.muted};cursor:default}
 .garage .paints{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .garage .paints button{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid rgba(244,241,232,.5)}
+.garage .paints button.gift{border-color:#f3c64a;box-shadow:0 0 0 2px rgba(243,198,74,.35)}
 .garage .leave{margin-top:14px;width:100%;background:rgba(244,241,232,.14);color:${C.paper}}
 .garage .note{font:600 13px/1.5 ${F.ui};color:${C.yellow};margin:0 0 8px}
 /* a promotion's code box (2026-10-29) */
@@ -105,6 +106,8 @@ export class GarageMenu {
   private root: HTMLDivElement;
   private panel: HTMLDivElement;
   onBuy: (item: Item, paint?: string) => void = () => {};
+  /** Paints won on 每日任务's card (daily/), after the shop's own, ringed in gold. */
+  giftPaints: () => readonly { color: string; name: string }[] = () => [];
   onClose: () => void = () => {};
   /** A promotion code typed in: what to tell the player, or null when the car came. */
   onRedeem: (code: string) => Promise<string | null> = async () => null;
@@ -160,12 +163,12 @@ export class GarageMenu {
     const r = el('div', 'row', p);
     el('div', 'name', r).textContent = t('garage.paint');
     const sw = el('div', 'paints', r);
-    for (const c of PAINTS) {
-      const b = el('button', '', sw);
-      b.style.background = c;
+    for (const c of [...PAINTS.map((color) => ({ color, name: '' })), ...this.giftPaints()]) {
+      const b = el('button', c.name ? 'gift' : '', sw);
+      b.style.background = c.color;
       b.disabled = v.cash < PRICE.paint;
-      b.title = `¥${PRICE.paint}`;
-      b.addEventListener('click', () => this.onBuy('paint', c));
+      b.title = c.name ? `${c.name} · ¥${PRICE.paint}` : `¥${PRICE.paint}`;
+      b.addEventListener('click', () => this.onBuy('paint', c.color));
     }
     el('div', 'what', r).textContent = `¥${PRICE.paint}${v.taxi ? ' · ' + t('garage.paintTaxi') : ''}`;
     // Your other cars: one swapped into the garage, for nothing.

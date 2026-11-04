@@ -27,6 +27,13 @@ const SKIP = new Set(['home']);
 export interface CheckinApi extends System {
   readonly found: number;
   readonly total: number;
+  /** Every landmark that can be checked in (daily/ picks the day's from these). */
+  readonly sites: readonly { id: string; x: number; z: number; name: { zh: string; en: string } }[];
+  /**
+   * One to be there for again, checked in or not (the day's landmark, daily/): reached the same way, it sends
+   * `checkin:visit` (and the card) once and goes back to null.
+   */
+  want: string | null;
   debug: { targets(): { id: string; x: number; z: number }[]; reset(): void; checkIn(id: string): void; has(id: string): boolean };
 }
 
@@ -141,12 +148,12 @@ export async function install(engine: Engine): Promise<void> {
       try { g.drawImage(src, sx, sy, w, h, 0, 0, photo.width, photo.height); } catch { /* tainted or lost: the card keeps its dark ground */ }
     };
   };
-  const show = (tg: Target) => {
+  const show = (tg: Target, ok = t('checkin.card')) => {
     const pin = tg.pin, zh = pin.name.zh, en = pin.name.en;
     cap.innerHTML = '';
     const a = document.createElement('div'); a.className = 'zh'; a.textContent = lang() === 'zh' ? zh : en;
     const b = document.createElement('div'); b.className = 'en'; b.textContent = lang() === 'zh' ? en : zh;
-    const c = document.createElement('div'); c.className = 'ok'; c.textContent = `✓ ${t('checkin.card')}`;
+    const c = document.createElement('div'); c.className = 'ok'; c.textContent = `✓ ${ok}`;
     cap.append(a, b, c);
     photo.getContext('2d')?.clearRect(0, 0, photo.width, photo.height);
     snapshot(tg);
@@ -168,6 +175,14 @@ export async function install(engine: Engine): Promise<void> {
     show(tg);
     engine.events.emit('checkin', { id: pin.id, x: pin.x, z: pin.z, found: found.size, total });
   };
+  /** There: a check-in if it is new, and the visit if it was wanted. */
+  const arrive = (tg: Target) => {
+    const id = tg.pin.id, wanted = api.want === id;
+    if (wanted) api.want = null;
+    if (!found.has(id)) checkIn(tg);
+    else show(tg, t('checkin.visit'));
+    if (wanted) engine.events.emit('checkin:visit', { id });
+  };
 
   let step = 0;
   const look = new THREE.Vector3();
@@ -175,6 +190,8 @@ export async function install(engine: Engine): Promise<void> {
     name: 'checkins',
     get found() { return found.size; },
     total,
+    sites: targets.map((tg) => ({ id: tg.pin.id, x: tg.pin.x, z: tg.pin.z, name: tg.pin.name })),
+    want: null,
     debug: {
       targets: () => targets.map((tg) => ({ id: tg.pin.id, x: tg.pin.x, z: tg.pin.z })),
       reset: () => { found.clear(); save(); for (const tg of targets) tg.pin.visited = false; },
@@ -201,10 +218,10 @@ export async function install(engine: Engine): Promise<void> {
       }
       let near: Target | null = null;
       for (const tg of targets) {
-        if (found.has(tg.pin.id)) continue;
+        if (found.has(tg.pin.id) && tg.pin.id !== api.want) continue;
         if (jumped.some((j) => Math.hypot(tg.cx - j.x, tg.cz - j.z) < JUMPED + 150)) continue;
         const [x0, z0, x1, z1] = tg.box;
-        if (at.x > x0 && at.x < x1 && at.z > z0 && at.z < z1 && distTo(at.x, at.z, tg.rings) <= REACH) { checkIn(tg); break; }
+        if (at.x > x0 && at.x < x1 && at.z > z0 && at.z < z1 && distTo(at.x, at.z, tg.rings) <= REACH) { arrive(tg); break; }
         // In view: near enough, the camera turned to it, nothing in between.
         const cp = cam.position, dx = tg.cx - cp.x, dz = tg.cz - cp.z, d = Math.hypot(dx, dz);
         if (d > tg.view + 60 || d < 1) continue;
@@ -213,7 +230,7 @@ export async function install(engine: Engine): Promise<void> {
         if ((dx * look.x + dz * look.z) / (d * lh) < Math.cos(VIEW_ANGLE)) continue;
         const dy = tg.cy - cp.y, L = Math.hypot(dx, dy, dz);
         const hit = engine.physics.raycast({ x: cp.x, y: cp.y, z: cp.z }, { x: dx / L, y: dy / L, z: dz / L }, L + 5, groups(CG.CAR, CG.WORLD), true, v?.car.body);
-        if (hit?.userData?.tag === `landmark:${tg.pin.id}`) { checkIn(tg); near = null; break; }
+        if (hit?.userData?.tag === `landmark:${tg.pin.id}`) { arrive(tg); near = null; break; }
       }
       // A nudge while one is in range and not yet photographed: turn the camera to it.
       const id = near ? near.pin.id : '';

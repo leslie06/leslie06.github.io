@@ -65,6 +65,7 @@ import { registerParkPoses } from './park/Poses';
 import * as home from './home';
 import * as travel from './travel';
 import * as estate from './estate';
+import * as daily from './daily';
 import { registerHomePoses } from './home/Poses';
 import { registerRacePoses } from './races/Poses';
 import { registerTitlePose } from './ui/TitlePose';
@@ -157,6 +158,7 @@ async function boot() {
   cloud.install(engine);
   if (worldName === 'city') funnel.install(engine);
   if (worldName === 'city') chat.install(engine);
+  if (worldName === 'city') daily.install(engine);
   await ui.install(engine, container);
   // things to do together in a room (online/RoomPlay.ts): after ui, whose HUD its button sits in
   if (worldName === 'city' && engine.get('mp')) { roomPlay.install(engine); roomRide.install(engine); roomFeats.install(engine); }

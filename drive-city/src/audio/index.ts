@@ -401,6 +401,14 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('trial:start', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; [880, 880, 1760].forEach((f, i) => ring(t0 + i * 0.12, f, 0.1, 0.12, 'square')); });
   engine.events.on('trial:finish', ({ medal }) => { if (!ctx || muted) return; const t0 = ctx.currentTime; [1047, 1319, 1568, medal >= 2 ? 2093 : 1568].forEach((f, i) => ring(t0 + i * 0.11, f, 0.12, 0.5)); });
   engine.events.on('collect:found', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; [1047, 1319, 1568].forEach((f, i) => ring(t0 + i * 0.09, f, 0.12, 0.6)); });
+  // 每日任务 (daily/): one done, a coin's two notes; all three, a stamp's thump and a rising run.
+  engine.events.on('daily:done', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; ring(t0, 1319, 0.08, 0.3); ring(t0 + 0.09, 1976, 0.1, 0.5); });
+  engine.events.on('daily:full', () => {
+    if (!ctx || muted) return;
+    const t0 = ctx.currentTime;
+    burst(t0 + 0.35, 260, 1.2, 0.6, 0.08);
+    [1047, 1319, 1568, 2093].forEach((f, i) => ring(t0 + 0.5 + i * 0.1, f, 0.12, 0.6));
+  });
   // A text message: the two-note phone chime, soft enough to sit under the radio.
   engine.events.on('phone:sms', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; ring(t0, 1568, 0.07, 0.25); ring(t0 + 0.12, 2093, 0.07, 0.35); });
   engine.events.on('vehicle:land', ({ airTime }) => thump(Math.min(0.8, airTime * 0.5), 55));

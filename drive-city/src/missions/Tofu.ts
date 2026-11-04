@@ -294,6 +294,7 @@ export class Tofu {
           this.deps.addCash(pay);
           if (full) this.deps.toast(t('tofu.full', { n: PAY.full }));
           this.deps.toast(t('tofu.delivered', { n: pay, pct }));
+          this.engine.events.emit('tofu:delivered', { water: level });
           // now down: the stopwatch from here
           this.stage = 'down'; this.t = 0;
           this.aim(this.foot, t('tofu.footLabel'));

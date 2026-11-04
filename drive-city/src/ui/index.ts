@@ -13,6 +13,8 @@ import { Minimap } from './Minimap';
 import { MapScreen } from './MapScreen';
 import { Boards } from './Boards';
 import { Chapters } from './Chapters';
+import { DailyPanel } from './Daily';
+import type { DailyApi } from '../daily';
 import { AccountPanel } from './Account';
 import { formatPlaytime, readPlaytime, trackPlaytime } from './PlayTime';
 import type { CloudApi } from '../online/Cloud';
@@ -66,6 +68,12 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   // game and the chapter; from the title it is the city's start too (the opening's adventure only sets up on it).
   const chapters = engine.get('campaign') ? new Chapters(engine, container, () => api.start()) : null;
   if (chapters) menu.onChapters = () => chapters.show();
+  // 每日任务 (daily/, docs/gta-plan.md §15): the title's and the pause screen's line and button, and the 附近 panel's
+  const dailyApi = engine.get<DailyApi>('daily');
+  const daily = dailyApi ? new DailyPanel(engine, container, () => api.start()) : null;
+  if (daily && dailyApi) { menu.onDaily = () => daily.show(); dailyApi.show = () => daily.show(); }
+  const dailyLine = () => { if (dailyApi) menu.setDaily(dailyApi.line, dailyApi.open ? 3 - dailyApi.done : 0); };
+  let dailyT = 0;
   // Accounts and the cloud save (online/Cloud.ts), from the title and the pause screen, where the server is on.
   const cloud = engine.get<CloudApi>('cloud');
   const account = cloud?.enabled ? new AccountPanel(engine, container, () => menu.setAccount(cloud.user)) : null;
@@ -151,7 +159,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       engine.paused = false;
     },
     start() {
-      boards?.hide(); chapters?.hide(); rooms?.hide();
+      boards?.hide(); chapters?.hide(); rooms?.hide(); daily?.hide();
       if (!cloud?.conflict) account?.hide();
       engine.get<AudioApi>('audio')?.unlock();
       engine.get<VoiceApi>('voices')?.unlock();   // in the same click: three's audio shares the context
@@ -215,6 +223,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
       const laneLine = lane && (lane.photos || lane.souvenirs || lane.danceBest) ? '\n' + t('nl.stats', { photos: lane.photos, souvenirs: lane.souvenirs, best: lane.danceBest }) : '';
       const estateLine = engine.get<{ name: string; line: string }>('estate')?.line;
       menu.setProgress(played + '\n' + (jumps && rabbits ? t('pause.progress', { j: jumps.done, jt: jumps.total, r: rabbits.found, rt: rabbits.total, c: checkins?.found ?? 0, ct: checkins?.total ?? 0, m: trials?.medals ?? 0, mt: (trials?.total ?? 0) * 3, taxi: taxiBest, combo: (combo?.best ?? 0).toLocaleString(), npc: journal.count, npct: journal.total }) : '') + laneLine + (estateLine ? '\n' + estateLine : ''));
+      dailyLine();
       menu.set('paused');
       v().inputEnabled = false;
       engine.paused = true;
@@ -223,6 +232,8 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     },
     update(dt) {
       const inp = engine.input.state;
+      // the line on the title and the pause screen keeps up (the day turning, a cloud save coming in)
+      if ((api.state === 'title' || api.state === 'paused') && (dailyT -= dt) <= 0) { dailyT = 1; dailyLine(); }
       // An open attract route (the city) loops back to its start when the taxi reaches the end.
       // It also restarts if the demo car is stuck (traffic in the way), so the title never sits still.
       const at = world.attract;

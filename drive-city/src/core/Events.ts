@@ -59,6 +59,8 @@ export interface GameEvents {
   'collect:found': { x: number; z: number; found: number; total: number };
   /** A landmark checked in (checkin/): the first visit to it. */
   'checkin': { id: string; x: number; z: number; found: number; total: number };
+  /** The landmark asked for (CheckinApi.want: the day's, daily/) reached, checked in before or not. */
+  'checkin:visit': { id: string };
   /** 南锣鼓巷 (district/): something bought at a counter, the studio's camera going off, a go on the dance machine. */
   'district:buy': { shop: string; item: string; price: number };
   'player:dress': { wear: import('../game/Contracts').Wear };
@@ -86,6 +88,15 @@ export interface GameEvents {
   'police:wrecked': { x: number; z: number; nearPlayer: boolean };
   /** The wanted level changed (`up`: it rose). */
   'wanted:level': { level: number; up: boolean };
+  /** The police lost the player (not a bust): the stars they had. */
+  'wanted:escaped': { level: number };
+  /** 送豆腐 (missions/Tofu.ts): the tofu up at the top, with the water left in the cup (0..1). */
+  'tofu:delivered': { water: number };
+  /** A short job (missions/Jobs.ts) finished, paid. */
+  'job:done': { kind: string };
+  /** 每日任务 (daily/): one done (its tier), and all three (the stamp it put on the card). */
+  'daily:done': { id: string; tier: number };
+  'daily:full': { stamp: number };
   /** A street race was finished (races/): which start line, the place, seconds from the green light. */
   'race:finish': { race: number; place: number; time: number };
   /** A time trial (trials/): started, a checkpoint passed, finished (medal -1 none, 0 bronze .. 2 gold). */

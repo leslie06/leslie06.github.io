@@ -23,7 +23,7 @@ import LAYOUT from './nanluo.layout.json';
 import { agePrint, PhotoCard, ShopPanel, type Row } from './Panel';
 import {
   blocked, CAT_REWARD, CATALOG, DANCE_PRICE, dancePrize, DEFAULT_WORN, deliveryPay, deliveryTime, HAIR, type Item, LISTEN_HEAL, loadSave, MAP_MARKS, ownKey,
-  priceOf, RACKET_PAY, RACKET_SHOPS, type Save, SHOP_IDS, type ShopId, SONG_PRICE, SONGS, WARDROBE, type Wearable, wearable, type WearKind, type Worn,
+  priceOf, RACKET_PAY, RACKET_SHOPS, type Save, SHOP_IDS, type ShopId, SONG_PRICE, SONGS, WARDROBE, type Wearable, wearable, hasWear, type WearKind, type Worn,
 } from './Shops';
 
 css(`.nl-flash{position:fixed;inset:0;background:#fff;pointer-events:none;z-index:47;opacity:0;transition:opacity .5s ease-out}.nl-flash.on{opacity:.9;transition:none}`);
@@ -51,6 +51,10 @@ export interface DistrictApi extends System {
   readonly saved: Readonly<Save>;
   /** In a shop, a chair, at a panel or in the courtyard: no street encounter starts (npc/). */
   readonly busy: boolean;
+  /** Bought or won (a save key, `hat:cap`). */
+  hasWear(key: string): boolean;
+  /** A 每日任务 stamp's wear (daily/): it is the player's, in the shop and the wardrobe. False if unknown or had. */
+  grant(key: string): boolean;
   debug: {
     shops(): Record<string, { door: { x: number; z: number }; counter: { x: number; z: number }; keeper: boolean }>;
     walkers(): number; save(): Save; open(id: ShopId): void; buy(id: ShopId, i: number): string | null;
@@ -161,7 +165,7 @@ export async function install(engine: Engine): Promise<void> {
   // --- what the player wears (bought here; kept in the save, put on at boot) ---
   const wearOf = (w: Worn): Wear => {
     const hat = wearable('hat', w.hat), col = (k: WearKind, id: string) => (id === DEFAULT_WORN[k as 'jacket'] ? null : wearable(k, id)?.color ?? null);
-    return { hat: hat?.id ?? null, hatColor: hat?.color ?? null, glasses: w.glasses, jacket: col('jacket', w.jacket), pants: col('pants', w.pants), hair: col('hair', w.hair) };
+    return { hat: hat?.shape ?? hat?.id ?? null, hatColor: hat?.color ?? null, glasses: w.glasses, jacket: col('jacket', w.jacket), pants: col('pants', w.pants), hair: col('hair', w.hair) };
   };
   const dressUp = () => pl.dress?.(wearOf(save.worn));
   dressUp();
@@ -293,7 +297,7 @@ export async function install(engine: Engine): Promise<void> {
     const m = missions(), cash = m?.cash ?? 0;
     let last: WearKind | null = null;
     return list.map((w) => {
-      const worn = save.worn[w.kind] === w.id, owned = w.price === 0 || save.owned.includes(ownKey(w));
+      const worn = save.worn[w.kind] === w.id, owned = hasWear(w, save.owned);
       const removable = w.kind === 'hat' || w.kind === 'glasses';
       const short = !owned && cash < w.price;
       const section = w.kind !== last ? t(`nl.sec.${w.kind}`) : undefined;
@@ -333,7 +337,7 @@ export async function install(engine: Engine): Promise<void> {
   };
   const renderWardrobe = () => {
     const m = missions();
-    if (!panel.render(t(CATALOG.clothes.name), t(CATALOG.clothes.greet), m?.cash ?? 0, wearRows(WARDROBE, renderWardrobe), () => unshot(), true)) unshot();
+    if (!panel.render(t(CATALOG.clothes.name), t(CATALOG.clothes.greet), m?.cash ?? 0, wearRows(WARDROBE.filter((w) => !w.gift || hasWear(w, save.owned)), renderWardrobe), () => unshot(), true)) unshot();
   };
 
   // --- the barber's chair ---
@@ -999,7 +1003,7 @@ export async function install(engine: Engine): Promise<void> {
   const fx = () => engine.get<{ name: string; smoke(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, shade?: number): void }>('fx');
 
   // 产业和安全屋 (estate/: the books; district/Owned.ts: the panels, the improvements, 蓝莲花, the 东厢房, the raids)
-  const ownedWear = (again: () => void) => wearRows(WARDROBE.filter((w) => w.price === 0 || save.owned.includes(ownKey(w))), again);
+  const ownedWear = (again: () => void) => wearRows(WARDROBE.filter((w) => hasWear(w, save.owned)), again);
   owned = installOwned(engine, {
     W, shops: { grill: SHOPS.grill, bar: SHOPS.bar }, rnd, panel, toast, after, shot, unshot, sit: perch, wearRows: ownedWear,
     racket: (spot) => {
@@ -1021,6 +1025,13 @@ export async function install(engine: Engine): Promise<void> {
     get inShop() { return inShop; },
     get music() { return music; },
     get saved() { return save; },
+    hasWear: (key) => save.owned.includes(key),
+    grant(key) {
+      const w = WARDROBE.find((q) => ownKey(q) === key) ?? null;
+      if (!w || save.owned.includes(key)) return false;
+      save.owned.push(key); store();
+      return true;
+    },
     get busy() { return !!inShop || !!seated || !!photo || dancing || panel.open || card.open || yardNow || near(W(SHOPS.grill.counter), 3) || taskOn() || houhai.busy || owned.busy; },
     get onJob() { return taskOn(); },
     debug: {

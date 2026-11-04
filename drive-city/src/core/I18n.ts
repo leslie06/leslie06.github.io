@@ -25,6 +25,7 @@ import { ADVENTURE_EN, ADVENTURE_ZH } from './i18n/adventure';
 import { CAMPAIGN_EN, CAMPAIGN_ZH } from './i18n/campaign';
 import { DISTRICT_EN, DISTRICT_ZH } from './i18n/district';
 import { ESTATE_EN, ESTATE_ZH } from './i18n/estate';
+import { DAILY_EN, DAILY_ZH } from './i18n/daily';
 
 const STORE_KEY = 'drivecity.lang.v1';
 
@@ -34,6 +35,7 @@ const EN = {
   ...CAMPAIGN_EN,
   ...DISTRICT_EN,
   ...ESTATE_EN,
+  ...DAILY_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
@@ -440,7 +442,7 @@ const EN = {
   'rabbit.all': "Every 兔儿爷 found! +¥{n}",
   'checkin.found': "Checked in · {name} · {i}/{of} · +¥{n}",
   'checkin.all': "Every landmark checked in! +¥{n}",
-  'checkin.card': "CHECKED IN",
+  'checkin.card': "CHECKED IN", 'checkin.visit': "TODAY'S LANDMARK",
   'trial.name': "TIME TRIAL",
   'trial.go': "Time trial · {name} · GO!",
   'trial.cp': "Checkpoint {i}/{n}",
@@ -760,6 +762,7 @@ const ZH: Record<TKey, string> = {
   ...CAMPAIGN_ZH,
   ...DISTRICT_ZH,
   ...ESTATE_ZH,
+  ...DAILY_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',
@@ -1166,7 +1169,7 @@ const ZH: Record<TKey, string> = {
   'rabbit.all': "兔儿爷全部集齐！+¥{n}",
   'checkin.found': "打卡 · {name} · {i}/{of} · +¥{n}",
   'checkin.all': "全部地标打卡完成！+¥{n}",
-  'checkin.card': "打卡成功",
+  'checkin.card': "打卡成功", 'checkin.visit': "今日地标",
   'trial.name': "计时赛",
   'trial.go': "计时赛 · {name} · 开始！",
   'trial.cp': "检查点 {i}/{n}",

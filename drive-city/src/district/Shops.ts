@@ -94,7 +94,11 @@ export const CAT_REWARD = 150;
  * recolours the suit's texture), and nanluo.py hangs the same ones on the racks.
  */
 export type WearKind = 'hat' | 'glasses' | 'jacket' | 'pants' | 'hair';
-export interface Wearable { kind: WearKind; id: string; name: TKey; price: number; color?: string }
+/**
+ * `gift`: not for sale - a 每日任务 season's (daily/Daily.ts SEASONS), in the shop and the wardrobe once won; `shape` the
+ * hat it is made as (Wear.ts builds hats by id), when its id is its own.
+ */
+export interface Wearable { kind: WearKind; id: string; name: TKey; price: number; color?: string; gift?: true; shape?: string }
 export const WARDROBE: readonly Wearable[] = [
   { kind: 'hat', id: 'cap', name: 'nl.wear.cap', price: 80, color: '#b3221c' },
   { kind: 'hat', id: 'bucket', name: 'nl.wear.bucket', price: 90, color: '#b8a47a' },
@@ -112,6 +116,11 @@ export const WARDROBE: readonly Wearable[] = [
   { kind: 'pants', id: 'black', name: 'nl.col.black', price: 100, color: '#1c1c1f' },
   { kind: 'pants', id: 'khaki', name: 'nl.col.khaki', price: 100, color: '#7c6a4a' },
   { kind: 'pants', id: 'grey', name: 'nl.col.grey', price: 100, color: '#55585c' },
+  // 每日任务's seasons (2026-11-04): won on the stamp card, never sold
+  { kind: 'hat', id: 's0cap', name: 'dly.wear.s0cap', price: 0, color: '#d4a62a', gift: true, shape: 'cap' },
+  { kind: 'hat', id: 's1bucket', name: 'dly.wear.s1bucket', price: 0, color: '#3d5f3c', gift: true, shape: 'bucket' },
+  { kind: 'jacket', id: 's0teal', name: 'dly.wear.s0teal', price: 0, color: '#1f5f5b', gift: true },
+  { kind: 'jacket', id: 's1vermilion', name: 'dly.wear.s1vermilion', price: 0, color: '#9c3324', gift: true },
 ];
 export const HAIR: readonly Wearable[] = [
   { kind: 'hair', id: 'black', name: 'nl.col.black', price: 0, color: '#191512' },
@@ -128,6 +137,8 @@ const ALL_WEAR = [...WARDROBE, ...HAIR];
 export const wearable = (kind: WearKind, id: string | null): Wearable | null => ALL_WEAR.find((w) => w.kind === kind && w.id === id) ?? null;
 /** The key a bought thing is kept under in the save. */
 export const ownKey = (w: Wearable): string => `${w.kind}:${w.id}`;
+/** Free to wear (a starting one), or bought or won. */
+export const hasWear = (w: Wearable, owned: readonly string[]): boolean => (w.price === 0 && !w.gift) || owned.includes(ownKey(w));
 
 /** The bar's songs: request one (¥SONG_PRICE) and the singer plays it next. */
 export const SONGS: readonly TKey[] = ['nl.song.0', 'nl.song.1', 'nl.song.2'];
@@ -182,7 +193,7 @@ export function loadSave(raw: string | null): Save {
     const w = (o.worn ?? {}) as Partial<Worn>;
     const ok = (kind: WearKind, id: unknown): boolean => {
       const it = typeof id === 'string' ? wearable(kind, id) : null;
-      return !!it && (it.price === 0 || s.owned.includes(ownKey(it)));
+      return !!it && hasWear(it, s.owned);
     };
     s.worn = {
       hat: ok('hat', w.hat) ? w.hat as string : null, glasses: ok('glasses', w.glasses) ? w.glasses as string : null,

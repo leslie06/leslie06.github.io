@@ -42,6 +42,9 @@ css(`
 .menu .pausehint{font:500 14px/1.4 ${F.ui};color:${C.muted}}
 .menu .progress{font:700 13px/1.9 ${F.ui};color:${C.paper};letter-spacing:.04em;white-space:pre-line}
 .menu .progress[hidden]{display:none}
+.menu .dailyline{display:inline-block;margin-top:12px;padding:8px 12px;border-left:3px solid ${C.yellow};background:rgba(243,181,15,.1);color:${C.paper};font:700 14px/1.4 ${F.ui};cursor:pointer;border-radius:0 6px 6px 0}
+.menu .dailyline:hover{background:rgba(243,181,15,.18)}
+.menu .dailyline[hidden]{display:none}
 @media (max-width: 820px){.menu{grid-template-columns:1fr;align-items:end}.menu .card{display:none}}
 /* a phone held upright: the map credit wraps to three lines at the bottom and sat over the settings row */
 @media (max-width: 820px) and (orientation: portrait){.menu{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}}
@@ -85,6 +88,11 @@ export class Menu {
   /** The 主线章节 button (title and pause); unset (no story in this world), hidden. */
   onChapters: (() => void) | null = null;
   private chaptersBtn: HTMLButtonElement;
+  /** 每日任务 (daily/): its button (a red count of what is left today) and a line under the title. */
+  onDaily: (() => void) | null = null;
+  private dailyBtn: HTMLButtonElement;
+  private dailyBadge: HTMLSpanElement;
+  private dailyLine: HTMLElement;
   /** The 登录 / 注册 button (title and pause; 账号：名字 once logged in); unset (no server in this build), hidden. */
   onAccount: (() => void) | null = null;
   private accountBtn: HTMLButtonElement;
@@ -115,6 +123,9 @@ export class Menu {
     this.pauseHint = el('div', 'pausehint', left); this.pauseHint.appendChild(L('pause.hint'));
     this.progressEl = el('div', 'progress', left);
     this.progressEl.hidden = true;
+    this.dailyLine = el('div', 'dailyline', left);
+    this.dailyLine.hidden = true;
+    this.dailyLine.addEventListener('click', () => this.onDaily?.());
     const row = el('div', 'row', left);
     const go = el('button', 'go', row);
     go.id = 'start';
@@ -129,6 +140,11 @@ export class Menu {
     chapters.id = 'chapters';
     chapters.appendChild(L('cmp.sel.button'));
     chapters.addEventListener('click', () => this.onChapters?.());
+    const daily = this.dailyBtn = el('button', 'ghost', row);
+    daily.id = 'daily';
+    daily.appendChild(L('dly.button'));
+    this.dailyBadge = el('span', 'badge', daily); this.dailyBadge.hidden = true;
+    daily.addEventListener('click', () => this.onDaily?.());
     const boards = this.boardsBtn = el('button', 'ghost', row);
     boards.appendChild(L('lb.title'));
     boards.addEventListener('click', () => this.onBoards?.());
@@ -214,6 +230,14 @@ export class Menu {
   setAccount(name: string | null): void { this.accountName = name; this.accountBtn.textContent = name ? t('acct.buttonUser', { name }) : t('acct.button'); }
   private accountName: string | null = null;
 
+  /** 每日任务's line ('' none: not open yet) and how many are left today (the button's count). */
+  setDaily(line: string, left: number): void {
+    this.dailyLine.textContent = line;
+    this.dailyLine.hidden = !line;
+    this.dailyBadge.hidden = !line || left <= 0;
+    this.dailyBadge.textContent = String(left);
+  }
+
   /** The pause screen's progress lines (ramps, 兔儿爷, bests), or '' for none. */
   setProgress(text: string): void { this.progressEl.textContent = text; }
 
@@ -227,6 +251,7 @@ export class Menu {
     const paused = state === 'paused';
     this.travelBtn.hidden = !paused || !this.onTravel;
     this.chaptersBtn.hidden = !this.onChapters;
+    this.dailyBtn.hidden = !this.onDaily;
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');
     this.pauseHint.hidden = !paused;
     this.progressEl.hidden = !paused || !this.progressEl.textContent;

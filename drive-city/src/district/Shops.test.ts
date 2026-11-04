@@ -62,13 +62,19 @@ describe('南锣鼓巷 shops', () => {
     expect(s.worn).toEqual({ hat: 'cap', glasses: null, jacket: 'wine', pants: DEFAULT_WORN.pants, hair: DEFAULT_WORN.hair });
   });
 
+  it('wears a 每日任务 gift only once it is won', () => {
+    const worn = { hat: 's0cap', glasses: null, jacket: 's0teal', pants: 'denim', hair: 'black' };
+    expect(loadSave(JSON.stringify({ owned: [], worn })).worn).toEqual({ ...DEFAULT_WORN });
+    expect(loadSave(JSON.stringify({ owned: ['hat:s0cap', 'jacket:s0teal'], worn })).worn).toEqual(worn);
+  });
+
   it('sells each look once, the starting ones free', () => {
     for (const list of [WARDROBE, HAIR]) {
       const keys = list.map(ownKey);
       expect(new Set(keys).size).toBe(keys.length);
       for (const w of list) {
         const start = (DEFAULT_WORN as unknown as Record<string, string | null>)[w.kind] === w.id;
-        expect(w.price === 0).toBe(start);
+        if (!w.gift) expect(w.price === 0).toBe(start);
         if (w.kind !== 'glasses') expect(w.color).toMatch(/^#[0-9a-f]{6}$/);
       }
     }

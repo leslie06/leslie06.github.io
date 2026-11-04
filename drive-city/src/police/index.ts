@@ -378,9 +378,11 @@ export async function install(engine: Engine): Promise<void> {
           const outside = hidden || Math.hypot(P.x - lastX, P.z - lastZ) > searchRadius(lv);
           evade += dt * (outside ? 1 : 0.3);
           if (evade > evadeTime(lv)) {
+            const had = lv;
             heat = 0; evade = 0; lv = 0;
             engine.get<HudApi>('hud')?.toast(t('wanted.lost'));
             engine.events.emit('wanted:level', { level: 0, up: false });
+            engine.events.emit('wanted:escaped', { level: had });
           }
         }
       } else { seen = false; heat = Math.max(0, heat - dt * 0.02); }
