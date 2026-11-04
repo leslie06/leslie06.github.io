@@ -26,6 +26,7 @@ import { CAMPAIGN_EN, CAMPAIGN_ZH } from './i18n/campaign';
 import { DISTRICT_EN, DISTRICT_ZH } from './i18n/district';
 import { ESTATE_EN, ESTATE_ZH } from './i18n/estate';
 import { DAILY_EN, DAILY_ZH } from './i18n/daily';
+import { REC_EN, REC_ZH } from './i18n/records';
 
 const STORE_KEY = 'drivecity.lang.v1';
 
@@ -36,6 +37,7 @@ const EN = {
   ...DISTRICT_EN,
   ...ESTATE_EN,
   ...DAILY_EN,
+  ...REC_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
@@ -763,6 +765,7 @@ const ZH: Record<TKey, string> = {
   ...DISTRICT_ZH,
   ...ESTATE_ZH,
   ...DAILY_ZH,
+  ...REC_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',

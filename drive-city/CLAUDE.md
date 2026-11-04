@@ -19,7 +19,7 @@
 | `nav-map.md` | 寻路、GPS 转向提示、地图标注（`Labeller`）、地图上的地铁 |
 | `gameplay.md` | 电台、开局逃亡、战役框架与第一章、氮气/连击/车库/出租车、特技坡道、断桥飞跃、兔儿爷、街头事件、地下车库、胡同捷径、短信剧情、排行榜、地标打卡、计时赛、短任务、快速前往（`travel/`）、每日任务（`daily/`）、玩法 probe |
 | `npc.md` | 脚本 NPC、对话框、配音（CosyVoice 录制管线、VoiceManager）、街头遭遇、按时间的街头生活、熟人和好感度福利 |
-| `online.md` | 玩家反馈（`/fb`）和回复、在线人数、账号云存档、聊天、促销兑换码、联机 |
+| `online.md` | 玩家反馈（`/fb`）和回复、在线人数、账号云存档、聊天、促销兑换码、联机、赛道纪录史（`/rec`） |
 | `home-park.md` | 我家别墅（楼梯、大门、车道的坑）、欢乐谷游乐设施和过山车 |
 | `district.md` | 精华街区南锣鼓巷：Blender 脚本 `nanluo.py`（从地安门东大街到鼓楼东大街，三处拐弯，拆成 `nanluo` / `nanluo_n1` / `nanluo_n2` 三个地标）、能进的 11 家店、店主和人流、室内相机、照相馆和跳舞机、换装（`character/hero/Wear.ts`）、小酒馆驻唱、四合院、送外卖、找猫（`district/Cats.ts`）、黑豹收保护费、小飞龙和小雨碰头；后海（地标 `houhai`、`district/Houhai.ts`：酒吧街、银锭桥、划船、冬天冰场、能进的蓝莲花酒吧）；产业和安全屋（`estate/` 记账、`district/Owned.ts`：烤串摊、小酒馆、蓝莲花能买能升级、日结进账、黑豹砸店、四合院东厢房能睡觉） |
 | `landmarks.md` | Blender 地标管线（`import.mjs`、`Glb.ts` 命名约定、Blender 插件）、楼梯/挡车块、每个地标和每批次 |

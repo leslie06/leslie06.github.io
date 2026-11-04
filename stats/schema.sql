@@ -178,3 +178,21 @@ CREATE TABLE IF NOT EXISTS promo_fail (
   ts      INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS promo_fail_ip ON promo_fail (ip_hash, ts);
+
+-- 赛道纪录史（2026-11-04 起，b城追车）：计时赛赛道上每次刷新全服纪录记一行（单人计时赛和房间里的联机赛跑都算）。
+-- 只存破纪录的成绩，按 ts 排就是这条赛道纪录被刷新的历史；最快的那行就是现在的纪录。
+CREATE TABLE IF NOT EXISTS rec (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  game    TEXT    NOT NULL,
+  board   TEXT    NOT NULL,             -- 赛道，和排行榜同名（trial_changan ...）
+  pid     TEXT    NOT NULL,
+  name    TEXT    NOT NULL,             -- 当时的昵称
+  ms      INTEGER NOT NULL,             -- 用时，毫秒，从起点门到终点
+  mode    TEXT    NOT NULL,             -- solo 单人计时赛 / room 房间里的联机赛跑
+  racers  INTEGER NOT NULL DEFAULT 1,   -- 几个人一起跑的
+  ts      INTEGER NOT NULL,
+  day     TEXT    NOT NULL,
+  ip_hash TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS rec_board ON rec (game, board, ms);
+CREATE INDEX IF NOT EXISTS rec_day ON rec (game, day);

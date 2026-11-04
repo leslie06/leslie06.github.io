@@ -11,6 +11,7 @@ import { C, F, css, el } from '../ui/theme';
 import { POLICE_LIVERY } from '../vehicle/CarModel';
 import { Vehicle } from '../vehicle/Vehicle';
 import { beaconFlash, type MultiplayerApi } from './Multiplayer';
+import type { BoardId, LeaderboardApi } from './Leaderboard';
 
 /**
  * Things to do together in a room (2026-10-30, 「现在感觉联机就是互相开车，没什么意思，怎么增加联机的趣味性」; the user
@@ -49,7 +50,7 @@ export interface PlayApi extends System {
   readonly running: { title: string; mine: boolean } | null;
   readonly last: PlayResult | null;
   readonly scores: readonly PlayScore[];
-  readonly courses: readonly { name: string; len: number }[];
+  readonly courses: readonly { id: string; name: string; len: number }[];
   /** Start a race on this course / a chase with this runner: what is wrong, or null. */
   startRace(course: number): string | null;
   startChase(runner: number): string | null;
@@ -75,6 +76,8 @@ const RABBIT_RING = 150, RABBIT_REACH = 4.5, RABBIT_WIN = 60, RABBIT_S = 300, ST
 const RABBIT_COLOR = '#ffc21f';
 const RACE_COLOR = '#35e0c2', FINISH_COLOR = '#7dff8a';
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+/** A course record's time (ms), to the hundredth as the boards show it. */
+const fmtMs = (ms: number) => { const v = ms / 1000; return `${Math.floor(v / 60)}:${(v % 60).toFixed(2).padStart(5, '0')}`; };
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 css(`
@@ -183,6 +186,13 @@ export function install(engine: Engine): PlayApi | null {
   let game: Game | null = null;
   const hint = new Map<number, number>();
   let myS = 0, myHint = 0, next = 0, raceT = 0, offT = 0, outT = 0, myFin = false;
+  /** The race clock when this player went through the start gate (-1 not yet): a course's record runs from the gate, as a time trial's does. */
+  let gateT = -1;
+  /** Who in the room set a course's record in this race, with its time from the gate (the results card says so). */
+  const recBy = new Map<string, Map<number, number>>();
+  const recSet = (gid: string, who: number, ms: number) => (recBy.get(gid) ?? recBy.set(gid, new Map()).get(gid)!).set(who, ms);
+  const lb = () => engine.get<LeaderboardApi>('leaderboard');
+  const boardOf = (course: number): BoardId | null => { const id = trials()?.lines[course]?.id; return id ? `trial_${id}` as BoardId : null; };
   let chaseT = 0, pulseT = 0, pulseAt: { x: number; z: number } | null = null, pulseShow = 0, holdT = 0, pulseTold = false;
   let gotAt = 0, grabT = 0, ptsT = 0, footT = 0, mineHeld = 0, navT = 0;
   /** The 兔儿爷 of 抢兔儿爷: collect/'s figure, on the ground or on the holder's roof. */
@@ -247,7 +257,7 @@ export function install(engine: Engine): PlayApi | null {
     if (best !== null) score(rows[0][0]).raceWins++;
     return {
       kind: 'race', title: t('play.raceDone', { course: trials()?.lines[g.course]?.name ?? '' }),
-      rows: rows.map(([id, tm], i) => ({ name: nameOf(id), text: tm === null ? t('play.dnf') : i === 0 ? fmt(tm) : `${fmt(tm)}  +${(tm - best!).toFixed(1)}`, win: i === 0 && tm !== null })),
+      rows: rows.map(([id, tm], i) => ({ name: nameOf(id), text: (tm === null ? t('play.dnf') : i === 0 ? fmt(tm) : `${fmt(tm)}  +${(tm - best!).toFixed(1)}`) + (recBy.get(g.gid)?.has(id) ? t('rec.cardMark', { time: fmtMs(recBy.get(g.gid)!.get(id)!) }) : ''), win: i === 0 && tm !== null })),
     };
   };
   const rabbitResult = (g: Game, winner: number | null): PlayResult => {
@@ -276,12 +286,13 @@ export function install(engine: Engine): PlayApi | null {
     engine.get<WantedApi>('wanted')?.clear();
     res.hidden = true;
     gotAt = 0; grabT = 0; ptsT = 0; footT = 0; mineHeld = 0;
-    myFin = false; next = 0; myS = 0; myHint = 0; raceT = 0; offT = 0; outT = 0; chaseT = 0; pulseT = 0; holdT = 0; pulseTold = false;
+    myFin = false; next = 0; myS = 0; myHint = 0; raceT = 0; gateT = -1; offT = 0; outT = 0; chaseT = 0; pulseT = 0; holdT = 0; pulseTold = false;
     const tr = trials();
     if (g.kind === 'race' && tr) {
       // the grid: two by two behind the gate, in the order of the list
       const k = g.ps.indexOf(meId()), [x, y, z, yaw] = tr.grid(g.course, 14 + Math.floor(k / 2) * 9, k % 2 ? 1.8 : -1.8);
-      toast(t('play.raceStart', { who: nameOf(g.org), course: tr.lines[g.course].name }), 4);
+      const rec = lb()?.records[`trial_${tr.lines[g.course].id}`];
+      toast(t('play.raceStart', { who: nameOf(g.org), course: tr.lines[g.course].name }) + (rec ? '　' + t('rec.raceRec', { time: fmtMs(rec.ms), name: rec.name }) : ''), 5);
       void mp.warp({ x, y, z, yaw }, { exact: true, hold: true }).then((ok) => {
         if (game !== g || !g.mine) { if (ok) veh().inputEnabled = true; return; }
         if (!ok) { g.mine = false; sendG('out'); changed(); return; }
@@ -372,6 +383,15 @@ export function install(engine: Engine): PlayApi | null {
     }
     if (m.k !== 'g') return;
     const gid = String(m.gid ?? '');
+    // a friend set a course's record in this race (heard even once the race is over here)
+    if (m.op === 'rec') {
+      const board = boardOf(Number(m.c)), ms = Number(m.ms);
+      if (!board || !Number.isFinite(ms)) return;
+      recSet(gid, from, ms);
+      lb()?.told(board, ms);
+      toast(t('rec.friend', { name: nameOf(from), course: lb()?.label(board) ?? '', time: fmtMs(ms) }), 6);
+      return;
+    }
     if (m.op === 'start') {
       if (game && game.phase !== 'over') return;
       const ps = Array.isArray(m.ps) ? (m.ps as unknown[]).map(Number).filter(Number.isFinite) : [];
@@ -572,6 +592,7 @@ export function install(engine: Engine): PlayApi | null {
     raceT += dt;
     const a = tr.along(g.course, car.pos.x, car.pos.z, myHint);
     myHint = a.i; myS = Math.max(myS, a.s);
+    if (gateT < 0 && a.s > 0.5 && a.d < ln.hw + 14) gateT = raceT;
     if (a.s >= ln.cps[next] - 4 && a.d < ln.hw + 14) {
       next++;
       if (next >= ln.cps.length) {
@@ -579,6 +600,14 @@ export function install(engine: Engine): PlayApi | null {
         g.fin.set(meId(), raceT);
         if (g.firstFin < 0) g.firstFin = g.clock;
         sendG('fin', { tm: Math.round(raceT * 100) / 100 });
+        // the course's record, from the gate: told to the room if it falls
+        const board = boardOf(g.course), gid = g.gid, runMs = (raceT - Math.max(0, gateT)) * 1000;
+        if (board) void lb()?.record(board, runMs, 'room', Math.max(1, g.in.size)).then((r) => {
+          if (!r?.record) return;
+          lb()?.recordToast(board, r);
+          recSet(gid, meId(), r.best.ms);
+          mp.send('g', { op: 'rec', gid, c: g.course, ms: r.best.ms });
+        });
         const place = [...g.fin.values()].filter((x) => x !== null).length;
         banner.show(t('play.place', { n: place }), place === 1 ? '#ffc21f' : '#f4f4f1');
         setTimeout(() => banner.hide(), 3000);
@@ -724,7 +753,7 @@ export function install(engine: Engine): PlayApi | null {
     },
     get last() { return last; },
     get scores() { return [...scores.values()]; },
-    get courses() { return (trials()?.lines ?? []).map((l) => ({ name: l.name, len: l.len })); },
+    get courses() { return (trials()?.lines ?? []).map((l) => ({ id: l.id, name: l.name, len: l.len })); },
     listen(fn) { listeners.push(fn); },
     startRace(course) {
       if (game && game.phase !== 'over') return t('play.already');

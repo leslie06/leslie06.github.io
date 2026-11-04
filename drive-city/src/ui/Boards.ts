@@ -26,6 +26,12 @@ css(`
 .boards li.me{background:rgba(243,181,15,.18)}
 .boards .foot{margin-top:10px;font:600 13px/1.5 ${F.ui};color:${C.muted};min-height:20px}
 .boards .foot.me{color:${C.paper}}
+.boards .hist[hidden]{display:none}
+.boards .hist h3{margin:16px 0 4px;font:800 12px/1 ${F.num};letter-spacing:.2em;color:${C.yellow}}
+.boards .hist .n{font:600 12px/1.5 ${F.ui};color:${C.muted};margin-bottom:6px}
+.boards .hist li{grid-template-columns:1fr auto;gap:2px 10px}
+.boards .hist li .w{grid-column:1 / -1;font:600 11px/1.3 ${F.ui};color:${C.muted}}
+.boards .hist li:first-child{background:rgba(243,181,15,.12)}
 `);
 
 /**
@@ -39,6 +45,8 @@ export class Boards {
   private foot: HTMLDivElement;
   private tabs: HTMLDivElement;
   private input: HTMLInputElement;
+  /** 赛道纪录史 under a course's board: every time its record fell. */
+  private hist: HTMLDivElement;
   private board: BoardId = 'race0';
   private seq = 0;
 
@@ -63,6 +71,7 @@ export class Boards {
     this.tabs = el('div', 'tabs', box);
     this.list = el('ol', '', box);
     this.foot = el('div', 'foot', box);
+    this.hist = el('div', 'hist', box);
     onLangChange(() => { if (!root.hidden) { this.buildTabs(); void this.load(); } });
   }
 
@@ -91,6 +100,7 @@ export class Boards {
   private async load(): Promise<void> {
     const lb = this.api(), n = ++this.seq, board = this.board;
     this.list.textContent = '';
+    this.hist.replaceChildren(); this.hist.hidden = true;
     this.foot.className = 'foot';
     if (!lb?.enabled) { this.foot.textContent = t('lb.off'); return; }
     this.foot.textContent = t('lb.loading');
@@ -105,5 +115,26 @@ export class Boards {
     });
     if (data.me) { this.foot.className = 'foot me'; this.foot.textContent = t('lb.mine', { rank: data.me.rank, total: data.total, score: lb.format(board, data.me.score) }); }
     else this.foot.textContent = data.top.length ? t('lb.none', { total: data.total }) : t('lb.empty');
+    if (board.startsWith('trial_')) await this.history(lb, board, n);
+  }
+
+  private async history(lb: LeaderboardApi, board: BoardId, n: number): Promise<void> {
+    this.hist.hidden = false;
+    el('h3', '', this.hist).textContent = t('rec.title');
+    const line = el('div', 'n', this.hist);
+    line.textContent = t('rec.loading');
+    const h = await lb.history(board);
+    if (n !== this.seq) return;
+    if (!h) { line.textContent = t('lb.error'); return; }
+    if (!h.hist.length) { line.textContent = t('rec.none'); return; }
+    line.textContent = t('rec.count', { n: h.n });
+    const ol = el('ol', '', this.hist);
+    for (const r of h.hist) {
+      const li = el('li', r.me ? 'me' : '', ol);
+      el('span', '', li).textContent = r.name;
+      el('span', 'v', li).textContent = lb.format(board, r.ms);
+      const d = new Date(r.ts);
+      el('span', 'w', li).textContent = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${r.mode === 'room' ? t('rec.room', { n: r.racers }) : t('rec.solo')}`;
+    }
   }
 }

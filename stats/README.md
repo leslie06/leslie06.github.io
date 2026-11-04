@@ -61,6 +61,14 @@ console.table(db.prepare(\"SELECT day,game,active,ip_masked FROM ev ORDER BY ts 
 
 服务器上建表不用手动：`server.mjs` 启动时会执行 `schema.sql`（`CREATE TABLE IF NOT EXISTS`）。所以按上面「改完代码怎么更新服务器」把 `worker.js`、`schema.sql` 传上去重启就行。
 
+
+## 赛道纪录史（2026-11-04 起，b城追车在用）
+
+`POST /rec` 交一次跑完的用时：`{g, b, p, n, v, m, r}`（赛道 `trial_*`、玩家号、昵称、毫秒、`solo` 单人计时赛 / `room` 房间里的联机赛跑、几个人一起跑）。比这条赛道现在的纪录快 50 毫秒以上才记一行，回 `{record: true, prev, n, best}`（`prev` 是被破的那条）；不够快回 `{record: false, best}`。`GET /rec?g=bcity&b=trial_changan&p=` 取这条赛道的纪录史（新的在前，最多 30 条，`n` 一共几次，`me` 是不是自己）；不给 `b` 取每条赛道现在的纪录（`recs`）。
+- 库里一张 `rec` 表，只存破纪录的那些成绩，按时间排就是纪录被刷新的历史；成绩合理范围用 `BOARDS` 里同名榜的。
+- 一个玩家号（或同一台设备）一天最多记 10 次；名字是排行榜那个昵称（当时的，改名不改历史）。
+- 表是 `server.mjs` 启动时建的：更新服务器时把 `worker.js`、`server.mjs`、`schema.sql` 传上去重启。
+
 ## 漏斗（2026-10-17 起，b城追车）
 
 只看「玩了多久」不知道玩家卡在哪一步，所以 b城追车自己在 `window.__stat` 里记下每一步是打开后第几秒走到的（`drive-city/src/online/Funnel.ts`，`drive-city/index.html` 在程序下载前就建好），打点片段（`apply.mjs`）每次心跳把它作为 `m` 一起带上。别的游戏没有 `__stat`，心跳和以前一样。

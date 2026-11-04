@@ -94,6 +94,8 @@ export interface GameEvents {
   'tofu:delivered': { water: number };
   /** A short job (missions/Jobs.ts) finished, paid. */
   'job:done': { kind: string };
+  /** This player set a course's record (online/Leaderboard.ts): the board, the time (ms). */
+  'rec:broken': { board: string; ms: number };
   /** 每日任务 (daily/): one done (its tier), and all three (the stamp it put on the card). */
   'daily:done': { id: string; tier: number };
   'daily:full': { stamp: number };

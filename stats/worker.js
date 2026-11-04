@@ -301,6 +301,58 @@ async function submit(request, env) {
   return json({ ok: true, best, rank: r?.rank ?? 0, score: r?.score ?? score, total: total?.c ?? 0, name });
 }
 
+// ---------------------------------------------------------------- 赛道纪录史
+// 2026-11-04（「每次打破纪录的选手纪录下来，并记录开车时长」）：计时赛那几条赛道（BOARDS 里 trial_ 开头的），
+// 不管单人计时赛还是房间里的联机赛跑，谁跑出比全服纪录还快的时间就记一行：昵称、用时（毫秒，从起点门算）、
+// 哪种跑法、几个人一起跑、时间。只记破纪录的，所以一条赛道一行一行往下就是纪录被刷新的历史。
+// 一个玩家号一天最多记 REC_PER_DAY 次；比现纪录快不到 REC_STEP 毫秒的不算（连着交差一点点的成绩刷屏）。
+const REC_PER_DAY = 10, REC_STEP = 50, REC_HIST = 30;
+const REC_MODES = new Set(['solo', 'room']);
+const RECSQL = {
+  best: 'SELECT name, ms, mode, racers, ts FROM rec WHERE game = ? AND board = ? ORDER BY ms ASC, ts ASC LIMIT 1',
+  put: 'INSERT INTO rec (game, board, pid, name, ms, mode, racers, ts, day, ip_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  today: 'SELECT COUNT(*) AS c FROM rec WHERE game = ? AND day = ? AND (pid = ? OR ip_hash = ?)',
+  hist: `SELECT name, ms, mode, racers, ts, pid FROM rec WHERE game = ? AND board = ? ORDER BY ts DESC LIMIT ${REC_HIST}`,
+  count: 'SELECT COUNT(*) AS c FROM rec WHERE game = ? AND board = ?',
+  // 每条赛道现在的纪录（最快的那行）
+  all: `SELECT board, name, ms, mode, racers, ts, pid FROM rec r WHERE game = ? AND ms = (SELECT MIN(ms) FROM rec q WHERE q.game = r.game AND q.board = r.board)
+        GROUP BY board`,
+};
+const recOut = (r, pid) => r && ({ name: r.name, ms: r.ms, mode: r.mode, racers: r.racers, ts: r.ts, ...(pid !== undefined ? { me: !!pid && r.pid === pid } : {}) });
+const recBoard = (g, b) => !!BOARDS[g]?.[b] && b.startsWith('trial_');
+
+async function recSubmit(request, env) {
+  const b = await body(request);
+  if (!b || !recBoard(b.g, b.b)) return json({ error: 'board' }, 400);
+  const pid = cleanPid(b.p), spec = BOARDS[b.g][b.b], ms = Math.round(+b.v);
+  if (!pid) return json({ error: 'pid' }, 400);
+  if (!Number.isFinite(ms) || ms < spec.min || ms > spec.max) return json({ error: 'range' }, 400);
+  const mode = REC_MODES.has(b.m) ? b.m : 'solo', racers = Math.min(8, Math.max(1, Math.round(+b.r) || 1));
+  const best = await env.DB.prepare(RECSQL.best).bind(b.g, b.b).first();
+  if (best && ms > best.ms - REC_STEP) return json({ ok: true, record: false, best: recOut(best) });
+  const now = Date.now(), day = cnDay(now);
+  const ip = request.headers.get('cf-connecting-ip') ?? '', ua = request.headers.get('user-agent') ?? '';
+  const ipHash = await hash(ip, ua, day, env.SALT ?? 'salt');
+  const n = await env.DB.prepare(RECSQL.today).bind(b.g, day, pid, ipHash).first();
+  if ((n?.c ?? 0) >= REC_PER_DAY) return json({ error: 'busy' }, 429);
+  const name = cleanName(b.n) || '车手';
+  await env.DB.prepare(RECSQL.put).bind(b.g, b.b, pid, name, ms, mode, racers, now, day, ipHash).run();
+  const c = await env.DB.prepare(RECSQL.count).bind(b.g, b.b).first();
+  return json({ ok: true, record: true, prev: recOut(best), n: c?.c ?? 1, best: { name, ms, mode, racers, ts: now } });
+}
+/** `b` 给了：这条赛道的纪录史（新的在前）；没给：每条赛道现在的纪录。 */
+async function recGet(env, url) {
+  const g = url.searchParams.get('g'), b = url.searchParams.get('b'), pid = cleanPid(url.searchParams.get('p'));
+  if (!BOARDS[g]) return json({ error: 'game' }, 400);
+  if (b) {
+    if (!recBoard(g, b)) return json({ error: 'board' }, 400);
+    const h = await env.DB.prepare(RECSQL.hist).bind(g, b).all(), c = await env.DB.prepare(RECSQL.count).bind(g, b).first();
+    return json({ board: b, n: c?.c ?? 0, hist: h.results.map((r) => recOut(r, pid)) });
+  }
+  const all = await env.DB.prepare(RECSQL.all).bind(g).all();
+  return json({ recs: Object.fromEntries(all.results.map((r) => [r.board, recOut(r, pid)])) });
+}
+
 // ---------------------------------------------------------------- 反馈
 // 游戏里的「反馈」面板交上来的意见：类型、正文、选填的联系方式、游戏附带的情况（版本、画质、设备、
 // 在城里哪儿）、可选的一张画面截图。text/plain 的 JSON，和排行榜一样不触发跨域预检。
@@ -809,6 +861,13 @@ export default {
         if (request.method === 'GET') return await board(env, url.searchParams.get('g'), url.searchParams.get('b'), cleanPid(url.searchParams.get('p')));
         return new Response(null, { status: 405, headers: CORS });
       } catch (e) { console.error('lb', e); return json({ error: 'server' }, 500); }
+    }
+    if (url.pathname === '/rec') {
+      try {
+        if (request.method === 'POST') return await recSubmit(request, env);
+        if (request.method === 'GET') return await recGet(env, url);
+        return new Response(null, { status: 405, headers: CORS });
+      } catch (e) { console.error('rec', e); return json({ error: 'server' }, 500); }
     }
     if ((url.pathname.startsWith('/acct/') || url.pathname.startsWith('/save/')) && request.method === 'POST') {
       try { return await account(request, env, url.pathname); } catch (e) { console.error('acct', e); return json({ error: 'server' }, 500); }

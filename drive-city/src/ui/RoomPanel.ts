@@ -3,6 +3,7 @@ import { t } from '../core/I18n';
 import type { MultiplayerApi } from '../online/Multiplayer';
 import type { PlayApi } from '../online/RoomPlay';
 import type { FeatApi } from '../online/RoomFeats';
+import type { LeaderboardApi } from '../online/Leaderboard';
 import { C, F, css, el } from './theme';
 
 css(`
@@ -108,7 +109,13 @@ export class RoomPanel {
       el('p', '', race).textContent = t('play.raceHelp');
       const rr = el('div', 'row', race);
       const cs = el('select', '', rr) as HTMLSelectElement;
-      play.courses.forEach((c, i) => { const o = el('option', '', cs) as HTMLOptionElement; o.value = String(i); o.textContent = `${c.name} · ${(c.len / 1000).toFixed(1)} km`; });
+      // each course with its record to beat (赛道纪录史, online/Leaderboard.ts)
+      const lb = this.engine.get<LeaderboardApi>('leaderboard'), recs = lb?.enabled ? lb.records : null;
+      play.courses.forEach((c, i) => {
+        const o = el('option', '', cs) as HTMLOptionElement, r = recs?.[`trial_${c.id}`];
+        o.value = String(i);
+        o.textContent = `${c.name} · ${(c.len / 1000).toFixed(1)} km` + (recs ? ' · ' + (r ? t('rec.opt', { time: lb!.format(`trial_${c.id}`, r.ms), name: r.name }) : t('rec.optNone')) : '');
+      });
       cs.value = String(this.coursePick);
       cs.addEventListener('change', () => { this.coursePick = Number(cs.value); });
       const rg = el('button', 'go', rr); rg.textContent = t('play.start');

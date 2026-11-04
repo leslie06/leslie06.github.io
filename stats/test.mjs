@@ -340,5 +340,25 @@ for (let i = 0; i < 24; i++) if ((await promo_pr({ g: 'bcity', p: 'guesser', cod
 ok('猜码：一台设备一小时错 20 次就挡', promo_guessBlocked === 4, `(${promo_guessBlocked} 次被挡)`);
 ok('兑换码管理页要密钥', (await worker.fetch(new Request('https://s/promo/admin'), env)).status === 401 && (await admin('/promo/admin')).status === 200);
 
+// —— 赛道纪录史
+const rec = (body, ip = '9.9.9.1') => worker.fetch(new Request('https://s/rec', { method: 'POST', body: JSON.stringify(body), headers: { 'user-agent': 'ua', 'cf-connecting-ip': ip } }), env).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+const recQ = (q) => worker.fetch(new Request(`https://s/rec?${q}`), env).then((r) => r.json());
+let rc1 = await rec({ g: 'bcity', b: 'trial_changan', p: 'ra', n: '阿飞', v: 200000, m: 'room', r: 3 });
+ok('第一个成绩就是纪录', rc1.record === true && rc1.prev === null && rc1.n === 1);
+let rc2 = await rec({ g: 'bcity', b: 'trial_changan', p: 'rb', n: '小雨', v: 205000, m: 'solo' });
+ok('慢的不记、回现纪录', rc2.record === false && rc2.best.name === '阿飞' && rc2.best.ms === 200000 && rc2.best.racers === 3);
+ok('只快一点点不算', (await rec({ g: 'bcity', b: 'trial_changan', p: 'rb', n: '小雨', v: 199980 })).record === false);
+let rc3 = await rec({ g: 'bcity', b: 'trial_changan', p: 'rb', n: '小雨<b>', v: 190500, m: 'solo' });
+ok('破纪录：记下、带上被破的那条', rc3.record === true && rc3.prev.name === '阿飞' && rc3.prev.ms === 200000 && rc3.n === 2 && rc3.best.name === '小雨b');
+await rec({ g: 'bcity', b: 'trial_e2', p: 'ra', n: '阿飞', v: 300000, m: 'room', r: 2 });
+let rch = await recQ('g=bcity&b=trial_changan&p=rb');
+ok('纪录史新的在前、带跑法和人数', rch.n === 2 && rch.hist[0].ms === 190500 && rch.hist[0].me && rch.hist[1].mode === 'room' && rch.hist[1].racers === 3 && !rch.hist[1].me);
+let rcall = await recQ('g=bcity');
+ok('每条赛道现在的纪录', rcall.recs.trial_changan.ms === 190500 && rcall.recs.trial_e2.name === '阿飞' && !rcall.recs.trial_w2);
+ok('不是赛道的榜不收', (await rec({ g: 'bcity', b: 'combo', p: 'ra', v: 100000 })).status === 400 && (await rec({ g: 'bcity', b: 'trial_changan', p: 'ra', v: 5 })).status === 400);
+let recBusy = 0;
+for (let i = 0; i < 12; i++) if ((await rec({ g: 'bcity', b: 'trial_w2', p: 'spam', n: 'x', v: 400000 - i * 1000 }, '9.9.9.9')).status === 429) recBusy++;
+ok('一个人一天最多记 10 次', recBusy === 2, `(${recBusy} 次被挡)`);
+
 console.log(failed ? `\n${failed} 条没过` : '\n全过');
 process.exit(failed ? 1 : 0);
