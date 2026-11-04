@@ -335,7 +335,8 @@ export async function install(engine: Engine): Promise<void> {
     const f = pl.foot;
     if (!f) return;
     let best: Actor | null = null, bd = r;
-    for (const a of cast) { if (!a.alive || a.state !== 'script') continue; const d = Math.hypot(a.pos.x - f.pos.x, a.pos.z - f.pos.z); if (d < bd) { bd = d; best = a; } }
+    // (a scene whose spawn found no actor slot free has a hole in its cast: 2026-11-04, 南锣鼓巷 and 后海 use many)
+    for (const a of cast) { if (!a?.alive || a.state !== 'script') continue; const d = Math.hypot(a.pos.x - f.pos.x, a.pos.z - f.pos.z); if (d < bd) { bd = d; best = a; } }
     if (best) { const b = best; pl.offer?.({ x: b.pos.x, z: b.pos.z, r, label, use: () => use(b) }); }
   };
 

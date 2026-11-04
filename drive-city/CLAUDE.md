@@ -17,11 +17,11 @@
 | `people.md` | 人群身体、主角模型、行人与密度、热点和站立人群、写实 MPFB 人物和动画、近战、徒步下陷 |
 | `police.md` | 通缉/目击者报警、GTA 式追捕、直升机、特警 |
 | `nav-map.md` | 寻路、GPS 转向提示、地图标注（`Labeller`）、地图上的地铁 |
-| `gameplay.md` | 电台、开局逃亡、战役框架与第一章、氮气/连击/车库/出租车、特技坡道、断桥飞跃、兔儿爷、街头事件、地下车库、胡同捷径、短信剧情、排行榜、地标打卡、计时赛、短任务、玩法 probe |
+| `gameplay.md` | 电台、开局逃亡、战役框架与第一章、氮气/连击/车库/出租车、特技坡道、断桥飞跃、兔儿爷、街头事件、地下车库、胡同捷径、短信剧情、排行榜、地标打卡、计时赛、短任务、快速前往（`travel/`）、玩法 probe |
 | `npc.md` | 脚本 NPC、对话框、配音（CosyVoice 录制管线、VoiceManager）、街头遭遇、按时间的街头生活、熟人和好感度福利 |
 | `online.md` | 玩家反馈（`/fb`）和回复、在线人数、账号云存档、聊天、促销兑换码、联机 |
 | `home-park.md` | 我家别墅（楼梯、大门、车道的坑）、欢乐谷游乐设施和过山车 |
-| `district.md` | 精华街区南锣鼓巷：Blender 脚本 `nanluo.py`（从地安门东大街到鼓楼东大街，三处拐弯，拆成 `nanluo` / `nanluo_n1` / `nanluo_n2` 三个地标）、能进的 11 家店、店主和人流、室内相机、照相馆和跳舞机、换装（`character/hero/Wear.ts`）、小酒馆驻唱、四合院、送外卖、找猫（`district/Cats.ts`）、黑豹收保护费、小飞龙和小雨碰头 |
+| `district.md` | 精华街区南锣鼓巷：Blender 脚本 `nanluo.py`（从地安门东大街到鼓楼东大街，三处拐弯，拆成 `nanluo` / `nanluo_n1` / `nanluo_n2` 三个地标）、能进的 11 家店、店主和人流、室内相机、照相馆和跳舞机、换装（`character/hero/Wear.ts`）、小酒馆驻唱、四合院、送外卖、找猫（`district/Cats.ts`）、黑豹收保护费、小飞龙和小雨碰头；后海（地标 `houhai`、`district/Houhai.ts`：酒吧街、银锭桥、划船、冬天冰场） |
 | `landmarks.md` | Blender 地标管线（`import.mjs`、`Glb.ts` 命名约定、Blender 插件）、楼梯/挡车块、每个地标和每批次 |
 | `hosting-phones.md` | 静态托管第 1-5 轮（启动下载量和时间）、加载进度条、手机分辨率、触屏操作 |
 
@@ -33,8 +33,8 @@
 ## 架构（src/）
 - `core/` — 从 gunFight 拷来精简过：Engine（固定 60 Hz `fixedUpdate` → `physics.step()` → `postStep`，然后每帧 `update(dt, alpha)`）、Input（GTA-V 键位 + 手柄 + `Input.touch`）、Physics（Rapier；碰撞组 `CG.WORLD/CAR/PROP/PED`）、Quality（low/medium/high 三档）、分辨率调节器、I18n（中/英；屏幕上每个字符串都走 `t()`）、Assets.compact、`Retry.ts`、`Boot.ts`（加载进度条）。
 - `game/Contracts.ts` — 唯一的跨模块接口（VehicleApi、CameraApi、WorldApi、HudApi……）。只能增量扩展。
-- `main.ts` 启动顺序：render → world（yard 或 city）→ mountain（城市西边的出城路和妙峰山，开近了才下载）→ vehicle → player → traffic → people → police → nav → missions → races → park → home → garage → underground → stunts → collect → checkin → trials → intro → events → leaderboard → story →（campaign、combat、npc、life、contacts……）→ fx → audio → ui。`install()` 里只能 `engine.get` 比自己早的模块；更晚的模块在运行时惰性获取。只属于城市的模块在 yard 里跳过。
-- 模块一览：`vehicle/`（Rapier 刚体上的射线车，自带轮胎模型；`Spec.ts` 调校参数、`ControlFilter`、`Autopilot` 的 PathPilot、`CarKit` 实例化车涂装）、`world/`（沙盒场地）、`render/`（天空/时间 `?tod=`、`?rain=`、CSM 阴影、后处理链、`Lighting` 材质补丁、路灯）、`city/`（OSM 分块、worker 建网格、流式加载、地标在 `city/landmarks/`、可视层在 `city/visual/`）、`mountain/`（数据边缘以西的京拉路和妙峰山山路：`scripts/city/mountain.mjs` 生成，见 `city-data.md`）、`traffic/`、`parking/`、`player/`、`character/`、`people/`、`police/`、`nav/`、`ui/`、`missions/`、`campaign/`、`combat/`、`npc/`、`life/`、`contacts/`、`dialogue/`、`voice/`、`story/`、`stunts/`、`collect/`、`checkin/`、`trials/`、`events/`、`garage/`、`home/`、`park/`、`underground/`、`district/`（南锣鼓巷的店）、`damage/`、`audio/`、`online/`。
+- `main.ts` 启动顺序：render → world（yard 或 city）→ mountain（城市西边的出城路和妙峰山，开近了才下载）→ vehicle → player → traffic → people → police → nav → travel → missions → races → park → home → garage → underground → stunts → collect → checkin → trials → intro → events → leaderboard → story →（campaign、combat、npc、life、contacts……）→ fx → audio → ui。`install()` 里只能 `engine.get` 比自己早的模块；更晚的模块在运行时惰性获取。只属于城市的模块在 yard 里跳过。
+- 模块一览：`vehicle/`（Rapier 刚体上的射线车，自带轮胎模型；`Spec.ts` 调校参数、`ControlFilter`、`Autopilot` 的 PathPilot、`CarKit` 实例化车涂装）、`world/`（沙盒场地）、`render/`（天空/时间 `?tod=`、`?rain=`、CSM 阴影、后处理链、`Lighting` 材质补丁、路灯）、`city/`（OSM 分块、worker 建网格、流式加载、地标在 `city/landmarks/`、可视层在 `city/visual/`）、`mountain/`（数据边缘以西的京拉路和妙峰山山路：`scripts/city/mountain.mjs` 生成，见 `city-data.md`）、`traffic/`、`parking/`、`player/`、`character/`、`people/`、`police/`、`nav/`、`ui/`、`missions/`、`campaign/`、`combat/`、`npc/`、`life/`、`contacts/`、`dialogue/`、`voice/`、`story/`、`stunts/`、`collect/`、`checkin/`、`trials/`、`events/`、`garage/`、`home/`、`park/`、`underground/`、`district/`（南锣鼓巷的店、后海）、`travel/`（快速前往的表：只收要下车或玩法起点的地方）、`damage/`、`audio/`、`online/`。
 - 材质用 `userData.wet = 'ground' | 'surface' | true` 开启湿润效果；`uniforms.uNight` 驱动灯和窗户；`RenderSystem.prepare(root)` 在流式加载的分块加入场景前打补丁。
 
 ## 重建城市（改了 `scripts/city/` 或 OSM 数据之后）

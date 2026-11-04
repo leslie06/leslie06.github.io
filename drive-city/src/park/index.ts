@@ -5,7 +5,8 @@ import { project } from '../city/Geo';
 import type { CameraApi, HudApi, ParkApi, PlayerApi } from '../game/Contracts';
 import { Marker } from '../missions/Marker';
 import type { RenderSystem } from '../render/RenderSystem';
-import { ANCHOR, PENDULUM, RIDES, SHIP, type RideSpec } from './Layout';
+import { ANCHOR, GATE, PENDULUM, RIDES, SHIP, type RideSpec } from './Layout';
+import type { TravelApi } from '../travel';
 import { advanceTrain, buildMovers, frameAt, makeFrame } from './Rides';
 
 /**
@@ -261,6 +262,11 @@ export async function install(engine: Engine): Promise<void> {
     },
   };
   engine.add(api);
+  // 快速前往 (travel/): play - the main gate on 金蝉西路, the car on the road outside it, on foot before the turnstiles
+  const tr = engine.get<TravelApi>('travel');
+  tr?.register({ id: 'park', group: 'play', label: 'travel.park', x: ax + GATE.x, z: az + GATE.z, go: () => {
+    void tr.land({ road: { x: ax + GATE.x + 34, z: az + GATE.z, yaw: 0 }, foot: { x: ax + GATE.x + 8, z: az + GATE.z, yaw: -Math.PI / 2 }, caption: t('travel.parkArrived'), look: -0.55 });
+  } });
   // Streamed-in geometry has to be patched for night, wet and shadows like a city tile.
   queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(root));
 }

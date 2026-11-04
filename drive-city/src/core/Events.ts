@@ -66,6 +66,8 @@ export interface GameEvents {
   'district:dance': { hits: number; of: number; prize: number };
   /** Round 3: a cat mewing at (x, z) (the café's lost cat, the café's own), a racket broken up, a delivery handed over. */
   'district:meow': { x: number; z: number };
+  /** A 快速前往 (travel/) to (x, z): checkin/ holds the landmarks round it until the player has left. */
+  'travel:jump': { x: number; z: number; id: string };
   'district:racket': { shop: string; result: 'won' | 'lost' | 'fled' | 'paid' };
   'district:delivered': { pay: number; late: boolean };
   /** The police got the player (police/), just before the respawn: fines and the impound hang off it. */

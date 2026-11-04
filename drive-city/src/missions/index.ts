@@ -21,7 +21,7 @@ import type { AdventureApi } from '../game/Contracts';
 import { pickAddress } from './Address';
 import { Banner } from '../ui/Banner';
 import { MissionHud } from './MissionHud';
-import type { DistrictApi } from '../district';
+import type { TravelApi } from '../travel';
 
 /** 'pickup': hailers are out and the taxi is empty; 'wait': a moment after a drop-off. */
 type Stage = 'off' | 'wait' | 'pickup' | 'boarding' | 'ride' | 'alight';
@@ -37,8 +37,6 @@ const TIERS = [
 ];
 /** A street event's rush fare: its colour, and how long it waits for you (s). */
 const URGENT_COLOR = '#ff2d55', URGENT_WAIT = 40;
-/** 快速前往's ids from here on are the district's spots (南锣鼓巷), below them 送豆腐's starts. */
-const DISTRICT_SPOT = 100;
 /** People hailing at once, and how far out they stand (m). */
 const HAILERS = 4, HAIL_MIN = 45, HAIL_MAX = 260;
 /** Seconds a shift starts with; each delivery adds some back. */
@@ -323,23 +321,14 @@ export async function install(engine: Engine): Promise<void> {
       return true;
     },
     get objective() { return api.story ?? jobs?.objective ?? tofu?.objective ?? objective; },
-    // 送豆腐's starts, then 南锣鼓巷's mouth (district/, 2026-11-03) from DISTRICT_SPOT on
-    travelSpots: () => [...(tofu?.starts.map((s, id) => ({ id, label: s.name, x: s.x, z: s.z })) ?? []),
-      ...(engine.get<DistrictApi>('district')?.travelSpots().map((s, i) => ({ id: DISTRICT_SPOT + i, ...s })) ?? [])],
-    travel(id) {
-      const district = id >= DISTRICT_SPOT ? engine.get<DistrictApi>('district') : undefined;
-      const spot = district?.travelSpots()[id - DISTRICT_SPOT];
-      if (!spot && (!tofu || !tofu.starts[id])) return t('travel.none');
+    // 送豆腐's starts (npc/ keeps its encounters away from them); the jumps themselves are travel/'s table
+    travelSpots: () => tofu?.starts.map((s, id) => ({ id, label: s.name, x: s.x, z: s.z })) ?? [],
+    travel(id) { return engine.get<TravelApi>('travel')?.go(id === 0 ? 'tofu' : 'miaofeng') ?? t('travel.none'); },
+    travelBlocked() {
       const pl = engine.get<PlayerApi>('player');
-      if ((engine.get<WantedApi>('wanted')?.level ?? 0) > 0) return t('travel.wanted');
-      if (tofu?.travelling) return t('travel.busy');
-      if (api.busy || api.story || stage === 'alight' || engine.get<RaceApi>('races')?.active || engine.get<CampaignApi>('campaign')?.running
-        || engine.get<AdventureApi>('adventure')?.active || engine.get<UndergroundApi>('underground')?.inside || pl?.riding) return t('travel.busy');
-      const s = spot ?? tofu!.starts[id], p = pl?.position;
-      if (p && Math.hypot(p.x - s.x, p.z - s.z) < 60) return t('travel.here');
-      if (spot) district!.travel(id - DISTRICT_SPOT);
-      else void tofu!.travel(id);
-      return null;
+      return !!tofu?.travelling || api.busy || !!api.story || stage === 'alight' || !!engine.get<RaceApi>('races')?.active || !!engine.get<CampaignApi>('campaign')?.running
+        || !!engine.get<AdventureApi>('adventure')?.active || !!engine.get<UndergroundApi>('underground')?.inside || !!pl?.riding
+        || !!engine.get<{ name: string; onJob?: boolean }>('district')?.onJob;
     },
     hailers: () => hailers.map((h) => ({ id: h.id, x: h.pos.x, z: h.pos.z })),
     contest(id, mult) { contested.set(id, mult); },
@@ -381,7 +370,13 @@ export async function install(engine: Engine): Promise<void> {
       // The short jobs (Jobs.ts): while one runs, no fare is offered and a running fare is dropped.
       if (!jobs) jobs = new Jobs(engine, { places, resolve, addCash: (n) => api.addCash(n), toast, rnd });
       // 送豆腐 (Tofu.ts): starts at the tofu shop when nothing else is on, and holds the jobs' posts while it runs
-      if (!tofu) tofu = new Tofu(engine, { addCash: (n) => api.addCash(n), toast, rnd, lang: () => (lang() === 'en' ? 'en' : 'zh') });
+      if (!tofu) {
+        const tf = tofu = new Tofu(engine, { addCash: (n) => api.addCash(n), toast, rnd, lang: () => (lang() === 'en' ? 'en' : 'zh') });
+        // its two starts in 快速前往's table (travel/): play, where 送豆腐 begins
+        const tr = engine.get<TravelApi>('travel'), st = tf.starts;
+        if (st[0]) tr?.register({ id: 'tofu', group: 'play', label: 'travel.shop', x: st[0].x, z: st[0].z, go: () => { void tf.travel(0); } });
+        if (st[1]) tr?.register({ id: 'miaofeng', group: 'play', label: 'travel.foot', x: st[1].x, z: st[1].z, go: () => { void tf.travel(1); } });
+      }
       jobs.hold = tofu.busy;
       jobs.fixedUpdate(dt);
       tofu.fixedUpdate(dt, !jobs.busy && stage !== 'boarding' && stage !== 'ride' && !api.story && !engine.get<RaceApi>('races')?.active

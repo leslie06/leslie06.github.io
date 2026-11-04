@@ -1,6 +1,7 @@
 import type { Engine, System } from '../core/Engine';
 import { lang, t, type TKey } from '../core/I18n';
-import type { MissionApi, VehicleApi, WorldApi } from '../game/Contracts';
+import type { PlayerApi, VehicleApi, WorldApi } from '../game/Contracts';
+import type { TravelApi } from '../travel';
 import type { NavSystem } from '../nav';
 import { TIERS, type AreaCell, type RoadCell } from '../nav/MapData';
 import { INK, drawBlip, drawPlayer, routeColor, screenAngle, type MarkKind } from '../nav/Draw';
@@ -43,6 +44,11 @@ css(`
 .navmap .go .acts button:hover,.navmap .go .acts button:focus-visible{border-color:${C.yellow}}
 .navmap .go .why{margin-top:8px;font:600 12px/1.3 ${F.ui};color:${C.yellow}}
 .navmap .go .why:empty{display:none}
+.navmap .go .grp{margin:6px 0 -1px;font:700 10px/1 ${F.ui};letter-spacing:.18em;color:${C.muted}}
+.navmap .go .grp:first-child{margin-top:0}
+.navmap .go .acts button .km{float:right;margin-left:10px;font:600 12px/1.25 ${F.num};color:${C.muted}}
+.navmap .go.hi{animation:dcGoHi 1.4s ease-out 2}
+@keyframes dcGoHi{0%{box-shadow:0 0 0 0 ${C.yellow}}40%{box-shadow:0 0 0 4px ${C.yellow}}100%{box-shadow:0 0 0 0 transparent}}
 .navmap .legend .row{display:flex;align-items:center;gap:10px;height:25px;font:500 13px/1 ${F.ui}}
 .navmap .legend canvas{width:22px;height:22px;flex:none}
 .navmap .keys{position:absolute;left:50%;bottom:max(20px,3vh);transform:translateX(-50%);display:flex;gap:20px;align-items:center;padding:10px 18px;border-radius:9px;
@@ -165,25 +171,36 @@ export class MapScreen implements System {
   private go!: HTMLDivElement;
   private goList!: HTMLDivElement;
   private goWhy!: HTMLDivElement;
+  private jumpBtn!: HTMLButtonElement;
+  private jumpId: string | null = null;
 
-  /** The 快速前往 card: a button for each of missions' `travelSpots`, rebuilt on each opening (the labels follow the language). */
+  /**
+   * The 快速前往 card (travel/'s table, docs/gta-plan.md §13): a button for each spot under its group's heading, with how
+   * far it is, rebuilt on each opening (the labels follow the language).
+   */
   private buildGo(): void {
-    const m = this.engine.get<MissionApi>('missions');
-    const spots = m?.travelSpots?.() ?? [];
+    const tr = this.engine.get<TravelApi>('travel');
+    const spots = tr?.spots ?? [];
     this.go.hidden = !spots.length;
     this.goList.replaceChildren();
     this.goWhy.textContent = '';
+    const me = this.engine.get<PlayerApi>('player')?.position;
+    let group = '';
     for (const s of spots) {
+      if (s.group !== group) { group = s.group; el('div', 'grp', this.goList).textContent = t(`travel.grp.${s.group}` as TKey); }
       const b = el('button', '', this.goList);
       b.type = 'button';
-      b.textContent = `→ ${s.label}`;
+      b.append(`→ ${t(s.label)}`);
+      if (me) el('span', 'km', b).textContent = fmtDist(Math.hypot(s.x - me.x, s.z - me.z));
       for (const event of ['pointerdown', 'pointerup', 'pointermove'] as const) b.addEventListener(event, (e) => e.stopPropagation());
-      b.addEventListener('click', () => {
-        const why = m?.travel?.(s.id) ?? null;
-        if (why) { this.goWhy.textContent = why; return; }
-        this.close();
-      });
+      b.addEventListener('click', () => this.travelTo(s.id));
     }
+  }
+
+  private travelTo(id: string): void {
+    const why = this.engine.get<TravelApi>('travel')?.go(id) ?? null;
+    if (why) { this.goWhy.textContent = why; this.go.classList.remove('hi'); void this.go.offsetWidth; this.go.classList.add('hi'); return; }
+    this.close();
   }
 
   constructor(private engine: Engine, container: HTMLElement) {
@@ -205,7 +222,10 @@ export class MapScreen implements System {
     const acts = el('div', 'acts', this.dest);
     this.backBtn = el('button', 'back', acts); this.backBtn.type = 'button';
     this.goalBtn = el('button', '', acts); this.goalBtn.type = 'button';
-    for (const b of [this.backBtn, this.goalBtn]) for (const event of ['pointerdown', 'pointerup', 'pointermove'] as const) b.addEventListener(event, (e) => e.stopPropagation());
+    // a waypoint on one of 快速前往's places: jump there instead of driving
+    this.jumpBtn = el('button', 'back', acts); this.jumpBtn.type = 'button'; this.jumpBtn.hidden = true;
+    this.jumpBtn.addEventListener('click', () => { if (this.jumpId) this.travelTo(this.jumpId); });
+    for (const b of [this.backBtn, this.goalBtn, this.jumpBtn]) for (const event of ['pointerdown', 'pointerup', 'pointermove'] as const) b.addEventListener(event, (e) => e.stopPropagation());
     this.backBtn.addEventListener('click', () => { this.clearWaypoint(); const g = this.nav?.goal; if (g) this.focus(g.x, g.z); this.drawn.version = -1; });
     this.goalBtn.addEventListener('click', () => { const g = this.nav?.goal; if (g) { this.focus(g.x, g.z, Math.max(this.s, 0.5)); this.drawn.version = -1; } });
     // 快速前往 (2026-10-22, 「给个入口可以直接到藤原豆腐店或者妙峰山入口」): the starts of 送豆腐 (missions' `travelSpots`)
@@ -257,8 +277,8 @@ export class MapScreen implements System {
   private get nav(): NavSystem | undefined { return this.engine.get<NavSystem>('nav'); }
   private get ui(): UiApi | undefined { return this.engine.get<UiApi>('ui'); }
 
-  /** Open over the game (only while driving or walking), paused like the pause menu. */
-  open(): void {
+  /** Open over the game (only while driving or walking), paused like the pause menu; `travel`: the 快速前往 card lit up. */
+  open(opts?: { travel?: boolean }): void {
     const nav = this.nav, ui = this.ui;
     if (this.open_ || !nav || !ui || ui.state !== 'playing') return;
     this.open_ = true;
@@ -273,6 +293,8 @@ export class MapScreen implements System {
     this.engine.events.emit('game:pause', { paused: true });
     this.root.hidden = false;
     this.buildGo();
+    this.go.classList.remove('hi');
+    if (opts?.travel) requestAnimationFrame(() => { this.go.classList.add('hi'); this.go.scrollIntoView?.({ block: 'nearest' }); });
     this.savedRender = this.engine.renderFrame;
     this.engine.renderFrame = this.noRender;
     this.drawn.version = -1;
@@ -490,6 +512,10 @@ export class MapScreen implements System {
         this.backBtn.textContent = t(story ? 'map.backStory' : 'map.backMission');
         this.goalBtn.hidden = !goal;
         this.goalBtn.textContent = t(story ? 'map.showStory' : 'map.showGoal');
+        const spot = tg.kind === 'waypoint' ? this.engine.get<TravelApi>('travel')?.near(tg.x, tg.z, 150) ?? null : null;
+        this.jumpId = spot?.id ?? null;
+        this.jumpBtn.hidden = !spot;
+        if (spot) this.jumpBtn.textContent = t('travel.goThere', { place: t(spot.label) });
         // The big number is already the distance; repeating it as "6.3 km to go" underneath said
         // nothing. Name the place when we know it, otherwise say what kind of target this is.
         const place = world?.placeName?.(tg.x, tg.z);

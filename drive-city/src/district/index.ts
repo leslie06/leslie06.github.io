@@ -4,9 +4,11 @@ import { t } from '../core/I18n';
 import { Rng } from '../core/Rng';
 import type { Actor, Blip, CameraApi, CombatApi, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RenderApi, Speaker, VehicleApi, WantedApi, Wear, WorldApi } from '../game/Contracts';
 import type { ContactsApi } from '../contacts';
+import type { TravelApi } from '../travel';
 import { CAST_ON, castModel, hasModel } from '../character/Cast';
 import { journalOf } from '../npc/Journal';
 import { Cats, type CatPose, type CatState } from './Cats';
+import { installHouhai } from './Houhai';
 import type { CollectApi } from '../collect';
 import type { MusicSource } from '../audio/StreetMusic';
 import { Gait } from '../character/Animator';
@@ -39,10 +41,8 @@ const ALL_VISITED = 200;
 export interface DistrictApi extends System {
   /** The player is in one of the shops (its id), or null. */
   readonly inShop: ShopId | null;
-  /** Fast travel (the map's 快速前往, missions/ lists it after 送豆腐's): where it goes. */
-  travelSpots(): readonly { label: string; x: number; z: number }[];
-  /** Go there now (the caller has checked nothing is on). */
-  travel(i: number): void;
+  /** A delivery, the lost cat or a racket on: no 快速前往 (travel/) cuts it short. */
+  readonly onJob: boolean;
   /** What is playing in the lane (the dance machine, the bar's singer, the yard's bird), for audio/. */
   readonly music: readonly MusicSource[];
   /** What the player keeps from the lane (the pause screen's progress line). */
@@ -58,6 +58,7 @@ export interface DistrictApi extends System {
     /** Round 3: start 黑豹's collection at the nearest shop that fits, a delivery, the lost cat; what is on. */
     racket(): boolean; deliver(): { x: number; z: number } | null; cat(): { x: number; z: number } | null; tasks(): Record<string, unknown>;
     catHere(): void; catSeats(): { x: number; z: number }[];
+    houhai(): import('./Houhai').HouhaiApi['debug'];
   };
 }
 
@@ -147,6 +148,8 @@ export async function install(engine: Engine): Promise<void> {
   const hud = () => engine.get<HudApi>('hud');
   const toast = (s: string, secs?: number) => hud()?.toast(s, secs);
   const rnd = new Rng(7307);
+  // 后海 (round 4): the bar street's tables, the pier's boats, the winter rink (Houhai.ts)
+  const houhai = installHouhai(engine, { toast: (s2, secs) => toast(s2, secs) });
 
   // --- what the player wears (bought here; kept in the save, put on at boot) ---
   const wearOf = (w: Worn): Wear => {
@@ -513,6 +516,7 @@ export async function install(engine: Engine): Promise<void> {
     if (dancing) music.push({ id: 'nl-arcade', kind: 'dance', x: arcadeAt.x, z: arcadeAt.z, t: danceT });
     if (singer?.alive) music.push({ id: `nl-bar${song}`, kind: 'ballad', x: stageAt.x, z: stageAt.z, t: songT, song });
     if (elder?.alive) music.push({ id: 'nl-cage', kind: 'birds', x: cageAt.x, z: cageAt.z, t: songT });
+    houhai.music(music, songT);
   };
 
   // --- the lane's crowd: strolling up and down, stopping at the windows, turning at the crossings and the ends ---
@@ -656,6 +660,7 @@ export async function install(engine: Engine): Promise<void> {
     const P = pl.position;
     for (const id of SHOP_IDS) { const d = W(SHOPS[id].door); if (Math.hypot(P.x - d.x, P.z - d.z) < 300) blips.push({ kind: 'shop', x: d.x, z: d.z }); }
     taskBlips(blips);
+    houhai.blips(blips);
     for (const m of marks) blips.push({ kind: 'collect', x: m.x, z: m.z, flash: true });
     return blips;
   });
@@ -956,15 +961,19 @@ export async function install(engine: Engine): Promise<void> {
   let smokeT = 0;
   const fx = () => engine.get<{ name: string; smoke(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, shade?: number): void }>('fx');
 
+  // 快速前往 (travel/): the lane's two mouths, district places
+  const tr = engine.get<TravelApi>('travel');
+  tr?.register({ id: 'nanluo', group: 'district', label: 'travel.nanluo', x: south.x, z: south.z, go: () => { void travel(0); } });
+  tr?.register({ id: 'nanluoN', group: 'district', label: 'travel.nanluoN', x: north.x, z: north.z, go: () => { void travel(1); } });
+
   let inShop: ShopId | null = null, hinted = false, hintedCar = false, yardNow = false;
   const api: DistrictApi = {
     name: 'district',
     get inShop() { return inShop; },
     get music() { return music; },
     get saved() { return save; },
-    get busy() { return !!inShop || !!seated || !!photo || dancing || panel.open || card.open || yardNow || near(W(SHOPS.grill.counter), 3) || taskOn(); },
-    travelSpots: () => [{ label: t('travel.nanluo'), x: south.x, z: south.z }, { label: t('travel.nanluoN'), x: north.x, z: north.z }],
-    travel: (i) => { void travel(i); },
+    get busy() { return !!inShop || !!seated || !!photo || dancing || panel.open || card.open || yardNow || near(W(SHOPS.grill.counter), 3) || taskOn() || houhai.busy; },
+    get onJob() { return taskOn(); },
     debug: {
       shops: () => Object.fromEntries(SHOP_IDS.map((id) => [id, { door: W(SHOPS[id].door), counter: W(SHOPS[id].counter), keeper: !!keeperOf(id)?.alive }])),
       walkers: () => walkers.length,
@@ -982,6 +991,7 @@ export async function install(engine: Engine): Promise<void> {
       cat: () => { if (!lost) startCat(); return lost ? { x: lost.x, z: lost.z } : null; },
       catHere: () => { const f = pl.foot; if (lost && f) { lost.x = f.pos.x - Math.sin(f.yaw); lost.z = f.pos.z - Math.cos(f.yaw); } },
       catSeats: () => (SHOPS.cats.seats ?? []).map(W),
+      houhai: () => houhai.debug,
       tasks: () => ({
         racket: racket ? { shop: racket.shop, fight: racket.fight, over: racket.over, thugs: racket.brawl.actors.map((a) => ({ x: a.pos.x, z: a.pos.z, alive: a.alive })) } : null,
         order: order ? { no: order.gate.no, left: order.left, done: order.done, resident: !!order.resident?.alive } : null,
@@ -1010,6 +1020,7 @@ export async function install(engine: Engine): Promise<void> {
       playing();
       // round 3: the jobs on, the collectors, the friends at their table
       deliveryStep(dt); catStep(dt); racketStep(dt);
+      houhai.fixedUpdate(dt);
       catCool = Math.max(0, catCool - dt);
       if (!racket) {
         const f = pl.foot;
@@ -1066,6 +1077,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       lifeProps.commit();
       drawCats();
+      houhai.update(dt, pl.riding ? null : pl.foot ?? null);
       const cam = camApi();
       const foot = pl.foot;
       const was = inShop;

@@ -91,6 +91,9 @@ export class Menu {
   /** The 意见反馈 button (title and pause); unset, it stays hidden. */
   onFeedback: (() => void) | null = null;
   onFriends: (() => void) | null = null;
+  /** 快速前往 (pause only): the map open on its card; unset (no travel/), hidden. */
+  onTravel: (() => void) | null = null;
+  private travelBtn: HTMLButtonElement;
   private feedbackBtn: HTMLButtonElement;
   private friendsBtn: HTMLButtonElement;
   private feedbackBadge: HTMLSpanElement;
@@ -118,6 +121,10 @@ export class Menu {
     this.goLabel = L('title.start');
     go.appendChild(this.goLabel);
     go.addEventListener('click', () => this.onStart());
+    const travel = this.travelBtn = el('button', 'ghost', row);
+    travel.id = 'travel';
+    travel.appendChild(L('travel.button'));
+    travel.addEventListener('click', () => this.onTravel?.());
     const chapters = this.chaptersBtn = el('button', 'ghost', row);
     chapters.id = 'chapters';
     chapters.appendChild(L('cmp.sel.button'));
@@ -218,6 +225,7 @@ export class Menu {
     this.accountBtn.hidden = !this.onAccount;
     this.setAccount(this.accountName);
     const paused = state === 'paused';
+    this.travelBtn.hidden = !paused || !this.onTravel;
     this.chaptersBtn.hidden = !this.onChapters;
     this.goLabel.data = t(paused ? 'title.resume' : 'title.start');
     this.pauseHint.hidden = !paused;

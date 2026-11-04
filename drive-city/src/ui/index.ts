@@ -106,7 +106,10 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   engine.add(hud);
   // Radar and full-screen map (city only; before `api` so the map's Esc/Tab handling runs first).
   // `dc-radar` tells the HUD that the top-left corner is taken (the yard has no nav, no radar).
-  if (engine.get('nav')) { document.body.classList.add('dc-radar'); engine.add(new Minimap(engine, hud.root)); engine.add(new MapScreen(engine, container)); }
+  let mapScreen: MapScreen | null = null;
+  if (engine.get('nav')) { document.body.classList.add('dc-radar'); engine.add(new Minimap(engine, hud.root)); engine.add(mapScreen = new MapScreen(engine, container)); }
+  // 快速前往 from the pause screen (travel/, docs/gta-plan.md §13): back into the game, the map open on its card
+  if (mapScreen && engine.get('travel')) menu.onTravel = () => { api.start(); engine.input.exitLock(); mapScreen?.open({ travel: true }); };
   const v = () => engine.get<VehicleApi>('vehicle')!;
   const cam = () => engine.get<CameraApi>('camera')!;
   const world = engine.get<WorldApi>('world')!;

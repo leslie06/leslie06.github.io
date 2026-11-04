@@ -350,6 +350,8 @@ export interface MissionApi extends System {
   travelSpots?(): readonly { id: number; label: string; x: number; z: number }[];
   /** Go to spot `id` now: null when on the way, else why not (a job on, wanted...). */
   travel?(id: number): string | null;
+  /** Something on that no 快速前往 may cut short (a job, a fare, a race, a chapter, a ride...): travel/ asks. */
+  travelBlocked?(): boolean;
 }
 
 /** Pedestrians on the pavements. Implemented by people/. */

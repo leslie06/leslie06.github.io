@@ -115,6 +115,13 @@ export const DISTRICT_EN = {
   'nl.meet.f1': "Black Panther's lot keep coming round here for money. Watch yourself.", 'nl.meet.x1': 'I looked it up: five hundred a month off every shop.',
   'nl.meet.f2': 'Gulou is empty at night. Another race one of these days?', 'nl.meet.x2': 'He practised for a week after you beat him.',
   'nl.meet.full': "We're stuffed! Next time.", 'nl.meet.thanksF': "Now that's a friend! Lamb skewers, ten of them!", 'nl.meet.thanksX': 'Thanks, Chen Ye. Your turn at chess next time.',
+  // round 4: 后海
+  'hh.arrived': 'Houhai · Yinding Bridge ahead: park and walk to the pier', 'hh.arrivedFoot': 'Houhai · the pier: rent a duck boat',
+  'hh.arrivedWinter': 'Houhai · the lake is frozen: park and walk to the rink', 'hh.arrivedWinterFoot': 'Houhai · the rink: rent an ice chair',
+  'hh.offer.boat': 'Rent a duck boat (¥{n})', 'hh.offer.sled': 'Rent an ice chair (¥{n})', 'hh.offer.seat': 'Sit by the lake',
+  'hh.boat.on': 'W / S pedal · A / D steer · F back at the pier to get off', 'hh.sled.on': 'W push · A / D steer · F to get off anywhere on the ice',
+  'hh.boat.backToDock': 'Pedal back to the pier to get off', 'hh.seat.on': 'Sitting by the lake: health back slowly · F to get up',
+  'hh.map.dock': 'Houhai · boats', 'hh.map.rink': 'Houhai · ice rink',
 };
 
 export const DISTRICT_ZH: Record<keyof typeof DISTRICT_EN, string> = {
@@ -232,4 +239,10 @@ export const DISTRICT_ZH: Record<keyof typeof DISTRICT_EN, string> = {
   'nl.meet.f1': '听说黑豹的人最近老来这条街收钱，你小心点。', 'nl.meet.x1': '我查过了，他们一家店一个月收五百。',
   'nl.meet.f2': '鼓楼那边晚上路空，改天再跑一场？', 'nl.meet.x2': '他上回输给你，回去练了一礼拜。',
   'nl.meet.full': '吃不下了！下回吧。', 'nl.meet.thanksF': '够意思！羊肉串，先来十串！', 'nl.meet.thanksX': '谢啦陈野。下回你来跟我下一盘。',
+  'hh.arrived': '后海 · 银锭桥在前面：停好车走到码头', 'hh.arrivedFoot': '后海 · 游船码头：租条鸭子船',
+  'hh.arrivedWinter': '后海 · 湖面冻上了：停好车走到冰场', 'hh.arrivedWinterFoot': '后海 · 冰场：租个冰车',
+  'hh.offer.boat': '租鸭子船（¥{n}）', 'hh.offer.sled': '租冰车（¥{n}）', 'hh.offer.seat': '坐下看湖',
+  'hh.boat.on': 'W / S 蹬船 · A / D 转向 · 回到码头按 F 下船', 'hh.sled.on': 'W 撑冰车 · A / D 转向 · 冰上随时按 F 下来',
+  'hh.boat.backToDock': '划回码头才能下船', 'hh.seat.on': '坐着看湖，慢慢回血 · 按 F 起身',
+  'hh.map.dock': '后海 · 游船码头', 'hh.map.rink': '后海 · 冰场',
 };

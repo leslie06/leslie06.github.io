@@ -10,6 +10,8 @@ export const CHECKIN_PRIZE = 200;
 export const SET_PRIZE = 8000;
 /** Within this many metres of a footprint (or on it)... */
 const REACH = 25;
+/** After a 快速前往, the landmarks within this of where it landed wait until the player has been this far off. */
+const JUMPED = 400;
 /** ...and slower than this (m/s, ~43 km/h): a look, not a blur. On foot always. */
 const SLOW = 12;
 /**
@@ -100,6 +102,12 @@ export async function install(engine: Engine): Promise<void> {
     pin.visited = found.has(pin.id);
   }
   const total = targets.length;
+  const jumped: { x: number; z: number; here: boolean; t: number }[] = [];
+  engine.events.on('travel:jump', (p) => {
+    // where the player is now is held too (the fade-out before the jump): a landmark there must not be checked in meanwhile
+    const at = pl.position;
+    jumped.push({ x: at.x, z: at.z, here: true, t: performance.now() }, { x: p.x, z: p.z, here: false, t: performance.now() });
+  });
 
   // --- the card ------------------------------------------------------------------------------------------
   const style = document.createElement('style');
@@ -183,9 +191,18 @@ export async function install(engine: Engine): Promise<void> {
       const cam = engine.camera;
       cam.getWorldDirection(look);
       const lh = Math.hypot(look.x, look.z) || 1;
+      // a 快速前往 (travel/) lands within JUMPED of a landmark: not checked in until the player has left and come back
+      // (docs/gta-plan.md §13: checking in is going there; a jump there would be a prize for nothing)
+      // (the jump fades out first: held from the event, armed once the player is there, let go once they have left)
+      // (one jump from a place held to another: both held until the player has left each)
+      for (let i = jumped.length - 1; i >= 0; i--) {
+        const j = jumped[i], d = Math.hypot(at.x - j.x, at.z - j.z);
+        if (d < JUMPED) j.here = true; else if (j.here || performance.now() - j.t > 15000) jumped.splice(i, 1);
+      }
       let near: Target | null = null;
       for (const tg of targets) {
         if (found.has(tg.pin.id)) continue;
+        if (jumped.some((j) => Math.hypot(tg.cx - j.x, tg.cz - j.z) < JUMPED + 150)) continue;
         const [x0, z0, x1, z1] = tg.box;
         if (at.x > x0 && at.x < x1 && at.z > z0 && at.z < z1 && distTo(at.x, at.z, tg.rings) <= REACH) { checkIn(tg); break; }
         // In view: near enough, the camera turned to it, nothing in between.

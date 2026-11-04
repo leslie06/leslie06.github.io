@@ -5,6 +5,7 @@ import { t } from '../core/I18n';
 import { CG, groups } from '../core/Physics';
 import type { HomeApi, HudApi, MissionApi, PlayerApi, RenderApi, VehicleApi, WantedApi } from '../game/Contracts';
 import type { RenderSystem } from '../render/RenderSystem';
+import type { TravelApi } from '../travel';
 import { ANCHOR, DOOR, GARAGE, HOUSE, PLOT } from './Layout';
 import { garageDoor, villaMaterials } from './Villa';
 
@@ -156,6 +157,11 @@ export async function install(engine: Engine): Promise<void> {
     },
   };
   engine.add(api);
+  // 快速前往 (travel/): home - driving, the car comes in at the gate and stops on the drive, facing the house
+  const tr = engine.get<TravelApi>('travel');
+  tr?.register({ id: 'home', group: 'home', label: 'travel.home', x: ax - 30, z: az - 10, go: () => {
+    void tr.land({ car: { x: ax - 38, z: az - 10, yaw: Math.PI / 2 }, foot: { x: ax - 34, z: az - 10, yaw: Math.PI / 2 }, caption: t('travel.homeArrived'), footCaption: t('travel.homeArrivedFoot'), look: 0 });
+  } });
   // Built here rather than streamed, but it still needs the night/wet/shadow patch a tile gets.
   queueMicrotask(() => engine.get<RenderSystem>('render')?.prepare?.(root));
 }

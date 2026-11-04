@@ -63,6 +63,7 @@ import * as underground from './underground';
 import * as park from './park';
 import { registerParkPoses } from './park/Poses';
 import * as home from './home';
+import * as travel from './travel';
 import { registerHomePoses } from './home/Poses';
 import { registerRacePoses } from './races/Poses';
 import { registerTitlePose } from './ui/TitlePose';
@@ -139,6 +140,7 @@ async function boot() {
   await damage.install(engine);
   if (worldName === 'city') { await traffic.install(engine); tollPlazas.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
   if (worldName === 'city') await nav.install(engine);
+  if (worldName === 'city') await travel.install(engine);
   if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await checkin.install(engine); await trials.install(engine); await intro.install(engine); await events.install(engine); await npc.install(engine); await life.install(engine); await contacts.install(engine); leaderboard.install(engine); await story.install(engine); campaign.install(engine); }
   if (worldName === 'city') await adventure.install(engine);
   if (worldName === 'city') await district.install(engine);

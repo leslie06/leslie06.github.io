@@ -66,6 +66,26 @@ CROSS_E = [(719.0, 725.0)]
 # high quality). The game's lane frame is the mouth's (layout `frame`), whatever the parts' origins.
 PARTS = {"nanluo": (0.0, 221.2, 110.0, 135), "nanluo_n1": (221.2, 457.0, 339.0, 140), "nanluo_n2": (457.0, 820.0, 628.0, 190)}
 PART = "nanluo"
+# Round 4 (2026-11-04): 后海's bar street, its own landmark `houhai` built by this script in its own frame - 后海南沿 from
+# 银锭桥 westwards (OSM: dead straight for 230 m, the lake 3.8-4.7 m off its centre line to the north, the bars across it
+# to the south), the bridge itself, the boats' pier. `LANE` is False while it builds: the lane's paving, bollards,
+# lamps, lantern strings, courtyard and layout are the lane's only.
+LANE = True
+HH_FRAME = (-891.0, -3197.0, -76.9)       # the bridge's south end on the road, 后海南沿's heading
+HH_HALF = 5.2                             # road 2.7 + pavement 2.5: the bars' fronts
+HH_S = (10.0, 176.0)                      # the bars along it
+HH_ALLEYS = [(92.0, 95.5)]
+HH_PIER = (38.3, 40.7, 14.0)              # its sides along the road, how far out it goes
+HH_BRIDGE = (14.25, -3.87)                # 银锭桥's north end from its south one (lane u, s): the road over the canal
+PARTS["houhai"] = (0.0, 200.0, 88.0, 130)
+BAR_SIGNS = ["银锭酒吧", "后海小院", "荷塘月色", "湖畔", "老船长", "蓝莲花", "鼓楼印象", "水岸", "月亮湾", "望海楼", "胡同深处",
+             "晚风", "听涛", "九号院", "白塔", "醉后海", "乌篷", "柳岸", "银锭观山", "船坞", "夜色", "老槐树", "半山",
+             "海上花", "西岸"]
+
+
+def hh_shore(sv):
+    """Where the water starts across 后海南沿 at `sv` (u, from the city's water polygon: 4.65 at the bridge, 3.75 137 m on)."""
+    return 4.67 - 0.0067 * sv
 
 # The shops you can go into: side, from, to (along the lane), what they are.
 SHOPS = {
@@ -442,7 +462,7 @@ def plate_image(numbers):
     return image("NL_Plates", np.flipud(cv.a).copy()), cells, H
 
 
-def stele_image():
+def stele_image(title="南锣鼓巷", small="元代 · 北京最古老的街区之一", name="NL_Stele"):
     """The stone at the lane's south mouth: grey granite, 「南锣鼓巷」 cut in and filled red, a line of small print."""
     W, H = 512, 256
     cv = Canvas(W, H, "#7f7d78")
@@ -450,12 +470,12 @@ def stele_image():
     hgt = np.zeros((H, W), np.float32)
     weathered(cv, hgt, rng, 0.16)
     cv.a *= (0.92 + 0.12 * vnoise(H, W, 3, rng))[..., None]
-    cov = text_cover("南锣鼓巷", 440, 140, fill=0.9)
+    cov = text_cover(title, 440, 140, fill=0.9)
     ink(cv, cov, 36, 30, "#9c1f17")
     hgt[30:170, 36:476] -= cov * 1.4
-    cov2 = text_cover("元代 · 北京最古老的街区之一", 360, 34, fill=0.9)
+    cov2 = text_cover(small, 360, 34, fill=0.9)
     ink(cv, cov2, 76, 190, "#3a3834")
-    return image("NL_Stele", np.flipud(cv.a).copy()), normal_image("NL_Stele_N", hgt, 2.0)
+    return image(name, np.flipud(cv.a).copy()), normal_image(name + "_N", hgt, 2.0)
 
 
 def backdrop_atlas():
@@ -889,6 +909,29 @@ def crossings(side):
     return CROSSINGS + (CROSS_E if side == "e" else [])
 
 
+def houhai_lots():
+    """后海南沿's bars, on its south side only: two storeys mostly, glass and timber fronts, a board each."""
+    rng = np.random.default_rng(701)
+    lots, y = [], HH_S[0]
+    for (a0, a1) in HH_ALLEYS + [(HH_S[1], HH_S[1])]:
+        while a0 - y > 0.01:
+            span = a0 - y
+            wd = span if span < 7.6 else float(rng.choice([4.8, 5.4, 6.0, 6.6, 7.2]))
+            if 0 < span - wd < 4.0:
+                wd = span / 2 if span > 8 else span
+            r = rng.random()
+            kind = "modern" if r < 0.5 else "wood" if r < 0.85 else "brick"
+            storeys = 2 if kind in ("wood", "modern") and rng.random() < 0.7 else 1
+            lots.append(dict(side="w", y0=y, y1=y + wd, kind=kind, storeys=storeys, seed=int(rng.integers(1 << 30))))
+            y += wd
+        y = a1
+    for i, lt in enumerate(lots):
+        lt["sign"] = BAR_SIGNS[i % len(BAR_SIGNS)]
+        if lt["kind"] in ("wood", "modern") and i % 3 == 1:
+            lt["banner"] = ["酒", "茶", "咖啡"][i % 3]
+    return lots
+
+
 def lot_plan():
     """Every lot on both sides of every stretch: (side, y0, y1, kind, storeys, sign, banner, seed)."""
     rng = np.random.default_rng(501)
@@ -970,14 +1013,16 @@ def build():
     til, til_n = tiles_image()
     lac, lac_n = lacquer_image()
     wod, wod_n = wood_image()
-    lots = lot_plan()
+    lots = lot_plan() if LANE else houhai_lots()
     names = list(SHOP_SIGN.values()) + [lt["sign"] for lt in lots if lt.get("sign") and lt["sign"] not in SHOP_SIGN.values()]
+    if not LANE:
+        names.append("游船码头")
     names = list(dict.fromkeys(names))
     signs, sign_cells = sign_atlas(names)
     banners, banner_cells = banner_atlas(BANNERS)
     numbers = [lt["no"] for lt in lots if lt["kind"] in ("gate", "yard") and in_part(lt["y0"])] or ["1"]
     plates, plate_cells, plate_h = plate_image(numbers)
-    stele, stele_n = stele_image()
+    stele, stele_n = stele_image() if LANE else stele_image("银锭桥", "银锭观山 · 燕京小八景之一", "NL_SteleYD")
     goods, gcell = goods_atlas()
     goods_dim = dimmed(goods, "NL_GoodsDim", (0.85, 0.82, 0.78))
     goods_e = dimmed(goods, "NL_GoodsE", (0.3, 0.27, 0.24))
@@ -1105,7 +1150,7 @@ def build():
         for G in (g, far):
             G.polyn(pts, "paving", (0, 0, 1), uvs=uv)
 
-    for (s0, s1) in STRETCHES:
+    for (s0, s1) in (STRETCHES if LANE else []):
         y = s0 - (2.0 if s0 == Y0 else 0.1)
         for (c0, c1) in sorted(c for c in CROSSINGS if s0 < c[0] < s1) + [(s1 + 0.1, s1 + 0.1)]:
             if in_part((y + c0) / 2):
@@ -1427,7 +1472,7 @@ def build():
                     yield y, min(c0, s1)
                 y = max(y, c1 + 0.5)
 
-    back = [(side, a, b) for side in ("w", "e") for (a, b) in back_runs(side)]
+    back = [(side, a, b) for side in ("w", "e") for (a, b) in back_runs(side)] if LANE else [("w", HH_S[0] + 0.5, HH_S[1] - 0.5)]
     rng_n = np.random.default_rng(611)      # the north's own (the south's houses stay as they were)
     for side, r0, r1 in back:
         R = rng if r0 < N0 else rng_n
@@ -1471,16 +1516,16 @@ def build():
         g.add(sg, seg_m(y) @ T(x, y, 0, yaw))
         cbox(helpers, name, x - 1.0, x + 1.0, y - 0.6, y + 0.6, 0, 1.6)
 
-    if in_part(2.6):
+    if LANE and in_part(2.6):
         stele(2.3, 2.6, math.radians(-25), "stele")
-    if in_part(N1 - 2.0):
+    if LANE and in_part(N1 - 2.0):
         # the north mouth's, facing 鼓楼东大街
         stele(-2.3, N1 - 2.0, math.radians(180 + 25), "stele_n")
     # bollards across the lane at the mouths and either side of each crossing hutong, never in the hutong itself
     # (a road cars use: round 1 had three across 福祥胡同 and a row in 板厂胡同's eastbound lane)
     rows = [0.4, N1 - 0.4] + [y for (c0, c1) in CROSSINGS for y in (c0 - 0.5, c1 + 0.5)]
     rows = sorted({round(y, 2) for y in rows if Y0 - 1 < y < N1 + 1 and not any(c0 < y < c1 for c0, c1 in CROSSINGS)})
-    bollards = [(x, y) for y in rows for x in (-3.0, -1.5, 0.0, 1.5, 3.0) if in_part(y)]
+    bollards = [(x, y) for y in rows for x in (-3.0, -1.5, 0.0, 1.5, 3.0) if LANE and in_part(y)]
     for i, (x, y) in enumerate(bollards):
         put("bollard", seg_m(y) @ T(x, y, 0))
         cbox(helpers, f"bollard{i}", x - 0.21, x + 0.21, y - 0.21, y + 0.21, 0, 0.56)
@@ -1494,7 +1539,7 @@ def build():
     for k, y in enumerate(lamp_ys):
         x = 3.15 if k % 2 == 0 else -3.15
         lamps_at.append([x, y])
-        if not in_part(y):
+        if not LANE or not in_part(y):
             continue
         put("lamp", seg_m(y) @ T(x, y, 0))
         cbox(helpers, f"lamp{k}", x - 0.2, x + 0.2, y - 0.2, y + 0.2, 0, 3.3)
@@ -1515,7 +1560,7 @@ def build():
                if (y < Y1 - 4 or M0 + 3 < y < M1 - 3) and not any(c0 - 1.5 < y < c1 + 1.5 for c0, c1 in CROSSINGS)]
     strings += [y for y in (229.0 + 11.5 * i for i in range(50)) if y < N1 - 4 and clear_of(y, 1.5)]
     for k, y in enumerate(strings):
-        if not in_part(y):
+        if not LANE or not in_part(y):
             continue
         m = seg_m(y)
         sgeo = Geo()
@@ -1536,7 +1581,7 @@ def build():
                (-2.75, 152.5), (2.75, 168.0), (-2.75, 180.0), (2.75, 196.0), (-2.75, 211.0)]
     tree_at += [(2.75 if i % 2 else -2.75, y) for i, y in enumerate(240.5 + 17.5 * j for j in range(32)) if y < N1 - 6 and clear_of(y, 3.0)]
     for k, (x, y) in enumerate(tree_at):
-        if not in_part(y) or not free("w" if x < 0 else "e", y):
+        if not LANE or not in_part(y) or not free("w" if x < 0 else "e", y):
             continue
         p = bent(x, y)
         trees.append([p.x, p.y, 0, 0.85])
@@ -1988,7 +2033,7 @@ def build():
         layout["shops"][sid] = info
 
     # ---- the courtyard behind the gate (east, middle stretch): a 四合院 you can walk into ----
-    if in_part(YARD[0]):
+    if LANE and in_part(YARD[0]):
         Y = Lot("e", YARD[0], YARD[1])      # a from the north end (y 215) southwards, d eastwards from the fronts
 
         def sub(o, ea, ed, w):
@@ -2130,6 +2175,122 @@ def build():
                           "passage": [Y.xy(ga - 0.7, 0.0), Y.xy(ga + 0.7, 7.0)],
                           "elder": Y.xy(ta, td + 0.72), "elderFace": Y.xy(ta, td), "cage": Y.xy(ta + 1.6, td + 1.1)}
 
+    # ---- 后海: the white stone railing along the water, willows, the boats' pier, 银锭桥, the bars' tables ----
+    if not LANE:
+        M["marble"] = material("NL_marble", "#dcd6c8", 0.55, props=flood(0.5))
+        pg = Geo()
+        pg.box(-0.09, 0.09, -0.09, 0.09, 0.0, 0.78, "marble")
+        pg.box(-0.12, 0.12, -0.12, 0.12, 0.78, 0.9, "marble")
+        meshes["post"] = mesh_of(pg, "post", M)
+        counts["post"] = 0
+        hh = {"seats": [], "music": [], "boats": []}
+        P0, P1, PU = HH_PIER
+
+        def add_box(x0, x1, y0, y1, z0, z1, key, m=None):
+            bg = Geo()
+            bg.box(x0, x1, y0, y1, z0, z1, key)
+            g.add(bg, OFF if m is None else m)
+
+        # the railing: a post every 2 m on the water's edge, a rail and a panel between, open at the pier
+        sv, k = 6.0, 0
+        while sv < HH_S[1] - 0.1:
+            nv = min(HH_S[1], sv + 2.0)
+            at_pier = P0 - 0.4 < (sv + nv) / 2 < P1 + 0.4
+            u0 = hh_shore(sv) - 0.14
+            if not (P0 - 0.4 < sv < P1 + 0.4):
+                put("post", OFF @ T(u0, sv, 0))
+            if not at_pier:
+                um = hh_shore((sv + nv) / 2) - 0.14
+                add_box(um - 0.05, um + 0.05, sv + 0.1, nv - 0.1, 0.62, 0.72, "marble")
+                add_box(um - 0.03, um + 0.03, sv + 0.1, nv - 0.1, 0.2, 0.6, "marble")
+            sv = nv
+            k += 1
+        for k, (a0, a1) in enumerate(((6.0, P0 - 0.4), (P1 + 0.4, HH_S[1]))):
+            for j in range(int((a1 - a0) // 10) + 1):
+                b0, b1 = a0 + j * 10, min(a1, a0 + (j + 1) * 10)
+                if b1 - b0 > 0.5:
+                    um = hh_shore((b0 + b1) / 2) - 0.14
+                    cbox(helpers, f"hh_rail{k}_{j}", um - 0.12, um + 0.12, b0, b1, 0, 0.9)
+        # willows (the city's 国槐 stand in for them) between the road and the railing
+        for sv in [8.0 + 12.0 * i for i in range(14)]:
+            if sv < HH_S[1] and not (P0 - 3 < sv < P1 + 3):
+                p = bent(hh_shore(sv) - 0.9, sv)
+                trees.append([p.x, p.y, 0, 0.8])
+        # the pier: planks on posts, a low rail each side, the board at its root; the boats moor along it
+        root = hh_shore((P0 + P1) / 2) - 0.35
+        add_box(root, PU, P0, P1, 0.08, 0.2, "wood")
+        cbox(helpers, "hh_pier", root, PU, P0, P1, 0, 0.2)
+        for uu in [root + 0.3 + 2.4 * i for i in range(int((PU - root) // 2.4) + 1)]:
+            for ss in (P0 + 0.1, P1 - 0.1):
+                cg = Geo()
+                cyl(cg, 0, 0, -0.8, 0.62, 0.07, 0.07, 8, "wood", caps=(False, True))
+                g.add(cg, OFF @ T(uu, ss, 0))
+        for ss in (P0 + 0.1, P1 - 0.1):
+            add_box(root + 0.3, PU - 0.1, ss - 0.03, ss + 0.03, 0.55, 0.6, "wood")
+        for ss in (P0 + 0.12, P1 - 0.12):
+            add_box(root - 0.04, root + 0.04, ss - 0.04, ss + 0.04, 0.0, 2.5, "lampiron")
+        cc, rr = sign_cells["游船码头"]
+        add_box(root - 0.04, root + 0.02, P0 + 0.08, P1 - 0.08, 1.88, 2.5, "wood")
+        sq = Geo()
+        # read from the road (facing +u, the left of the board is +s): the text runs from P1 to P0
+        sq.polyn([(root - 0.045, P1 - 0.12, 1.9), (root - 0.045, P0 + 0.12, 1.9), (root - 0.045, P0 + 0.12, 2.48), (root - 0.045, P1 - 0.12, 2.48)], "sign", (-1, 0, 0),
+                 uvs=atlas_uv((cc, rr), 4, 16))
+        g.add(sq, OFF)
+        for side, ss in ((-1, P0 - 1.15), (1, P1 + 1.15)):
+            for j in range(3):
+                hh["boats"].append([round(root + 2.4 + 2.6 * j, 3), round(ss, 3), 1, 0])
+        hh["dock"] = {"counter": [round(root + 0.9, 3), round((P0 + P1) / 2, 3)], "pier": [[round(root, 3), P0], [PU, P1]]}
+        # 银锭桥: the road's deck over the canal, stone walls down to the water, white balustrades; flat (cars cross it)
+        ang = math.atan2(HH_BRIDGE[1], HH_BRIDGE[0])
+        MB = OFF @ Matrix.Rotation(ang, 4, "Z")
+        add_box(0.6, 9.6, -3.75, 3.75, -0.05, 0.06, "granite", MB)
+        dq = Geo()
+        dq.polyn([(0.6, -3.7, 0.075), (9.6, -3.7, 0.075), (9.6, 3.7, 0.075), (0.6, 3.7, 0.075)], "paving", (0, 0, 1), uvs=[(0, 0), (2.25, 0), (2.25, 1.85), (0, 1.85)])
+        g.add(dq, MB)
+        for sd in (-1, 1):
+            y0, y1 = (-3.95, -3.75) if sd < 0 else (3.75, 3.95)
+            add_box(0.8, 9.4, y0, y1, -0.7, 0.45, "granite", MB)
+            yc = (y0 + y1) / 2
+            for j in range(9):
+                bxp = 1.0 + j * 1.025
+                put("post", MB @ T(bxp, yc, 0.45))
+                if j < 8:
+                    add_box(bxp + 0.12, bxp + 0.905, yc - 0.05, yc + 0.05, 1.07, 1.17, "marble", MB)
+                    add_box(bxp + 0.12, bxp + 0.905, yc - 0.03, yc + 0.03, 0.6, 1.02, "marble", MB)
+            add_box(0.55, 0.95, yc - 0.2, yc + 0.2, 0.0, 1.45, "marble", MB)
+            add_box(9.25, 9.65, yc - 0.2, yc + 0.2, 0.0, 1.45, "marble", MB)
+            cbox(helpers, f"hh_bridge{sd}", 0.55, 9.65, y0 - 0.05, y1 + 0.05, 0, 1.4, m=MB)
+        stele(3.45, 8.4, math.radians(-90), "hh_stele")
+        # the pavement before the bars paved to their fronts (the city's stops short of them here and there: grass showed)
+        for G in (g, far):
+            G.polyn([OFF @ Vector(p) for p in ((-HH_HALF - 0.02, HH_S[0], 0.03), (-2.75, HH_S[0], 0.03), (-2.75, HH_S[1], 0.03), (-HH_HALF - 0.02, HH_S[1], 0.03))],
+                    "paving", (0, 0, 1), uvs=[(-HH_HALF / 4, HH_S[0] / 4), (-2.75 / 4, HH_S[0] / 4), (-2.75 / 4, HH_S[1] / 4), (-HH_HALF / 4, HH_S[1] / 4)])
+        # the bars' tables on the pavement: a round table, two stools, a big umbrella; every other bar
+        built = [lt for lt in lots if "L" in lt]
+        for i, lt in enumerate(built):
+            mid = (lt["y0"] + lt["y1"]) / 2
+            if i % 4 == 1:
+                hh["music"].append([-HH_HALF - 0.4, round(mid, 3)])
+            if lt["kind"] == "brick" or i % 2:
+                continue
+            tu = -HH_HALF + 1.1
+            tg = Geo()
+            cyl(tg, 0, 0, 0.72, 0.76, 0.4, 0.4, 14, "inwood")
+            cyl(tg, 0, 0, 0.0, 0.72, 0.04, 0.04, 6, "iron")
+            cyl(tg, 0, 0, 0.76, 2.25, 0.022, 0.022, 6, "iron", caps=(False, False))
+            lathe(tg, [(1.15, 2.02), (0.9, 2.12), (0.0, 2.38)], 12, "laundry2" if i % 4 == 0 else "laundry0")
+            g.add(tg, OFF @ T(tu, mid, 0))
+            cbox(helpers, f"hh_table{i}", tu - 0.4, tu + 0.4, mid - 0.4, mid + 0.4, 0, 0.76)
+            for sd in (-1, 1):
+                put("stool", OFF @ T(tu, mid + sd * 0.66, 0))
+                hh["seats"].append([round(tu, 3), round(mid + sd * 0.66, 3), round(tu, 3), round(mid, 3)])
+            # a neon strip along a glass front's head now and then
+            if lt["kind"] == "modern":
+                lt["L"].box(g, 0.3, lt["L"].w - 0.3, -0.07, -0.03, 2.6, 2.66, "neon" if i % 4 == 0 else "neon2")
+        hh.update({"frame": {"gx": GX, "gz": GZ, "heading": HEADING}, "half": HH_HALF, "bars": list(HH_S), "shore": [4.67, -0.0067],
+                   "bridge": [[0.0, 0.0], list(HH_BRIDGE)]})
+        layout["houhai"] = hh
+
     # ---- far level, colliders, markers ----
     # the flat colours onto the palette
     g.f = [(idx, [pal_uv(k)] * len(idx), "palette", sm) if k in PAL else (idx, uv, k, sm) for idx, uv, k, sm in g.f]
@@ -2143,7 +2304,7 @@ def build():
         m = seg_m((y0 + y1) / 2)
         flat_marker(helpers, name, [tuple((m @ Vector((x, y, 0))).xy) for x, y in rect(x0, x1, y0, y1)], role)
 
-    for (s0, s1) in STRETCHES:
+    for (s0, s1) in (STRETCHES if LANE else []):
         def runs_of(cs):
             runs, y = [], s0 - 0.2
             for (c0, c1) in sorted(c for c in cs if s0 < c[0] < s1) + [(s1 + 0.2, s1 + 0.2)]:
@@ -2157,27 +2318,33 @@ def build():
                 marker(f"nanluo_{side}{int(s0)}_{i}", min(x_in, x_out), max(x_in, x_out), r0, r1, "FOOTPRINT")
         for i, (r0, r1) in enumerate(runs_of(CROSSINGS)):
             marker(f"nanluo_lane{int(s0)}_{i}", -HALF - 0.1, HALF + 0.1, r0 - (1.0 if r0 < 1 else 0), r1, "CLEAR")
-    if in_part(YARD[0]):
+    if LANE and in_part(YARD[0]):
         marker("nanluo_yard", HALF + DEPTH, HALF + DEPTH + 18.2, YARD[0], YARD[1], "FOOTPRINT")
         marker("nanluo_yardclear", HALF + DEPTH, HALF + DEPTH + 13.4, YARD[0] + 4.9, YARD[1] - 5.2, "CLEAR")
 
+    if not LANE:
+        marker("hh_bars", -(HH_HALF + BACK1 + 0.1), -(HH_HALF + 0.05), HH_S[0], HH_S[1], "FOOTPRINT")
+        marker("hh_pave", -(HH_HALF + 0.05), -2.95, HH_S[0] - 1.0, HH_S[1], "CLEAR")
+        marker("hh_shore", 2.95, 5.0, 4.0, HH_S[1], "CLEAR")
+        marker("hh_bridge", -1.0, 15.0, -5.0, 3.0, "CLEAR")
     # the gates a delivery can go to (the plate's number by each)
     for lt in lots:
-        if lt["kind"] == "gate" and "L" in lt:
+        if LANE and lt["kind"] == "gate" and "L" in lt:
             layout["gates"].append({"no": lt["no"], "side": lt["side"], "door": lt["L"].xy(lt["L"].w / 2, -0.45), "in": lt["L"].xy(lt["L"].w / 2, 0.5)})
-    layout["lamps"] = lamps_at
-    layout["lane"] = {"half": HALF, "stretches": [list(st) for st in STRETCHES], "bends": [[by, round(math.degrees(a), 4)] for by, a in BENDS],
-                      "crossings": CROSSINGS, "crossingsE": CROSS_E, "parts": {k: [v[0], v[1]] for k, v in PARTS.items()}}
-    layout["mouths"] = {"south": [0.0, -0.5], "fuxiang": [-HALF - 2.0, sum(FUXIANG) / 2], "chaodou": [HALF + 2.0, sum(FUXIANG) / 2],
-                        "banchang": [0.0, (Y1 + M0) / 2], "dongmianhua": [0.0, M1 + 2.5], "north": [0.0, N1 + 0.5]}
-    layout["frame"] = {"gx": GX, "gz": GZ, "heading": HEADING}
+    if LANE:
+        layout["lamps"] = lamps_at
+        layout["lane"] = {"half": HALF, "stretches": [list(st) for st in STRETCHES], "bends": [[by, round(math.degrees(a), 4)] for by, a in BENDS],
+                          "crossings": CROSSINGS, "crossingsE": CROSS_E, "parts": {k: [v[0], v[1]] for k, v in PARTS.items() if k != "houhai"}}
+        layout["mouths"] = {"south": [0.0, -0.5], "fuxiang": [-HALF - 2.0, sum(FUXIANG) / 2], "chaodou": [HALF + 2.0, sum(FUXIANG) / 2],
+                            "banchang": [0.0, (Y1 + M0) / 2], "dongmianhua": [0.0, M1 + 2.5], "north": [0.0, N1 + 0.5]}
+        layout["frame"] = {"gx": GX, "gz": GZ, "heading": HEADING}
 
     p = PARTS[PART]
     o = lane_m(p[2]) @ Vector((0, p[2], 0))
     h = math.radians(HEADING)
     s = bpy.context.scene.bcity
     s.lm_id = PART
-    s.name_zh, s.name_en = ("南锣鼓巷", "Nanluoguxiang") if PART == "nanluo" else ("南锣鼓巷北段", "Nanluoguxiang North")
+    s.name_zh, s.name_en = {"nanluo": ("南锣鼓巷", "Nanluoguxiang"), "houhai": ("后海", "Houhai")}.get(PART, ("南锣鼓巷北段", "Nanluoguxiang North"))
     s.coord_mode, s.heading = "GAME", HEADING
     s.game_x, s.game_z = GX + o.x * math.cos(h) + o.y * math.sin(h), GZ + o.x * math.sin(h) - o.y * math.cos(h)
     s.far_distance = p[3]
@@ -2196,7 +2363,7 @@ def write_trees(part, trees):
         text = f.read()
     meta = json.loads(text)
     meta["trees"] = [v for x, y, sp, sc in trees for v in (round(x, 2), round(-y, 2), sp, sc)]
-    if part != "nanluo":
+    if part.startswith("nanluo_"):
         meta["partOf"] = "nanluo"     # one place on the map and one check-in, the south one's
     out = json.dumps(meta, ensure_ascii=False, indent=2)
     import re
@@ -2210,8 +2377,12 @@ def write_trees(part, trees):
 if __name__ == "__main__":
     # every part in one run (the layout is all of them): --part ID builds and exports that one only
     only = argv[argv.index("--part") + 1] if "--part" in argv else None
+    lane_frame = (GX, GZ, HEADING, BENDS, HALF)
     for PART in PARTS:
         p = PARTS[PART]
+        # 后海 is its own place: its own frame, no bends, its own front line
+        LANE = PART != "houhai"
+        GX, GZ, HEADING, BENDS, HALF = lane_frame if LANE else (*HH_FRAME, [], HH_HALF)
         OFF = Matrix.Translation(-(lane_m(p[2]) @ Vector((0, p[2], 0))))
         info = build()
         if only and PART != only:
@@ -2219,6 +2390,7 @@ if __name__ == "__main__":
         trees = info.pop("trees")
         print("built", info)
         out = OUT if PART == "nanluo" else OUT.replace("nanluo.blend", f"{PART}.blend")
+        # (the lane's frame back for the layout written below)
         save_and_export(out, argv)
         if "--export" in argv:
             write_trees(PART, trees)
