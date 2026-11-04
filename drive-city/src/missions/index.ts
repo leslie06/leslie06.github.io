@@ -115,7 +115,7 @@ export async function install(engine: Engine): Promise<void> {
   // Every landmark is a fare destination except the player's own house: nobody hails a taxi to be
   // driven to your garage.
   const RAIL = new Set(['station', 'southstation', 'weststation']);
-  const places = [...LANDMARKS.filter((l) => l.id !== 'home')
+  const places = [...LANDMARKS.filter((l) => l.id !== 'home' && !l.partOf)
     .map((l) => ({ lat: l.lat, lon: l.lon, zh: l.name.zh, en: l.name.en, road: '', id: l.id })), ...PLACES.map((p) => ({ ...p, id: '' }))].map((p) => {
     const [x, z] = project(p.lat, p.lon);
     return { x, z, zh: p.zh, en: p.en, road: p.road, id: p.id, rail: RAIL.has(p.id), kerb: undefined as Kerb | null | undefined };

@@ -59,3 +59,4 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
     - **数字**：近景 2.43 万三角形、41 种材质（多 9 次绘制），glb 689 KB，贴图 31 张；碰撞体 10 个。
     - 测：`LOCAL=1 node .scratch/ae86/look.mjs .scratch/stuck/r8 "4.6,-1.95,1.5>0.3,-1.95,1.0" "9,-6,1.6>2,-1,1.8"`（正对店口、斜看店口）；`[TOD=21] node .scratch/stuck/oc.mjs`（真实帧循环把车放在离店不同距离，读 overcast / 曝光 / 阴影；截图模式下读不到，因为画面不自己走）。
   - **门口的 AE86**（2026-10-22）：店前水泥地上常停一辆白黑配色的 AE86，按 F 能开走。是 `parking/index.ts` 的 `FIXED` 放的（位置见上面第四版），车本身见 `vehicles.md`「AE86」。（按豆腐店本地坐标取景；照片机位约 `"9,-1.2,1.3>2.5,-1.2,2.3"`），`node .scratch/tofu/collide.mjs`（先跑几步物理再打射线——`glbprobe.mjs` 在碰撞体刚加进去、物理还没走一步时就测，射线全打到地面；再让车沿门口空地开、正面撞店门）。
+- 一个地标拆成几个 glb（2026-11-04，南锣鼓巷北段）：`LandmarkDef.partOf` / meta 的 `partOf`。带它的地标不在地图上单独标、不算打卡点、不当出租车目的地（`nav/` 的 `loadLandmarks`、`missions/` 的 `places`、`npc/` 老外的地标表都跳过它）。每段各自的 LOD 按到自己原点的距离切，所以原点要放在这段中间。见 `district.md` 第 3 轮。

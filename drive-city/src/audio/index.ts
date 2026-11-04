@@ -374,6 +374,28 @@ export async function install(engine: Engine): Promise<void> {
     const t0 = ctx.currentTime;
     burst(t0, 3200, 1.6, 0.45, 0.025); burst(t0 + 0.075, 2200, 1.3, 0.35, 0.035);
   });
+  // A cat (district/'s café, its lost cat): a mew - a voice gliding up and down through two vowel formants.
+  engine.events.on('district:meow', ({ x, z }) => {
+    if (!ctx || muted) return;
+    const c = ctx, t0 = c.currentTime, cam = engine.camera.position, vol = 0.09 * Math.max(0, 1 - Math.hypot(x - cam.x, z - cam.z) / 40);
+    if (vol <= 0.002) return;
+    const r = Math.random(), dur = 0.45 + r * 0.25, f0 = 520 + r * 160;
+    const o = c.createOscillator(), g = c.createGain(), out = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0 * 0.8, t0); o.frequency.linearRampToValueAtTime(f0 * 1.25, t0 + dur * 0.35); o.frequency.linearRampToValueAtTime(f0 * 0.7, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(1, t0 + 0.05); g.gain.setValueAtTime(1, t0 + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    out.gain.value = vol;
+    o.connect(g);
+    // "mi-a-ow": the first formant opens and closes
+    for (const [f1, f2, q, k] of [[700, 1300, 6, 1], [2200, 3000, 8, 0.5]] as const) {
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q;
+      bp.frequency.setValueAtTime(f1 * 0.6, t0); bp.frequency.linearRampToValueAtTime(f2 * (k === 1 ? 0.7 : 1), t0 + dur * 0.4); bp.frequency.linearRampToValueAtTime(f1 * 0.55, t0 + dur);
+      const kg = c.createGain(); kg.gain.value = k;
+      g.connect(bp).connect(kg).connect(out);
+    }
+    out.connect(master);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  });
   // Time trials: a beep through each checkpoint, three rising notes at the start and the finish.
   engine.events.on('trial:checkpoint', () => { if (!ctx || muted) return; ring(ctx.currentTime, 1760, 0.12, 0.18, 'square'); });
   engine.events.on('trial:start', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; [880, 880, 1760].forEach((f, i) => ring(t0 + i * 0.12, f, 0.1, 0.12, 'square')); });
@@ -434,7 +456,8 @@ export async function install(engine: Engine): Promise<void> {
       const tc = 0.03;
       o1.frequency.setTargetAtTime(f, t, tc); o2.frequency.setTargetAtTime(f * 0.5, t, tc); o3.frequency.setTargetAtTime(f * 2, t, tc);
       const rn = (rpm - 850) / 6000;
-      engineFilter.frequency.setTargetAtTime(260 + rn * 2200 + thr * 1600, t, 0.05);
+      // the engine off (on foot: rpm 0) put it at -52 Hz, and Web Audio warned about it 60 times a second (2026-11-04)
+      engineFilter.frequency.setTargetAtTime(Math.max(60, 260 + rn * 2200 + thr * 1600), t, 0.05);
       const eg = off ? 0 : paused ? 0.05 : (0.16 + thr * 0.22 + rn * 0.1) * (shiftDip > 0 ? 0.45 : 1);
       engineGain.gain.setTargetAtTime(eg, t, 0.04);
       intakeFilter.frequency.setTargetAtTime(f * 4, t, 0.05);

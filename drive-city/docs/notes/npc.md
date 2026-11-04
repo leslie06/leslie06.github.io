@@ -9,3 +9,4 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
 - 剧情对白时路人闭嘴（2026-10-14，「播放剧情人物说话时，旁边行人会说话，不要让路人有声音」）：`VoiceApi.hushed`——对话框里有台词（`DialogueApi.busy`）或者正在放战役过场（`body.cmp-cine`）时为真。这时 voice/ 的 `say` 一律不放（司机按喇叭时的骂声也是），刚开始静音那一帧把正在说的路人掐掉；people/ 的 `bark2` 和 `speak` 对路人直接跳过（声音和头顶气泡都不出），脚本人物（`p.actor`，剧情里的打手、熟人）照常说话。喇叭声本身、警哨等音效不受影响。
 
 - 送豆腐起点附近不出街头遭遇（2026-10-23，用户在藤原豆腐店门口下车被黑豹帮围住，发来截图：「为什么我在藤原豆腐店下车，有几个人打我」）：这是 npc/ 的随机街头遭遇「黑豹的人找茬」（`startGang`），步行时计时一到（第一次 30–50 秒，之后每 50–90 秒）在哪儿都可能来，步行时抽中它的概率是一半。现在 `free()` 里加了 `calm()`：离送豆腐的起点（`MissionApi.travelSpots`：藤原豆腐店、妙峰山脚）80 米内，任何街头遭遇都不开始，计时停住，走远了接着倒数。撞车引发的路怒（`startRage`）不走这个计时，不受影响。测：`node .scratch/stuck/calm.mjs`（店门口步行 80 秒计时不动，走到 200 米外开始倒数）。
+- 小飞龙和小雨在南锣鼓巷北段碰头（2026-11-04，南锣鼓巷第 3 轮，「小飞龙等熟人在这条街碰头」）：`district/` 自己放两个人（`contacts.appearance` 的长相、写实模型），这期间 `contacts.reserve` 他们；聊天和请吃串走 `ContactsApi.addFriendship`。另外人物志多了「收保护费的黑豹」（`nl.racket`），一共 35 条。见 `district.md` 第 3 轮。

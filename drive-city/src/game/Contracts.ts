@@ -295,8 +295,10 @@ export interface CombatApi extends System {
   /**
    * `boss` (2026-10-18, chapter 5's 豹哥): the first of them is this one - a cast model (`id`), a look, and his own
    * toughness - and the brawl is won only when he is down too.
+   * `at` (2026-11-04, 南锣鼓巷's protection money): where each stands, instead of spread round (x, z). `wait`: they stand
+   * there facing that point, not fighting (nor counted, nor shown on the HUD) until `go()` - a shopkeeper being leaned on.
    */
-  brawl(x: number, z: number, n: number, opts?: { tough?: number; boss?: { id: string; look: Look; tough: number } }): { done: Promise<'won' | 'lost' | 'fled'>; end(): void; readonly actors: readonly Actor[] };
+  brawl(x: number, z: number, n: number, opts?: { tough?: number; boss?: { id: string; look: Look; tough: number }; at?: readonly { x: number; z: number }[]; wait?: { x: number; z: number } }): { done: Promise<'won' | 'lost' | 'fled'>; end(): void; go(): void; readonly actors: readonly Actor[] };
 }
 
 export interface WantedApi extends System {
@@ -546,6 +548,8 @@ export interface LandmarkDef {
   name: { zh: string; en: string };
   /** WGS84 anchor (the model's local origin) and heading of the model's local -Z axis, degrees clockwise from north. */
   lat: number; lon: number; headingDeg: number;
+  /** A piece of another landmark (南锣鼓巷's north stretch, its own glb for its own LOD): no pin on the map, no check-in. */
+  partOf?: string;
   /** `env` carries the shared night/wet/time uniforms: floodlights and lit windows follow uNight. */
   build(env: EnvUniforms): LandmarkModel;
   /**

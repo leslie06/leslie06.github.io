@@ -47,11 +47,25 @@ OVER = 0.75                   # the eaves' reach over the lane
 # is in "lane" coordinates (x across, y along, unbent), `bent()` puts it in Blender's.
 Y0, Y1 = 1.0, 144.5           # the south stretch's lots (地安门东大街 -> 板厂 / 蓑衣胡同, which cross at 147)
 M0, M1 = 149.6, 218.2         # the middle stretch's (-> 东棉花 / 雨儿胡同, crossing at 221.2)
-BEND_Y, BEND = 147.0, math.radians(2.49)
+# Round 3 (2026-11-04): the north stretch on to 鼓楼东大街 (its carriageway 16 m wide at 808, the pavement's back at 796.5).
+N0, N1 = 224.2, 796.5
+STRETCHES = [(Y0, Y1), (M0, M1), (N0, N1)]
+# Where the lane turns west, and by how much (OSM's centre line: 2.49 at 板厂胡同, 0.41 at 东棉花胡同, 1.14 more at 菊儿胡同).
+BENDS = [(147.0, math.radians(2.49)), (221.2, math.radians(0.41)), (613.0, math.radians(1.14))]
+BEND_Y, BEND = BENDS[0]
 # Hutongs that cross the lane: roads in the driving network, so nothing stands in them (no lot, no bollard). 福祥胡同 on
-# the west goes on east as 炒豆胡同 (round 1 had lots over that side).
+# the west goes on east as 炒豆胡同 (round 1 had lots over that side). North of 东棉花胡同: 帽儿 / 北兵马司, 景阳, 沙井 / 前圆恩寺,
+# 黑芝麻 / 后圆恩寺, 前鼓楼苑 / 菊儿 (each a road both sides); 小菊儿胡同 opens on the east only.
 FUXIANG = (65.5, 70.5)
-CROSSINGS = [FUXIANG, (Y1, M0), (M1, 224.2)]
+CROSSINGS = [FUXIANG, (Y1, M0), (M1, N0), (296.0, 303.0), (385.3, 392.3), (453.5, 460.5), (535.2, 541.2), (610.0, 616.0)]
+CROSS_E = [(719.0, 725.0)]
+# The landmarks the lane is cut into (each its own glb, LOD and draw calls): id -> lots from, to, and the lane point its
+# origin sits at (the city's LOD switches by the distance to it).
+# Each origin is in its part's middle and the far distance just over its half length: with the south part's origin at the
+# mouth (270 m) and the north's at 260, the bar and the yard drew all three parts' detail (draw calls 570 -> 780 there,
+# high quality). The game's lane frame is the mouth's (layout `frame`), whatever the parts' origins.
+PARTS = {"nanluo": (0.0, 221.2, 110.0, 135), "nanluo_n1": (221.2, 457.0, 339.0, 140), "nanluo_n2": (457.0, 820.0, 628.0, 190)}
+PART = "nanluo"
 
 # The shops you can go into: side, from, to (along the lane), what they are.
 SHOPS = {
@@ -65,9 +79,12 @@ SHOPS = {
     "barber": ("w", 157.0, 162.5),
     "bar": ("e", 175.5, 184.5),
     "grill": ("w", 186.0, 190.5),   # a stall open to the lane, not a room
+    # round 3: the north stretch (the dumplings send out deliveries; the cat café has lost its cat)
+    "noodle": ("w", 262.0, 268.0),
+    "cats": ("e", 640.0, 647.5),
 }
 SHOP_SIGN = {"snack": "老北京小吃", "crafts": "锣鼓文创", "tea": "槐下茶事", "photo": "北平照相馆", "arcade": "锣鼓游戏厅",
-             "clothes": "胡同衣帽间", "barber": "老剃头铺", "bar": "锣鼓小酒馆", "grill": "京味烤串"}
+             "clothes": "胡同衣帽间", "barber": "老剃头铺", "bar": "锣鼓小酒馆", "grill": "京味烤串", "noodle": "胡同饺子馆", "cats": "喵胡同猫咖"}
 # The courtyard you can walk into (east): its gate's lot on the lane, and the yard's span behind the front row.
 YARD_GATE = (199.0, 203.0)
 YARD = (189.5, 215.0)
@@ -81,11 +98,27 @@ BANNERS = ["茶", "酒", "面", "糖葫芦", "酸奶", "烤串", "布鞋", "书"
 
 BENDM = Matrix.Translation((0, BEND_Y, 0)) @ Matrix.Rotation(BEND, 4, "Z") @ Matrix.Translation((0, -BEND_Y, 0))
 IDM = Matrix.Identity(4)
+# The part being built sits at its own origin: everything is moved by OFF (the lane point PARTS gives, unmoved).
+OFF = IDM
+
+
+def lane_m(y):
+    """The frame a point at lane y is built in (without the part's offset): each bend south of it turns it on."""
+    m = IDM
+    for (by, a) in BENDS:
+        if y > by:
+            m = m @ Matrix.Translation((0, by, 0)) @ Matrix.Rotation(a, 4, "Z") @ Matrix.Translation((0, -by, 0))
+    return m
 
 
 def seg_m(y):
-    """The frame a point at lane y is built in: the south stretch's, or the middle's turned one."""
-    return BENDM if y > BEND_Y else IDM
+    """The frame a point at lane y is built in, in the part's own frame."""
+    return OFF @ lane_m(y)
+
+
+def in_part(y):
+    p = PARTS[PART]
+    return p[0] <= y < p[1]
 
 
 def bent(x, y, z=0.0):
@@ -102,6 +135,8 @@ def cbox(coll, name, x0, x1, y0, y1, z0, z1, m=None):
 
 
 FONT_DATA = None
+# What the game reads (src/district/nanluo.layout.json), all the parts' together.
+layout = {"shops": {}, "gates": []}
 
 
 # --- lettering -------------------------------------------------------------------------------------------
@@ -518,6 +553,9 @@ def goods_atlas():
         "menu_barber": ["染发  ¥50", "洗头按摩  ¥30", "修面  ¥20"],
         "menu_bar": ["橘子汽水  ¥8", "炸花生米  ¥15", "点歌  ¥20"],
         "menu_grill": ["羊肉串  ¥15", "烤馒头片  ¥8", "大腰子  ¥25"],
+        # round 3
+        "menu_noodle": ["猪肉大葱饺子  ¥22", "卤煮火烧  ¥30", "小米粥  ¥6", "外卖 · 胡同里送"],
+        "menu_cats": ["拿铁  ¥25", "猫爪蛋糕  ¥30", "撸猫不要钱"],
     }
     for i, (name, lines) in enumerate(menus.items()):
         # two rows at the top, the rest along the bottom (the backdrop and portraits are in between)
@@ -645,6 +683,24 @@ def goods_atlas():
         cv.ellipse(cx, cy, 11, 11, "#e8d0a0")
         cv.ellipse(cx, cy, 7, 7, "#a3261c" if k % 2 else "#1a1410")
     cell("chess", px, py, px + 256, py + 256)
+    # round 3: the cat café's poster (a cat's head and 「撸猫」), 192 x 256, and its paw-print wall stencil, 256 x 256
+    px, py = 1536, 1664
+    cv.rect(px, py, px + 192, py + 256, "#f0d9a8")
+    cv.ellipse(px + 96, py + 100, 58, 50, "#d88a3a")
+    for s in (-1, 1):
+        cv.poly([(px + 96 + s * 52, py + 72), (px + 96 + s * 30, py + 30), (px + 96 + s * 16, py + 64)], "#d88a3a")
+        cv.ellipse(px + 96 + s * 22, py + 96, 8, 10, "#2a1a10")
+    cv.ellipse(px + 96, py + 116, 6, 4, "#c4523a")
+    ink(cv, text_cover("撸猫", 150, 52), px + 21, py + 186, "#5a2a12")
+    cell("catposter", px, py, px + 192, py + 256)
+    px, py = 1792, 1664
+    cv.rect(px, py, px + 256, py + 256, "#e8dcc4")
+    for k in range(5):
+        cx, cy = px + 40 + k * 44, py + 210 - k * 40
+        cv.ellipse(cx, cy, 14, 12, "#a87a4a")
+        for j in range(4):
+            cv.ellipse(cx - 14 + j * 9.5, cy - 16 - (j in (1, 2)) * 4, 4.5, 5, "#a87a4a")
+    cell("paws", px, py, px + 256, py + 256)
     cv.noise(0.04, 412)
     return image("NL_Goods", np.flipud(cv.a).copy()), cells
 
@@ -828,14 +884,19 @@ def cup_geo():
 
 # --- the build -------------------------------------------------------------------------------------------
 
+def crossings(side):
+    """The hutongs opening on `side` of the lane."""
+    return CROSSINGS + (CROSS_E if side == "e" else [])
+
+
 def lot_plan():
-    """Every lot on both sides of both stretches: (side, y0, y1, kind, storeys, sign, banner, seed)."""
+    """Every lot on both sides of every stretch: (side, y0, y1, kind, storeys, sign, banner, seed)."""
     rng = np.random.default_rng(501)
     lots = []
-    for (s0, s1) in ((Y0, Y1), (M0, M1)):
+    for (s0, s1) in STRETCHES:
         for side in ("w", "e"):
             fixed = [(y0, y1, k) for k, (sd, y0, y1) in SHOPS.items() if sd == side and s0 <= y0 < s1]
-            fixed += [(c0, c1, "gap") for (c0, c1) in CROSSINGS if s0 < c0 < s1]
+            fixed += [(c0, c1, "gap") for (c0, c1) in crossings(side) if s0 < c0 < s1]
             if side == "e" and s0 <= YARD_GATE[0] < s1:
                 fixed.append((YARD_GATE[0], YARD_GATE[1], "yard"))
             fixed.sort()
@@ -866,12 +927,17 @@ def lot_plan():
                 elif k != "gap":
                     lots.append(dict(side=side, y0=f0, y1=f1, kind="shop", shop=k, storeys=1, seed=int(rng.integers(1 << 30))))
                 y = f1
-    # the corner lots on 地安门东大街 are two storeys, faced on both streets
+    # the corner lots on 地安门东大街 and 鼓楼东大街 are two storeys, faced on both streets
     for lt in lots:
-        if abs(lt["y0"] - Y0) < 1e-6 and lt["kind"] != "shop":
+        end = "s" if abs(lt["y0"] - Y0) < 1e-6 else "n" if abs(lt["y1"] - N1) < 1e-6 else None
+        if end and lt["kind"] != "shop":
             lt["storeys"] = 2
             lt["kind"] = "wood"
-            lt["corner"] = True
+            lt["corner"] = end
+    # house numbers up each side, as the plates by the gates show them: odd on the east, even on the west
+    for side, first in (("e", 1), ("w", 2)):
+        for k, lt in enumerate(sorted((q for q in lots if q["side"] == side), key=lambda q: q["y0"])):
+            lt["no"] = str(first + 2 * k)
     # boards: shops their own, the rest from the list (a gate has a house number instead)
     di = 0
     for lt in lots:
@@ -889,7 +955,9 @@ def lot_plan():
 
 
 def build():
+    global FONT_DATA
     clear_file()
+    FONT_DATA = None
     ensure_addon()
     main = collection("南锣鼓巷")
     detail = collection("LOD0", main)
@@ -907,7 +975,7 @@ def build():
     names = list(dict.fromkeys(names))
     signs, sign_cells = sign_atlas(names)
     banners, banner_cells = banner_atlas(BANNERS)
-    numbers = [str(8 + 2 * i) for i in range(16)]
+    numbers = [lt["no"] for lt in lots if lt["kind"] in ("gate", "yard") and in_part(lt["y0"])] or ["1"]
     plates, plate_cells, plate_h = plate_image(numbers)
     stele, stele_n = stele_image()
     goods, gcell = goods_atlas()
@@ -1027,7 +1095,6 @@ def build():
         return [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
 
     rng = np.random.default_rng(601)
-    layout = {"shops": {}}
     lamps_at, lantern_n = [], 0
 
     # ---- the lane's paving: up to each crossing hutong (a road: the city draws it) ----
@@ -1038,12 +1105,17 @@ def build():
         for G in (g, far):
             G.polyn(pts, "paving", (0, 0, 1), uvs=uv)
 
-    pave(-1.0, FUXIANG[0])
-    pave(FUXIANG[1], Y1 + 0.1)
-    pave(M0 - 0.1, M1 + 0.1)
+    for (s0, s1) in STRETCHES:
+        y = s0 - (2.0 if s0 == Y0 else 0.1)
+        for (c0, c1) in sorted(c for c in CROSSINGS if s0 < c[0] < s1) + [(s1 + 0.1, s1 + 0.1)]:
+            if in_part((y + c0) / 2):
+                pave(y, c0)
+            y = c1
 
     # ---- each lot ----
     for li, lt in enumerate(lots):
+        if not in_part(lt["y0"]):
+            continue
         L = Lot(lt["side"], lt["y0"], lt["y1"])
         w = L.w
         lr = np.random.default_rng(lt["seed"])
@@ -1085,10 +1157,13 @@ def build():
         # the far level's front: one brick face with the sign
         L.front(far, 0, w, 0, EZ - 0.2, "brick")
 
-        # the corner lots' face to 地安门东大街 (its a-end at the south)
+        # the corner lots' face to 地安门东大街 (its a-end at the south) or 鼓楼东大街 (the north)
         if lt.get("corner"):
-            south_a = 0.0 if lt["side"] == "w" else w
-            nrm = -1 if lt["side"] == "w" else 1
+            west = lt["side"] == "w"
+            if lt["corner"] == "s":
+                south_a, nrm = (0.0, -1) if west else (w, 1)
+            else:
+                south_a, nrm = (w, 1) if west else (0.0, -1)
             for (d0, d1) in ((1.2, 2.8), (4.2, 5.8)):
                 for (z0, z1) in ((0.9, 2.4), (3.9, 5.4)):
                     e = nrm * 0.02
@@ -1180,8 +1255,7 @@ def build():
                 cyl(cg, 0, 0, -0.1, 0.1, 0.2, 0.2, 12, "granite", caps=(True, True))
                 g.add(cg, L.M(a, 0.05, 0.62) @ Matrix.Rotation(math.pi / 2, 4, "Y"))
             # the house number beside the gate
-            num = numbers[li % len(numbers)]
-            c, r = plate_cells[num]
+            c, r = plate_cells[lt["no"]]
             rows = plate_h // 128
             L.front(g, g1 + 0.2, g1 + 0.6, 1.9, 2.1, "plate", d=-0.01, uvs=atlas_uv((c, r), 4, rows))
             L.box(g, 0, w, -0.12, 0.0, EZ - 0.5, EZ - 0.3, "brick", skip=("+d",))
@@ -1345,8 +1419,8 @@ def build():
     # ---- the back row: courtyard houses behind (seen over the front roofs and from the air) ----
     def back_runs(side):
         """The stretches of the back row: between the crossings, and on the east round the courtyard."""
-        cuts = list(CROSSINGS) + ([YARD] if side == "e" else [])
-        for (s0, s1) in ((Y0, Y1), (M0, M1)):
+        cuts = crossings(side) + ([YARD] if side == "e" else [])
+        for (s0, s1) in STRETCHES:
             y = s0 + 0.5
             for (c0, c1) in sorted(c for c in cuts if c[1] > s0 and c[0] < s1) + [(s1, s1)]:
                 if c0 - y > 3:
@@ -1354,15 +1428,20 @@ def build():
                 y = max(y, c1 + 0.5)
 
     back = [(side, a, b) for side in ("w", "e") for (a, b) in back_runs(side)]
+    rng_n = np.random.default_rng(611)      # the north's own (the south's houses stay as they were)
     for side, r0, r1 in back:
+        R = rng if r0 < N0 else rng_n
         y = r0
         while y < r1 - 3:
-            wd = float(rng.uniform(7, 12))
+            wd = float(R.uniform(7, 12))
             y1 = min(r1, y + wd)
             if r1 - y1 < 3:
                 y1 = r1
             L = Lot(side, y, y1)
-            EZ, RZ = 3.0 + float(rng.uniform(-0.2, 0.2)), 4.7 + float(rng.uniform(-0.2, 0.2))
+            EZ, RZ = 3.0 + float(R.uniform(-0.2, 0.2)), 4.7 + float(R.uniform(-0.2, 0.2))
+            if not in_part(y):
+                y = y1 + float(R.uniform(0.5, 2.5))
+                continue
             d0, d1 = BACK0, BACK1
             md = (d0 + d1) / 2
             w = L.w
@@ -1379,34 +1458,50 @@ def build():
                 a = (k + 0.5) * w / max(1, int(w // 3.2))
                 L.front(g, a - 0.55, a + 0.55, 0.9, 2.2, "lattice", d=d0 - 0.01, uvs=[(0, 0), (1, 0), (1, 1.2), (0, 1.2)])
             L.col(helpers, f"back{side}{int(y)}", 0, w, d0, d1, 0, EZ)
-            y = y1 + float(rng.uniform(0.5, 2.5))
+            y = y1 + float(R.uniform(0.5, 2.5))
 
-    # ---- the south mouth: the stone, the bollards; bollards at 福祥胡同 and at the north end ----
-    sg = Geo()
-    sg.box(-1.05, 1.05, -0.3, 0.3, 0.0, 0.35, "granite")
-    sg.box(-0.9, 0.9, -0.2, 0.2, 0.35, 1.45, "stele", uvs={"-y": [(0, 0), (1, 0), (1, 1), (0, 1)]})
-    sg.box(-0.95, 0.95, -0.24, 0.24, 1.45, 1.55, "granite")
-    g.add(sg, T(2.3, 2.6, 0, math.radians(-25)))
-    collider_box(helpers, "stele", 1.3, 3.3, 2.0, 3.2, 0, 1.6)
-    # bollards across the lane at the south mouth and either side of each crossing hutong, never in the hutong itself
+    # ---- the mouths' stones, the bollards ----
+    def stele(x, y, yaw, name):
+        sg = Geo()
+        sg.box(-1.05, 1.05, -0.3, 0.3, 0.0, 0.35, "granite")
+        # granite all round, the lettering on its face only (the box's other faces had it too: 「南」 on the side)
+        sg.box(-0.9, 0.9, -0.2, 0.2, 0.35, 1.45, "granite", skip=("-y",))
+        sg.polyn([(-0.9, -0.2, 0.35), (0.9, -0.2, 0.35), (0.9, -0.2, 1.45), (-0.9, -0.2, 1.45)], "stele", (0, -1, 0), uvs=[(0, 0), (1, 0), (1, 1), (0, 1)])
+        sg.box(-0.95, 0.95, -0.24, 0.24, 1.45, 1.55, "granite")
+        g.add(sg, seg_m(y) @ T(x, y, 0, yaw))
+        cbox(helpers, name, x - 1.0, x + 1.0, y - 0.6, y + 0.6, 0, 1.6)
+
+    if in_part(2.6):
+        stele(2.3, 2.6, math.radians(-25), "stele")
+    if in_part(N1 - 2.0):
+        # the north mouth's, facing 鼓楼东大街
+        stele(-2.3, N1 - 2.0, math.radians(180 + 25), "stele_n")
+    # bollards across the lane at the mouths and either side of each crossing hutong, never in the hutong itself
     # (a road cars use: round 1 had three across 福祥胡同 and a row in 板厂胡同's eastbound lane)
-    rows = [0.4, FUXIANG[0] - 0.6, FUXIANG[1] + 0.6, Y1 - 0.5, M0 + 0.5, M1 - 0.5]
-    bollards = [(x, y) for y in rows for x in (-3.0, -1.5, 0.0, 1.5, 3.0)]
+    rows = [0.4, N1 - 0.4] + [y for (c0, c1) in CROSSINGS for y in (c0 - 0.5, c1 + 0.5)]
+    rows = sorted({round(y, 2) for y in rows if Y0 - 1 < y < N1 + 1 and not any(c0 < y < c1 for c0, c1 in CROSSINGS)})
+    bollards = [(x, y) for y in rows for x in (-3.0, -1.5, 0.0, 1.5, 3.0) if in_part(y)]
     for i, (x, y) in enumerate(bollards):
         put("bollard", seg_m(y) @ T(x, y, 0))
         cbox(helpers, f"bollard{i}", x - 0.21, x + 0.21, y - 0.21, y + 0.21, 0, 0.56)
 
     # ---- palace lamps, bikes, pots, the trees' places ----
-    for k, y in enumerate((9.0, 27.0, 45.0, 63.0, 81.0, 99.0, 117.0, 135.0, 154.0, 172.0, 190.0, 208.0)):
-        x = 3.15 if k % 2 == 0 else -3.15
-        # not in front of a shop's door or the stall
-        put("lamp", seg_m(y) @ T(x, y, 0))
-        cbox(helpers, f"lamp{k}", x - 0.2, x + 0.2, y - 0.2, y + 0.2, 0, 3.3)
-        lamps_at.append(list(bent(x, y).xy))
     shop_spans = [(s, y0 - 0.5, y1 + 0.5) for s, y0, y1 in SHOPS.values()]
     free = lambda side, y: not any(s == side and y0 <= y <= y1 for s, y0, y1 in shop_spans)  # noqa: E731
+    clear_of = lambda y, r: not any(c0 - r < y < c1 + r for c0, c1 in CROSSINGS + CROSS_E)  # noqa: E731
+    lamp_ys = [9.0, 27.0, 45.0, 63.0, 81.0, 99.0, 117.0, 135.0, 154.0, 172.0, 190.0, 208.0]
+    lamp_ys += [y for y in (232.0 + 18.0 * i for i in range(32)) if y < N1 - 4 and clear_of(y, 2.0)]
+    for k, y in enumerate(lamp_ys):
+        x = 3.15 if k % 2 == 0 else -3.15
+        lamps_at.append([x, y])
+        if not in_part(y):
+            continue
+        put("lamp", seg_m(y) @ T(x, y, 0))
+        cbox(helpers, f"lamp{k}", x - 0.2, x + 0.2, y - 0.2, y + 0.2, 0, 3.3)
     bk = 0
     for lt in lots:
+        if "L" not in lt or not in_part(lt["y0"]):
+            continue
         if lt["kind"] in ("wood", "modern", "brick") and lt["seed"] % 4 == 0 and free(lt["side"], (lt["y0"] + lt["y1"]) / 2):
             L = lt["L"]
             put("bike", L.M(0.9 + (lt["seed"] % 3) * 0.3, -0.55, 0, yaw=0.12))
@@ -1418,7 +1513,10 @@ def build():
     # strings of small lanterns across the lane, eave to eave, sagging a little
     strings = [y for y in [12.0 + 11.5 * i for i in range(12)] + [155.0 + 11.5 * i for i in range(6)]
                if (y < Y1 - 4 or M0 + 3 < y < M1 - 3) and not any(c0 - 1.5 < y < c1 + 1.5 for c0, c1 in CROSSINGS)]
+    strings += [y for y in (229.0 + 11.5 * i for i in range(50)) if y < N1 - 4 and clear_of(y, 1.5)]
     for k, y in enumerate(strings):
+        if not in_part(y):
+            continue
         m = seg_m(y)
         sgeo = Geo()
         z0, sag, n = 3.15, 0.35, 6
@@ -1434,8 +1532,12 @@ def build():
             put("lantern", m @ T(x, y, z - 0.75 * 0.62) @ Matrix.Diagonal((0.62, 0.62, 0.62, 1)))
             lantern_n += 1
     trees = []
-    for k, (x, y) in enumerate([(-2.75, 18.0), (2.75, 36.5), (-2.75, 54.0), (2.75, 74.0), (-2.75, 90.0), (2.75, 108.0), (-2.75, 126.0),
-                                (-2.75, 152.5), (2.75, 168.0), (-2.75, 180.0), (2.75, 196.0), (-2.75, 211.0)]):
+    tree_at = [(-2.75, 18.0), (2.75, 36.5), (-2.75, 54.0), (2.75, 74.0), (-2.75, 90.0), (2.75, 108.0), (-2.75, 126.0),
+               (-2.75, 152.5), (2.75, 168.0), (-2.75, 180.0), (2.75, 196.0), (-2.75, 211.0)]
+    tree_at += [(2.75 if i % 2 else -2.75, y) for i, y in enumerate(240.5 + 17.5 * j for j in range(32)) if y < N1 - 6 and clear_of(y, 3.0)]
+    for k, (x, y) in enumerate(tree_at):
+        if not in_part(y) or not free("w" if x < 0 else "e", y):
+            continue
         p = bent(x, y)
         trees.append([p.x, p.y, 0, 0.85])
 
@@ -1618,9 +1720,8 @@ def build():
             info["keeper"] = L.xy(7.85, 3.2)
             info["keeperFace"] = L.xy(5.5, 3.2)
 
-    layout["shops"] = {}
     for lt in lots:
-        if lt["kind"] != "shop":
+        if lt["kind"] != "shop" or "L" not in lt or not in_part(lt["y0"]):
             continue
         L, w, sid = lt["L"], lt["L"].w, lt["shop"]
         if sid == "grill":
@@ -1641,11 +1742,11 @@ def build():
         a_in0, a_in1 = 0.22, w - 0.22
         CZ = 3.0
         d0, d1 = w / 2 - 0.85, w / 2 + 0.85
-        floor_key = "inwood" if sid in ("tea", "photo", "crafts", "clothes", "bar") else "infloor"
+        floor_key = "inwood" if sid in ("tea", "photo", "crafts", "clothes", "bar", "cats") else "infloor"
         L.quad(g, [(a_in0, d_in, 0.035), (a_in1, d_in, 0.035), (a_in1, d_back, 0.035), (a_in0, d_back, 0.035)], floor_key, (0, 0, 1),
                uvs=[(0, 0), ((a_in1 - a_in0) / 1.5, 0), ((a_in1 - a_in0) / 1.5, (d_back - d_in) / 1.5), (0, (d_back - d_in) / 1.5)] if floor_key == "inwood" else None)
         L.quad(g, [(a_in0, d_in, CZ), (a_in0, d_back, CZ), (a_in1, d_back, CZ), (a_in1, d_in, CZ)], "ceiling", (0, 0, -1))
-        wall_key = "inbrick" if sid in ("snack", "arcade", "bar") else "tilewhite" if sid == "barber" else "inwall"
+        wall_key = "inbrick" if sid in ("snack", "arcade", "bar", "noodle") else "tilewhite" if sid == "barber" else "inwall"
         L.quad(g, [(a_in0, d_in, 0), (a_in0, d_back, 0), (a_in0, d_back, CZ), (a_in0, d_in, CZ)], wall_key, (1, 0, 0))
         L.quad(g, [(a_in1, d_in, 0), (a_in1, d_in, CZ), (a_in1, d_back, CZ), (a_in1, d_back, 0)], wall_key, (-1, 0, 0))
         L.front(g, a_in0, a_in1, 0, CZ, wall_key, d=d_back, n=(0, -1, 0))
@@ -1681,6 +1782,8 @@ def build():
         counter_a = (a_in0 + 0.6, a_in1 - 0.6)
         if sid in ("photo", "arcade"):
             counter_a = (a_in0, a_in0 + 1.3)
+        if sid == "cats":
+            counter_a = (a_in1 - 2.7, a_in1 - 0.5)
         ca0, ca1 = counter_a
         L.box(g, ca0, ca1, cb0, cb1, 0, 0.95, "inwood", skip=("-z",))
         L.box(g, ca0 - 0.04, ca1 + 0.04, cb0 - 0.05, cb1 + 0.05, 0.95, 1.0, "inwood", skip=())
@@ -1690,9 +1793,9 @@ def build():
             info["keeper"] = L.xy((ca0 + ca1) / 2 - 0.2, cb1 + 0.45) if sid == "photo" else L.xy(a_in0 + 0.4, (cb0 + cb1) / 2 + 0.9)
             info["keeperFace"] = L.xy(w / 2, (cb0 + cb1) / 2)
         else:
-            info["counter"] = L.xy(w / 2, cb0 - 0.55)
-            info["keeper"] = L.xy(w / 2, cb1 + 0.5)
-            info["keeperFace"] = L.xy(w / 2, 0)
+            info["counter"] = L.xy((ca0 + ca1) / 2, cb0 - 0.55)
+            info["keeper"] = L.xy((ca0 + ca1) / 2, cb1 + 0.5)
+            info["keeperFace"] = L.xy((ca0 + ca1) / 2, 0)
 
         # menu board (or the studio's price list) on the back wall
         mu = gcell[f"menu_{sid}"]
@@ -1823,149 +1926,209 @@ def build():
                 L.box(g, b0, b1, d_in + 0.2, d_back - 0.2, CZ - 0.12, CZ - 0.06, key)
             pu = gcell["poster0"]
             L.front(g, d1 + 0.15, a_in1 - 0.15, 0.9, 2.1, "screen", d=0.1, uvs=sub_uv(*pu))
+        elif sid == "noodle":
+            # steamers and a tray of dumplings on the counter, takeaway bags waiting by the door, three tables
+            st = Geo()
+            for k in range(4):
+                cyl(st, 0, 0, k * 0.12, k * 0.12 + 0.11, 0.24, 0.24, 12, "bamboo")
+            g.add(st, L.M(ca0 + 0.45, (cb0 + cb1) / 2, 1.0))
+            g.add(st, L.M(ca0 + 1.0, (cb0 + cb1) / 2, 1.0))
+            L.box(g, ca1 - 1.1, ca1 - 0.3, cb0 + 0.1, cb1 - 0.1, 1.0, 1.03, "steel")
+            for k in range(12):
+                L.box(g, ca1 - 1.05 + (k % 6) * 0.13, ca1 - 0.97 + (k % 6) * 0.13, cb0 + 0.18 + (k // 6) * 0.2, cb0 + 0.3 + (k // 6) * 0.2, 1.03, 1.07, "cup")
+            # the bags for the deliveries: white boxes in red bags on a shelf by the door
+            sa0 = a_in1 - 0.5
+            L.box(g, sa0, a_in1, 0.4, 1.4, 0.7, 0.74, "inwood")
+            L.col(helpers, f"{sid}_shelf", sa0, a_in1, 0.4, 1.4, 0, 0.74)
+            for k in range(3):
+                L.box(g, sa0 + 0.06, a_in1 - 0.06, 0.48 + k * 0.32, 0.72 + k * 0.32, 0.74, 1.02, "curtain")
+            for (ta, td) in ((a_in0 + 1.0, 1.5), (a_in0 + 1.0, 3.2), (a_in1 - 1.3, 2.9)):
+                table(L, sid, ta, td)
+                for s_ in (-1, 1):
+                    put("stool", L.M(ta + s_ * 0.62, td, 0))
+            pu = gcell["poster2"]
+            L.quad(g, [(a_in0 + 0.01, 2.2, 1.2), (a_in0 + 0.01, 2.95, 1.2), (a_in0 + 0.01, 2.95, 2.2), (a_in0 + 0.01, 2.2, 2.2)], "goods", (1, 0, 0), uvs=sub_uv(*pu))
+            for k in range(3):
+                put("lantern", L.M(w / 2 - 1.4 + k * 1.4, 2.4, CZ - 0.75))
+            info["bags"] = L.xy((sa0 + a_in1) / 2, 0.9)
+        elif sid == "cats":
+            # a cat tree by the left wall, beds on the floor, sills under the front windows, a table with two stools to
+            # sit at with the cats; the spots they curl up on go to the layout (the game puts the cats there)
+            tx, td_ = a_in0 + 0.55, 1.5
+            for (zz, oa, od) in ((0.55, 0.0, 0.0), (1.15, 0.05, 0.9), (1.75, 0.0, 0.1)):
+                L.box(g, tx - 0.3 + oa, tx + 0.3 + oa, td_ - 0.3 + od, td_ + 0.3 + od, zz - 0.05, zz, "cushion")
+            for (oa, od, top) in ((0.0, 0.0, 1.75), (0.05, 0.9, 1.15)):
+                cyl(cg := Geo(), 0, 0, 0.0, top, 0.06, 0.06, 8, "basket", caps=(False, False))
+                g.add(cg, L.M(tx + oa, td_ + od, 0))
+            L.box(g, tx - 0.35, tx + 0.35, td_ - 0.35, td_ + 0.35 + 0.9, 0.0, 0.06, "basket")
+            L.col(helpers, f"{sid}_tree", tx - 0.35, tx + 0.35, td_ - 0.35, td_ + 0.35 + 0.9, 0, 1.75)
+            for (ba, bd) in ((a_in1 - 0.7, 3.3), (a_in0 + 0.7, 4.6)):
+                bg = Geo()
+                cyl(bg, 0, 0, 0.0, 0.12, 0.34, 0.3, 12, "cushion")
+                g.add(bg, L.M(ba, bd, 0))
+            for (s0, s1) in ((a_in0 + 0.1, d0 - 0.1), (d1 + 0.1, a_in1 - 0.1)):
+                L.box(g, s0, s1, d_in, d_in + 0.32, 0.76, 0.82, "inwood")
+            ta, tdd = w / 2 + 0.2, 2.6
+            table(L, sid, ta, tdd)
+            seats = []
+            for s_ in (-1, 1):
+                put("stool", L.M(ta + s_ * 0.66, tdd, 0))
+                seats.append(L.xy(ta + s_ * 0.66, tdd))
+            info["seats"], info["seatFace"] = seats, L.xy(ta, tdd)
+            pu = gcell["catposter"]
+            L.quad(g, [(a_in1 - 0.01, 1.2, 1.25), (a_in1 - 0.01, 1.2, 2.25), (a_in1 - 0.01, 1.95, 2.25), (a_in1 - 0.01, 1.95, 1.25)], "goods", (-1, 0, 0), uvs=sub_uv(*pu))
+            pu = gcell["paws"]
+            L.quad(g, [(a_in0 + 0.01, 3.0, 0.9), (a_in0 + 0.01, 4.4, 0.9), (a_in0 + 0.01, 4.4, 2.3), (a_in0 + 0.01, 3.0, 2.3)], "goods", (1, 0, 0), uvs=sub_uv(*pu))
+            for k in range(3):
+                put("lantern", L.M(w / 2 - 1.6 + k * 1.6, 3.4, CZ - 0.75))
+            # where the cats are: [u, s, height, yaw towards (lane coordinates)]
+            spot = lambda a, d, z, fa, fd: [*L.xy(a, d), round(z, 3), *L.xy(fa, fd)]  # noqa: E731
+            info["cats"] = [spot(tx, td_ + 0.1, 1.75, w / 2, 3.0), spot(tx + 0.05, td_ + 0.9, 1.15, w / 2, 2.0), spot(a_in1 - 0.7, 3.3, 0.12, w / 2, 3.0),
+                            spot(a_in0 + 0.7, 4.6, 0.12, w / 2, 2.0), spot(d1 + 0.6, d_in + 0.18, 0.82, d1 + 0.6, -2.0), spot(ca0 + 0.3, (cb0 + cb1) / 2, 1.0, w / 2, 1.0)]
         layout["shops"][sid] = info
 
     # ---- the courtyard behind the gate (east, middle stretch): a 四合院 you can walk into ----
-    Y = Lot("e", YARD[0], YARD[1])      # a from the north end (y 215) southwards, d eastwards from the fronts
+    if in_part(YARD[0]):
+        Y = Lot("e", YARD[0], YARD[1])      # a from the north end (y 215) southwards, d eastwards from the fronts
 
-    def sub(o, ea, ed, w):
-        """A frame for one of the yard's houses: o its front's left end, ea along the front, ed into it (lane vectors)."""
-        F = Lot("e", YARD[0], YARD[1], m=Y.m)
-        F.o, F.ea, F.ed, F.w = Vector((o[0], o[1], 0)), Vector((ea[0], ea[1], 0)), Vector((ed[0], ed[1], 0)), w
-        return F
+        def sub(o, ea, ed, w):
+            """A frame for one of the yard's houses: o its front's left end, ea along the front, ed into it (lane vectors)."""
+            F = Lot("e", YARD[0], YARD[1], m=Y.m)
+            F.o, F.ea, F.ed, F.w = Vector((o[0], o[1], 0)), Vector((ea[0], ea[1], 0)), Vector((ed[0], ed[1], 0)), w
+            return F
 
-    def house(F, name, dep, EZ, RZ):
-        """A yard house: a porch of red posts, lattice windows and a closed door, a gabled tiled roof, brick behind."""
-        w, rd = F.w, dep / 2
-        for G in (g, far):
-            F.quad(G, [(0, -0.95, EZ - 0.18), (w, -0.95, EZ - 0.18), (w, rd, RZ), (0, rd, RZ)], "tiles", (0, -1, 1.6), [(0, 0), (w, 0), (w, 3), (0, 3)])
-            F.quad(G, [(w, dep + 0.5, EZ - 0.18), (0, dep + 0.5, EZ - 0.18), (0, rd, RZ), (w, rd, RZ)], "tiles", (0, 1, 1.6), [(0, 0), (w, 0), (w, 3), (0, 3)])
-            for a, na in ((0.0, -1), (w, 1)):
-                F.quad(G, [(a, -0.6, 0), (a, dep, 0), (a, dep, EZ - 0.2), (a, rd, RZ), (a, -0.6, EZ - 0.2)], "brick", (na, 0, 0))
-            F.quad(G, [(0, dep, 0), (w, dep, 0), (w, dep, EZ - 0.2), (0, dep, EZ - 0.2)], "brick", (0, 1, 0))
-        F.front(far, 0, w, 0, EZ - 0.2, "brick")
-        F.box(g, -0.05, w + 0.05, rd - 0.16, rd + 0.16, RZ - 0.05, RZ + 0.28, "ridge", skip=("-z",))
-        F.quad(g, [(0, -0.95, EZ - 0.34), (w, -0.95, EZ - 0.34), (w, 0, EZ - 0.2), (0, 0, EZ - 0.2)], "wood", (0, 0, -1))
-        F.quad(g, [(0, -0.9, 0.1), (w, -0.9, 0.1), (w, 0.0, 0.1), (0, 0.0, 0.1)], "steps", (0, 0, 1))
-        F.front(g, 0, w, 0, 0.1, "steps", d=-0.9)
-        nb = max(3, int(w // 3.2))
-        posts = [w * k / nb for k in range(nb + 1)]
-        for p in posts:
+        def house(F, name, dep, EZ, RZ):
+            """A yard house: a porch of red posts, lattice windows and a closed door, a gabled tiled roof, brick behind."""
+            w, rd = F.w, dep / 2
+            for G in (g, far):
+                F.quad(G, [(0, -0.95, EZ - 0.18), (w, -0.95, EZ - 0.18), (w, rd, RZ), (0, rd, RZ)], "tiles", (0, -1, 1.6), [(0, 0), (w, 0), (w, 3), (0, 3)])
+                F.quad(G, [(w, dep + 0.5, EZ - 0.18), (0, dep + 0.5, EZ - 0.18), (0, rd, RZ), (w, rd, RZ)], "tiles", (0, 1, 1.6), [(0, 0), (w, 0), (w, 3), (0, 3)])
+                for a, na in ((0.0, -1), (w, 1)):
+                    F.quad(G, [(a, -0.6, 0), (a, dep, 0), (a, dep, EZ - 0.2), (a, rd, RZ), (a, -0.6, EZ - 0.2)], "brick", (na, 0, 0))
+                F.quad(G, [(0, dep, 0), (w, dep, 0), (w, dep, EZ - 0.2), (0, dep, EZ - 0.2)], "brick", (0, 1, 0))
+            F.front(far, 0, w, 0, EZ - 0.2, "brick")
+            F.box(g, -0.05, w + 0.05, rd - 0.16, rd + 0.16, RZ - 0.05, RZ + 0.28, "ridge", skip=("-z",))
+            F.quad(g, [(0, -0.95, EZ - 0.34), (w, -0.95, EZ - 0.34), (w, 0, EZ - 0.2), (0, 0, EZ - 0.2)], "wood", (0, 0, -1))
+            F.quad(g, [(0, -0.9, 0.1), (w, -0.9, 0.1), (w, 0.0, 0.1), (0, 0.0, 0.1)], "steps", (0, 0, 1))
+            F.front(g, 0, w, 0, 0.1, "steps", d=-0.9)
+            nb = max(3, int(w // 3.2))
+            posts = [w * k / nb for k in range(nb + 1)]
+            for p in posts:
+                cg = Geo()
+                cyl(cg, 0, 0, 0.1, EZ - 0.35, 0.11, 0.11, 10, "lacquer", caps=(False, False))
+                g.add(cg, F.M(min(max(p, 0.15), w - 0.15), -0.6, 0))
+                F.col(helpers, f"{name}_p{int(p * 10)}", min(max(p, 0.15), w - 0.15) - 0.12, min(max(p, 0.15), w - 0.15) + 0.12, -0.72, -0.48, 0, EZ - 0.3)
+            F.box(g, 0, w, -0.7, -0.5, EZ - 0.75, EZ - 0.35, "beam", skip=("+d",), uvs={"-d": [(0, 0), (w / 1.5, 0), (w / 1.5, 1), (0, 1)]})
+            mid = nb // 2
+            for k in range(nb):
+                a0, a1 = posts[k] + 0.15, posts[k + 1] - 0.15
+                if k == mid:
+                    # the door: two leaves of lattice over panels, closed
+                    for j in range(2):
+                        e0, e1 = a0 + j * (a1 - a0) / 2 + 0.02, a0 + (j + 1) * (a1 - a0) / 2 - 0.02
+                        F.front(g, e0, e1, 0.1, 1.0, "wood", d=0.0)
+                        F.front(g, e0, e1, 1.0, EZ - 0.8, "lattice", d=0.0, uvs=[(0, 0), ((e1 - e0) / 1.1, 0), ((e1 - e0) / 1.1, 2), (0, 2)])
+                        F.front(g, e0, e1, 1.0, EZ - 0.8, "backdrop", d=0.6, uvs=sub_uv(0.5, 2 / 3, 1, 1))
+                else:
+                    F.front(g, a0, a1, 0.1, 0.9, "brick")
+                    F.front(g, a0, a1, 0.9, EZ - 0.8, "lattice", d=0.0, uvs=[(0, 0), ((a1 - a0) / 1.1, 0), ((a1 - a0) / 1.1, 2), (0, 2)])
+                    F.front(g, a0, a1, 0.9, EZ - 0.8, "glass", d=0.05)
+                F.front(g, posts[k] - 0.15 if k else 0, a0, 0.1, EZ - 0.8, "lacquer")
+                F.front(g, a1, posts[k + 1] + 0.15 if k < nb - 1 else w, 0.1, EZ - 0.8, "lacquer")
+            F.front(g, 0, w, EZ - 0.8, EZ - 0.2, "wood")
+            F.col(helpers, f"{name}", 0, w, 0, dep, 0, EZ)
+            for a in (w * 0.3, w * 0.7):
+                put("lantern", F.M(a, -0.75, EZ - 1.2))
+
+        X0 = HALF + DEPTH                    # the front row's back walls
+        north = sub((X0, YARD[1] - 5.2), (1, 0), (0, 1), 12.9)
+        house(north, "yard_n", 5.2, 3.7, 5.6)
+        south = sub((X0 + 12.9, YARD[0] + 4.9), (-1, 0), (0, -1), 12.9)
+        house(south, "yard_s", 4.9, 3.3, 5.0)
+        east = sub((X0 + 13.4, YARD[1] - 6.0), (0, -1), (1, 0), 14.0)
+        house(east, "yard_e", 4.6, 3.3, 5.0)
+        # the west side: the front row's back walls dressed as the 西厢房's front (posts under their eave, lattice windows),
+        # open where the passage from the gate comes through
+        pass_y = ((YARD_GATE[0] + YARD_GATE[1]) / 2 - 0.7, (YARD_GATE[0] + YARD_GATE[1]) / 2 + 0.7)
+        wy0, wy1 = YARD[0] + 4.9 + 0.4, YARD[1] - 5.2 - 0.4
+        west = sub((X0, wy0), (0, 1), (-1, 0), wy1 - wy0)
+        ww, wz = west.w, 2.95
+        gap = (pass_y[0] - wy0, pass_y[1] - wy0)
+        cuts = sorted({0.0, ww, gap[0], gap[1], *[ww * k / 4 for k in range(1, 4)]})
+        cuts = [c for c in cuts if not (gap[0] < c < gap[1])]
+        for a0, a1 in zip(cuts, cuts[1:]):
+            if a0 >= gap[0] - 1e-6 and a1 <= gap[1] + 1e-6:
+                west.box(g, a0 - 0.04, a1 + 0.04, -0.12, 0.0, 2.55, 2.75, "lacquer", skip=("+d",))
+                continue
+            west.front(g, a0 + 0.05, a1 - 0.05, 0.0, 0.85, "brick", d=-0.02)
+            west.front(g, a0 + 0.15, a1 - 0.15, 0.85, 2.45, "lattice", d=-0.03, uvs=[(0, 0), ((a1 - a0 - 0.3) / 1.1, 0), ((a1 - a0 - 0.3) / 1.1, 1.5), (0, 1.5)])
+            west.front(g, a0 + 0.15, a1 - 0.15, 0.85, 2.45, "glass", d=-0.01)
+            west.front(g, a0 + 0.05, a1 - 0.05, 2.45, wz - 0.25, "wood", d=-0.02)
+        for c in cuts:
             cg = Geo()
-            cyl(cg, 0, 0, 0.1, EZ - 0.35, 0.11, 0.11, 10, "lacquer", caps=(False, False))
-            g.add(cg, F.M(min(max(p, 0.15), w - 0.15), -0.6, 0))
-            F.col(helpers, f"{name}_p{int(p * 10)}", min(max(p, 0.15), w - 0.15) - 0.12, min(max(p, 0.15), w - 0.15) + 0.12, -0.72, -0.48, 0, EZ - 0.3)
-        F.box(g, 0, w, -0.7, -0.5, EZ - 0.75, EZ - 0.35, "beam", skip=("+d",), uvs={"-d": [(0, 0), (w / 1.5, 0), (w / 1.5, 1), (0, 1)]})
-        mid = nb // 2
-        for k in range(nb):
-            a0, a1 = posts[k] + 0.15, posts[k + 1] - 0.15
-            if k == mid:
-                # the door: two leaves of lattice over panels, closed
-                for j in range(2):
-                    e0, e1 = a0 + j * (a1 - a0) / 2 + 0.02, a0 + (j + 1) * (a1 - a0) / 2 - 0.02
-                    F.front(g, e0, e1, 0.1, 1.0, "wood", d=0.0)
-                    F.front(g, e0, e1, 1.0, EZ - 0.8, "lattice", d=0.0, uvs=[(0, 0), ((e1 - e0) / 1.1, 0), ((e1 - e0) / 1.1, 2), (0, 2)])
-                    F.front(g, e0, e1, 1.0, EZ - 0.8, "backdrop", d=0.6, uvs=sub_uv(0.5, 2 / 3, 1, 1))
-            else:
-                F.front(g, a0, a1, 0.1, 0.9, "brick")
-                F.front(g, a0, a1, 0.9, EZ - 0.8, "lattice", d=0.0, uvs=[(0, 0), ((a1 - a0) / 1.1, 0), ((a1 - a0) / 1.1, 2), (0, 2)])
-                F.front(g, a0, a1, 0.9, EZ - 0.8, "glass", d=0.05)
-            F.front(g, posts[k] - 0.15 if k else 0, a0, 0.1, EZ - 0.8, "lacquer")
-            F.front(g, a1, posts[k + 1] + 0.15 if k < nb - 1 else w, 0.1, EZ - 0.8, "lacquer")
-        F.front(g, 0, w, EZ - 0.8, EZ - 0.2, "wood")
-        F.col(helpers, f"{name}", 0, w, 0, dep, 0, EZ)
-        for a in (w * 0.3, w * 0.7):
-            put("lantern", F.M(a, -0.75, EZ - 1.2))
-
-    X0 = HALF + DEPTH                    # the front row's back walls
-    north = sub((X0, YARD[1] - 5.2), (1, 0), (0, 1), 12.9)
-    house(north, "yard_n", 5.2, 3.7, 5.6)
-    south = sub((X0 + 12.9, YARD[0] + 4.9), (-1, 0), (0, -1), 12.9)
-    house(south, "yard_s", 4.9, 3.3, 5.0)
-    east = sub((X0 + 13.4, YARD[1] - 6.0), (0, -1), (1, 0), 14.0)
-    house(east, "yard_e", 4.6, 3.3, 5.0)
-    # the west side: the front row's back walls dressed as the 西厢房's front (posts under their eave, lattice windows),
-    # open where the passage from the gate comes through
-    pass_y = ((YARD_GATE[0] + YARD_GATE[1]) / 2 - 0.7, (YARD_GATE[0] + YARD_GATE[1]) / 2 + 0.7)
-    wy0, wy1 = YARD[0] + 4.9 + 0.4, YARD[1] - 5.2 - 0.4
-    west = sub((X0, wy0), (0, 1), (-1, 0), wy1 - wy0)
-    ww, wz = west.w, 2.95
-    gap = (pass_y[0] - wy0, pass_y[1] - wy0)
-    cuts = sorted({0.0, ww, gap[0], gap[1], *[ww * k / 4 for k in range(1, 4)]})
-    cuts = [c for c in cuts if not (gap[0] < c < gap[1])]
-    for a0, a1 in zip(cuts, cuts[1:]):
-        if a0 >= gap[0] - 1e-6 and a1 <= gap[1] + 1e-6:
-            west.box(g, a0 - 0.04, a1 + 0.04, -0.12, 0.0, 2.55, 2.75, "lacquer", skip=("+d",))
-            continue
-        west.front(g, a0 + 0.05, a1 - 0.05, 0.0, 0.85, "brick", d=-0.02)
-        west.front(g, a0 + 0.15, a1 - 0.15, 0.85, 2.45, "lattice", d=-0.03, uvs=[(0, 0), ((a1 - a0 - 0.3) / 1.1, 0), ((a1 - a0 - 0.3) / 1.1, 1.5), (0, 1.5)])
-        west.front(g, a0 + 0.15, a1 - 0.15, 0.85, 2.45, "glass", d=-0.01)
-        west.front(g, a0 + 0.05, a1 - 0.05, 2.45, wz - 0.25, "wood", d=-0.02)
-    for c in cuts:
+            cyl(cg, 0, 0, 0.1, wz, 0.1, 0.1, 10, "lacquer", caps=(False, False))
+            a = min(max(c, 0.12), ww - 0.12)
+            g.add(cg, west.M(a, -0.6, 0))
+            west.col(helpers, f"yard_w{int(c * 10)}", a - 0.11, a + 0.11, -0.71, -0.49, 0, wz)
+        west.box(g, 0, ww, -0.7, -0.5, wz - 0.35, wz, "beam", skip=("+d",), uvs={"-d": [(0, 0), (ww / 1.5, 0), (ww / 1.5, 1), (0, 1)]})
+        west.quad(g, [(0, -0.8, 0.08), (ww, -0.8, 0.08), (ww, 0.0, 0.08), (0, 0.0, 0.08)], "steps", (0, 0, 1))
+        # the corners: a brick mass with a flat tiled top each, so the yard is closed
+        for (a0, a1) in ((0.0, 6.0), (19.6, YARD[1] - YARD[0])):
+            Y.box(g, a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0, "brick", skip=("-z",))
+            Y.box(far, a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0, "brick", skip=("-z",))
+            Y.col(helpers, f"yard_c{int(a0)}", a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0)
+        # the ground: grey paving, a stone path from the gate
+        ga = YARD[1] - (YARD_GATE[0] + YARD_GATE[1]) / 2      # the gate's middle, as a
+        Y.quad(g, [(5.15, 7.0, 0.03), (20.7, 7.0, 0.03), (20.7, 20.45, 0.03), (5.15, 20.45, 0.03)], "paving", (0, 0, 1),
+               [(0, 0), (15.55 / 4, 0), (15.55 / 4, 13.45 / 4), (0, 13.45 / 4)])
+        Y.quad(g, [(ga - 0.6, 7.0, 0.04), (ga + 0.6, 7.0, 0.04), (ga + 0.6, 19.5, 0.04), (ga - 0.6, 19.5, 0.04)], "granite", (0, 0, 1))
+        Y.quad(g, [(6.0, 13.0, 0.041), (19.6, 13.0, 0.041), (19.6, 14.2, 0.041), (6.0, 14.2, 0.041)], "granite", (0, 0, 1))
+        # the screen wall facing the gate (you go round it)
+        Y.box(g, ga - 1.4, ga + 1.4, 8.3, 8.62, 0, 2.6, "brick", skip=("-z",))
+        Y.box(g, ga - 1.5, ga + 1.5, 8.22, 8.7, 2.6, 2.8, "tiles")
+        Y.quad(g, [(ga - 0.35, 8.29, 1.2), (ga + 0.35, 8.29, 1.2), (ga + 0.35, 8.29, 1.9), (ga - 0.35, 8.29, 1.9)], "couplet", (0, -1, 0), sub_uv(0, 0, 1, 0.27))
+        Y.col(helpers, "yard_screen", ga - 1.5, ga + 1.5, 8.22, 8.7, 0, 2.8)
+        # the stone table with its 象棋 board and four drum stools; the old man sits at the one facing the gate
+        ta, td = 9.2, 11.6
+        tg = Geo()
+        cyl(tg, 0, 0, 0.0, 0.7, 0.22, 0.3, 10, "granite")
+        cyl(tg, 0, 0, 0.7, 0.78, 0.5, 0.5, 14, "granite")
+        g.add(tg, Y.M(ta, td, 0))
+        Y.quad(g, [(ta - 0.3, td - 0.3, 0.785), (ta + 0.3, td - 0.3, 0.785), (ta + 0.3, td + 0.3, 0.785), (ta - 0.3, td + 0.3, 0.785)], "goods", (0, 0, 1), sub_uv(*gcell["chess"]))
+        Y.col(helpers, "yard_table", ta - 0.5, ta + 0.5, td - 0.5, td + 0.5, 0, 0.78)
+        for (oa, od) in ((0, 0.72), (0, -0.72), (0.72, 0), (-0.72, 0)):
+            sg2 = Geo()
+            cyl(sg2, 0, 0, 0.0, 0.42, 0.17, 0.17, 10, "granite")
+            g.add(sg2, Y.M(ta + oa, td + od, 0))
+        # a bird cage on a stand by him, two pots of pomegranate, bikes against the south house, washing on a line
         cg = Geo()
-        cyl(cg, 0, 0, 0.1, wz, 0.1, 0.1, 10, "lacquer", caps=(False, False))
-        a = min(max(c, 0.12), ww - 0.12)
-        g.add(cg, west.M(a, -0.6, 0))
-        west.col(helpers, f"yard_w{int(c * 10)}", a - 0.11, a + 0.11, -0.71, -0.49, 0, wz)
-    west.box(g, 0, ww, -0.7, -0.5, wz - 0.35, wz, "beam", skip=("+d",), uvs={"-d": [(0, 0), (ww / 1.5, 0), (ww / 1.5, 1), (0, 1)]})
-    west.quad(g, [(0, -0.8, 0.08), (ww, -0.8, 0.08), (ww, 0.0, 0.08), (0, 0.0, 0.08)], "steps", (0, 0, 1))
-    # the corners: a brick mass with a flat tiled top each, so the yard is closed
-    for (a0, a1) in ((0.0, 6.0), (19.6, YARD[1] - YARD[0])):
-        Y.box(g, a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0, "brick", skip=("-z",))
-        Y.box(far, a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0, "brick", skip=("-z",))
-        Y.col(helpers, f"yard_c{int(a0)}", a0, a1, 7.0 + 12.9, 7.0 + 18.0, 0, 3.0)
-    # the ground: grey paving, a stone path from the gate
-    ga = YARD[1] - (YARD_GATE[0] + YARD_GATE[1]) / 2      # the gate's middle, as a
-    Y.quad(g, [(5.15, 7.0, 0.03), (20.7, 7.0, 0.03), (20.7, 20.45, 0.03), (5.15, 20.45, 0.03)], "paving", (0, 0, 1),
-           [(0, 0), (15.55 / 4, 0), (15.55 / 4, 13.45 / 4), (0, 13.45 / 4)])
-    Y.quad(g, [(ga - 0.6, 7.0, 0.04), (ga + 0.6, 7.0, 0.04), (ga + 0.6, 19.5, 0.04), (ga - 0.6, 19.5, 0.04)], "granite", (0, 0, 1))
-    Y.quad(g, [(6.0, 13.0, 0.041), (19.6, 13.0, 0.041), (19.6, 14.2, 0.041), (6.0, 14.2, 0.041)], "granite", (0, 0, 1))
-    # the screen wall facing the gate (you go round it)
-    Y.box(g, ga - 1.4, ga + 1.4, 8.3, 8.62, 0, 2.6, "brick", skip=("-z",))
-    Y.box(g, ga - 1.5, ga + 1.5, 8.22, 8.7, 2.6, 2.8, "tiles")
-    Y.quad(g, [(ga - 0.35, 8.29, 1.2), (ga + 0.35, 8.29, 1.2), (ga + 0.35, 8.29, 1.9), (ga - 0.35, 8.29, 1.9)], "couplet", (0, -1, 0), sub_uv(0, 0, 1, 0.27))
-    Y.col(helpers, "yard_screen", ga - 1.5, ga + 1.5, 8.22, 8.7, 0, 2.8)
-    # the stone table with its 象棋 board and four drum stools; the old man sits at the one facing the gate
-    ta, td = 9.2, 11.6
-    tg = Geo()
-    cyl(tg, 0, 0, 0.0, 0.7, 0.22, 0.3, 10, "granite")
-    cyl(tg, 0, 0, 0.7, 0.78, 0.5, 0.5, 14, "granite")
-    g.add(tg, Y.M(ta, td, 0))
-    Y.quad(g, [(ta - 0.3, td - 0.3, 0.785), (ta + 0.3, td - 0.3, 0.785), (ta + 0.3, td + 0.3, 0.785), (ta - 0.3, td + 0.3, 0.785)], "goods", (0, 0, 1), sub_uv(*gcell["chess"]))
-    Y.col(helpers, "yard_table", ta - 0.5, ta + 0.5, td - 0.5, td + 0.5, 0, 0.78)
-    for (oa, od) in ((0, 0.72), (0, -0.72), (0.72, 0), (-0.72, 0)):
-        sg2 = Geo()
-        cyl(sg2, 0, 0, 0.0, 0.42, 0.17, 0.17, 10, "granite")
-        g.add(sg2, Y.M(ta + oa, td + od, 0))
-    # a bird cage on a stand by him, two pots of pomegranate, bikes against the south house, washing on a line
-    cg = Geo()
-    cyl(cg, 0, 0, 0.0, 1.55, 0.025, 0.025, 6, "inwood")
-    cg.box(-0.02, 0.32, -0.02, 0.02, 1.52, 1.56, "inwood")
-    cyl(cg, 0.3, 0, 1.0, 1.36, 0.14, 0.14, 12, "bamboo", caps=(True, False))
-    lathe(cg, [(0.14, 1.36), (0.08, 1.44), (0.0, 1.47)], 12, "bamboo", x=0.3)
-    cyl(cg, 0.3, 0, 1.47, 1.52, 0.006, 0.006, 4, "iron")
-    g.add(cg, Y.M(ta + 1.3, td + 1.1, 0))
-    for (pa_, pd_) in ((6.7, 9.6), (6.7, 17.8)):
-        put("pot", Y.M(pa_, pd_, 0))
-        Y.col(helpers, f"yard_pot{int(pd_)}", pa_ - 0.3, pa_ + 0.3, pd_ - 0.3, pd_ + 0.3, 0, 0.9)
-    for k in range(2):
-        put("bike", Y.M(19.3, 15.4 + k * 1.4, 0, yaw=math.pi / 2 + 0.1))
-    la_ = 17.4
-    Y.box(g, la_ - 0.01, la_ + 0.01, 9.8, 17.2, 1.95, 1.965, "iron")
-    for k, dd in enumerate((10.6, 11.9, 13.3, 14.6, 15.9)):
-        key = f"laundry{k % 3}"
-        hw = 0.28 if k % 2 == 0 else 0.22
-        for sgn in (1, -1):
-            Y.quad(g, [(la_ + 0.004 * sgn, dd - hw, 1.25 if k % 2 else 1.35), (la_ + 0.004 * sgn, dd + hw, 1.25 if k % 2 else 1.35),
-                       (la_ + 0.004 * sgn, dd + hw, 1.95), (la_ + 0.004 * sgn, dd - hw, 1.95)], key, (sgn, 0, 0))
-    for dd in (9.8, 17.2):
-        Y.box(g, la_ - 0.03, la_ + 0.03, dd - 0.03, dd + 0.03, 0, 2.0, "iron")
-    # the jujube in the middle (the city plants it with the lane's 国槐)
-    tp = Y.P(13.0, 15.5, 0)
-    trees.append([tp.x, tp.y, 0, 0.8])
-    layout["yard"] = {"gate": Y.xy(ga, -0.6), "inside": Y.xy(ga, 9.6), "area": [Y.xy(5.2, 7.0), Y.xy(20.6, 20.4)],
-                      "passage": [Y.xy(ga - 0.7, 0.0), Y.xy(ga + 0.7, 7.0)],
-                      "elder": Y.xy(ta, td + 0.72), "elderFace": Y.xy(ta, td), "cage": Y.xy(ta + 1.6, td + 1.1)}
+        cyl(cg, 0, 0, 0.0, 1.55, 0.025, 0.025, 6, "inwood")
+        cg.box(-0.02, 0.32, -0.02, 0.02, 1.52, 1.56, "inwood")
+        cyl(cg, 0.3, 0, 1.0, 1.36, 0.14, 0.14, 12, "bamboo", caps=(True, False))
+        lathe(cg, [(0.14, 1.36), (0.08, 1.44), (0.0, 1.47)], 12, "bamboo", x=0.3)
+        cyl(cg, 0.3, 0, 1.47, 1.52, 0.006, 0.006, 4, "iron")
+        g.add(cg, Y.M(ta + 1.3, td + 1.1, 0))
+        for (pa_, pd_) in ((6.7, 9.6), (6.7, 17.8)):
+            put("pot", Y.M(pa_, pd_, 0))
+            Y.col(helpers, f"yard_pot{int(pd_)}", pa_ - 0.3, pa_ + 0.3, pd_ - 0.3, pd_ + 0.3, 0, 0.9)
+        for k in range(2):
+            put("bike", Y.M(19.3, 15.4 + k * 1.4, 0, yaw=math.pi / 2 + 0.1))
+        la_ = 17.4
+        Y.box(g, la_ - 0.01, la_ + 0.01, 9.8, 17.2, 1.95, 1.965, "iron")
+        for k, dd in enumerate((10.6, 11.9, 13.3, 14.6, 15.9)):
+            key = f"laundry{k % 3}"
+            hw = 0.28 if k % 2 == 0 else 0.22
+            for sgn in (1, -1):
+                Y.quad(g, [(la_ + 0.004 * sgn, dd - hw, 1.25 if k % 2 else 1.35), (la_ + 0.004 * sgn, dd + hw, 1.25 if k % 2 else 1.35),
+                           (la_ + 0.004 * sgn, dd + hw, 1.95), (la_ + 0.004 * sgn, dd - hw, 1.95)], key, (sgn, 0, 0))
+        for dd in (9.8, 17.2):
+            Y.box(g, la_ - 0.03, la_ + 0.03, dd - 0.03, dd + 0.03, 0, 2.0, "iron")
+        # the jujube in the middle (the city plants it with the lane's 国槐)
+        tp = Y.P(13.0, 15.5, 0)
+        trees.append([tp.x, tp.y, 0, 0.8])
+        layout["yard"] = {"gate": Y.xy(ga, -0.6), "inside": Y.xy(ga, 9.6), "area": [Y.xy(5.2, 7.0), Y.xy(20.6, 20.4)],
+                          "passage": [Y.xy(ga - 0.7, 0.0), Y.xy(ga + 0.7, 7.0)],
+                          "elder": Y.xy(ta, td + 0.72), "elderFace": Y.xy(ta, td), "cage": Y.xy(ta + 1.6, td + 1.1)}
 
     # ---- far level, colliders, markers ----
     # the flat colours onto the palette
@@ -1980,52 +2143,61 @@ def build():
         m = seg_m((y0 + y1) / 2)
         flat_marker(helpers, name, [tuple((m @ Vector((x, y, 0))).xy) for x, y in rect(x0, x1, y0, y1)], role)
 
-    for (s0, s1) in ((Y0, Y1), (M0, M1)):
-        cuts = [(c0, c1) for (c0, c1) in CROSSINGS if s0 < c0 < s1]
-        runs, y = [], s0 - 0.2
-        for (c0, c1) in cuts + [(s1 + 0.2, s1 + 0.2)]:
-            runs.append((y, c0))
-            y = c1
+    for (s0, s1) in STRETCHES:
+        def runs_of(cs):
+            runs, y = [], s0 - 0.2
+            for (c0, c1) in sorted(c for c in cs if s0 < c[0] < s1) + [(s1 + 0.2, s1 + 0.2)]:
+                runs.append((y, c0))
+                y = c1
+            return [r for r in runs if in_part((r[0] + r[1]) / 2)]
         for side in ("w", "e"):
             sx = -1 if side == "w" else 1
             x_in, x_out = sx * (HALF + 0.05), sx * (HALF + BACK1 + 0.1)
-            for i, (r0, r1) in enumerate(runs):
+            for i, (r0, r1) in enumerate(runs_of(crossings(side))):
                 marker(f"nanluo_{side}{int(s0)}_{i}", min(x_in, x_out), max(x_in, x_out), r0, r1, "FOOTPRINT")
-        for i, (r0, r1) in enumerate(runs):
+        for i, (r0, r1) in enumerate(runs_of(CROSSINGS)):
             marker(f"nanluo_lane{int(s0)}_{i}", -HALF - 0.1, HALF + 0.1, r0 - (1.0 if r0 < 1 else 0), r1, "CLEAR")
-    marker("nanluo_yard", HALF + DEPTH, HALF + DEPTH + 18.2, YARD[0], YARD[1], "FOOTPRINT")
-    marker("nanluo_yardclear", HALF + DEPTH, HALF + DEPTH + 13.4, YARD[0] + 4.9, YARD[1] - 5.2, "CLEAR")
+    if in_part(YARD[0]):
+        marker("nanluo_yard", HALF + DEPTH, HALF + DEPTH + 18.2, YARD[0], YARD[1], "FOOTPRINT")
+        marker("nanluo_yardclear", HALF + DEPTH, HALF + DEPTH + 13.4, YARD[0] + 4.9, YARD[1] - 5.2, "CLEAR")
 
-    layout["trees"] = trees
+    # the gates a delivery can go to (the plate's number by each)
+    for lt in lots:
+        if lt["kind"] == "gate" and "L" in lt:
+            layout["gates"].append({"no": lt["no"], "side": lt["side"], "door": lt["L"].xy(lt["L"].w / 2, -0.45), "in": lt["L"].xy(lt["L"].w / 2, 0.5)})
     layout["lamps"] = lamps_at
-    layout["lane"] = {"half": HALF, "stretches": [[Y0, Y1], [M0, M1]], "bend": [BEND_Y, round(math.degrees(BEND), 4)], "crossings": CROSSINGS}
+    layout["lane"] = {"half": HALF, "stretches": [list(st) for st in STRETCHES], "bends": [[by, round(math.degrees(a), 4)] for by, a in BENDS],
+                      "crossings": CROSSINGS, "crossingsE": CROSS_E, "parts": {k: [v[0], v[1]] for k, v in PARTS.items()}}
     layout["mouths"] = {"south": [0.0, -0.5], "fuxiang": [-HALF - 2.0, sum(FUXIANG) / 2], "chaodou": [HALF + 2.0, sum(FUXIANG) / 2],
-                        "banchang": [0.0, (Y1 + M0) / 2], "dongmianhua": [0.0, M1 + 2.5]}
+                        "banchang": [0.0, (Y1 + M0) / 2], "dongmianhua": [0.0, M1 + 2.5], "north": [0.0, N1 + 0.5]}
     layout["frame"] = {"gx": GX, "gz": GZ, "heading": HEADING}
-    os.makedirs(os.path.dirname(LAYOUT), exist_ok=True)
-    with open(LAYOUT, "w") as f:
-        json.dump(layout, f, ensure_ascii=False, indent=1)
-        f.write("\n")
 
+    p = PARTS[PART]
+    o = lane_m(p[2]) @ Vector((0, p[2], 0))
+    h = math.radians(HEADING)
     s = bpy.context.scene.bcity
-    s.lm_id, s.name_zh, s.name_en = "nanluo", "南锣鼓巷", "Nanluoguxiang"
-    s.coord_mode, s.game_x, s.game_z, s.heading = "GAME", GX, GZ, HEADING
-    s.far_distance = 270
+    s.lm_id = PART
+    s.name_zh, s.name_en = ("南锣鼓巷", "Nanluoguxiang") if PART == "nanluo" else ("南锣鼓巷北段", "Nanluoguxiang North")
+    s.coord_mode, s.heading = "GAME", HEADING
+    s.game_x, s.game_z = GX + o.x * math.cos(h) + o.y * math.sin(h), GZ + o.x * math.sin(h) - o.y * math.cos(h)
+    s.far_distance = p[3]
     s.max_texture = "2048"
     s.repo_path = REPO
-    return dict(tris=tris, far=far.tris(), lots=len(lots), lanterns=lantern_n, parts=counts)
+    return dict(part=PART, tris=tris, far=far.tris(), lots=sum(1 for lt in lots if "L" in lt), lanterns=lantern_n, parts=counts, trees=trees)
 
 
-def write_trees(trees):
+def write_trees(part, trees):
     """The 国槐 along the lane go into the meta the export wrote (the city plants them at boot): [x, z, species, scale]
     in the game's local frame, where z is Blender's -y. import.mjs keeps them on a re-import."""
-    path = os.path.join(REPO, "src", "city", "landmarks", "glb", "nanluo.meta.json")
+    path = os.path.join(REPO, "src", "city", "landmarks", "glb", f"{part}.meta.json")
     if not os.path.exists(path):
         return
     with open(path) as f:
         text = f.read()
     meta = json.loads(text)
     meta["trees"] = [v for x, y, sp, sc in trees for v in (round(x, 2), round(-y, 2), sp, sc)]
+    if part != "nanluo":
+        meta["partOf"] = "nanluo"     # one place on the map and one check-in, the south one's
     out = json.dumps(meta, ensure_ascii=False, indent=2)
     import re
     out = re.sub(r"\[\s+(-?[\d.e-]+),\s+(-?[\d.e-]+)\s+\]", r"[\1, \2]", out)
@@ -2036,9 +2208,21 @@ def write_trees(trees):
 
 
 if __name__ == "__main__":
-    info = build()
-    print("built", info)
-    save_and_export(OUT, argv)
-    if "--export" in argv:
-        with open(LAYOUT) as f:
-            write_trees(json.load(f)["trees"])
+    # every part in one run (the layout is all of them): --part ID builds and exports that one only
+    only = argv[argv.index("--part") + 1] if "--part" in argv else None
+    for PART in PARTS:
+        p = PARTS[PART]
+        OFF = Matrix.Translation(-(lane_m(p[2]) @ Vector((0, p[2], 0))))
+        info = build()
+        if only and PART != only:
+            continue
+        trees = info.pop("trees")
+        print("built", info)
+        out = OUT if PART == "nanluo" else OUT.replace("nanluo.blend", f"{PART}.blend")
+        save_and_export(out, argv)
+        if "--export" in argv:
+            write_trees(PART, trees)
+    os.makedirs(os.path.dirname(LAYOUT), exist_ok=True)
+    with open(LAYOUT, "w") as f:
+        json.dump(layout, f, ensure_ascii=False, indent=1)
+        f.write("\n")

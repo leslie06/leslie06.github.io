@@ -64,6 +64,10 @@ export interface GameEvents {
   'player:dress': { wear: import('../game/Contracts').Wear };
   'district:photo': Record<string, never>;
   'district:dance': { hits: number; of: number; prize: number };
+  /** Round 3: a cat mewing at (x, z) (the café's lost cat, the café's own), a racket broken up, a delivery handed over. */
+  'district:meow': { x: number; z: number };
+  'district:racket': { shop: string; result: 'won' | 'lost' | 'fled' | 'paid' };
+  'district:delivered': { pay: number; late: boolean };
   /** The police got the player (police/), just before the respawn: fines and the impound hang off it. */
   'wanted:busted': { level: number };
   /** A traffic car blew its horn at (x, z). */

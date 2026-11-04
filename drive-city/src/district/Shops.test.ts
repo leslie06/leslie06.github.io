@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blocked, CATALOG, dancePrize, DEFAULT_WORN, HAIR, loadSave, ownKey, SHOP_IDS, WARDROBE } from './Shops';
+import { blocked, CATALOG, dancePrize, DEFAULT_WORN, deliveryPay, deliveryTime, HAIR, loadSave, ownKey, priceOf, RACKET_SHOPS, SHOP_IDS, WARDROBE } from './Shops';
 
 describe('南锣鼓巷 shops', () => {
   it('every shop but the arcade and the clothes shop sells something, at a price', () => {
@@ -31,12 +31,29 @@ describe('南锣鼓巷 shops', () => {
   });
 
   it('reads a save, and survives a broken one', () => {
-    const empty = { souvenirs: 0, photos: 0, danceBest: 0, visited: [], owned: [], worn: DEFAULT_WORN, yard: false };
+    const empty = { souvenirs: 0, photos: 0, danceBest: 0, visited: [], owned: [], worn: DEFAULT_WORN, yard: false, regulars: [], deliveries: 0, cat: false, rackets: 0 };
     expect(loadSave(null)).toEqual(empty);
     expect(loadSave('{oops')).toEqual(empty);
     // a round-1 save reads with round 2's defaults
     expect(loadSave(JSON.stringify({ souvenirs: 2.7, photos: -1, danceBest: 40, visited: ['tea', 'bank', 'photo'] })))
       .toEqual({ ...empty, souvenirs: 2, danceBest: 16, visited: ['tea', 'photo'] });
+    // round 3's: shops stood up for, deliveries, the cat
+    expect(loadSave(JSON.stringify({ regulars: ['grill', 'mall', 'cats'], deliveries: 3, cat: 'yes', rackets: 2 })))
+      .toEqual({ ...empty, regulars: ['grill', 'cats'], deliveries: 3, rackets: 2 });
+  });
+
+  it('sells to a regular for less, and pays a delivery by the time left', () => {
+    const [chuan] = CATALOG.grill.items;
+    expect(priceOf(chuan, false)).toBe(15);
+    expect(priceOf(chuan, true)).toBe(11);
+    // the cheaper price is what decides whether it can be bought
+    expect(blocked(chuan, { cash: 12, health: 50, rabbitsLeft: 0, price: priceOf(chuan, true) })).toBeNull();
+    expect(blocked(chuan, { cash: 12, health: 50, rabbitsLeft: 0 })).toEqual({ key: 'nl.panel.short', n: 3 });
+    for (const id of RACKET_SHOPS) expect(CATALOG[id].items.length).toBeGreaterThan(0);
+    expect(deliveryPay(60, 60)).toBe(60);
+    expect(deliveryPay(1, 60)).toBe(31);
+    expect(deliveryPay(0, 60)).toBe(12);
+    expect(deliveryTime(300)).toBe(125);
   });
 
   it('wears only what was bought (or is free)', () => {

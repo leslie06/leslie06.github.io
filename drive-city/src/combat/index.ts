@@ -40,6 +40,8 @@ interface Brawl {
   over: boolean;
   /** Seconds since everyone went down (the win is called a beat later). */
   wonT: number;
+  /** Standing about facing this point, not fighting yet (`go()` starts it). */
+  wait: { x: number; z: number } | null;
 }
 /** A blow the player threw, landing at `at` seconds into the move (`fin`: a finisher, into a car or a wall). */
 interface Pending { f: Fighter; t: number; at: number; dmg: number; knock: boolean; counter: boolean; action: StrikeAction; fin: Finish | null }
@@ -82,7 +84,7 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   const feet = () => player.foot;
-  const standing = () => fighters.filter((f) => f.brain.standing);
+  const standing = () => fighters.filter((f) => f.brain.standing && !f.brawl.wait);
   const near = (f: Fighter, r: number) => { const ft = feet(); return !!ft && Math.hypot(f.brain.x - ft.pos.x, f.brain.z - ft.pos.z) < r; };
   /** A car or a wall within FINISH.back behind `f`, seen from (px, pz), at waist and chest height (a bonnet is low). */
   const surfaceBehind = (f: Fighter, px: number, pz: number): Finish | null => {
@@ -210,13 +212,15 @@ export async function install(engine: Engine): Promise<void> {
     brawl(x, z, n, opts) {
       let resolve: (r: 'won' | 'lost' | 'fled') => void = () => {};
       const done = new Promise<'won' | 'lost' | 'fled'>((r) => { resolve = r; });
-      const b: Brawl = { fighters: [], resolve, over: false, wonT: 0 };
+      const b: Brawl = { fighters: [], resolve, over: false, wonT: 0, wait: opts?.wait ?? null };
       const toughOf = (k: number): Tough => ({ ...TOUGH, hp: TOUGH.hp * k, dmg: TOUGH.dmg * Math.sqrt(k), windup: TOUGH.windup / Math.sqrt(k) });
       const tough = toughOf(opts?.tough ?? 1), boss = opts?.boss;
       for (let i = 0; i < n; i++) {
         // spread round (x, z), each spot in the open (a ray from the middle reaches it)
         let sx = x, sz = z;
-        for (let k = 0; k < 8; k++) {
+        const at = opts?.at?.[i];
+        if (at) { sx = at.x; sz = at.z; }
+        else for (let k = 0; k < 8; k++) {
           const a = (i / n) * Math.PI * 2 + rnd() * 0.8 + k * 0.7, r = 1.5 + rnd() * 2.5;
           const tx = x + Math.sin(a) * r, tz = z + Math.cos(a) * r;
           const hit = engine.physics.raycast({ x, y: 1, z }, { x: (tx - x) / r, y: 0, z: (tz - z) / r }, r + 0.5, slamGroups, true);
@@ -227,6 +231,7 @@ export async function install(engine: Engine): Promise<void> {
         const actor = people.spawnActor!(sx, sz, { look, yaw: rnd() * 6.28, seed: rnd() });
         if (!actor) continue;
         actor.fair = true;
+        if (b.wait) { actor.stop(); actor.face(b.wait.x, b.wait.z); actor.act(i === 0 ? 'point' : 'angry', { t: rnd() * 2 }); }
         const f: Fighter = { brain: new Brain(sx, sz, isBoss ? toughOf(boss.tough) : tough), actor, brawl: b, koT: -1, detour: 0, side: 0 };
         b.fighters.push(f); fighters.push(f);
         if (isBoss) {
@@ -238,7 +243,8 @@ export async function install(engine: Engine): Promise<void> {
       }
       brawls.push(b);
       const end = () => { if (!b.over) finish(b, 'fled'); };
-      return { done, end, actors: b.fighters.map((f) => f.actor) };
+      const go = () => { if (!b.wait) return; b.wait = null; for (const f of b.fighters) if (f.actor.alive) { f.brain.x = f.actor.pos.x; f.brain.z = f.actor.pos.z; f.actor.act(null); } };
+      return { done, end, go, actors: b.fighters.map((f) => f.actor) };
     },
 
     fixedUpdate(dt) {
@@ -258,7 +264,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       for (const f of fighters) {
         const b = f.brain, a = f.actor;
-        if (!a.alive) continue;
+        if (!a.alive || f.brawl.wait) continue;
         // people/ has it down (a blow, a car) or up again
         if (a.state === 'down') { b.x = a.pos.x; b.z = a.pos.z; if (b.standing && b.state !== 'down') b.knocked(); continue; }
         if (b.state === 'down') b.up();
@@ -311,7 +317,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       // the brawls: won (everyone out), lost (wasted), fled (60 m off)
       for (const b of brawls) {
-        if (b.over) continue;
+        if (b.over || b.wait) continue;
         if (b.fighters.every((f) => f.brain.state === 'ko' || !f.actor.alive)) { b.wonT += dt; if (b.wonT > 1.2) finish(b, 'won'); }
         else if (player.health <= 0) finish(b, 'lost');
         else if (b.fighters.every((f) => !f.actor.alive || f.brain.state === 'ko' || Math.hypot(f.brain.x - px, f.brain.z - pz) > 60)) finish(b, 'fled');
@@ -324,7 +330,7 @@ export async function install(engine: Engine): Promise<void> {
         const gone = !f.actor.alive || (f.brawl.over && (f.koT > 30 || Math.hypot(f.actor.pos.x - cam.x, f.actor.pos.z - cam.z) > 70));
         if (gone) { if (f.actor.alive) f.actor.release(f.brain.state === 'ko' ? 'vanish' : 'walk'); fighters.splice(i, 1); }
       }
-      engagedNow = !!ft && fighters.some((f) => f.brain.standing && near(f, 14));
+      engagedNow = !!ft && fighters.some((f) => f.brain.standing && !f.brawl.wait && near(f, 14));
       // the finisher on offer: the nearest softened fighter within reach of a lunge with a surface behind him
       fin = null;
       if (engagedNow && ft && player.mode === 'onfoot') {
@@ -341,7 +347,7 @@ export async function install(engine: Engine): Promise<void> {
     },
 
     update() {
-      hud.draw(fighters.map((f) => ({ x: f.actor.pos.x, y: f.actor.pos.y, z: f.actor.pos.z, hp: f.brain.hp / f.brain.tough.hp, warn: f.brain.telegraph, fin: fin?.f === f ? fin.s.kind : null, standing: f.brain.standing && f.actor.state === 'script' })), engagedNow);
+      hud.draw(fighters.map((f) => ({ x: f.actor.pos.x, y: f.actor.pos.y, z: f.actor.pos.z, hp: f.brain.hp / f.brain.tough.hp, warn: f.brain.telegraph, fin: fin?.f === f ? fin.s.kind : null, standing: f.brain.standing && !f.brawl.wait && f.actor.state === 'script' })), engagedNow);
     },
   };
 

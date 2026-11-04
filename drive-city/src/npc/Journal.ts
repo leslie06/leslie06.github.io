@@ -20,6 +20,8 @@ export const ENTRIES: [string, TKey][] = [
   // the contacts, met in person (contacts/)
   ['con.laok', 'who.laok'], ['con.xiaoyu', 'who.xiaoyu'], ['con.daliu', 'who.daliu'], ['con.wang', 'who.wang'],
   ['con.laozhang', 'con.who.laozhang'], ['con.liujie', 'con.who.liujie'], ['con.feilong', 'con.who.feilong'],
+  // 南锣鼓巷 (district/)
+  ['nl.racket', 'npc.j.racket'],
 ];
 
 export class Journal {

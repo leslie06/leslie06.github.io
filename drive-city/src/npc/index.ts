@@ -893,7 +893,7 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   // --- 老外问路
-  const lmPts = LANDMARKS.filter((l) => l.id !== 'home').map((l) => { const [x, z] = project(l.lat, l.lon); return { id: l.id, x, z, zh: l.name.zh, en: l.name.en }; });
+  const lmPts = LANDMARKS.filter((l) => l.id !== 'home' && !l.partOf).map((l) => { const [x, z] = project(l.lat, l.lon); return { id: l.id, x, z, zh: l.name.zh, en: l.name.en }; });
   const told = new Set<string>();
   const startForeigner = (): boolean => {
     if (pl.mode !== 'driving') return false;

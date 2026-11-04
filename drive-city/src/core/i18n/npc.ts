@@ -318,6 +318,7 @@ export const NPC_EN = {
   'event.blackHit': 'Rammed the pirate cab {n}/2',
   'pax.legit': 'A proper cab - much better!',
   'npc.j.blackcab': 'The pirate cab driver',
+  'npc.j.racket': "Black Panther's collectors",
 
   // --- P3 encounters (npc/)
   'npc.who.courier': 'Delivery rider', 'npc.who.boss': 'Tipsy boss', 'npc.who.client': 'Client', 'npc.who.foreigner': 'Tourist',
@@ -665,7 +666,7 @@ export const NPC_ZH: Record<NpcKey, string> = {
   'npc.j.blackcab': '黑车司机',
 
   'npc.who.courier': '外卖小哥', 'npc.who.boss': '喝多的老板', 'npc.who.client': '神秘委托人', 'npc.who.foreigner': '外国游客',
-  'npc.j.courier': '摔了的外卖小哥', 'npc.j.daijia': '叫代驾的老板', 'npc.j.tail': '跟车的委托人', 'npc.j.foreigner': '问路的老外', 'npc.j.gang': '找茬的黑豹打手',
+  'npc.j.courier': '摔了的外卖小哥', 'npc.j.daijia': '叫代驾的老板', 'npc.j.tail': '跟车的委托人', 'npc.j.foreigner': '问路的老外', 'npc.j.racket': '收保护费的黑豹', 'npc.j.gang': '找茬的黑豹打手',
   'npc.obj.courierWave': '路边有个外卖小哥在招手',
   'npc.courier.ask': '哥们儿，我脚扭了……帮我送两单行吗？配送费分你！',
   'npc.courier.optYes': '行，交给我', 'npc.courier.optNo': '没空',

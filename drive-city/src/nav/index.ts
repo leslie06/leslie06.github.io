@@ -63,7 +63,7 @@ async function loadLandmarks(): Promise<LandmarkPin[]> {
   if (!loader) return [];
   try {
     const defs = ((await loader()) as { LANDMARKS?: LandmarkDef[] }).LANDMARKS ?? [];
-    return defs.map((d) => { const [x, z] = project(d.lat, d.lon); return { id: d.id, name: d.name, x, z }; });
+    return defs.filter((d) => !d.partOf).map((d) => { const [x, z] = project(d.lat, d.lon); return { id: d.id, name: d.name, x, z }; });
   } catch (e) { console.warn('[nav] landmarks unavailable', e); return []; }
 }
 

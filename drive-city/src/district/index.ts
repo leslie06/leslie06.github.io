@@ -2,22 +2,24 @@ import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
 import { Rng } from '../core/Rng';
-import type { Actor, Blip, CameraApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RenderApi, VehicleApi, Wear, WorldApi } from '../game/Contracts';
+import type { Actor, Blip, CameraApi, CombatApi, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RenderApi, Speaker, VehicleApi, WantedApi, Wear, WorldApi } from '../game/Contracts';
+import type { ContactsApi } from '../contacts';
+import { CAST_ON, castModel, hasModel } from '../character/Cast';
+import { journalOf } from '../npc/Journal';
+import { Cats, type CatPose, type CatState } from './Cats';
 import type { CollectApi } from '../collect';
 import type { MusicSource } from '../audio/StreetMusic';
 import { Gait } from '../character/Animator';
 import { J, randomLook, type Look } from '../character/Body';
-import { project } from '../city/Geo';
 import { Fade } from '../campaign/Screens';
 import { DanceGame } from '../life/DanceGame';
 import { LifeProps } from '../life/Props';
 import { css, el } from '../ui/theme';
-import META from '../city/landmarks/glb/nanluo.meta.json';
 import LAYOUT from './nanluo.layout.json';
 import { agePrint, PhotoCard, ShopPanel, type Row } from './Panel';
 import {
-  blocked, CATALOG, DANCE_PRICE, dancePrize, DEFAULT_WORN, HAIR, type Item, LISTEN_HEAL, loadSave, MAP_MARKS, ownKey, type Save, SHOP_IDS,
-  type ShopId, SONG_PRICE, SONGS, WARDROBE, type Wearable, wearable, type WearKind, type Worn,
+  blocked, CAT_REWARD, CATALOG, DANCE_PRICE, dancePrize, DEFAULT_WORN, deliveryPay, deliveryTime, HAIR, type Item, LISTEN_HEAL, loadSave, MAP_MARKS, ownKey,
+  priceOf, RACKET_PAY, RACKET_SHOPS, type Save, SHOP_IDS, type ShopId, SONG_PRICE, SONGS, WARDROBE, type Wearable, wearable, type WearKind, type Worn,
 } from './Shops';
 
 css(`.nl-flash{position:fixed;inset:0;background:#fff;pointer-events:none;z-index:47;opacity:0;transition:opacity .5s ease-out}.nl-flash.on{opacity:.9;transition:none}`);
@@ -53,6 +55,9 @@ export interface DistrictApi extends System {
     world(u: number, s: number): { x: number; z: number }; local(x: number, z: number): [number, number];
     point(name: string): { x: number; z: number } | null; seats(): { x: number; z: number }[]; actors(): Record<string, boolean>;
     wear(kind: WearKind, id: string | null): void;
+    /** Round 3: start 黑豹's collection at the nearest shop that fits, a delivery, the lost cat; what is on. */
+    racket(): boolean; deliver(): { x: number; z: number } | null; cat(): { x: number; z: number } | null; tasks(): Record<string, unknown>;
+    catHere(): void; catSeats(): { x: number; z: number }[];
   };
 }
 
@@ -62,41 +67,55 @@ interface ShopLayout {
   inside?: XY; room?: [XY, XY]; stall?: boolean; smoke?: XY;
   chair?: XY; chairFace?: XY; camera?: XY; pad?: XY; padFace?: XY; stand?: XY; mirror?: XY;
   seats?: XY[]; stage?: XY; stageFace?: XY; mic?: XY;
+  /** Round 3: the dumpling shop's takeaway shelf; the café's table to sit at and where its cats are ([u, s, height, face u, face s]). */
+  bags?: XY; seatFace?: XY; cats?: [number, number, number, number, number][];
 }
 interface YardLayout { gate: XY; inside: XY; area: [XY, XY]; passage: [XY, XY]; elder: XY; elderFace: XY; cage: XY }
 
 // The model's frame: Blender (bx, by) is the game's local (bx, -by), turned by -heading about the anchor (city/index.ts
-// placeLandmarks). The layout's points are in nanluo.py's lane coordinates (u across, s along, unbent): the middle
-// stretch was built turned BEND about (0, BY), where the lane bends at 板厂胡同.
-const [OX, OZ] = project(META.lat, META.lon);
-const ROT = -META.headingDeg * Math.PI / 180, RC = Math.cos(ROT), RS = Math.sin(ROT);
-const LANE = LAYOUT.lane as unknown as { half: number; stretches: XY[]; bend: XY; crossings: XY[] };
-const BY = LANE.bend[0], BR = LANE.bend[1] * Math.PI / 180, BC = Math.cos(BR), BS = Math.sin(BR);
-const bent = (u: number, s: number): XY => (s <= BY ? [u, s] : [u * BC - (s - BY) * BS, BY + u * BS + (s - BY) * BC]);
-const unbent = (bx: number, by: number): XY => (by <= BY ? [bx, by] : [bx * BC + (by - BY) * BS, BY - bx * BS + (by - BY) * BC]);
+// placeLandmarks). The layout's points are in nanluo.py's lane coordinates (u across, s along, unbent): the lane turns
+// west at each of `lane.bends` (板厂, 东棉花, 菊儿胡同), each stretch north of one built turned about it. The north stretch
+// is two more landmarks (nanluo_n1, nanluo_n2) in the same lane coordinates, only their origins moved.
+// The lane's frame is the south mouth's (nanluo.py's GX, GZ, HEADING): the landmarks' own origins are each in the middle
+// of their part, for their LOD.
+const FRAME = (LAYOUT as unknown as { frame: { gx: number; gz: number; heading: number } }).frame;
+const OX = FRAME.gx, OZ = FRAME.gz;
+const ROT = -FRAME.heading * Math.PI / 180, RC = Math.cos(ROT), RS = Math.sin(ROT);
+const LANE = LAYOUT.lane as unknown as { half: number; stretches: XY[]; bends: XY[]; crossings: XY[]; crossingsE: XY[] };
+const BENDS = LANE.bends.map(([y, d]) => ({ y, a: d * Math.PI / 180, c: Math.cos(d * Math.PI / 180), s: Math.sin(d * Math.PI / 180) }));
+const turn = (u: number, s: number, b: (typeof BENDS)[number], k: number): XY => { const dy = s - b.y, sn = b.s * k; return [u * b.c - dy * sn, b.y + u * sn + dy * b.c]; };
+const bent = (u: number, s: number): XY => { let p: XY = [u, s]; for (let i = BENDS.length - 1; i >= 0; i--) if (s > BENDS[i].y) p = turn(p[0], p[1], BENDS[i], 1); return p; };
+const unbent = (bx: number, by: number): XY => { let p: XY = [bx, by]; for (const b of BENDS) { if (p[1] <= b.y) break; p = turn(p[0], p[1], b, -1); } return p; };
 const world = (u: number, s: number): { x: number; z: number } => { const [bx, by] = bent(u, s); return { x: OX + bx * RC - by * RS, z: OZ - bx * RS - by * RC }; };
 const local = (x: number, z: number): XY => { const dx = x - OX, dz = z - OZ; return unbent(dx * RC - dz * RS, -(dx * RS + dz * RC)); };
 /** The game's yaw (atan2(x, z)) of lane direction (du, ds) at lane position s. */
 const yawOf = (du: number, ds: number, s: number): number => {
-  const dx = s > BY ? du * BC - ds * BS : du, dy = s > BY ? du * BS + ds * BC : ds;
+  const a = BENDS.reduce((t, b) => (s > b.y ? t + b.a : t), 0), c = Math.cos(a), sn = Math.sin(a);
+  const dx = du * c - ds * sn, dy = du * sn + ds * c;
   return Math.atan2(dx * RC - dy * RS, -dx * RS - dy * RC);
 };
+const S0 = LANE.stretches[0][0], S1 = LANE.stretches[LANE.stretches.length - 1][1];
+/** On (or right by) the lane: |u| within `r` of its fronts and s between its mouths. */
+const onLane = (u: number, s: number, r = 0) => Math.abs(u) < LANE.half + r && s > S0 - 2 - r && s < S1 + 2 + r;
 
 const SHOPS = LAYOUT.shops as unknown as Record<ShopId, ShopLayout>;
 const MOUTHS = LAYOUT.mouths as unknown as Record<string, XY>;
 const YARD = (LAYOUT as unknown as { yard: YardLayout }).yard;
-/** The lane between its crossing hutongs (roads: the walkers turn before them). */
+const GATES = (LAYOUT as unknown as { gates: { no: string; side: string; door: XY; in: XY }[] }).gates;
+/** The lane between its crossing hutongs (roads: the walkers turn before them, and before 小菊儿胡同's mouth). */
 const RUNS: XY[] = [];
 for (const [s0, s1] of LANE.stretches) {
   let a = s0;
-  for (const [c0, c1] of [...LANE.crossings].sort((p, q) => p[0] - q[0])) if (c0 > s0 && c0 < s1) { RUNS.push([a, c0]); a = c1; }
+  for (const [c0, c1] of [...LANE.crossings, ...LANE.crossingsE].sort((p, q) => p[0] - q[0])) if (c0 > s0 && c0 < s1) { RUNS.push([a, c0]); a = c1; }
   RUNS.push([a, s1]);
 }
+/** The lane's runs clipped to [a, b]. */
+const runsIn = (a: number, b: number): XY[] => RUNS.map(([r0, r1]): XY => [Math.max(r0, a), Math.min(r1, b)]).filter(([r0, r1]) => r1 - r0 > 4);
 
 interface Keeper { id: ShopId; actor: Actor | null; barkT: number; faceT: number }
 interface Walker { u: number; s: number; lo: number; hi: number; dir: number; speed: number; pause: number; lookT: number; gait: Gait; look: Look; seed: number; pos: THREE.Vector3; prev: THREE.Vector3; yaw: number }
 /** A chair the player is held in: the barber's, a seat at the bar's tables (listening). */
-type Seated = { kind: 'barber'; t: number } | { kind: 'listen'; t: number; seat: number } | null;
+type Seated = { kind: 'barber'; t: number } | { kind: 'listen' | 'pet'; t: number; seat: number } | null;
 
 /**
  * 南锣鼓巷 (2026-11-03, docs/gta-plan.md §12, 「先做精华街区，要求街区精美，可以进入商店，让用户不只是开车，还能下车活动」): the
@@ -139,7 +158,7 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('game:start', () => { try { save = loadSave(localStorage.getItem(KEY)); } catch { /* ignore */ } dressUp(); });
 
   const W = (b: XY) => world(b[0], b[1]);
-  const south = W(MOUTHS.south), centre = world(0, (LANE.stretches[0][0] + LANE.stretches[LANE.stretches.length - 1][1]) / 2);
+  const south = W(MOUTHS.south), north = W(MOUTHS.north);
   const roomOf = (s: ShopLayout) => {
     if (!s.room) return null;
     const [a, b] = s.room;
@@ -207,14 +226,17 @@ export async function install(engine: Engine): Promise<void> {
   const rabbitsLeft = () => engine.get<CollectApi>('collect')?.left?.() ?? [];
   const keeperOf = (id: ShopId) => keepers.find((q) => q.id === id)?.actor ?? null;
   const thanks = (id: ShopId, line = t('nl.thanks')) => { const a = keeperOf(id); if (a?.alive) { a.say(line, 2.5); a.act('talk', { t: 0 }); } };
+  /** A shop the player stood up for against 黑豹's collectors: 熟客价 there (Shops.REGULAR). */
+  const regular = (id: ShopId) => save.regulars.includes(id);
   /** Buy item `it` in shop `id`: null when done, else why not. */
   const buy = (id: ShopId, it: Item): string | null => {
     const m = missions();
     if (!m) return 'no missions';
-    const why = blocked(it, { cash: m.cash, health: pl.health, rabbitsLeft: rabbitsLeft().length });
+    const price = priceOf(it, regular(id));
+    const why = blocked(it, { cash: m.cash, health: pl.health, rabbitsLeft: rabbitsLeft().length, price });
     if (why) return t(why.key, { n: why.n ?? 0 });
-    m.addCash(-it.price);
-    engine.events.emit('district:buy', { shop: id, item: it.id, price: it.price });
+    m.addCash(-price);
+    engine.events.emit('district:buy', { shop: id, item: it.id, price });
     if (it.heal) pl.heal(it.heal);
     if (it.guard) { pl.guard?.(it.guard.scale, it.guard.secs); toast(t('nl.guard', { m: Math.round(it.guard.secs / 60) }), 3); }
     if (it.act === 'map') {
@@ -224,7 +246,7 @@ export async function install(engine: Engine): Promise<void> {
       toast(t('nl.mapDone', { n: nearest.length }), 3);
     }
     if (it.act === 'souvenir') { save.souvenirs++; store(); toast(t('nl.souvenir', { n: save.souvenirs }), 3); }
-    if (!it.guard && it.act !== 'map' && it.act !== 'souvenir') toast(t('nl.bought', { item: t(it.name), n: it.price }), 2);
+    if (!it.guard && it.act !== 'map' && it.act !== 'souvenir') toast(t('nl.bought', { item: t(it.name), n: price }), 2);
     thanks(id);
     if (it.act === 'photo') { panel.close(); startPhoto(); }
     return null;
@@ -232,8 +254,9 @@ export async function install(engine: Engine): Promise<void> {
   const itemRows = (id: ShopId, again: () => void, section?: string): Row[] => {
     const m = missions();
     return CATALOG[id].items.map((it, i) => {
-      const why = blocked(it, { cash: m?.cash ?? 0, health: pl.health, rabbitsLeft: rabbitsLeft().length });
-      return { label: t(it.name), detail: describe(it), price: why ? t(why.key, { n: why.n ?? 0 }) : `¥${it.price}`, disabled: !!why,
+      const price = priceOf(it, regular(id));
+      const why = blocked(it, { cash: m?.cash ?? 0, health: pl.health, rabbitsLeft: rabbitsLeft().length, price });
+      return { label: t(it.name), detail: describe(it), price: why ? t(why.key, { n: why.n ?? 0 }) : regular(id) ? t('nl.regularPrice', { n: price }) : `¥${price}`, disabled: !!why,
         section: i === 0 ? section : undefined, buy: () => { if (!buy(id, it) && panel.open) again(); } };
     });
   };
@@ -249,7 +272,9 @@ export async function install(engine: Engine): Promise<void> {
         disabled: short, buy: () => { panel.close(); startDance(); } });
     }
     if (id === 'grill') visit('grill');
-    panel.render(t(shop.name), t(shop.greet), m?.cash ?? 0, rows);
+    if (id === 'noodle') rows.push(deliveryRow());
+    if (id === 'cats') rows.push(catRow());
+    panel.render(t(shop.name), regular(id) ? t('nl.greet.regular') : t(shop.greet), m?.cash ?? 0, rows);
     keeperOf(id)?.act('talk', { t: 0 });
   };
 
@@ -329,7 +354,7 @@ export async function install(engine: Engine): Promise<void> {
       const s = SHOPS.barber, c = W(s.chair!), d = W(s.counter);
       pl.setRiding(null, { x: d.x, y: 0.2, z: d.z, yaw: Math.atan2(d.x - c.x, d.z - c.z) });
     } else {
-      const s = SHOPS.bar, p = W(s.seats![was.seat]), st = W(s.stage!);
+      const s = SHOPS[was.kind === 'pet' ? 'cats' : 'bar'], p = W(s.seats![was.seat]), st = W(was.kind === 'pet' ? s.seatFace! : s.stage!);
       // a step back from the table, towards the room's middle
       const r = W(s.counter), dx = r.x - p.x, dz = r.z - p.z, L = Math.hypot(dx, dz) || 1;
       pl.setRiding(null, { x: p.x + dx / L * 0.55, y: 0.2, z: p.z + dz / L * 0.55, yaw: Math.atan2(st.x - p.x, st.z - p.z) });
@@ -372,6 +397,18 @@ export async function install(engine: Engine): Promise<void> {
     const dx = p.x - st.x, dz = p.z - st.z, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
     shot({ x: p.x + ux * 1.25 - uz * 0.75, z: p.z + uz * 1.25 + ux * 0.75 }, 1.6, st, 1.1, 0, 56);
     toast(t('nl.listen'), 4);
+  };
+  /** The café's table: sit with the cats (one hops up beside you), health back a second like the bar's. */
+  const sitWithCats = (i: number) => {
+    const s = SHOPS.cats;
+    if (!s.seats || !s.seatFace || seated) return;
+    const p = W(s.seats[i]), f = W(s.seatFace);
+    pl.setRiding({ pos: new THREE.Vector3(p.x, 0.04, p.z), yaw: Math.atan2(f.x - p.x, f.z - p.z) });
+    pl.setPose?.('sit', 0);
+    seated = { kind: 'pet', t: 0, seat: i };
+    const dx = p.x - f.x, dz = p.z - f.z, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
+    shot({ x: f.x - ux * 1.5 - uz * 0.9, z: f.z - uz * 1.5 + ux * 0.9 }, 1.5, { x: (p.x + f.x) / 2, z: (p.z + f.z) / 2 }, 0.75, 0, 58);
+    toast(t('nl.cats.pet'), 4);
   };
   const singerSpawn = () => {
     const s = SHOPS.bar;
@@ -482,25 +519,35 @@ export async function install(engine: Engine): Promise<void> {
   const cap = () => (engine.lite ? LITE : WALKERS[engine.quality.tier]);
   const walkers: Walker[] = [];
   const crowd = pl.crowd, camDir = new THREE.Vector3(), draw = new THREE.Vector3();
-  const runLen = RUNS.reduce((a, [r0, r1]) => a + (r1 - r0), 0);
+  /** The crowd is round the camera: 800 m of lane is too long to fill, so walkers are put within WIN of where it is along it. */
+  const WIN = 140;
   let clock = 0;
-  const addWalker = () => {
-    // a run by its length, a place in it
-    let k = rnd.next() * runLen, run = RUNS[0];
-    for (const r of RUNS) { if (k < r[1] - r[0]) { run = r; break; } k -= r[1] - r[0]; }
-    const lo = run[0] + (run[0] < 2 ? 3 : 1.5), hi = run[1] - 1.5;
+  const addWalker = (cs: number) => {
+    // a run near the camera by its length, a place in it
+    const near = runsIn(cs - WIN, cs + WIN);
+    if (!near.length) return false;
+    const len = near.reduce((a, [r0, r1]) => a + (r1 - r0), 0);
+    let k = rnd.next() * len, run = near[0];
+    for (const r of near) { if (k < r[1] - r[0]) { run = r; break; } k -= r[1] - r[0]; }
+    // the turning points are the whole run's (a crossing, a mouth), not the window's
+    const whole = RUNS.find(([r0, r1]) => r0 <= run[0] + 1e-6 && r1 >= run[1] - 1e-6) ?? run;
+    const lo = whole[0] + (whole[0] < 2 ? 3 : 1.5), hi = whole[1] - 1.5;
     const seed = rnd.next();
-    const w: Walker = { u: (rnd.next() - 0.5) * 2 * 2.3, s: lo + rnd.next() * (hi - lo), lo, hi, dir: rnd.next() < 0.5 ? 1 : -1, speed: 0.8 + rnd.next() * 0.45, pause: 0, lookT: 4 + rnd.next() * 14,
+    const s0 = Math.max(lo, run[0]), s1 = Math.min(hi, run[1]);
+    const w: Walker = { u: (rnd.next() - 0.5) * 2 * 2.3, s: s0 + rnd.next() * Math.max(0, s1 - s0), lo, hi, dir: rnd.next() < 0.5 ? 1 : -1, speed: 0.8 + rnd.next() * 0.45, pause: 0, lookT: 4 + rnd.next() * 14,
       gait: new Gait(), look: randomLook(() => rnd.next()), seed, pos: new THREE.Vector3(), prev: new THREE.Vector3(), yaw: 0 };
     const p = world(w.u, w.s);
     w.pos.set(p.x, 0.03, p.z); w.prev.copy(w.pos); w.yaw = yawOf(0, w.dir, w.s);
     walkers.push(w);
+    return true;
   };
   const stepWalkers = (dt: number) => {
     const cam = engine.camera.position;
-    const close = Math.hypot(cam.x - centre.x, cam.z - centre.z) < 260;
-    if (!close) { walkers.length = 0; return; }
-    while (walkers.length < cap()) addWalker();
+    const [cu, cs] = local(cam.x, cam.z);
+    if (!onLane(cu, cs, 230)) { walkers.length = 0; return; }
+    // the ones left far behind go, new ones come in round the camera
+    for (let i = walkers.length - 1; i >= 0; i--) if (Math.abs(walkers[i].s - cs) > WIN + 40) walkers.splice(i, 1);
+    while (walkers.length < cap()) if (!addWalker(cs)) break;
     while (walkers.length > cap()) walkers.pop();
     const foot = pl.foot;
     const [pu, ps] = foot ? local(foot.pos.x, foot.pos.z) : [1e9, 1e9];
@@ -524,9 +571,13 @@ export async function install(engine: Engine): Promise<void> {
           w.yaw = yawOf(0, w.dir, w.s);
         }
       }
-      // keep out of the player's way: step aside
+      // keep out of the player's way (and a fight's): step aside
       const du = w.u - pu, ds = w.s - ps, d = Math.hypot(du, ds);
       if (d < 1.1) w.u = Math.max(-2.6, Math.min(2.6, w.u + Math.sign(du || 1) * (1.1 - d) * 4 * dt));
+      if (racket) {
+        const dr = Math.hypot(w.u - racket.u, w.s - racket.s);
+        if (dr < 6) { w.dir = w.s > racket.s ? 1 : -1; w.pause = 0; w.yaw = yawOf(0, w.dir, w.s); }
+      }
       const p = world(w.u, w.s);
       w.pos.set(p.x, 0.03, p.z);
     }
@@ -545,9 +596,10 @@ export async function install(engine: Engine): Promise<void> {
     }
   };
 
-  // --- fast travel: to 地安门东大街 at the lane's mouth ---
+  // --- fast travel: to 地安门东大街 at the lane's south mouth, or 鼓楼东大街 at its north one ---
   let fade: Fade | null = null, travelling = false;
-  const travel = async () => {
+  const travel = async (i: number) => {
+    const n = i === 1, end = n ? S1 : S0, dir = n ? 1 : -1;
     if (travelling) return;
     travelling = true;
     const v = engine.get<VehicleApi>('vehicle')!, driving = pl.mode === 'driving';
@@ -558,8 +610,9 @@ export async function install(engine: Engine): Promise<void> {
       await new Promise((r) => setTimeout(r, 0));
       v.inputEnabled = false;
       await new Promise((r) => setTimeout(r, 700));
-      // the near (westbound) carriageway of 地安门东大街, a little east of the mouth: the lane opens on the right
-      const kerb = world(14, -4);   // the kerb side: the lane nearest the median has the railings at its door
+      // the near carriageway, a little short of the mouth: the lane opens on the right (地安门东大街's westbound, from
+      // the east; 鼓楼东大街's eastbound, from the west)
+      const kerb = n ? world(-14, end + 7.5) : world(14, -4);   // the kerb side: the lane nearest the median has the railings at its door
       await engine.get<WorldApi>('world')?.preload?.(kerb.x, kerb.z);
       if (driving) {
         const lane = v.roadPoseNear?.(kerb.x, 0.5, kerb.z);
@@ -570,6 +623,8 @@ export async function install(engine: Engine): Promise<void> {
           let pos = lane.pos;
           for (const k of [7, 3.5]) {
             const c = { x: lane.pos.x - fz * k, y: lane.pos.y, z: lane.pos.z + fx * k };
+            // 鼓楼东大街's kerb lane is narrower: 7 m over is the pavement behind the railings
+            if (n && local(c.x, c.z)[1] < end + 5) continue;
             let hit = false;
             pw.intersectionsWithShape({ x: c.x, y: c.y + 0.95, z: c.z }, qq, box, (col) => { if (col.parent() !== v.car.body) { hit = true; return false; } return true; });
             if (!hit) { pos = c; break; }
@@ -577,7 +632,8 @@ export async function install(engine: Engine): Promise<void> {
           v.reset(pos, lane.yaw); ok = true; hintedCar = true;
         }
       } else {
-        const at = world(0, -2.5), to = world(0, 10);
+        // on the pavement before the mouth (by the bollards' gaps), facing in
+        const at = world(n ? 0.75 : 0, n ? end + 2.5 : -2.5), to = world(n ? 0.75 : 0, end - dir * 9);
         pl.setRiding(null, { x: at.x, y: 0.3, z: at.z, yaw: Math.atan2(to.x - at.x, to.z - at.z) });
         ok = true;
       }
@@ -585,7 +641,7 @@ export async function install(engine: Engine): Promise<void> {
       camApi()?.snap(driving ? -0.55 : undefined);
     } finally {
       v.inputEnabled = true;
-      fade.to(false, ok ? t(driving ? 'nl.arrived' : 'nl.arrivedFoot', { n: SHOP_IDS.length }) : undefined);
+      fade.to(false, ok ? t(driving ? (n ? 'nl.arrivedN' : 'nl.arrived') : 'nl.arrivedFoot', { n: SHOP_IDS.length }) : undefined);
       travelling = false;
     }
   };
@@ -596,8 +652,10 @@ export async function install(engine: Engine): Promise<void> {
   nav?.addBlips(() => {
     blips.length = 0;
     blips.push({ kind: 'shop', x: south.x, z: south.z, label: t('nl.name') });
+    blips.push({ kind: 'shop', x: north.x, z: north.z, label: t('nl.nameN') });
     const P = pl.position;
-    if (Math.hypot(P.x - centre.x, P.z - centre.z) < 300) for (const id of SHOP_IDS) { const d = W(SHOPS[id].door); blips.push({ kind: 'shop', x: d.x, z: d.z }); }
+    for (const id of SHOP_IDS) { const d = W(SHOPS[id].door); if (Math.hypot(P.x - d.x, P.z - d.z) < 300) blips.push({ kind: 'shop', x: d.x, z: d.z }); }
+    taskBlips(blips);
     for (const m of marks) blips.push({ kind: 'collect', x: m.x, z: m.z, flash: true });
     return blips;
   });
@@ -605,6 +663,288 @@ export async function install(engine: Engine): Promise<void> {
     const left = rabbitsLeft();
     for (let i = marks.length - 1; i >= 0; i--) if (!left.some((l) => Math.hypot(l.x - marks[i].x, l.z - marks[i].z) < 1)) marks.splice(i, 1);
   });
+
+  // ================= round 3: deliveries, the lost cat, 黑豹's collectors, friends at a table =================
+  const journal = journalOf(engine);
+  const dlg = () => engine.get<DialogueApi>('dialogue');
+  /** The HUD's line while one of these is on (cleared only if it is still ours). */
+  let said: string | null = null;
+  const say = (line: string) => { const m = missions(); if (m && m.story !== line) { m.story = line; said = line; } };
+  const unsay = () => { const m = missions(); if (m && said && m.story === said) m.story = null; said = null; };
+  /** Nothing else on: no job, no story beat, no police, no street encounter, no fight. */
+  const calm = () => {
+    const m = missions(), ui = engine.get<{ name: string; state: string }>('ui');
+    return (!ui || ui.state === 'playing') && !m?.busy && (!m?.story || m.story === said) && (engine.get<WantedApi>('wanted')?.level ?? 0) === 0
+      && !engine.get<{ name: string; active: unknown }>('npc')?.active && !engine.get<CombatApi>('combat')?.engaged;
+  };
+  const laneS = (p: { x: number; z: number }) => local(p.x, p.z)[1];
+  const taskOn = () => !!order || !!lost || !!racket;
+
+  // --- the dumpling shop's deliveries: a bag to a numbered gate up or down the lane, against the clock ---
+  interface Order { gate: (typeof GATES)[number]; limit: number; left: number; resident: Actor | null; done: number }
+  let order: Order | null = null;
+  const noodleS = (SHOPS.noodle.y0 + SHOPS.noodle.y1) / 2;
+  const deliveryRow = (): Row => {
+    const m = missions(), off = taskOn() || !!m?.busy || (!!m?.story && m.story !== said);
+    return { label: t('nl.deliver.offer'), detail: t('nl.deliver.d'), section: t('nl.sec.jobs'), price: order ? t('nl.task.on') : off ? t('nl.task.busy') : t('nl.deliver.pay'),
+      disabled: off, buy: () => { panel.close(); startDelivery(); } };
+  };
+  const startDelivery = () => {
+    const far = GATES.filter((g) => { const d = Math.abs(g.door[1] - noodleS); return d > 80 && d < 360; });
+    const gate = far[Math.floor(rnd.next() * far.length)];
+    if (!gate) return;
+    const limit = deliveryTime(Math.abs(gate.door[1] - noodleS) + 4);
+    order = { gate, limit, left: limit, resident: null, done: -1 };
+    keeperOf('noodle')?.say(t('nl.deliver.go', { no: gate.no }), 4);
+    toast(t('nl.deliver.start', { no: gate.no, s: limit }), 4);
+  };
+  const endDelivery = () => { if (order?.resident?.alive) order.resident.release('vanish'); order = null; unsay(); };
+  const handOver = () => {
+    const o = order;
+    if (!o || o.done >= 0) return;
+    o.done = 0;
+    const late = o.left <= 0, pay = deliveryPay(o.left, o.limit);
+    missions()?.addCash(pay);
+    save.deliveries++; store();
+    if (o.resident?.alive) { o.resident.say(t(late ? 'nl.deliver.cold' : 'nl.deliver.thanks'), 3); o.resident.act('wave', { t: 0 }); }
+    toast(t(late ? 'nl.deliver.paidLate' : 'nl.deliver.paid', { n: pay }), 3);
+    engine.events.emit('district:delivered', { pay, late });
+    unsay();
+  };
+  const deliveryStep = (dt: number) => {
+    const o = order;
+    if (!o) return;
+    const d = W(o.gate.door);
+    if (o.done >= 0) {
+      // handed over: the one who ordered goes back in once the player has walked on
+      o.done += dt;
+      if (o.done > 15 || (o.done > 3 && !near(d, 9))) { if (o.resident?.alive) o.resident.release('vanish'); order = null; }
+      return;
+    }
+    o.left -= dt;
+    say(o.left > 0 ? t('nl.deliver.obj', { no: o.gate.no, s: Math.ceil(o.left) }) : t('nl.deliver.late', { no: o.gate.no }));
+    // the one who ordered waits at their gate once the player is near
+    if (!o.resident?.alive && near(d, 40)) {
+      const p = W(o.gate.in);
+      o.resident = people.spawnActor!(p.x, p.z, { yaw: Math.atan2(d.x - p.x, d.z - p.z), seed: 6100 + Number(o.gate.no) }) ?? null;
+      if (o.resident) { o.resident.stop(); o.resident.face(d.x, d.z); }
+    }
+    // given up on: far off, or two minutes late
+    if (!near(d, 600) || o.left < -120) { endDelivery(); toast(t('nl.deliver.lost'), 3); }
+  };
+
+  // --- the cat café: its cats, and 大橘 who got out - found by its mewing, it follows the player home ---
+  const cats = new Cats(engine.scene, engine.get<RenderApi>('render')?.uniforms);
+  const cafe = SHOPS.cats, cafeDoor = W(cafe.door), cafeS = (cafe.y0 + cafe.y1) / 2;
+  /** Each spot's cat: pose and coat (spot 2's is 大橘, the ginger one, whose cushion it is). */
+  const CAFE_CATS: [CatPose, number][] = [['curl', 1], ['loaf', 3], ['curl', 0], ['loaf', 2], ['sit', 4], ['loaf', 1]];
+  interface Lost { x: number; z: number; yaw: number; pose: CatPose; follow: boolean; meowT: number; heard: boolean; hint: { x: number; z: number } }
+  let lost: Lost | null = null, catCool = 0, cafeMeow = 6;
+  const catState: CatState = { x: 0, y: 0, z: 0, yaw: 0, pose: 'sit', coat: 0, t: 0 };
+  const catRow = (): Row => {
+    const m = missions(), off = taskOn() || catCool > 0 || !!m?.busy || (!!m?.story && m.story !== said);
+    return { label: t('nl.cat.offer'), detail: t('nl.cat.d'), section: t('nl.sec.jobs'),
+      price: lost ? t('nl.task.on') : catCool > 0 ? t('nl.cat.home') : off ? t('nl.task.busy') : `+¥${save.cat ? 60 : CAT_REWARD}`,
+      disabled: off, buy: () => { panel.close(); startCat(); } };
+  };
+  const startCat = () => {
+    // somewhere along the lane 60-260 m from the café, against a front (not in a doorway), sitting low
+    for (let k = 0; k < 60 && !lost; k++) {
+      const s = cafeS + (60 + rnd.next() * 200) * (rnd.next() < 0.5 ? -1 : 1), side = rnd.next() < 0.5 ? -1 : 1;
+      if (!RUNS.some(([a, b]) => s > a + 3 && s < b - 3)) continue;
+      if (SHOP_IDS.some((id) => (SHOPS[id].side === 'e') === side > 0 && s > SHOPS[id].y0 - 0.8 && s < SHOPS[id].y1 + 0.8)) continue;
+      const p = world(side * 3.3, s), h = world(side * 1.5, s + (rnd.next() - 0.5) * 36);
+      lost = { x: p.x, z: p.z, yaw: yawOf(-side, (rnd.next() - 0.5), s), pose: rnd.next() < 0.5 ? 'loaf' : 'sit', follow: false, meowT: 2, heard: false, hint: h };
+    }
+    if (!lost) return;
+    keeperOf('cats')?.say(t('nl.cat.go'), 4.5);
+    toast(t('nl.cat.start'), 4);
+  };
+  const catStep = (dt: number) => {
+    const c = lost;
+    if (!c) return;
+    const f = pl.foot, P = f?.pos ?? pl.position, d = Math.hypot(P.x - c.x, P.z - c.z);
+    if (near({ x: c.x, z: c.z }, 400)) say(t(c.follow ? 'nl.cat.bring' : 'nl.cat.obj')); else unsay();
+    // mewing: often while lost (the way to find it), now and then on the way home
+    c.meowT -= dt;
+    if (c.meowT <= 0 && d < 40) { c.meowT = c.follow ? 8 + rnd.next() * 6 : 3 + rnd.next() * 3; engine.events.emit('district:meow', { x: c.x, z: c.z }); }
+    if (!c.follow && !c.heard && d < 14) { c.heard = true; toast(t('nl.cat.hear'), 3); }
+    if (!c.follow) return;
+    // at heel: a metre behind, trotting to catch up, sitting when the player stops
+    if (!f || d > 60) { c.follow = false; c.pose = 'sit'; toast(t('nl.cat.stay'), 3); return; }
+    const tx = f.pos.x - Math.sin(f.yaw) * 1.0, tz = f.pos.z - Math.cos(f.yaw) * 1.0, dx = tx - c.x, dz = tz - c.z, dd = Math.hypot(dx, dz);
+    if (dd > 0.35) {
+      const step = Math.min(dd, Math.min(6, 0.8 + dd * 2.2) * dt);
+      c.x += dx / dd * step; c.z += dz / dd * step; c.yaw = Math.atan2(dx, dz); c.pose = 'walk';
+    } else { c.pose = 'sit'; c.yaw = Math.atan2(f.pos.x - c.x, f.pos.z - c.z); }
+    // home: in through the café's door
+    if (shopAt(c.x, c.z) === 'cats') {
+      const pay = save.cat ? 60 : CAT_REWARD;
+      missions()?.addCash(pay);
+      save.cat = true; store();
+      lost = null; catCool = 600; unsay();
+      thanks('cats', t('nl.cat.thanks'));
+      toast(t('nl.cat.done', { n: pay }), 4);
+      engine.events.emit('district:meow', { x: c.x, z: c.z });
+    }
+  };
+  const drawCats = () => {
+    cats.begin();
+    const sitting = seated?.kind === 'pet';
+    if (cafe.cats && near(cafeDoor, 60)) cafe.cats.forEach(([u, s, h, fu, fs], j) => {
+      if (j === 2 && lost) return;
+      const [pose, coat] = CAFE_CATS[j];
+      let p = world(u, s), y = h, yaw = Math.atan2(world(fu, fs).x - p.x, world(fu, fs).z - p.z);
+      // sat at the table, the grey one hops up beside you
+      if (j === 3 && sitting && cafe.seatFace) { p = W(cafe.seatFace); y = 0.78; yaw = Math.atan2(pl.position.x - p.x, pl.position.z - p.z); }
+      catState.x = p.x; catState.y = y; catState.z = p.z; catState.yaw = yaw; catState.pose = j === 3 && sitting ? 'loaf' : pose; catState.coat = coat; catState.t = clock + j * 1.7;
+      cats.add(catState);
+    });
+    if (lost) { catState.x = lost.x; catState.y = 0.035; catState.z = lost.z; catState.yaw = lost.yaw; catState.pose = lost.pose; catState.coat = 0; catState.t = clock; cats.add(catState); }
+    cats.commit();
+  };
+
+  // --- 黑豹's collectors at a shop's door: the keeper out in the lane, three of them round him, a fight if you step in ---
+  interface Racket { shop: ShopId; u: number; s: number; brawl: ReturnType<CombatApi['brawl']>; keeper: Actor | null; t: number; fight: boolean; lineT: number; line: number; over: boolean }
+  let racket: Racket | null = null, racketCool = 50;
+  const RACKET_WAIT = 150;
+  const startRacket = (): boolean => {
+    const cb = engine.get<CombatApi>('combat'), f = pl.foot;
+    if (!cb || !f) return false;
+    const ps = laneS(f.pos);
+    // a shop 25-95 m along from the player (not one already stood up for, if there is another)
+    const cands = RACKET_SHOPS.filter((id) => { const d = Math.abs(laneS(W(SHOPS[id].door)) - ps); return d > 25 && d < 95; })
+      .sort((a, b) => Number(regular(a)) - Number(regular(b)) || Math.abs(laneS(W(SHOPS[a].door)) - ps) - Math.abs(laneS(W(SHOPS[b].door)) - ps));
+    const id = cands[0];
+    if (!id) return false;
+    const [du, ds] = SHOPS[id].door, side = du > 0 ? 1 : -1, ku = du - side * 0.9;
+    const kp = world(ku, ds), at = [world(du - side * 2.3, ds), world(du - side * 1.8, ds - 1.3), world(du - side * 1.8, ds + 1.3)];
+    const b = cb.brawl(kp.x, kp.z, engine.lite ? 2 : 3, { at, wait: kp });
+    if (!b.actors.length) return false;
+    // the keeper steps out (a fresh one of the same face: the one at the counter is put away)
+    const k = keepers.find((q) => q.id === id)!;
+    keeperDrop(k);
+    const ka = people.spawnActor!(kp.x, kp.z, { yaw: Math.atan2(at[0].x - kp.x, at[0].z - kp.z), seed: 911 + SHOP_IDS.indexOf(id) * 37 }) ?? null;
+    if (ka) { ka.stop(); ka.face(at[0].x, at[0].z); ka.act('talk', { t: 0 }); }
+    racket = { shop: id, u: ku, s: ds, brawl: b, keeper: ka, t: 0, fight: false, lineT: 0.5, line: 0, over: false };
+    const r = racket;
+    toast(t('nl.racket.news', { shop: t(CATALOG[id].name) }), 4);
+    void b.done.then((res) => {
+      if (racket !== r) return;
+      r.over = true;
+      unsay();
+      const name = t(CATALOG[r.shop].name);
+      if (res === 'won') {
+        const pay = RACKET_PAY * b.actors.length;
+        missions()?.addCash(pay);
+        const first = !regular(r.shop);
+        if (first) save.regulars.push(r.shop);
+        save.rackets++; store();
+        if (r.keeper?.alive) { r.keeper.say(t('nl.racket.thanks'), 4); r.keeper.act('cheer', { t: 0 }); }
+        toast(t('nl.racket.won', { n: pay }), 3.5);
+        if (first) after(3.2, () => toast(t('nl.racket.regular', { shop: name }), 4.5));
+        journal.meet('nl.racket');
+        racketCool = 600;
+      } else if (res === 'fled' && !r.fight) {
+        // nobody stepped in: they took the money and went
+        if (r.keeper?.alive) r.keeper.say(t('nl.racket.paid'), 3.5);
+        toast(t('nl.racket.gone', { shop: name }), 3.5);
+        racketCool = 300;
+      } else {
+        if (res === 'fled') toast(t('npc.gang.fled'), 2.5);
+        racketCool = 300;
+      }
+      engine.events.emit('district:racket', { shop: r.shop, result: res === 'fled' && !r.fight ? 'paid' : res });
+      // back behind the counter in a while (the keeper loop puts the indoor one back once this is gone)
+      after(6, () => { if (r.keeper?.alive) r.keeper.release('vanish'); if (racket === r) racket = null; });
+    });
+    return true;
+  };
+  const racketStep = (dt: number) => {
+    const r = racket;
+    if (!r || r.over) return;
+    r.t += dt;
+    const lead = r.brawl.actors[0], f = pl.foot;
+    say(t(r.fight ? 'nl.racket.fight' : 'nl.racket.obj', { shop: t(CATALOG[r.shop].name) }));
+    if (r.fight) return;
+    // leaning on him: a line from them, a plea from him, turn about
+    r.lineT -= dt;
+    if (r.lineT <= 0) {
+      r.lineT = 3.4;
+      const who = r.line % 2 === 0 ? lead : r.keeper;
+      if (who?.alive) who.say(t(`nl.racket.${r.line % 2 === 0 ? 't' : 'k'}${Math.floor(r.line / 2) % 3}` as 'nl.racket.t0'), 3);
+      r.line++;
+    }
+    const go = !!f && !!lead?.alive && Math.hypot(f.pos.x - lead.pos.x, f.pos.z - lead.pos.z) < 5.5;
+    if (go) {
+      r.fight = true;
+      r.brawl.go();
+      if (lead?.alive) lead.say(t('nl.racket.go'), 2.5);
+      if (r.keeper?.alive) { const kp = world(r.u + (r.u > 0 ? 0.7 : -0.7), r.s); r.keeper.goTo(kp.x, kp.z, 1.6); r.keeper.act(null); }
+      return;
+    }
+    // nobody came (or the player went off): they collect and go
+    if (r.t > RACKET_WAIT || !near(world(r.u, r.s), 220)) r.brawl.end();
+  };
+  engine.events.on('combat:swing', ({ x, z }) => {
+    const r = racket;
+    if (r && !r.fight && !r.over && Math.hypot(x - world(r.u, r.s).x, z - world(r.u, r.s).z) < 7) { r.fight = true; r.brawl.go(); }
+  });
+
+  // --- 小飞龙 and 小雨 at a 象棋 table in the north stretch (contacts/: their looks, models, friendship) ---
+  const MEET = { u: -2.55, s: 583.0 };
+  interface Friend { id: 'feilong' | 'xiaoyu'; name: string; color: string; ds: number; actor: Actor | null }
+  const friends: Friend[] = [{ id: 'feilong', name: 'con.who.feilong', color: '#ff3b6b', ds: -0.72, actor: null }, { id: 'xiaoyu', name: 'who.xiaoyu', color: '#5ac8fa', ds: 0.72, actor: null }];
+  const meetAt = world(MEET.u, MEET.s);
+  let chatted = false, treated = false, meetLine = 0;
+  const contacts = () => engine.get<ContactsApi>('contacts');
+  const friendSpawn = () => {
+    const c = contacts();
+    if (!c) return;
+    for (const fr of friends) {
+      const p = world(MEET.u, MEET.s + fr.ds), look = c.appearance(fr.id);
+      c.reserve(fr.id, true);
+      const a = people.spawnActor!(p.x, p.z, { look, yaw: Math.atan2(meetAt.x - p.x, meetAt.z - p.z), seed: fr.id === 'feilong' ? 7701 : 7702 }) ?? null;
+      if (!a) continue;
+      a.stop(); a.face(meetAt.x, meetAt.z); a.act('chess', { seat: 0.42 });
+      fr.actor = a;
+      if (CAST_ON) void hasModel(fr.id).then((yes) => { if (yes) castModel(engine, fr.id, look).then((m) => { if (a.alive) a.model = m; else m.hide(); }).catch(() => {}); });
+    }
+  };
+  const friendDrop = () => { for (const fr of friends) { if (fr.actor?.alive) fr.actor.release('vanish'); fr.actor = null; contacts()?.reserve(fr.id, false); } };
+  const speakerOf = (fr: Friend): Speaker => {
+    const h = contacts()?.hearts(fr.id) ?? 0;
+    return { name: `${t(fr.name as 'who.xiaoyu')} ${'♥'.repeat(h)}${'♡'.repeat(5 - h)}`, color: fr.color, look: contacts()?.appearance(fr.id), voice: fr.actor ? { ...fr.actor.voice, character: fr.id } : undefined, at: fr.actor?.pos ?? null };
+  };
+  const meetTalk = () => {
+    const [f, x] = friends, c = contacts(), d = dlg();
+    if (!c || !d || !f.actor?.alive) return;
+    for (const fr of friends) { journal.meet(`con.${fr.id}`); fr.actor?.face(pl.position.x, pl.position.z); }
+    const k = meetLine++ % 3;
+    d.ask(speakerOf(f), t(k === 0 ? 'nl.meet.greet' : 'nl.meet.again'), [t('nl.meet.chat'), t('nl.meet.treat', { n: 45 }), t('nl.meet.bye')], (i) => {
+      if (i === 0) {
+        d.say(speakerOf(f), t(`nl.meet.f${k}` as 'nl.meet.f0'), { prio: 2 });
+        after(3.8, () => dlg()?.say(speakerOf(x), t(`nl.meet.x${k}` as 'nl.meet.x0'), { prio: 2 }));
+        if (!chatted) { chatted = true; c.addFriendship('feilong', 3); c.addFriendship('xiaoyu', 3); }
+      } else if (i === 1) {
+        const m = missions();
+        if (treated) { d.say(speakerOf(x), t('nl.meet.full'), { prio: 2 }); return; }
+        if (!m || m.cash < 45) { toast(t('nl.panel.short', { n: 45 - (m?.cash ?? 0) }), 2); return; }
+        m.addCash(-45); treated = true;
+        c.addFriendship('feilong', 8); c.addFriendship('xiaoyu', 8);
+        d.say(speakerOf(f), t('nl.meet.thanksF'), { prio: 2 });
+        after(3.4, () => dlg()?.say(speakerOf(x), t('nl.meet.thanksX'), { prio: 2 }));
+      }
+    }, { prio: 3, timeout: 15, fallback: 2 });
+  };
+
+  /** The map's marks for what is on: the door to deliver to, where the cat was last seen (then the café), the racket, the friends. */
+  const taskBlips = (out: Blip[]) => {
+    if (order && order.done < 0) { const d = W(order.gate.door); out.push({ kind: 'dropoff', x: d.x, z: d.z, flash: true }); }
+    if (lost) out.push(lost.follow ? { kind: 'dropoff', x: cafeDoor.x, z: cafeDoor.z, flash: true } : { kind: 'target', x: lost.hint.x, z: lost.hint.z, flash: true });
+    if (racket && !racket.over) { const p = world(racket.u, racket.s); out.push({ kind: 'encounter', x: p.x, z: p.z, flash: true }); }
+    if (contacts() && Math.hypot(pl.position.x - meetAt.x, pl.position.z - meetAt.z) < 400) out.push({ kind: 'contact', x: meetAt.x, z: meetAt.z, label: t('nl.meet.map'), color: '#ff3b6b' });
+  };
 
   const point = (name: string): { x: number; z: number } | null => {
     const [shop, key] = name.split('.');
@@ -622,9 +962,9 @@ export async function install(engine: Engine): Promise<void> {
     get inShop() { return inShop; },
     get music() { return music; },
     get saved() { return save; },
-    get busy() { return !!inShop || !!seated || !!photo || dancing || panel.open || card.open || yardNow || near(W(SHOPS.grill.counter), 3); },
-    travelSpots: () => [{ label: t('travel.nanluo'), x: south.x, z: south.z }],
-    travel: () => { void travel(); },
+    get busy() { return !!inShop || !!seated || !!photo || dancing || panel.open || card.open || yardNow || near(W(SHOPS.grill.counter), 3) || taskOn(); },
+    travelSpots: () => [{ label: t('travel.nanluo'), x: south.x, z: south.z }, { label: t('travel.nanluoN'), x: north.x, z: north.z }],
+    travel: (i) => { void travel(i); },
     debug: {
       shops: () => Object.fromEntries(SHOP_IDS.map((id) => [id, { door: W(SHOPS[id].door), counter: W(SHOPS[id].counter), keeper: !!keeperOf(id)?.alive }])),
       walkers: () => walkers.length,
@@ -637,6 +977,17 @@ export async function install(engine: Engine): Promise<void> {
       seats: () => (SHOPS.bar.seats ?? []).map(W),
       actors: () => ({ singer: !!singer?.alive, elder: !!elder?.alive }),
       wear: (kind, id) => { (save.worn as unknown as Record<WearKind, string | null>)[kind] = id; if (id) { const w = wearable(kind, id); if (w && !save.owned.includes(ownKey(w))) save.owned.push(ownKey(w)); } store(); dressUp(); },
+      racket: () => { racketCool = 0; return !racket && startRacket(); },
+      deliver: () => { if (!order) startDelivery(); return order ? W(order.gate.door) : null; },
+      cat: () => { if (!lost) startCat(); return lost ? { x: lost.x, z: lost.z } : null; },
+      catHere: () => { const f = pl.foot; if (lost && f) { lost.x = f.pos.x - Math.sin(f.yaw); lost.z = f.pos.z - Math.cos(f.yaw); } },
+      catSeats: () => (SHOPS.cats.seats ?? []).map(W),
+      tasks: () => ({
+        racket: racket ? { shop: racket.shop, fight: racket.fight, over: racket.over, thugs: racket.brawl.actors.map((a) => ({ x: a.pos.x, z: a.pos.z, alive: a.alive })) } : null,
+        order: order ? { no: order.gate.no, left: order.left, done: order.done, resident: !!order.resident?.alive } : null,
+        cat: lost ? { x: lost.x, z: lost.z, follow: lost.follow } : null,
+        friends: friends.map((f) => !!f.actor?.alive), meet: meetAt,
+      }),
     },
     fixedUpdate(dt) {
       clock += dt; danceT += dt; songT += dt;
@@ -644,6 +995,7 @@ export async function install(engine: Engine): Promise<void> {
       stepWalkers(dt);
       for (const k of keepers) {
         if (k.actor && !k.actor.alive) k.actor = null;
+        if (racket?.shop === k.id) continue;   // out in the lane with the collectors
         const d = W(SHOPS[k.id].door);
         if (!k.actor && near(d, ON)) keeperSpawn(k);
         else if (k.actor && !near(d, OFF)) keeperDrop(k);
@@ -656,10 +1008,28 @@ export async function install(engine: Engine): Promise<void> {
       if (!elder && near(ep, ON)) elderSpawn();
       else if (elder && !near(ep, OFF)) { elder.release('vanish'); elder = null; }
       playing();
+      // round 3: the jobs on, the collectors, the friends at their table
+      deliveryStep(dt); catStep(dt); racketStep(dt);
+      catCool = Math.max(0, catCool - dt);
+      if (!racket) {
+        const f = pl.foot;
+        const [fu, fs] = f ? local(f.pos.x, f.pos.z) : [1e9, 0];
+        if (f && pl.mode === 'onfoot' && !pl.riding && onLane(fu, fs)) {
+          racketCool -= dt;
+          if (racketCool <= 0) {
+            racketCool = 20;   // not now: look again in a while
+            if (calm() && !taskOn() && !inShop && !seated && !panel.open && !yardNow) startRacket();
+          }
+        }
+      }
+      if (!friends[0].actor?.alive && near(meetAt, ON)) { friendDrop(); friendSpawn(); }
+      else if (friends[0].actor && !near(meetAt, OFF)) friendDrop();
+      // the café's cats mew now and then while the player is inside
+      if (inShop === 'cats' && (cafeMeow -= dt) <= 0) { cafeMeow = 10 + rnd.next() * 12; const c = cafe.cats?.[Math.floor(rnd.next() * 6)]; if (c) { const p = world(c[0], c[1]); engine.events.emit('district:meow', { x: p.x, z: p.z }); } }
       // the grill's smoke while anyone is near enough to see it
       smokeT -= dt;
       if (smokeT <= 0 && near(smokeAt, 70)) { smokeT = 0.28; fx()?.smoke(smokeAt.x + (rnd.next() - 0.5) * 0.6, 1.2, smokeAt.z + (rnd.next() - 0.5) * 0.3, 0, 0.55, 0, 0.45, 2.6, 0.18); }
-      if (seated?.kind === 'listen') { seated.t += dt; if (pl.health < 100) pl.heal(LISTEN_HEAL * dt); }
+      if (seated?.kind === 'listen' || seated?.kind === 'pet') { seated.t += dt; if (pl.health < 100) pl.heal(LISTEN_HEAL * dt); }
       if (seated?.kind === 'barber') seated.t += dt;
       if (photo) {
         photo.t += dt;
@@ -688,7 +1058,14 @@ export async function install(engine: Engine): Promise<void> {
         _m.compose(_v.set(_v.x + Math.sin(fy) * 0.2, _v.y - 0.3, _v.z + Math.cos(fy) * 0.2), _q, _one);
         lifeProps.add('guitar', _m);
       }
+      // the friends' 象棋 table and stools
+      if (friends[0].actor?.alive) {
+        const yaw = yawOf(0, 1, MEET.s);
+        lifeProps.place('chess', meetAt.x, 0.03, meetAt.z, yaw);
+        for (const fr of friends) { const p = world(MEET.u, MEET.s + fr.ds * 1.08); lifeProps.place('stool', p.x, 0.03, p.z, yaw); }
+      }
       lifeProps.commit();
+      drawCats();
       const cam = camApi();
       const foot = pl.foot;
       const was = inShop;
@@ -719,7 +1096,7 @@ export async function install(engine: Engine): Promise<void> {
         }
       }
       // held in a seat: F (or Esc on a seat with no panel) stands up
-      if (seated?.kind === 'listen' && seated.t > 0.5 && engine.input.state.enterPressed) standUp();
+      if ((seated?.kind === 'listen' || seated?.kind === 'pet') && seated.t > 0.5 && engine.input.state.enterPressed) standUp();
       if (!foot || pl.riding || photo || dancing) {
         // the hint for a car at the mouth
         if (!hintedCar && pl.mode === 'driving' && Math.hypot(pl.position.x - south.x, pl.position.z - south.z) < 22) {
@@ -746,11 +1123,21 @@ export async function install(engine: Engine): Promise<void> {
           const p = W(s.pad);
           if (Math.hypot(foot.pos.x - p.x, foot.pos.z - p.z) < 1.3) pl.offer?.({ x: p.x, z: p.z, r: 1.3, label: t('nl.offer.dance', { n: DANCE_PRICE }), use: () => startDance() });
         }
-        if (inShop === 'bar' && s.seats) s.seats.forEach((xy, i) => {
-          const p = W(xy);
-          if (Math.hypot(foot.pos.x - p.x, foot.pos.z - p.z) < 0.95) pl.offer?.({ x: p.x, z: p.z, r: 0.95, label: t('nl.offer.seat'), use: () => sitToListen(i) });
+        if ((inShop === 'bar' || inShop === 'cats') && s.seats) s.seats.forEach((xy, i) => {
+          const p = W(xy), cafe = inShop === 'cats';
+          if (Math.hypot(foot.pos.x - p.x, foot.pos.z - p.z) < 0.95) pl.offer?.({ x: p.x, z: p.z, r: 0.95, label: t(cafe ? 'nl.offer.pet' : 'nl.offer.seat'), use: () => (cafe ? sitWithCats(i) : sitToListen(i)) });
         });
       }
+      // the jobs: the bag handed over at the gate, 大橘 picked up, the friends' table
+      if (order && order.done < 0) {
+        const d = W(order.gate.door);
+        if (Math.hypot(foot.pos.x - d.x, foot.pos.z - d.z) < 1.8) pl.offer?.({ x: d.x, z: d.z, r: 1.8, label: t('nl.offer.deliver', { no: order.gate.no }), use: handOver });
+      }
+      if (lost && !lost.follow && Math.hypot(foot.pos.x - lost.x, foot.pos.z - lost.z) < 1.5) {
+        const c = lost;
+        pl.offer?.({ x: c.x, z: c.z, r: 1.5, label: t('nl.offer.cat'), use: () => { c.follow = true; c.meowT = 0; toast(t('nl.cat.found'), 3.5); } });
+      }
+      if (friends[0].actor?.alive && Math.hypot(foot.pos.x - meetAt.x, foot.pos.z - meetAt.z) < 2.4 && !dlg()?.asking) pl.offer?.({ x: meetAt.x, z: meetAt.z, r: 2.4, label: t('nl.meet.offer'), use: meetTalk });
       const gc = W(SHOPS.grill.counter);
       if (Math.hypot(foot.pos.x - gc.x, foot.pos.z - gc.z) < COUNTER_R) pl.offer?.({ x: gc.x, z: gc.z, r: COUNTER_R, label: t('nl.offer.grill'), use: () => openShop('grill') });
       yardNow = inYard(foot.pos.x, foot.pos.z);

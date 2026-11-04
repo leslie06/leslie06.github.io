@@ -58,6 +58,8 @@ export interface GlbMeta {
   /** Trees the city's pools draw, [x, z, species, scale] per tree in the local frame (LandmarkModel.trees): a landmark
    *  script writes them into its meta after the export (南锣鼓巷's 国槐), and a re-import keeps them. */
   trees?: number[];
+  /** LandmarkDef.partOf: a landmark script writes it with the trees (南锣鼓巷's north stretch is two more glbs). */
+  partOf?: string;
   stats?: Record<string, unknown>;
 }
 
@@ -432,7 +434,7 @@ async function capTextures(root: THREE.Object3D): Promise<void> {
 export function glbLandmark(meta: GlbMeta): LandmarkDef {
   const url = `${import.meta.env.BASE_URL}models/landmarks/${meta.file}?v=${meta.version}`;
   return {
-    id: meta.id, name: meta.name, lat: meta.lat, lon: meta.lon, headingDeg: meta.headingDeg,
+    id: meta.id, name: meta.name, lat: meta.lat, lon: meta.lon, headingDeg: meta.headingDeg, partOf: meta.partOf,
     build: () => {
       const group = new THREE.Group();
       group.name = meta.id;

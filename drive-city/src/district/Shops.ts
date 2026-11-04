@@ -1,11 +1,11 @@
 import type { TKey } from '../core/I18n';
 
 /**
- * 南锣鼓巷's five shops (docs/gta-plan.md §12): what each sells and what it does. Pure, so Node tests it; index.ts
+ * 南锣鼓巷's shops (docs/gta-plan.md §12): what each sells and what it does. Pure, so Node tests it; index.ts
  * applies the effects. The rooms themselves come from scripts/blender/landmarks/nanluo.py (nanluo.layout.json).
  */
-export type ShopId = 'snack' | 'crafts' | 'tea' | 'photo' | 'arcade' | 'clothes' | 'barber' | 'bar' | 'grill';
-export const SHOP_IDS: readonly ShopId[] = ['snack', 'crafts', 'tea', 'photo', 'arcade', 'clothes', 'barber', 'bar', 'grill'];
+export type ShopId = 'snack' | 'crafts' | 'tea' | 'photo' | 'arcade' | 'clothes' | 'barber' | 'bar' | 'grill' | 'noodle' | 'cats';
+export const SHOP_IDS: readonly ShopId[] = ['snack', 'crafts', 'tea', 'photo', 'arcade', 'clothes', 'barber', 'bar', 'grill', 'noodle', 'cats'];
 
 export interface Item {
   id: string;
@@ -55,7 +55,38 @@ export const CATALOG: Record<ShopId, Shop> = {
     { id: 'mantou', name: 'nl.item.mantou', price: 8, heal: 12 },
     { id: 'yaozi', name: 'nl.item.yaozi', price: 25, heal: 50 },
   ] },
+  // round 3: the north stretch (the dumplings send out deliveries, the cat café has a cat to find)
+  noodle: { name: 'nl.shop.noodle', greet: 'nl.greet.noodle', bark: 'nl.bark.noodle', items: [
+    { id: 'jiaozi', name: 'nl.item.jiaozi', price: 22, heal: 40 },
+    { id: 'luzhu', name: 'nl.item.luzhu', price: 30, heal: 70 },
+    { id: 'zhou', name: 'nl.item.zhou', price: 6, heal: 8 },
+  ] },
+  cats: { name: 'nl.shop.cats', greet: 'nl.greet.cats', bark: 'nl.bark.cats', items: [
+    { id: 'latte', name: 'nl.item.latte', price: 25, heal: 15, guard: { scale: 0.8, secs: 120 } },
+    { id: 'pawcake', name: 'nl.item.pawcake', price: 30, heal: 30 },
+  ] },
 };
+
+/**
+ * 熟客价 (round 3): a shop whose keeper the player stood up for against 黑豹's collectors sells at this share of the price
+ * ever after.
+ */
+export const REGULAR = 0.7;
+export const priceOf = (it: Item, regular: boolean): number => (regular ? Math.max(1, Math.round(it.price * REGULAR)) : it.price);
+/** Shops 黑豹's men come to lean on (a keeper by the door, the lane in front to fight in). */
+export const RACKET_SHOPS: readonly ShopId[] = ['grill', 'noodle', 'snack', 'tea', 'bar', 'cats'];
+/** A thug put down in a racket pays this (what he was collecting). */
+export const RACKET_PAY = 100;
+
+/** A delivery from the dumpling shop: the pay for a door reached in time (more the quicker), and late. */
+export function deliveryPay(left: number, limit: number): number {
+  if (left <= 0) return 12;
+  return 30 + Math.round(30 * Math.min(1, left / Math.max(1, limit)));
+}
+/** Seconds for a delivery `metres` along the lane: a jog with a little to spare. */
+export const deliveryTime = (metres: number): number => Math.round(25 + metres / 3);
+/** The cat café's cat brought home. */
+export const CAT_REWARD = 150;
 
 /**
  * What the clothes shop and the barber sell: the player's look (PlayerApi.dress). Each is bought once and kept; the
@@ -116,8 +147,9 @@ export function dancePrize(hits: number, of: number): number {
 export const MAP_MARKS = 3;
 
 /** Why an item cannot be bought now (a key to show on its button), or null. */
-export function blocked(item: Item, s: { cash: number; health: number; rabbitsLeft: number }): { key: TKey; n?: number } | null {
-  if (s.cash < item.price) return { key: 'nl.panel.short', n: item.price - s.cash };
+export function blocked(item: Item, s: { cash: number; health: number; rabbitsLeft: number; price?: number }): { key: TKey; n?: number } | null {
+  const price = s.price ?? item.price;
+  if (s.cash < price) return { key: 'nl.panel.short', n: price - s.cash };
   if (item.act === 'map' && s.rabbitsLeft <= 0) return { key: 'nl.panel.noneLeft' };
   // food that only heals is no use at full health (a drink with a guard still is)
   if (item.heal && !item.guard && !item.act && s.health >= 100) return { key: 'nl.panel.full' };
@@ -125,13 +157,17 @@ export function blocked(item: Item, s: { cash: number; health: number; rabbitsLe
 }
 
 /**
- * What the player keeps from the lane: `drivecity.district.v1` (round 2 added `owned`, `worn` and `yard`; an older save
- * reads with the defaults).
+ * What the player keeps from the lane: `drivecity.district.v1` (round 2 added `owned`, `worn` and `yard`; round 3
+ * `regulars` (shops stood up for), `deliveries`, `cat` (the café's cat brought home) and `rackets` (collections broken
+ * up); an older save reads with the defaults).
  */
-export interface Save { souvenirs: number; photos: number; danceBest: number; visited: ShopId[]; owned: string[]; worn: Worn; yard: boolean }
+export interface Save {
+  souvenirs: number; photos: number; danceBest: number; visited: ShopId[]; owned: string[]; worn: Worn; yard: boolean;
+  regulars: ShopId[]; deliveries: number; cat: boolean; rackets: number;
+}
 
 export function loadSave(raw: string | null): Save {
-  const s: Save = { souvenirs: 0, photos: 0, danceBest: 0, visited: [], owned: [], worn: { ...DEFAULT_WORN }, yard: false };
+  const s: Save = { souvenirs: 0, photos: 0, danceBest: 0, visited: [], owned: [], worn: { ...DEFAULT_WORN }, yard: false, regulars: [], deliveries: 0, cat: false, rackets: 0 };
   if (!raw) return s;
   try {
     const o = JSON.parse(raw) as Partial<Save>;
@@ -140,6 +176,8 @@ export function loadSave(raw: string | null): Save {
     if (Array.isArray(o.visited)) s.visited = o.visited.filter((v): v is ShopId => SHOP_IDS.includes(v as ShopId));
     if (Array.isArray(o.owned)) s.owned = o.owned.filter((k): k is string => typeof k === 'string' && ALL_WEAR.some((w) => ownKey(w) === k));
     s.yard = o.yard === true;
+    if (Array.isArray(o.regulars)) s.regulars = o.regulars.filter((v): v is ShopId => SHOP_IDS.includes(v as ShopId));
+    s.deliveries = n(o.deliveries); s.cat = o.cat === true; s.rackets = n(o.rackets);
     // only what is owned (or free) can be worn
     const w = (o.worn ?? {}) as Partial<Worn>;
     const ok = (kind: WearKind, id: unknown): boolean => {
