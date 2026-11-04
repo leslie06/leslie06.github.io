@@ -62,6 +62,10 @@ css(`
 @media (max-width: 900px){.navmap .side .legend{display:none}.navmap .keys{gap:12px;font-size:12px}}
 body.dc-touch .navmap .keys{display:none}
 body.dc-touch .navmap .side{width:min(236px,45vw)}
+/* A short screen (a phone sideways, 2026-11-04: 「手机地图右边可以快速前往的地方拨不动，只能看到一个」): the column ends above the
+   credits and scrolls on its own - a drag there scrolls it instead of panning the map. */
+.navmap .side.scroll{bottom:calc(max(24px,3vh) + 58px);overflow-y:auto;align-content:start;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.navmap .side.scroll::-webkit-scrollbar{display:none}
 `);
 
 // North-up palette: a little brighter than the radar, since nothing else competes with it here.
@@ -214,6 +218,10 @@ export class MapScreen implements System {
     el('h1', '', head).appendChild(L('map.city'));
     this.placeEl = el('div', 'place', head);
     const side = this.side = el('div', 'side', root);
+    // on a short screen the column scrolls (see the CSS): its own drags, wheel and taps stay out of the map's pan and zoom
+    const fitSide = () => side.classList.toggle('scroll', document.body.classList.contains('dc-touch') || innerHeight < 760);
+    fitSide(); addEventListener('resize', fitSide);
+    for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'wheel'] as const) side.addEventListener(ev, (e) => { if (side.classList.contains('scroll')) e.stopPropagation(); }, { passive: true });
     this.dest = el('div', 'card dest', side);
     this.dest.hidden = true;
     this.destTag = el('h2', '', this.dest);
@@ -293,6 +301,8 @@ export class MapScreen implements System {
     this.engine.events.emit('game:pause', { paused: true });
     this.root.hidden = false;
     this.buildGo();
+    this.side.classList.toggle('scroll', document.body.classList.contains('dc-touch') || innerHeight < 760);
+    this.side.scrollTop = 0;
     this.go.classList.remove('hi');
     if (opts?.travel) requestAnimationFrame(() => { this.go.classList.add('hi'); this.go.scrollIntoView?.({ block: 'nearest' }); });
     this.savedRender = this.engine.renderFrame;
