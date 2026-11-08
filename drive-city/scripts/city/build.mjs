@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pinyinOf } from './pinyin.mjs';
 import { available as extraAvailable, clsmFootprints, grid, heightRasters, sample, scan } from './extra-buildings.mjs';
-import { REGIONS, TILE, project } from './region.mjs';
+import { EXTRA as EXTRA_BOXES, REGIONS, TILE, project } from './region.mjs';
 
 const RAW = path.resolve('.cache/osm');
 const OUT = path.resolve('public/city');
@@ -21,7 +21,10 @@ const els = new Map();
 // The main box's chunks first (digits sort before the corridors' tags), and an element already read is
 // kept: a corridor fetched later may carry a newer edit of a way the main box has, and taking it would
 // move things in the city already built.
-for (const f of fs.readdirSync(RAW).filter((f) => /^chunk-[a-z]{0,2}\d+-\d+\.json$/.test(f)).sort()) {
+// 新批次（region.mjs `since`）的框排在所有老框后面读：按文件名排，rc 会排到 s……za 前面，它们的元素全往后挪，
+// 按顺序编号的大院围墙等跟着变（2026-11-08）。
+const chunkEra = (f) => { const tag = f.match(/^chunk-([a-z]{0,2})\d/)[1]; return tag ? EXTRA_BOXES.find((b) => b.tag === tag)?.since ?? '' : ''; };
+for (const f of fs.readdirSync(RAW).filter((f) => /^chunk-[a-z]{0,2}\d+-\d+\.json$/.test(f)).sort().sort((a, b) => chunkEra(a).localeCompare(chunkEra(b)))) {
   for (const e of JSON.parse(fs.readFileSync(path.join(RAW, f), 'utf8')).elements) if (!els.has(e.type[0] + e.id)) els.set(e.type[0] + e.id, e);
 }
 const ways = [], rels = [], nodes = [];
@@ -159,6 +162,13 @@ const RX1 = Math.max(...RECTS.map((r) => r[2])), RZ1 = Math.max(...RECTS.map((r)
 const inRect = (r, x, z) => x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3];
 const inRegion = (x, z) => RECTS.some((r) => inRect(r, x, z));
 const inMain = (x, z) => inRect(RECTS[0], x, z);
+// 框的批次（region.mjs `since`）：没写的是 0，之后按日期 1、2……。按顺序编号的东西先编老批次的，新框不挪老编号。
+const ERAS = [...new Set(REGIONS.map((b) => b.since ?? ''))].sort();
+const RECT_ERA = REGIONS.map((b) => ERAS.indexOf(b.since ?? ''));
+const eraAt = (x, z) => RECTS.reduce((e, r, i) => (inRect(r, x, z) ? Math.min(e, RECT_ERA[i]) : e), Infinity);
+const eraOfBox = (bb) => RECTS.reduce((e, R, i) => (!(bb[0] > R[2] || bb[2] < R[0] || bb[1] > R[3] || bb[3] < R[1]) ? Math.min(e, RECT_ERA[i]) : e), Infinity);
+/** Stable sort by era: items of the old boxes keep the order (and so the ids) they had before a box was added. */
+const byEra = (items, era) => items.map((v, i) => [era(v), i, v]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((e) => e[2]);
 const tiles = new Map();
 const tileOf = (x, z) => [Math.floor(x / TILE), Math.floor(z / TILE)];
 function tile(ix, iz) {
@@ -1714,7 +1724,8 @@ if (EXTRA) {
   const inWater = (x, z) => water.some((w) => x >= w.bb[0] && x <= w.bb[2] && z >= w.bb[1] && z <= w.bb[3] && pip(x, z, w.r));
   const drop = { osm: 0, zone: 0, road: 0, water: 0 };
   let id = 8e12;
-  for (const ring of clsmFootprints(inRegion)) {
+  const ringCentre = (ring) => { let sx = 0, sz = 0; for (const [x, z] of ring) { sx += x; sz += z; } return [sx / ring.length, sz / ring.length]; };
+  for (const ring of byEra(clsmFootprints(inRegion), (r) => eraAt(...ringCentre(r)))) {
     const n0 = learnt.length;
     addBuilding(learnt, id++, { building: 'yes' }, ring);
     if (learnt.length === n0) continue;
@@ -2290,11 +2301,12 @@ for (const r of rels) {
 if (!process.env.NO_EXTRA && fs.existsSync('.cache/buildings/green.json')) {
   const G = JSON.parse(fs.readFileSync('.cache/buildings/green.json', 'utf8')).p;
   let rings = [], gid = 9.8e12, nLawn = 0;
+  const lawns = [];
   const flush = () => {
     if (rings.length) {
       const [outer, ...holes] = rings;
-      const bb = bboxOf(outer);
-      if (RECTS.some((R) => !(bb[0] > R[2] || bb[2] < R[0] || bb[1] > R[3] || bb[3] < R[1]))) { areaPolys.push({ k: 'lawn', outer, holes, id: gid++ }); nLawn++; }
+      const era = eraOfBox(bboxOf(outer));
+      if (era < Infinity) lawns.push({ outer, holes, era });
     }
     rings = [];
   };
@@ -2305,6 +2317,7 @@ if (!process.env.NO_EXTRA && fs.existsSync('.cache/buildings/green.json')) {
     rings.push(ring);
   }
   flush();
+  for (const { outer, holes } of byEra(lawns, (l) => l.era)) { areaPolys.push({ k: 'lawn', outer, holes, id: gid++ }); nLawn++; }
   console.log(`green ground: ${nLawn} polygons`);
 }
 // The open trenches of the underpasses are holes in every area over them (a lawn or a square would lie
@@ -2559,7 +2572,9 @@ console.log(`names: ${brHits.size} interchanges (${bridgeNames.length} points), 
 // or render.
 const COMPOUND_SW = { trunk: 4.5, primary: 4.5, secondary: 4, tertiary: 3.5, unclassified: 2.5, residential: 2.5, busway: 3 };
 {
-  let walls = 0, cid = 9.6e12, compounds = 0, metres = 0;
+  // 编号由 OSM 元素推出（2026-11-08）：原来是一路计数，扩图时边界上的大院多切出或少切出几段墙，后面全图的墙编号都挪位，
+  // 上千个地块文件跟着变。现在 way 是 1.1e13 + id·256 + 第几段，relation 是 1.15e13 + id·4096 + 第几段。
+  let walls = 0, cid = 0, compounds = 0, metres = 0;
   const WALLS = ['#8e908f', '#8e908f', '#93593f', '#d6ccb8'];
   const taken = new Set();   // 1 m cells already holding a wall
   for (const [, t] of tiles) for (const b of t.buildings) if (b.k === 'wall') for (let i = 0; i < b.o.length; i += 2) taken.add(`${Math.floor(b.o[i])}_${Math.floor(b.o[i + 1])}`);
@@ -2603,6 +2618,7 @@ const COMPOUND_SW = { trunk: 4.5, primary: 4.5, secondary: 4, tertiary: 3.5, unc
     const t = w.tags; if (!t || !w.geometry || w.geometry.length < 4) continue;
     const P = proj(w.geometry);
     if (!P.some(([x, z]) => inRegion(x, z))) continue;
+    cid = 1.1e13 + w.id * 256;
     if (t.barrier === 'wall') { line(P, 0, WALLS[0]); continue; }
     if (w.nodes?.[0] !== w.nodes?.at(-1)) continue;
     const A = ringArea(P), area = Math.abs(A);
@@ -2616,6 +2632,7 @@ const COMPOUND_SW = { trunk: 4.5, primary: 4.5, secondary: 4, tertiary: 3.5, unc
   for (const r of rels) {
     const t = r.tags; if (!t || !COMPOUND(t)) continue;
     let any = false;
+    cid = 1.15e13 + r.id * 4096;
     for (const m of r.members ?? []) {
       if (m.type !== 'way' || m.role !== 'outer' || !m.geometry || m.geometry.length < 2) continue;
       const P = proj(m.geometry);

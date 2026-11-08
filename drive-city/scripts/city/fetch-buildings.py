@@ -13,11 +13,20 @@
 #   data/3d-globfp-2350.zip   https://ndownloader.figshare.com/files/54107210 (75 MB, same)
 #   data/cmab-beijing.zip     https://ndownloader.figshare.com/files/53666768 (249 MB)
 # Overture is read straight from its public S3 bucket (a bbox filter; ~3 min).
-# Usage: python3 scripts/city/fetch-buildings.py [overture|globfp|cmab ...]
+# Usage: python3 scripts/city/fetch-buildings.py [overture|globfp|cmab ...] [--south OLD_S]
+#   --south OLD_S: the box only grew south (from OLD_S to S): fetch just the rows with S < ymin <= OLD_S and append
+#   them to the existing files (the union is exactly what a full run with the new S returns; 2026-11-08 枣园).
 import json, os, sys, time, zipfile
 import duckdb
 
-W, S, E, N = 116.19, 39.748, 116.62, 40.03
+W, S, E, N = 116.19, 39.735, 116.62, 40.03  # 南到 39.735：4 号线枣园、清源路（2026-11-08；之前 39.748）
+args = sys.argv[1:]
+OLD_S = None
+if '--south' in args:
+    i = args.index('--south')
+    OLD_S = float(args[i + 1])
+    del args[i:i + 2]
+ONLY = '' if OLD_S is None else f' AND {{y}} <= {OLD_S}'
 OVERTURE = 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=buildings/type=building/*'
 OUT = '.cache/buildings'
 os.makedirs(OUT, exist_ok=True)
@@ -41,6 +50,11 @@ def rings(gj):
 
 def write(name, obj):
     path = os.path.join(OUT, name)
+    if OLD_S is not None:
+        with open(path) as f:
+            old = json.load(f)
+        print(f'{path}: +{len(obj["p"])} polygons south of {OLD_S}')
+        obj['p'] = old['p'] + obj['p']
     with open(path, 'w') as f:
         json.dump(obj, f, separators=(',', ':'))
     print(f'{path}: {len(obj["p"])} polygons, {os.path.getsize(path) / 1e6:.1f} MB')
@@ -50,7 +64,7 @@ def overture():
     t0 = time.time()
     rows = db.sql(f"""
       SELECT ST_AsGeoJSON(geometry) FROM read_parquet('{OVERTURE}', hive_partitioning=1)
-      WHERE bbox.xmin > {W} AND bbox.xmax < {E} AND bbox.ymin > {S} AND bbox.ymax < {N}
+      WHERE bbox.xmin > {W} AND bbox.xmax < {E} AND bbox.ymin > {S} AND bbox.ymax < {N}{ONLY.format(y='bbox.ymin')}
         AND sources[1].dataset <> 'OpenStreetMap'""").fetchall()
     write('clsm.json', {'src': 'Overture 2026-09-23.1 buildings, non-OSM (CLSM, Shi et al. 2023, CC BY 4.0)', 'p': [r for (g,) in rows for r in rings(g)]})
     print(f'  {time.time() - t0:.0f} s')
@@ -69,7 +83,7 @@ def globfp():
     for zp, shp in [(zp, shp) for t in GLOBFP for zp in [f'data/3d-globfp-{t}.zip'] for shp in shp_in(zp)]:
         rows = db.sql(f"""
           SELECT Height, ST_AsGeoJSON(geom) FROM ST_Read('/vsizip/{zp}/{shp}')
-          WHERE Height > 0 AND ST_XMin(geom) > {W} AND ST_XMax(geom) < {E} AND ST_YMin(geom) > {S} AND ST_YMax(geom) < {N}""").fetchall()
+          WHERE Height > 0 AND ST_XMin(geom) > {W} AND ST_XMax(geom) < {E} AND ST_YMin(geom) > {S} AND ST_YMax(geom) < {N}{ONLY.format(y='ST_YMin(geom)')}""").fetchall()
         out += [[round(h, 1)] + r for (h, g) in rows for r in rings(g)]
     write('globfp.json', {'src': f'3D-GloBFP tiles {", ".join(GLOBFP)} (Che et al. 2024, CC BY 4.0)', 'p': out})
 
@@ -86,7 +100,7 @@ def cmab():
           WITH b AS (SELECT Height, "Function" AS fn, Age, ST_Transform(geom, 'EPSG:3857', 'EPSG:4326', always_xy := true) AS g
                      FROM ST_Read('/vsizip/{zp}/{shp}'))
           SELECT Height, fn, Age, ST_AsGeoJSON(g) FROM b
-          WHERE ST_XMin(g) > {W} AND ST_XMax(g) < {E} AND ST_YMin(g) > {S} AND ST_YMax(g) < {N}""").fetchall()
+          WHERE ST_XMin(g) > {W} AND ST_XMax(g) < {E} AND ST_YMin(g) > {S} AND ST_YMax(g) < {N}{ONLY.format(y='ST_YMin(g)')}""").fetchall()
         for h, fn, age, g in rows:
             fn = (fn or '').strip()
             code = FN.index(fn) if fn in FN else len(FN) - 1
@@ -96,7 +110,7 @@ def cmab():
     write('cmab.json', {'src': 'CMAB Beijing (Zhang, Zhao & Long 2025, CC BY 4.0)', 'fn': FN, 'p': out})
 
 
-steps = sys.argv[1:] or ['overture', 'globfp', 'cmab']
+steps = args or ['overture', 'globfp', 'cmab']
 for s in steps:
     print(f'== {s}')
     {'overture': overture, 'globfp': globfp, 'cmab': cmab}[s]()

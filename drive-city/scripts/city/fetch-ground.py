@@ -5,8 +5,9 @@
 # The build lays them under everything else as 'lawn': the courtyards, compounds and verges under the
 # trees stop being bare paving. Inside the 4th Ring: 22% tree cover, 1% grass, 3% crops.
 # Needs `python3 -m pip install --user rasterio "affine<3" scipy shapely`.
-# Usage: python3 scripts/city/fetch-ground.py
-import json, math, os, time
+# Usage: python3 scripts/city/fetch-ground.py [--south OLD_S]
+#   --south OLD_S: the box only grew south: polygonise just S..OLD_S and append them to green.json.
+import json, math, os, sys, time
 import numpy as np
 import rasterio
 from rasterio import features
@@ -15,7 +16,10 @@ from scipy.ndimage import binary_opening, binary_closing
 from shapely.geometry import shape
 from shapely.ops import transform
 
-W, S, E, N = 116.19, 39.748, 116.615, 40.03  # 五环以内（2026-10-16）
+W, S, E, N = 116.19, 39.735, 116.615, 40.03  # 五环以内（2026-10-16），南到 4 号线清源路（2026-11-08）
+OLD_S = float(sys.argv[sys.argv.index('--south') + 1]) if '--south' in sys.argv else None
+if OLD_S is not None:
+    N = OLD_S
 URL = 'https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N39E114_Map.tif'
 LAT0, LON0, R = 39.90883, 116.39757, 6378137.0
 KX = math.pi / 180 * R * math.cos(math.radians(LAT0))
@@ -49,6 +53,10 @@ for geom, v in features.shapes(green.astype(np.uint8), mask=green, transform=tr)
         out.append(None)
         n += 1
 os.makedirs('.cache/buildings', exist_ok=True)
+if OLD_S is not None:
+    with open('.cache/buildings/green.json') as f:
+        out = json.load(f)['p'] + out
+    print('new polygons south of', OLD_S, n)
 with open('.cache/buildings/green.json', 'w') as f:
     json.dump({'src': 'ESA WorldCover 10m 2021 v200 (CC BY 4.0): tree cover, grassland, cropland', 'p': out}, f, separators=(',', ':'))
 print('polygons', n, f'{os.path.getsize(".cache/buildings/green.json") / 1e6:.1f} MB', f'{time.time() - t0:.0f} s')

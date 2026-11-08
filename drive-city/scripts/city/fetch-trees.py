@@ -7,16 +7,28 @@
 # Beijing's centre (non-COG GeoTIFFs, 1.1 GB, so downloaded whole; delete them afterwards):
 #   curl -o data/chm-132100121.tif https://dataforgood-fb-data.s3.amazonaws.com/forests/v1/alsgedi_global_v6_float/chm/132100121.tif
 #   curl -o data/chm-132100103.tif https://dataforgood-fb-data.s3.amazonaws.com/forests/v1/alsgedi_global_v6_float/chm/132100103.tif
-# Usage: python3 scripts/city/fetch-trees.py [spacing m]
+# Usage: python3 scripts/city/fetch-trees.py [spacing m] [--south OLD_S]
+#   --south OLD_S: the box only grew south: read just S..OLD_S and append its crowns to trees.json (crowns within
+#   SPACING of one already there dropped). Works without the downloads: the tile is read over HTTP (/vsicurl, a
+#   window of whole rows, ~1 min for a 1.5 km strip).
 import json, math, os, sys, time
 import numpy as np
 import rasterio
 from rasterio.windows import from_bounds
 from scipy.ndimage import maximum_filter
 
-W, S, E, N = 116.19, 39.748, 116.615, 40.03  # 五环以内（2026-10-16）
-SPACING = float(sys.argv[1]) if len(sys.argv) > 1 else 7.0
+W, S, E, N = 116.19, 39.735, 116.615, 40.03  # 五环以内（2026-10-16），南到 4 号线清源路（2026-11-08）
+args = sys.argv[1:]
+OLD_S = None
+if '--south' in args:
+    i = args.index('--south')
+    OLD_S = float(args[i + 1])
+    del args[i:i + 2]
+    N = OLD_S
+SPACING = float(args[0]) if args else 7.0
 TILES = ['data/chm-132100121.tif', 'data/chm-132100103.tif']
+CHM_URL = 'https://dataforgood-fb-data.s3.amazonaws.com/forests/v1/alsgedi_global_v6_float/chm/'
+TILES = [t if os.path.exists(t) else '/vsicurl/' + CHM_URL + t.split('chm-')[1] for t in TILES]
 LAT0, LON0, R = 39.90883, 116.39757, 6378137.0
 KX = math.pi / 180 * R * math.cos(math.radians(LAT0))
 KZ = math.pi / 180 * R
@@ -75,7 +87,24 @@ for i in range(len(P)):
         keep.append(i)
 K = P[keep]
 os.makedirs('.cache/buildings', exist_ok=True)
+flat = [round(float(v), 1) for row in K for v in row]
+if OLD_S is not None:
+    with open('.cache/buildings/trees.json') as f:
+        old = json.load(f)['p']
+    # the old file's crowns along the seam: a new crown closer than SPACING to one of them goes
+    zs = -(OLD_S - LAT0) * KZ
+    seam = {}
+    for i in range(0, len(old), 3):
+        if old[i + 1] > zs - 2 * SPACING:
+            seam.setdefault((int(math.floor(old[i] / cell)), int(math.floor(old[i + 1] / cell))), []).append((old[i], old[i + 1]))
+    def near(x, z):
+        cx, cz = int(math.floor(x / cell)), int(math.floor(z / cell))
+        return any((ox - x) ** 2 + (oz - z) ** 2 < SPACING * SPACING
+                   for dx in (-1, 0, 1) for dz in (-1, 0, 1) for ox, oz in seam.get((cx + dx, cz + dz), ()))
+    K = np.array([row for row in K if not near(row[0], row[1])]).reshape(-1, 3)
+    print('new crowns south of', OLD_S, len(K))
+    flat = old + [round(float(v), 1) for row in K for v in row]
 with open('.cache/buildings/trees.json', 'w') as f:
     json.dump({'src': 'Meta/WRI canopy height v1 (CC BY 4.0), crowns at least %g m apart' % SPACING,
-               'p': [round(float(v), 1) for row in K for v in row]}, f, separators=(',', ':'))
+               'p': flat}, f, separators=(',', ':'))
 print('crowns', len(K), 'heights q10/50/90', np.percentile(K[:, 2], [10, 50, 90]), f'{time.time() - t0:.0f} s')
