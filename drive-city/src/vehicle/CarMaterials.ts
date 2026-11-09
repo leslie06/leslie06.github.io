@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Livery } from './CarModel';
-import { ATLAS_H, ATLAS_W, PX, type PxRect } from './Atlas';
+import { ATLAS_H, ATLAS_W, DEST_VARIANTS, PLATE_VARIANTS, PX, destCell, plateCell, uv, type PxRect } from './Atlas';
 import { LAMP } from './Mesher';
 
 /**
@@ -68,7 +68,7 @@ function metalFor(c: THREE.Color): number {
 
 // ---- shader patches --------------------------------------------------------------------------------
 
-interface PatchOpts { tone?: boolean; lamp?: LampArray; instLamp?: boolean; map?: boolean }
+interface PatchOpts { tone?: boolean; lamp?: LampArray; instLamp?: boolean; map?: boolean; instPlate?: boolean }
 
 const VERT_PARS = /* glsl */`
 attribute vec2 pbr;
@@ -86,6 +86,9 @@ varying float vLampI;
 #endif
 #ifdef CAR_INST_LAMP
 attribute vec4 instLamp;
+#endif
+#ifdef CAR_INST_PLATE
+attribute float instPlate;
 #endif
 `;
 
@@ -114,6 +117,33 @@ vAux = aux;
 #endif
 `;
 
+// 每辆车自己的车牌和线路牌：落在 plateF / plateR / dest 里的 uv 挪到 instPlate 选的那格（-1 不动）。
+const glslRect = (r: readonly number[]) => `vec4(${r.map((v) => v.toFixed(6)).join(', ')})`;
+const VERT_PLATE = /* glsl */`
+#ifdef CAR_INST_PLATE
+if (instPlate >= 0.0) {
+  vec2 q = vMapUv;
+  vec4 src = vec4(-1.0);
+  vec4 dst = vec4(0.0);
+  vec4 pf = ${glslRect(uv('plateF'))}, pr = ${glslRect(uv('plateR'))}, dd = ${glslRect(uv('dest'))};
+  if (all(greaterThanEqual(q, pf.xy - 1e-4)) && all(lessThanEqual(q, pf.zw + 1e-4))) src = pf;
+  else if (all(greaterThanEqual(q, pr.xy - 1e-4)) && all(lessThanEqual(q, pr.zw + 1e-4))) src = pr;
+  if (src.x >= 0.0) {
+    float k = mod(instPlate, ${PLATE_VARIANTS}.0);
+    float col = mod(k, 8.0), row = floor(k / 8.0);
+    vec2 o = vec2(col * ${(128 / ATLAS_W).toFixed(6)}, 1.0 - ${((PX.plates.y + 40) / ATLAS_H).toFixed(6)} - row * ${(40 / ATLAS_H).toFixed(6)});
+    dst = vec4(o + vec2(${(2 / ATLAS_W).toFixed(6)}, ${(2 / ATLAS_H).toFixed(6)}), o + vec2(${(126 / ATLAS_W).toFixed(6)}, ${(38 / ATLAS_H).toFixed(6)}));
+  } else if (all(greaterThanEqual(q, dd.xy - 1e-4)) && all(lessThanEqual(q, dd.zw + 1e-4))) {
+    src = dd;
+    float k = mod(instPlate, ${DEST_VARIANTS}.0);
+    vec2 o = vec2(k * ${(256 / ATLAS_W).toFixed(6)}, 1.0 - ${((PX.dests.y + 48) / ATLAS_H).toFixed(6)});
+    dst = vec4(o + vec2(${(2 / ATLAS_W).toFixed(6)}, ${(2 / ATLAS_H).toFixed(6)}), o + vec2(${(254 / ATLAS_W).toFixed(6)}, ${(46 / ATLAS_H).toFixed(6)}));
+  }
+  if (src.x >= 0.0) vMapUv = dst.xy + (q - src.xy) / (src.zw - src.xy) * (dst.zw - dst.xy);
+}
+#endif
+`;
+
 const VERT_COLLAPSE = /* glsl */`
 #ifdef CAR_INST_LAMP
   // Taxi-only parts (roof sign, lettering) fold to a point on private cars.
@@ -137,12 +167,13 @@ function patch(mat: THREE.MeshStandardMaterial, key: string, o: PatchOpts): void
   if (o.tone) mat.defines.CAR_TONE = '';
   if (o.lamp) mat.defines.CAR_LAMP = '';
   if (o.instLamp) mat.defines.CAR_INST_LAMP = '';
+  if (o.instPlate) mat.defines.CAR_INST_PLATE = '';
   const lamp = o.lamp;
   mat.onBeforeCompile = (shader) => {
     if (lamp) shader.uniforms.uLamp = { value: lamp };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\n' + VERT_PARS)
-      .replace('#include <color_vertex>', '#include <color_vertex>\n' + VERT_MAIN)
+      .replace('#include <color_vertex>', '#include <color_vertex>\n' + VERT_MAIN + VERT_PLATE)
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + VERT_COLLAPSE);
     let fs = shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + FRAG_PARS)
@@ -211,10 +242,10 @@ export function kitMaterials(livery: Livery): { paint: THREE.MeshPhysicalMateria
 
 function common(atlas: THREE.Texture, lampLevels: LampArray, inst: boolean) {
   const trim = new THREE.MeshStandardMaterial({ map: atlas, vertexColors: true, roughness: 1, metalness: 1 });
-  patch(trim, 'car-trim', { map: true });
+  patch(trim, inst ? 'car-trim-inst' : 'car-trim', { map: true, instPlate: inst });
   trim.userData.wet = 'surface';
   const lamp = new THREE.MeshStandardMaterial({ map: atlas, vertexColors: true, roughness: 1, metalness: 1, emissive: '#000000' });
-  patch(lamp, inst ? 'car-lamp-inst' : 'car-lamp', { map: true, lamp: lampLevels, instLamp: inst });
+  patch(lamp, inst ? 'car-lamp-inst' : 'car-lamp', { map: true, lamp: lampLevels, instLamp: inst, instPlate: inst });
   lamp.userData.wet = 'surface';
   const wheel = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 1 });
   patch(wheel, 'car-wheel', {});
@@ -257,6 +288,8 @@ export function liveryAtlas(l: Livery): THREE.DataTexture {
   drawSign(g, m, PX.sign, l.roofSign);
   drawText(g, m, PX.door, l.doorText ?? '', l.doorColor ?? '#ffffff', 700);
   drawDest(g, m, PX.dest);
+  drawPlateVariants(g, l.plate); opaque.push(PX.plates);
+  drawDestVariants(g, m);
   drawBeacon(g, m, PX.beacon);
   drawText(g, m, PX.side, l.doorText ?? '', l.doorColor ?? '#ffffff', 800);
   drawBadge(g, PX.badge); opaque.push(PX.badge);
@@ -637,6 +670,70 @@ function drawDest(g: G, m: G, r: PxRect): void {
     for (let x = 0; x < r.w; x += 4) g.fillRect(x + 3, 0, 1, r.h);
   });
   clip(m, r, () => { m.fillStyle = '#000'; m.fillRect(0, 0, r.w, r.h); text(m, '#ffffff'); });
+}
+
+/** 车牌的字：省份简称、发牌机关代号、五位序号（不用 I、O）。 */
+const PLATE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ', PLATE_DIGITS = '0123456789';
+function plateRng(seed: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+}
+const pick = (r: () => number, s: string) => s[Math.floor(r() * s.length)];
+const serial = (r: () => number, n: number, letters = 1) => Array.from({ length: n }, (_, i) => pick(r, i < letters && r() < 0.5 ? PLATE_LETTERS : PLATE_DIGITS)).join('');
+
+/**
+ * 每种涂装 16 块车牌（`plates` 的 8 × 2 格）。私家车：京 A–Q 蓝牌（京 B 是出租）、新能源绿牌、约一成五外地牌；
+ * 出租车涂装：前 8 块京 B，后 8 块私家车的；警车、教练车：只换号码；黄牌（公交、货车）：京 A、外地。
+ */
+function drawPlateVariants(g: G, base: Livery['plate']): void {
+  const r = plateRng(base.text);
+  const blue = base.bg === '#1d49b5', taxiKit = base.text.startsWith('京B'), suffix = /[警学]$/.test(base.text) ? base.text.slice(-1) : '';
+  for (let k = 0; k < PLATE_VARIANTS; k++) {
+    let text: string, bg = base.bg, fg = base.fg, green = false;
+    // CarKit：出租车挑 0–7，私家车 8–15（轿车的 kit 是出租车涂装，私家轿车也画在里面）
+    if (suffix) text = `${base.text.slice(0, 3)}${serial(r, 4, 0)}${suffix}`;
+    else if (taxiKit && k < 8) text = `京B·${pick(r, 'DTXZ')}${serial(r, 4, 0)}`;
+    else if (blue) {
+      if (k % 4 === 3) { green = true; text = `京${pick(r, 'ACEFGHJKLMNPQ')}·${pick(r, 'DF')}${serial(r, 5, 0)}`; bg = '#7fcf8e'; fg = '#111111'; }
+      else if (k % 8 === 6) text = `${pick(r, '冀津鲁晋辽豫蒙黑')}${pick(r, 'ABCDEFGH')}·${serial(r, 5, 2)}`;
+      else text = `京${pick(r, 'ACEFGHJKLMNPQ')}·${serial(r, 5, 2)}`;
+    } else text = `${k % 4 === 3 ? pick(r, '冀津鲁晋') : '京'}${pick(r, 'ABCEH')}·${serial(r, 5, 1)}`;
+    const c = plateCell(k);
+    clip(g, c, () => {
+      if (green) {
+        const gr = g.createLinearGradient(0, 0, 0, c.h);
+        gr.addColorStop(0, '#f2fbf3'); gr.addColorStop(1, '#58bf6c');
+        g.fillStyle = gr;
+      } else g.fillStyle = bg;
+      g.fillRect(0, 0, c.w, c.h);
+      g.strokeStyle = fg; g.lineWidth = 2; g.strokeRect(3, 3, c.w - 6, c.h - 6);
+      g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+      fit(g, text, c.w - 12, 26, 700);
+      g.fillText(text, c.w / 2, c.h / 2 + 1);
+    });
+  }
+}
+
+/** 公交线路牌的四种（线路号、终点站），画法同 `drawDest`。 */
+const BUS_ROUTES: readonly [string, string][] = [['1', '四惠枢纽站'], ['52', '北京西站'], ['特2', '前门'], ['300', '内环 快车']];
+function drawDestVariants(g: G, m: G): void {
+  for (let k = 0; k < DEST_VARIANTS; k++) {
+    const r = destCell(k), [no, to] = BUS_ROUTES[k];
+    const text = (c: G, color: string) => {
+      c.fillStyle = color; c.textBaseline = 'middle';
+      c.textAlign = 'left'; fit(c, no, r.w * 0.26, r.h * 0.78, 800); c.fillText(no, r.w * 0.04, r.h * 0.54);
+      c.textAlign = 'center'; fit(c, to, r.w * 0.62, r.h * 0.58, 700); c.fillText(to, r.w * 0.64, r.h * 0.54);
+    };
+    clip(g, r, () => {
+      g.fillStyle = '#0b0b0b'; g.fillRect(0, 0, r.w, r.h);
+      text(g, '#ffb020');
+      g.fillStyle = 'rgba(8,8,8,0.72)';
+      for (let y = 0; y < r.h; y += 3) g.fillRect(0, y + 2, r.w, 1);
+      for (let x = 0; x < r.w; x += 3) g.fillRect(x + 2, 0, 1, r.h);
+    });
+    clip(m, r, () => { m.fillStyle = '#000'; m.fillRect(0, 0, r.w, r.h); text(m, '#ffffff'); });
+  }
 }
 
 function drawBeacon(g: G, m: G, r: PxRect): void {

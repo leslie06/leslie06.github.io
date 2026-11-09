@@ -259,11 +259,13 @@ export function treeGeometry(s: number, lod: 'near' | 'mid' | 'far'): THREE.Buff
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setAttribute('aSway', new THREE.Float32BufferAttribute(sway, 1));
   g.setAttribute('aVariant', new THREE.Float32BufferAttribute(new Float32Array(sway.length).fill(-1), 1));
+  g.setAttribute('aSpecies', new THREE.Float32BufferAttribute(new Float32Array(sway.length).fill(s), 1));
+  g.setAttribute('aLeaf', new THREE.Float32BufferAttribute(new Float32Array(sway.length).fill(-1), 1));   // by colour
   g.computeBoundingSphere();
   return g;
 }
 
-const SWAY_PARS = 'attribute float aSway;\nattribute float aVariant;\nuniform float uTime;\nuniform float uTreeVariants;';
+const SWAY_PARS = 'attribute float aSway;\nattribute float aVariant;\nattribute float aSpecies;\nattribute float aNest;\nattribute float aLeaf;\nuniform float uTime;\nuniform float uTreeVariants;\nuniform vec4 uSeason;\nvarying float vSpecies;\nvarying float vTreeRnd;\nvarying float vLeaf;';
 const SWAY = /* glsl */`
 {
 #ifdef USE_INSTANCING
@@ -274,6 +276,11 @@ const SWAY = /* glsl */`
   // One of the geometry's variants per tree (BlenderTrees.ts); the others collapse to a point.
   // aVariant -1 is drawn by every tree (the procedural trees, the impostors).
   float tv = floor(fract(sin(dot(ip, vec2(12.9898, 78.233)) + 3.7) * 43758.5453) * uTreeVariants);
+  vSpecies = aSpecies;
+  vLeaf = aLeaf;
+  vTreeRnd = fract(sin(dot(ip, vec2(7.131, 3.717))) * 24634.6345);
+  // 喜鹊窝：落叶七成以后，约四分之一的树上有
+  if (aNest > 0.5 && (uSeason.y < 0.7 || vTreeRnd > 0.27)) transformed = vec3(0.0);
   if (aVariant >= 0.0 && abs(aVariant - tv) > 0.5) transformed = vec3(0.0);
   float ph = uTime * 1.15 + ip.x * 0.21 + ip.y * 0.17;
   float sw = aSway * aSway;
@@ -289,6 +296,31 @@ const MIP_ALPHA = (_size: number) => /* glsl */`
   diffuseColor.a *= 1.0 + lod * 0.32;
 }`;
 
+/**
+ * 季节（render/Season.ts 的 `uSeason`，2026-11-09）：叶子（贴图里偏绿的像素；树皮是棕灰的不动）按树种换色——国槐、杨树
+ * 转黄（每棵树早晚不一），银杏金黄，侧柏冬天发暗；落叶按贴图上的小块随机丢掉，露出 Blender 树本来就有的枝干。
+ * 影子的深度材质丢一样的叶子。
+ */
+const SEASON_PARS = 'uniform vec4 uSeason;\nvarying float vSpecies;\nvarying float vTreeRnd;\nvarying float vLeaf;';
+const SEASON = (tint: boolean) => /* glsl */`
+{
+  vec3 c0 = diffuseColor.rgb;
+  // aLeaf: 1 a leaf card, 0 bark (and nests), -1 an impostor or a procedural tree: tell by the colour (leaves are green)
+  float leafy = vLeaf > 0.5 ? 1.0 : vLeaf < -0.5 ? smoothstep(0.004, 0.04, c0.g - max(c0.r, c0.b)) : 0.0;
+  int sp = int(vSpecies + 0.5);
+  if (sp != 2 && leafy > 0.12) {
+    float h = fract(sin(dot(floor(vMapUv * 90.0) + vTreeRnd * 17.0, vec2(12.9898, 78.233))) * 43758.5453);
+    if (h < uSeason.y * (0.88 + 0.24 * vTreeRnd)) discard;
+  }
+${tint ? `  float lum = dot(c0, vec3(0.299, 0.587, 0.114));
+  float t = 0.0;
+  vec3 tgt = c0;
+  if (sp == 3) { t = clamp(uSeason.z * (0.8 + 0.4 * vTreeRnd), 0.0, 1.0); tgt = vec3(1.0, 0.76, 0.16) * lum * 2.5; }
+  else if (sp == 2) { t = uSeason.w * 0.45; tgt = vec3(0.5, 0.48, 0.3) * lum * 2.0; }
+  else { t = clamp(uSeason.x * (0.55 + 0.9 * vTreeRnd), 0.0, 1.0); tgt = (sp == 1 ? vec3(0.96, 0.8, 0.3) : vec3(0.86, 0.8, 0.34)) * lum * 2.3; }
+  diffuseColor.rgb = mix(c0, tgt, t * leafy);` : ''}
+}`;
+
 /** The shared tree material and its shadow-depth twin (same sway and alpha test). */
 export function foliageMaterials(env: EnvUniforms, size: number): { mat: THREE.MeshStandardMaterial; depth: THREE.MeshDepthMaterial; variants: { value: number } } {
   const map = leafAtlas(size);
@@ -297,12 +329,15 @@ export function foliageMaterials(env: EnvUniforms, size: number): { mat: THREE.M
   const mat = new THREE.MeshStandardMaterial({ map, vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.82, metalness: 0 });
   mat.userData.wet = true;
   mat.customProgramCacheKey = () => 'city-foliage';
+  const season = env.uSeason ?? { value: new THREE.Vector4() };
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = env.uTime;
     sh.uniforms.uTreeVariants = variants;
+    sh.uniforms.uSeason = season;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\n${SWAY_PARS}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${SWAY}`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <map_fragment>', `#include <map_fragment>\n${MIP_ALPHA(size)}`)
+      .replace('#include <common>', `#include <common>\n${SEASON_PARS}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>\n${MIP_ALPHA(size)}\n${SEASON(true)}`)
       // Leaves keep their crown normal on both sides (no back-face flip).
       .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n#ifdef DOUBLE_SIDED\nnormal *= faceDirection;\n#endif')
       // A little light through the leaves.
@@ -313,8 +348,11 @@ export function foliageMaterials(env: EnvUniforms, size: number): { mat: THREE.M
   depth.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = env.uTime;
     sh.uniforms.uTreeVariants = variants;
+    sh.uniforms.uSeason = season;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\n${SWAY_PARS}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${SWAY}`);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>\n${MIP_ALPHA(size)}`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\n${SEASON_PARS}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>\n${MIP_ALPHA(size)}\n${SEASON(false)}`);
   };
   return { mat, depth, variants };
 }

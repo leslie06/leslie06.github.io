@@ -30,7 +30,7 @@ const IMPOSTOR: Record<(typeof SPECIES)[number], { width: number; height: number
 };
 
 function level(trees: Trees, species: string, lod: 'near' | 'mid'): THREE.BufferGeometry {
-  const pos: number[] = [], nor: number[] = [], uv: number[] = [], col: number[] = [], sway: number[] = [], variant: number[] = [], idx: number[] = [];
+  const pos: number[] = [], nor: number[] = [], uv: number[] = [], col: number[] = [], sway: number[] = [], variant: number[] = [], idx: number[] = [], nestFlag: number[] = [], leafFlag: number[] = [];
   for (let v = 0; v < TREE_VARIANTS; v++) {
   const parts = trees[`${species}_${lod}_v${v}`];
   let top = 0;
@@ -60,9 +60,36 @@ function level(trees: Trees, species: string, lod: 'near' | 'mid'): THREE.Buffer
       }
       uv.push((g.t?.[k] ?? 0) / 4096, (g.t?.[k + 1] ?? 0) / 4096);
       variant.push(v);
+      leafFlag.push(leaf ? 1 : 0);
     }
     for (const i of g.i) idx.push(base + i);
   }
+  // 喜鹊窝（2026-11-09）：国槐和杨树的近景每个变体在树冠的枝杈里放一个，`aNest` = 1；着色器只在落叶后、约四分之一的树上
+  // 显示（Foliage.ts SWAY），其余时候收成一个点。北京冬天光秃的树上最显眼的就是它。
+  if (lod === 'near' && (species === 'huai' || species === 'poplar')) {
+    const bark = Object.entries(parts).find(([n]) => n !== 'leaf')?.[1];
+    const bu = (bark?.t?.[0] ?? 0) / 4096, bv = (bark?.t?.[1] ?? 0) / 4096;
+    const a = v * 2.1 + 0.6, cx = Math.cos(a) * 0.25, cz = Math.sin(a) * 0.25, cy = top * (species === 'poplar' ? 0.7 : 0.62);
+    const nest = new THREE.IcosahedronGeometry(0.42, 1);
+    const np = nest.getAttribute('position'), nn = nest.getAttribute('normal');
+    while (nestFlag.length < pos.length / 3) nestFlag.push(0);
+    const base = pos.length / 3;
+    for (let i = 0; i < np.count; i++) {
+      const j = 0.85 + 0.3 * Math.abs(Math.sin(i * 12.9898) * 43758.5453 % 1);
+      pos.push(cx + np.getX(i) * j, cy + np.getY(i) * 0.62 * j, cz + np.getZ(i) * j);
+      nor.push(nn.getX(i), nn.getY(i), nn.getZ(i));
+      col.push(0.42, 0.34, 0.27);
+      sway.push(Math.min(0.45, Math.max(0, (cy - 2) / 12)));
+      uv.push(bu, bv);
+      variant.push(v);
+      nestFlag.push(1);
+      leafFlag.push(0);
+    }
+    const ni = nest.index ? Array.from(nest.index.array as ArrayLike<number>) : Array.from({ length: np.count }, (_, i) => i);
+    for (const i of ni) idx.push(base + i);
+    nest.dispose();
+  }
+  while (nestFlag.length < pos.length / 3) nestFlag.push(0);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('aVariant', new THREE.Float32BufferAttribute(variant, 1));
@@ -71,6 +98,9 @@ function level(trees: Trees, species: string, lod: 'near' | 'mid'): THREE.Buffer
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setAttribute('aSway', new THREE.Float32BufferAttribute(sway, 1));
+  geo.setAttribute('aSpecies', new THREE.Float32BufferAttribute(new Float32Array(sway.length).fill(SPECIES.indexOf(species as (typeof SPECIES)[number])), 1));
+  geo.setAttribute('aNest', new THREE.Float32BufferAttribute(nestFlag, 1));
+  geo.setAttribute('aLeaf', new THREE.Float32BufferAttribute(leafFlag, 1));
   geo.setIndex(idx);
   geo.computeBoundingSphere();
   return geo;
@@ -100,6 +130,8 @@ function impostor(s: number): THREE.BufferGeometry {
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setAttribute('aSway', new THREE.Float32BufferAttribute(sway, 1));
   geo.setAttribute('aVariant', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3).fill(-1), 1));   // every instance
+  geo.setAttribute('aSpecies', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3).fill(s), 1));
+  geo.setAttribute('aLeaf', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3).fill(-1), 1));   // leaves and trunk in one picture: by colour
   geo.setIndex(idx);
   geo.computeBoundingSphere();
   return geo;

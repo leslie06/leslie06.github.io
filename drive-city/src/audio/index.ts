@@ -3,6 +3,13 @@ import type { VehicleApi, WantedApi, RenderApi, PlayerApi } from '../game/Contra
 import type { TrafficApi } from '../traffic';
 import type { HudApi } from '../game/Contracts';
 import { Radio } from './Radio';
+import type { TalkWorld } from './Talk';
+import { Soundscape, type Where } from './Soundscape';
+import { CityClips } from './CityClips';
+import type { WorldApi } from '../game/Contracts';
+import { RADIO_ROADS, type RadioRoad } from './CityLines';
+import { seasonAt } from '../render/Season';
+import type { NavSystem } from '../nav';
 import { babble } from './Babble';
 import { StreetMusic, type MusicSource } from './StreetMusic';
 import { Speech } from './Speech';
@@ -170,9 +177,71 @@ export async function install(engine: Engine): Promise<void> {
     hum.connect(hlp).connect(humGain).connect(master); hum.start();
 
     // The radio, on its own bus under the master so mute covers it.
-    radio = new Radio(c, master, noiseBuf);
+    radio = new Radio(c, master, noiseBuf, talkWorld());
+    // 北京的街头声景（audio/Soundscape.ts）
+    scape = new Soundscape(c, master, new CityClips(c), noiseBuf);
     radio.onTrack = (label) => { if (engine.get<PlayerApi>('player')?.mode === 'driving') engine.get<HudApi>('hud')?.toast(label); };
   }
+
+  /**
+   * What the traffic radio (audio/Talk.ts) needs from the world: the clock, the rain, where the player is, the radio's roads
+   * near them (from the map's road chains, sampled every ~150 m, built the first time a report is read) and the day.
+   */
+  function talkWorld(): TalkWorld {
+    let roads: { road: RadioRoad; pts: number[] }[] | null = null;
+    const day = seasonAt().day;
+    return {
+      hour: () => engine.get<RenderApi>('render')?.timeOfDay ?? 12,
+      rain: () => engine.get<RenderApi>('render')?.rain ?? 0,
+      where: () => engine.get<PlayerApi>('player')?.position ?? { x: 0, z: 0 },
+      day: () => day,
+      roadsNear(x, z) {
+        if (!roads) {
+          const nav = engine.get<NavSystem>('nav');
+          if (!nav?.places.length) return [];
+          const chains = nav.labels().roads;
+          roads = RADIO_ROADS.map((road) => {
+            const pts: number[] = [];
+            for (const ch of chains) if (road.match.test(ch.name.zh)) for (let i = 0; i < ch.pts.length; i += 16) pts.push(ch.pts[i], ch.pts[i + 1]);
+            return { road, pts };
+          }).filter((r) => r.pts.length);
+        }
+        const out: { road: RadioRoad; d: number }[] = [];
+        for (const r of roads) {
+          let d = Infinity;
+          for (let i = 0; i < r.pts.length; i += 2) d = Math.min(d, Math.hypot(r.pts[i] - x, r.pts[i + 1] - z));
+          out.push({ road: r.road, d });
+        }
+        return out.sort((a, b) => a.d - b.d);
+      },
+    };
+  }
+
+  // 街头声景：听的人在哪儿（每 1.5 秒看一次：路名像胡同、老城里、小区、公园、大马路）
+  let scape: Soundscape | null = null, zoneT = 0;
+  const where: Where = { x: 0, z: 0, fx: 0, fz: -1, hour: 12, day: seasonAt().day, hutong: false, old: false, resid: false, park: false, bigRoad: false, inCar: false, paused: false };
+  const zoneAt = (x: number, z: number) => {
+    const name = engine.get<WorldApi>('world')?.placeName?.(x, z) ?? '';
+    where.hutong = /胡同$|巷$|[一二三四五六七八九十]条$|斜街$|夹道$|大院$/.test(name);
+    where.bigRoad = /环|高速|快速|大街$|立交|桥$/.test(name);
+    // 二环以内（游戏坐标的近似框）
+    where.old = x > -4000 && x < 3150 && z > -4450 && z < 4750;
+    let resid = false, park = false;
+    for (const p of engine.get<NavSystem>('nav')?.places ?? []) {
+      const dx = p.x - x, dz = p.z - z;
+      if (Math.abs(dx) > 700 || Math.abs(dz) > 700) continue;
+      if (p.cat === 'resid' && !resid && dx * dx + dz * dz < 220 * 220) resid = true;
+      else if (p.cat === 'park' && !park) { const r = Math.sqrt(p.ha * 1e4 / Math.PI) + 30; if (dx * dx + dz * dz < r * r) park = true; }
+    }
+    where.resid = resid || where.hutong; where.park = park;
+  };
+  engine.events.on('traffic:bus', ({ x, z, arrive }) => scape?.bus(x, z, arrive, where));
+
+  // 交通台插播「听众报料」：被追捕、甩掉警察、被抓、路口漂移
+  engine.events.on('wanted:level', ({ level, up }) => { if (up) radio?.talk?.report(level >= 2 ? 'chase' : 'crazy'); });
+  engine.events.on('wanted:escaped', () => radio?.talk?.report('escaped'));
+  engine.events.on('wanted:busted', () => radio?.talk?.report('busted'));
+  engine.events.on('drift:end', ({ score, crashed }) => { if (!crashed && score >= 1500) radio?.talk?.report('drift'); });
 
   /** One footstep: a short, soft noise tick (harder when running). */
   function footstep(k: number): void {
@@ -455,6 +524,18 @@ export async function install(engine: Engine): Promise<void> {
         // the lane's dance machine (district/) plays through the same voices as the squares' dancing (life/)
         const lm = engine.get<{ name: string; music: readonly MusicSource[] }>('life')?.music ?? [], dm = engine.get<{ name: string; music: readonly MusicSource[] }>('district')?.music;
         street.update(dm?.length ? [...lm, ...dm] : lm, cam.x, cam.z, camF.x / fl, camF.z / fl, paused);
+      }
+      if (scape) {
+        const cam = engine.camera.position;
+        engine.camera.getWorldDirection(camF);
+        const fl = Math.hypot(camF.x, camF.z) || 1;
+        zoneT -= dt;
+        if (zoneT <= 0) { zoneT = 1.5; zoneAt(cam.x, cam.z); }
+        where.x = cam.x; where.z = cam.z; where.fx = camF.x / fl; where.fz = camF.z / fl;
+        where.hour = engine.get<RenderApi>('render')?.timeOfDay ?? 12;
+        where.inCar = !!driving && !['bike', 'ebike', 'moto'].includes(car.spec.name);
+        where.paused = paused || muted;
+        scape.update(dt, where);
       }
       // Engine off while the player is out of the car, and a bicycle or an electric scooter has none.
       const off = !v.occupied || car.spec.name === 'bike' || car.spec.name === 'ebike';

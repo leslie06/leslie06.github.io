@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { seasonAt } from '../render/Season';
 import type { Engine } from '../core/Engine';
 import type { EnvUniforms } from '../game/Contracts';
 import { loadCity, loadNetwork, type AreaKind, type Manifest, type Network } from './Data';
@@ -436,6 +437,9 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms, defe
     plaza: skin(std({ roughness: 0.7, color: '#c4c1b9' }, undefined, 0.55, 0.12, 4, 'ground'), 'granite_tile', 3, { map: true, normal: true }),
     water: std({ color: '#2a3c40', roughness: 0.05, metalness: 0.1, envMapIntensity: 1.3 }, undefined, 0, 0.1, 4.5, false),
   };
+  // 季节（render/Season.ts，2026-11-09）：北京的草地 11 月下旬到 3 月是枯黄的
+  const dry = seasonAt().dry;
+  if (dry > 0) for (const k of ['lawn', 'grass', 'park', 'wood'] as const) areas[k].color.lerp(new THREE.Color(k === 'wood' ? '#8a7a55' : '#a4916a'), dry * 0.8);
   const ground = skin(std({ roughness: 0.95, color: '#9d9c97' }, undefined, 0.6, 0.35, 0, 'ground'), 'concrete_tiles', 4, { map: true, normal: true });
   const rm = await roadMap(tier === 'low' ? 1024 : 2048);
   if (rm) {

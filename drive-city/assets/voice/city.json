@@ -1,0 +1,2009 @@
+{
+ "version": 1,
+ "_note": "城市声音的台词（交通台、公交报站、吆喝）：由 scripts/voice/city.mts 从 src/audio/CityLines.ts 生成，别手改。",
+ "tts": {
+  "provider": "aliyun-bailian",
+  "model": "cosyvoice-v3.5-plus",
+  "format": "mp3",
+  "sampleRate": 24000,
+  "variantsDefault": 1,
+  "languageHints": [
+   "zh"
+  ],
+  "voiceListUrl": "https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list",
+  "emotions": [
+   "neutral",
+   "fearful",
+   "angry",
+   "sad",
+   "surprised",
+   "happy",
+   "disgusted"
+  ]
+ },
+ "archetypes": {
+  "dj": {
+   "name": "交通台主持人",
+   "voices": ["cosyvoice-v3.5-plus-vd-dj1-a19182d3c82845ac8525b20027cd9bb9"],
+   "voiceDesign": [
+    {
+     "prompt": "青年男性，32 岁左右，北京交通广播电台主持人，普通话标准、带一点儿京腔儿化音，音色明亮浑厚，语速偏快，热情幽默，播音腔但不死板。",
+     "previewText": "您正在收听的是B城交通台。东三环车多缓行，着急的朋友可以走辅路。"
+    }
+   ],
+   "style": "北京交通广播的男主持人，京腔，热情幽默，播音自然。",
+   "styleEn": "A Beijing traffic radio host.",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "bus": {
+   "name": "公交报站",
+   "voices": ["cosyvoice-v3.5-plus-vd-bus1-1c23f0f02c4147019bace7ec96ef922e"],
+   "voiceDesign": [
+    {
+     "prompt": "女性，30 岁左右，标准普通话播音腔，音色清亮柔和，语速平稳，吐字清晰，像公交车上的报站录音。",
+     "previewText": "车辆进站，请注意安全。车辆起步，请站稳扶好。"
+    }
+   ],
+   "style": "公交车上的报站录音，女声，标准普通话，平稳清晰。",
+   "styleEn": "A recorded bus announcement.",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "hawker": {
+   "name": "吆喝",
+   "voiceHint": "复用路人原型的音色（中年男）",
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-driver1-fb7c7041902248cc801935372d3bc393"
+   ],
+   "voiceDesign": [
+    {
+     "prompt": "中年男性，45 岁左右，北京口音很重、儿化音多，音色粗哑、中低音，嗓门大，语速偏快，火气大，爱唠叨。",
+     "previewText": "会不会开车啊！这路堵的，到地方得天黑。"
+    }
+   ],
+   "style": "胡同里吆喝的北京爷们儿，嗓门大，拖长音。",
+   "styleEn": "A Beijing hawker calling out in the lanes.",
+   "rateRange": [
+    1,
+    1
+   ]
+  }
+ },
+ "lines": [
+  {
+   "id": "radio.id1",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "您正在收听的是B城交通台，调频九十九点六。",
+   "instruct": "台呼，热情饱满。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.id2",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城交通台，陪您一路畅通。",
+   "instruct": "台呼，轻快。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.0",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，零点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.1",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，一点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.2",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，两点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.3",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，三点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.4",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，四点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.5",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，五点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.6",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，六点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.7",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，七点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.8",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，八点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.9",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，九点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.10",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.11",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十一点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.12",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十二点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.13",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十三点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.14",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十四点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.15",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十五点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.16",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十六点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.17",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十七点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.18",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十八点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.19",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，十九点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.20",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，二十点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.21",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，二十一点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.22",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，二十二点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.time.23",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城时间，二十三点整。",
+   "instruct": "整点报时，字正腔圆，干脆。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.intro1",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "来看看路面上的情况。",
+   "instruct": "电台主持人播报，自然流畅，带点儿京味儿。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.intro2",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "下面是实时路况。",
+   "instruct": "电台主持人播报，自然流畅，带点儿京味儿。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.intro3",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "最新路况，大家听好了。",
+   "instruct": "电台主持人播报，自然流畅，带点儿京味儿。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e2.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东二环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e2.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东二环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e2.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东二环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w2.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西二环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w2.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西二环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w2.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西二环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s2.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南二环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s2.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南二环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s2.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南二环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n2.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北二环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n2.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北二环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n2.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北二环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e3.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东三环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e3.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东三环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e3.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东三环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w3.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西三环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w3.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西三环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w3.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西三环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s3.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南三环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s3.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南三环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s3.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南三环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n3.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北三环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n3.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北三环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n3.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北三环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e4.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东四环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e4.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东四环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e4.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东四环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w4.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西四环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w4.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西四环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w4.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西四环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s4.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南四环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s4.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南四环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s4.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南四环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n4.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北四环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n4.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北四环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n4.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北四环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e5.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东五环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e5.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东五环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.e5.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "东五环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w5.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西五环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w5.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西五环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.w5.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西五环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s5.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南五环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s5.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南五环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.s5.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南五环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n5.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北五环车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n5.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北五环拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.n5.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北五环通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.changan.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "长安街车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.changan.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "长安街拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.changan.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "长安街通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jianguo.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "建国路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jianguo.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "建国路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jianguo.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "建国路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.chaoyang.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "朝阳路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.chaoyang.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "朝阳路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.chaoyang.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "朝阳路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.chaoyangbei.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "朝阳北路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.chaoyangbei.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "朝阳北路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.chaoyangbei.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "朝阳北路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.guangqu.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "广渠路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.guangqu.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "广渠路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.guangqu.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "广渠路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingtong.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京通快速路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingtong.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京通快速路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingtong.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京通快速路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.airport.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "机场高速车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.airport.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "机场高速拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.airport.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "机场高速通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingzang.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京藏高速车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingzang.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京藏高速拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingzang.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京藏高速通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingcheng.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京承高速车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingcheng.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京承高速拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingcheng.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京承高速通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingkai.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京开高速车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingkai.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京开高速拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingkai.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京开高速通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jinggangao.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京港澳高速车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jinggangao.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京港澳高速拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jinggangao.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京港澳高速通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jinghu.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京沪高速车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jinghu.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京沪高速拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jinghu.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京沪高速通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingha.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京哈高速车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingha.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京哈高速拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingha.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京哈高速通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fuxing.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "复兴路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fuxing.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "复兴路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fuxing.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "复兴路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fushi.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "阜石路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fushi.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "阜石路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fushi.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "阜石路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.lianshi.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "莲石路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.lianshi.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "莲石路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.lianshi.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "莲石路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fucheng.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "阜成路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fucheng.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "阜成路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.fucheng.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "阜成路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xizhimenwai.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西直门外大街车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xizhimenwai.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西直门外大街拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xizhimenwai.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西直门外大街通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xueyuan.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "学院路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xueyuan.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "学院路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xueyuan.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "学院路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.zhongguancun.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "中关村大街车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.zhongguancun.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "中关村大街拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.zhongguancun.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "中关村大街通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.zhichun.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "知春路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.zhichun.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "知春路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.zhichun.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "知春路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.anli.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "安立路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.anli.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "安立路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.anli.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "安立路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.beichen.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北辰路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.beichen.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北辰路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.beichen.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北辰路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.yaojiayuan.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "姚家园路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.yaojiayuan.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "姚家园路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.yaojiayuan.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "姚家园路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xidawang.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西大望路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xidawang.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西大望路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.xidawang.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "西大望路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.lianhuachi.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "莲花池东路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.lianhuachi.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "莲花池东路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.lianhuachi.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "莲花池东路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingliang.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京良路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingliang.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京良路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.jingliang.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "京良路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.nanyuan.slow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南苑路车多缓行。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.nanyuan.jam",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南苑路拥堵比较严重，能绕就绕。",
+   "instruct": "播报路况，语速稍快，略带提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.nanyuan.ok",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "南苑路通行顺畅。",
+   "instruct": "播报路况，语气轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.out1",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "开车的朋友注意保持车距。",
+   "instruct": "电台主持人播报，自然流畅，带点儿京味儿。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.out2",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "着急的朋友可以走辅路。",
+   "instruct": "电台主持人播报，自然流畅，带点儿京味儿。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.out3",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "以上是实时路况。",
+   "instruct": "电台主持人播报，自然流畅，带点儿京味儿。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.tr.rain",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "雨天路滑，大家慢点儿开，记得打开车灯。",
+   "instruct": "关切地提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.clear",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "今儿天儿不错，能见度挺好，开车的朋友注意防晒。",
+   "instruct": "轻松愉快。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.rain",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "外头下着雨呢，路面湿滑，跟车别太近。",
+   "instruct": "关切地提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.autumn",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "这两天银杏正黄，赏叶的车多，开车可别光顾着看景儿。",
+   "instruct": "轻松，带点儿调侃。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.heat",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "供暖季开始了，家里暖和了，出门可别忘了添衣服。",
+   "instruct": "温和地提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.winter",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "天儿冷了，早晚桥面容易结冰，过桥的时候慢点儿。",
+   "instruct": "认真地提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.spring",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "杨絮又飘起来了，开车把车窗关好，别让它糊一脸。",
+   "instruct": "轻松调侃。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.summer",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "天儿热，车里可别放打火机和充电宝。",
+   "instruct": "认真地提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.night",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "夜深了，开夜车的朋友注意休息，可别疲劳驾驶。",
+   "instruct": "低沉温柔，深夜电台的感觉。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.news.chase",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "插播一条消息：警方正在追捕一辆可疑车辆，附近的司机朋友注意避让。",
+   "instruct": "新闻插播，严肃紧张。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.news.crazy",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "刚接到听众报料，有辆车在马路上横冲直撞，大伙儿离它远点儿。",
+   "instruct": "新闻插播，有点儿着急。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.news.drift",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "又有听众打电话说，看见有人在路口漂移。哥们儿，这是马路，不是赛道！",
+   "instruct": "哭笑不得地调侃。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.news.escaped",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "最新消息，那辆可疑车辆甩掉了警车，下落不明。警方提醒：开车别跟警察较劲。",
+   "instruct": "新闻插播，略带无奈。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.news.busted",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "刚才那辆横冲直撞的车，已经被警方拦下来了，大家可以放心了。",
+   "instruct": "新闻插播，松了口气。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.chat1",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "开车不喝酒，喝酒不开车。这话我天天说，您天天听，咱都记住了啊。",
+   "instruct": "语重心长，带京腔。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.chat2",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "北京的路啊，您记住一条：二环看运气，三环看心情，四环看缘分。",
+   "instruct": "说段子，带笑。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.chat3",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "有听众问，为什么一到周五就堵？您想啊，全城的人都着急回家呢。",
+   "instruct": "说段子，轻松。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.chat4",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "停车别占消防通道，这可不是闹着玩儿的。",
+   "instruct": "认真地提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.chat5",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "遇上加塞儿的别着急，深呼吸，咱不跟别人置气。",
+   "instruct": "温和地劝。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.ad1",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "蛮牛跑车，现在只要五万块！开出去，倍儿有面儿。详情就近找车行。",
+   "instruct": "夸张的广告腔，语速快。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.ad2",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "开车累了？南锣鼓巷的饺子馆儿，皮薄馅儿大，进去坐坐。",
+   "instruct": "热情的广告腔。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.ad3",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "车坏了别发愁，光华路大刘修车，手艺地道，价钱公道。",
+   "instruct": "热情的广告腔。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.bye",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "B城交通台，陪您一路平安。",
+   "instruct": "台呼，温暖。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "street.bus.arrive",
+   "archetype": "bus",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "车辆进站，请注意安全。",
+   "instruct": "公交车报站录音，平稳清晰。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "street.bus.leave",
+   "archetype": "bus",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "车辆起步，请站稳扶好。",
+   "instruct": "公交车报站录音，平稳清晰。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "street.reverse",
+   "archetype": "bus",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "倒车，请注意。倒车，请注意。",
+   "instruct": "机械的提示音录音，平稳，一字一顿。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "street.recycle",
+   "archetype": "hawker",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "收——旧冰箱、旧彩电、旧洗衣机——旧电脑、旧手机——高价回收——",
+   "instruct": "用喇叭吆喝，拖长音，懒洋洋的。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "street.knife",
+   "archetype": "hawker",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "磨剪子嘞——戗菜刀——",
+   "instruct": "老北京吆喝，拖长音，有韵味。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "street.tanghulu",
+   "archetype": "hawker",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "冰糖葫芦——哎——冰糖葫芦——",
+   "instruct": "老北京吆喝，拖长音，响亮。",
+   "textEn": "",
+   "instructEn": ""
+  }
+ ]
+}

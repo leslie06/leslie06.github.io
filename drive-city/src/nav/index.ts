@@ -9,7 +9,7 @@ import { LaneGraph } from '../traffic/LaneGraph';
 import { Router } from './Router';
 import { MapData } from './MapData';
 import { routeTurns, type Turn, type TurnKind } from './Turns';
-import { bridgesOf, loadPlaces, roadChains, type Bridge, type Place, type RoadChain } from './Places';
+import { bridgesOf, loadPlaces, roadChains, type Bridge, type Name, type Place, type RoadChain } from './Places';
 
 /** The live GPS route and where the player is along it. */
 export interface Gps {
@@ -46,6 +46,12 @@ export interface NavSystem extends NavApi {
   readonly nextTurn: { kind: TurnKind; dist: number; road: string } | null;
   /** The full map's labels: OSM places (empty until places.json arrives), interchanges, road chains. Built on first use. */
   labels(): MapLabels;
+  /** The OSM places alone (empty until places.json arrives): the place titles read the areas from it. */
+  readonly places: readonly Place[];
+  /** The named interchanges (from network.json), built on first use. */
+  bridges(): readonly Bridge[];
+  /** The interchange whose deck or ramps pass within `r` m of the point (network.json `br`: every named span's points), or null. */
+  bridgeAt(x: number, z: number, r?: number): Name | null;
 }
 export interface MapLabels { places: readonly Place[]; bridges: readonly Bridge[]; roads: readonly RoadChain[] }
 
@@ -83,6 +89,8 @@ export async function install(engine: Engine): Promise<void> {
   const places: Place[] = [];
   void loadPlaces().then((p) => { places.push(...p); map.version++; });
   let labels: MapLabels | null = null;
+  let bridgeList: Bridge[] | null = null;
+  let brGrid: Map<string, [number, number, string][]> | null = null;
   const m = world.manifest;
   const bounds = m?.bounds ?? { x0: -1000, z0: -1000, x1: 1000, z1: 1000 };
   const shot = new URLSearchParams(location.search).has('shot');
@@ -158,9 +166,24 @@ export async function install(engine: Engine): Promise<void> {
   const api: NavSystem = {
     name: 'nav',
     router, map, graph, landmarks, bounds,
+    places,
+    bridges() { return labels?.bridges ?? (bridgeList ??= world.routes?.net ? bridgesOf(world.routes.net) : []); },
+    bridgeAt(x, z, r = 40) {
+      const net = world.routes?.net;
+      if (!net?.br) return null;
+      if (!brGrid) {
+        brGrid = new Map();
+        for (const [bx, bz, n] of net.br) { const k = `${Math.floor(bx / 64)}_${Math.floor(bz / 64)}`; (brGrid.get(k) ?? brGrid.set(k, []).get(k)!).push([bx, bz, n]); }
+      }
+      let best: string | null = null, bd = r;
+      for (let i = Math.floor((x - r) / 64); i <= Math.floor((x + r) / 64); i++) for (let j = Math.floor((z - r) / 64); j <= Math.floor((z + r) / 64); j++) {
+        for (const [bx, bz, n] of brGrid.get(`${i}_${j}`) ?? []) { const d = Math.hypot(bx - x, bz - z); if (d < bd) { bd = d; best = n; } }
+      }
+      return best ? { zh: best, en: net.en?.[best] || best } : null;
+    },
     labels() {
       const net = world.routes?.net;
-      return labels ??= { places, bridges: net ? bridgesOf(net) : [], roads: roadChains(graph, net?.en) };
+      return labels ??= { places, bridges: bridgeList ?? (net ? bridgesOf(net) : []), roads: roadChains(graph, net?.en) };
     },
     attribution: m?.attribution ?? '© OpenStreetMap contributors (ODbL)',
     searchArea: null,

@@ -47,6 +47,7 @@ import * as adventure from './adventure';
 import * as district from './district';
 import * as resume from './resume';
 import * as tollPlazas from './city/visual/TollPlazas';
+import * as bridgeNames from './city/visual/BridgeNames';
 import * as funnel from './online/Funnel';
 import * as leaderboard from './online/Leaderboard';
 import * as feedback from './online/Feedback';
@@ -140,7 +141,7 @@ async function boot() {
   await vehicle.install(engine);
   await player.install(engine);
   await damage.install(engine);
-  if (worldName === 'city') { await traffic.install(engine); tollPlazas.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
+  if (worldName === 'city') { await traffic.install(engine); tollPlazas.install(engine); bridgeNames.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
   if (worldName === 'city') await nav.install(engine);
   if (worldName === 'city') await travel.install(engine);
   if (worldName === 'city') await estate.install(engine);

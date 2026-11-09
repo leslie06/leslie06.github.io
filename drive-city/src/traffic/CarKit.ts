@@ -20,6 +20,15 @@ function put16(a: Float32Array, o: number, m: THREE.Matrix4): void {
   for (let k = 0; k < 16; k++) a[o + k] = e[k];
 }
 
+/** 每辆车一个固定的车牌号（按第一次画它的顺序发，换颜色、换 kit 都不变）。 */
+const plateIds = new WeakMap<Vehicle, number>();
+let nextPlate = 0;
+function plateOf(car: Vehicle): number {
+  let k = plateIds.get(car);
+  if (k === undefined) { k = (nextPlate++ * 5) % 16; plateIds.set(car, k); }
+  return k;
+}
+
 /** How far past a car's own length a shadow can fall into view from outside it (low sun). */
 const SHADOW_REACH = 8;
 /** The view every kit culls against this frame (`CarKit.view`); null draws every car. */
@@ -55,6 +64,8 @@ export class CarKit {
   private readonly upper: THREE.InstancedBufferAttribute;
   private readonly lower: THREE.InstancedBufferAttribute;
   private readonly flags: THREE.InstancedBufferAttribute;
+  /** 每辆车自己的车牌、线路牌（`Atlas` 的 plates / dests 格子号），着色器里用。 */
+  private readonly plate: THREE.InstancedBufferAttribute;
   private readonly levels: LampArray;
   private readonly hubs: THREE.Vector3[];
   private _m = new THREE.Matrix4(); private _w = new THREE.Matrix4(); private _l = new THREE.Matrix4();
@@ -94,7 +105,8 @@ export class CarKit {
     this.upper = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4).fill(1), 4);
     this.lower = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4).fill(1), 4);
     this.flags = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
-    for (const a of [this.upper, this.lower, this.flags]) a.setUsage(THREE.DynamicDrawUsage);
+    this.plate = new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(-1), 1);
+    for (const a of [this.upper, this.lower, this.flags, this.plate]) a.setUsage(THREE.DynamicDrawUsage);
     let tris = 0;
     const count = (g: THREE.BufferGeometry, n = 1) => { tris += (g.index ? g.index.count : g.getAttribute('position').count) / 3 * n; };
     const add = (g: THREE.BufferGeometry | null, mat: THREE.Material, shadow: boolean) => {
@@ -112,6 +124,7 @@ export class CarKit {
     const trim = far ? null : b.build('trim');
     for (const g of [paint, trim]) if (g) simplifyIndex(g, far ? 0.06 : 0.2, far ? 0.03 : 0.005);
     if (paint) { paint.setAttribute('instUpper', this.upper); paint.setAttribute('instLower', this.lower); }
+    if (trim) trim.setAttribute('instPlate', this.plate);
     add(paint, mats.paint, !far);
     add(trim, mats.trim, true);
     // Lamps and the taxi-only parts in one mesh; taxi parts carry flag 2 in aux.y.
@@ -119,7 +132,7 @@ export class CarKit {
     if (taxi) { const a = taxi.getAttribute('aux'); for (let i = 0; i < a.count; i++) a.setY(i, a.getY(i) + 2); }
     const lamps = lamp && taxi ? mergeGeometries([lamp, taxi]) : lamp ?? taxi;
     if (lamp && taxi) { lamp.dispose(); taxi.dispose(); }
-    if (lamps) lamps.setAttribute('instLamp', this.flags);
+    if (lamps) { lamps.setAttribute('instLamp', this.flags); lamps.setAttribute('instPlate', this.plate); }
     add(lamps, mats.lamp, false);
     // Wheels: front and rear (twin rear tyres are two instances each side).
     this.hubs = spec.wheels.map((w) => new THREE.Vector3(spec.single ? 0 : w.x, 0, w.z));
@@ -158,6 +171,8 @@ export class CarKit {
     // Brake lamps: braking, or standing with the foot on the brake (not parked on the handbrake).
     const braking = car.brake > 0.05 || (car.speed < 0.5 && car.throttle < 0.05 && !car.handbrake);
     f[i * 4] = taxi ? 1 : 0; f[i * 4 + 1] = braking ? 1 : 0; f[i * 4 + 2] = car.gear === -1 ? 1 : 0; f[i * 4 + 3] = 0;
+    // 出租车用前 8 块（京 B），私家车用后 8 块：同一个 kit 里两种都有
+    (this.plate.array as Float32Array)[i] = (taxi ? 0 : 8) + plateOf(car) % 8;
     for (const ws of this.wheels) {
       for (let s = 0; s < ws.slots.length; s++) {
         const { k, dx } = ws.slots[s];
@@ -189,6 +204,8 @@ export class CarKit {
     u[i * 4] = upper.r; u[i * 4 + 1] = upper.g; u[i * 4 + 2] = upper.b; u[i * 4 + 3] = paintMetal(upper);
     l[i * 4] = lower.r; l[i * 4 + 1] = lower.g; l[i * 4 + 2] = lower.b; l[i * 4 + 3] = paintMetal(lower);
     f[i * 4] = lit?.taxi ? 1 : 0; f[i * 4 + 1] = lit?.brake ? 1 : 0; f[i * 4 + 2] = 0; f[i * 4 + 3] = lit ? 0 : 1;
+    // 停着的车不动，按位置挑车牌（每米一格）；远景车流的车牌看不见，跟着变也无所谓
+    (this.plate.array as Float32Array)[i] = (lit?.taxi ? 0 : 8) + ((Math.imul(Math.round(pos.x), 73856093) ^ Math.imul(Math.round(pos.z), 19349663)) >>> 0) % 8;
     // Wheels at rest: each slot's matrix in the body frame is fixed (made once).
     if (!this.still) this.still = this.wheels.map((ws) => ws.slots.map(({ k, dx }) => {
       const m = new THREE.Matrix4().makeTranslation(this.hubs[k].x, 0, this.hubs[k].z), side = this.hubs[k].x > 0 ? 1 : -1;
@@ -221,7 +238,7 @@ export class CarKit {
     this.kept = 0;
     // an empty kit draws nothing (three still issues its draw calls with 0 instances): the luxury bodies are often absent
     for (const im of this.body) { im.count = n; im.visible = n > 0; }
-    for (const a of [this.matrix, this.upper, this.lower, this.flags]) {
+    for (const a of [this.matrix, this.upper, this.lower, this.flags, this.plate]) {
       a.clearUpdateRanges();
       if (n > 0) a.addUpdateRange(0, n * a.itemSize);
       a.needsUpdate = true;

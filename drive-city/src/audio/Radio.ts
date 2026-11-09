@@ -1,4 +1,6 @@
 import { t } from '../core/I18n';
+import { CityClips } from './CityClips';
+import { Talk, type TalkWorld } from './Talk';
 
 /**
  * The car radio: hip-hop while you drive, GTA style, and N to switch station or turn it off.
@@ -83,11 +85,11 @@ export function arrange(song: Song): Arrangement {
   return { kick, snare, hat, open, hook, bass };
 }
 
-export type Station = 'beats' | 'custom';
+export type Station = 'beats' | 'talk' | 'custom';
 
 export class Radio {
   /** Stations in cycle order; `custom` joins once the playlist has loaded. */
-  stations: Station[] = ['beats'];
+  stations: Station[] = ['beats', 'talk'];
   private idx = 0;
   private on = true;
   private audible = false;
@@ -108,7 +110,11 @@ export class Radio {
   /** Called with the new "now playing" label whenever it changes (a station switch or a new track). */
   onTrack: ((label: string) => void) | null = null;
 
-  constructor(private ctx: AudioContext, master: GainNode, private noiseBuf: AudioBuffer) {
+  /** 「B城交通台」（audio/Talk.ts），有 `world` 才有。 */
+  readonly talk: Talk | null = null;
+  private lastT = 0;
+
+  constructor(private ctx: AudioContext, master: GainNode, private noiseBuf: AudioBuffer, world?: TalkWorld) {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -18; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.2;
     this.bus = ctx.createGain(); this.bus.gain.value = 0;
@@ -119,9 +125,12 @@ export class Radio {
     const fb = ctx.createGain(); fb.gain.value = 0.28;
     const dl = ctx.createBiquadFilter(); dl.type = 'lowpass'; dl.frequency.value = 2400;
     this.delay.connect(dl).connect(fb).connect(this.delay); fb.connect(this.beatsBus);
+    if (world) this.talk = new Talk(ctx, this.bus, new CityClips(ctx), world);
+    else this.stations = ['beats'];
     let saved: string | null = null;
     try { saved = localStorage.getItem(STORE); } catch { /* ignore */ }
     this.on = saved !== 'off';
+    if (saved === 'talk' && this.talk) this.idx = this.stations.indexOf('talk');
     this.song = Math.floor(Math.random() * SONGS.length);
     this.arr = arrange(SONGS[this.song]);
     void this.loadPlaylist(saved);
@@ -145,7 +154,7 @@ export class Radio {
   label(): string {
     const st = this.station;
     if (!st) return '';
-    const title = st === 'beats' ? SONGS[this.song].title : (this.playlist[this.track]?.title ?? '');
+    const title = st === 'beats' ? SONGS[this.song].title : st === 'talk' ? t('radio.talkFm') : (this.playlist[this.track]?.title ?? '');
     return t('hud.radio', { station: t(`radio.${st}` as 'radio.beats'), track: title });
   }
 
@@ -175,7 +184,9 @@ export class Radio {
     }
     const st = this.station;
     if (st === 'custom') this.custom(want);
-    if (!want || st !== 'beats') { this.nextT = 0; return; }
+    const dt = Math.min(0.25, Math.max(0, now - this.lastT)); this.lastT = now;
+    this.talk?.update(dt, want && st === 'talk');
+    if (!want || st !== 'beats') { this.nextT = 0; if (st === 'talk') this.announce(); return; }
     // The sequencer, a quarter second ahead of the clock.
     const song = SONGS[this.song], stepDur = 60 / song.bpm / 4;
     if (this.nextT < now - 0.5) { this.nextT = now + 0.05; }

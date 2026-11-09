@@ -2798,6 +2798,8 @@ execFileSync('node', ['scripts/city/mountain.mjs', '--no-signs'], { stdio: 'inhe
 execFileSync('npx', ['tsx', 'scripts/city/signs.mts'], { stdio: 'inherit' });
 // The network packed for the game's boot (src/city/NetPack.ts).
 execFileSync('npx', ['tsx', 'scripts/city/netpack.mts'], { stdio: 'inherit' });
+// 立交桥身上的桥名（2026-11-09）
+execFileSync('npx', ['tsx', 'scripts/city/bridgenames.mts'], { stdio: 'inherit' });
 // Bus stops whose shelter would stand in a carriageway, taken out of the tiles just written.
 execFileSync('npx', ['tsx', 'scripts/city/shelters.mts'], { stdio: 'inherit' });
 // The subway entrances, placed against the tiles just written.
@@ -2809,3 +2811,5 @@ execFileSync('node', ['--max-old-space-size=8000', 'scripts/city/sites.mjs'], { 
 execFileSync('node', ['scripts/city/places.mjs'], { stdio: 'inherit' });
 // The subway lines and stations for the map (needs the pbf; skipped without it).
 execFileSync('node', ['scripts/city/metro.mjs'], { stdio: 'inherit' });
+// 区界（地名标题「三里屯 · 朝阳区」用，2026-11-09）
+execFileSync('node', ['scripts/city/districts.mjs'], { stdio: 'inherit' });

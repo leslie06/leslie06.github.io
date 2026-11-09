@@ -83,6 +83,8 @@ export interface GameEvents {
   /** The police got the player (police/), just before the respawn: fines and the impound hang off it. */
   'wanted:busted': { level: number };
   /** A traffic car blew its horn at (x, z). */
+  /** A bus pulled in at its stop (`arrive`) or pulled out, near the camera (audio/: the announcement). */
+  'traffic:bus': { x: number; z: number; arrive: boolean };
   'traffic:horn': { x: number; z: number; /** The car honking (voice/: its driver may shout too). */ car?: { readonly pos: { readonly x: number; readonly y: number; readonly z: number } } };
   /** A police car was wrecked (police/); `nearPlayer`: the player was right there (a takedown). */
   'police:wrecked': { x: number; z: number; nearPlayer: boolean };

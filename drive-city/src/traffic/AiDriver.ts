@@ -43,6 +43,9 @@ export class AiDriver {
    * stops at `s` and waits `dwell` seconds, then pulls out; `busCool` seconds before it takes another.
    */
   busStop: { s: number; dwell: number } | null = null;
+  /** 公交进站、出站（audio/ 放报站，2026-11-09）：1 刚停稳，2 刚起步；traffic/ 读了就清。 */
+  busEvent: 0 | 1 | 2 = 0;
+  private dwelt = false;
   busCool = 0;
   private timer = 0;
   stuck = 0;
@@ -182,8 +185,12 @@ export class AiDriver {
     let dwelling = false;
     if (this.busStop) {
       vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 1.8 * Math.max(0, toStop - 0.5))));
-      if (toStop < 2.5 && v < 0.5) { dwelling = true; lineStats.lastStop = [car.pos.x, car.pos.z]; this.busStop.dwell -= dt; if (this.busStop.dwell <= 0) { this.busStop = null; this.busCool = 30; lineStats.busStops++; } }
-    }
+      if (toStop < 2.5 && v < 0.5) {
+        dwelling = true; lineStats.lastStop = [car.pos.x, car.pos.z]; this.busStop.dwell -= dt;
+        if (!this.dwelt) { this.dwelt = true; this.busEvent = 1; }
+        if (this.busStop.dwell <= 0) { this.busStop = null; this.busCool = 30; lineStats.busStops++; this.dwelt = false; this.busEvent = 2; }
+      }
+    } else this.dwelt = false;
     // IDM with the car in front.
     let a = A_MAX * (1 - Math.pow(v / Math.max(0.5, vt), 4));
     if (vt < 0.3) a = -B_COMF * 2;

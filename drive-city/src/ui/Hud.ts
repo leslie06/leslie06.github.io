@@ -5,6 +5,7 @@ import type { CameraApi, HudApi, PlayerApi, VehicleApi, WorldApi, ParkApi } from
 import { C, F, css, el } from './theme';
 import { L } from './lang';
 import { SignCard } from './SignCard';
+import { PlaceTitle } from './PlaceTitle';
 import { TOUCH } from './Touch';
 
 css(`
@@ -126,6 +127,8 @@ export class Hud implements HudApi {
   private streetEl: HTMLDivElement;
   /** The guide sign ahead, big (ui/SignCard). */
   private signCard: SignCard;
+  /** 进片区、上立交时的地名标题（ui/PlaceTitle）。 */
+  private placeTitle: PlaceTitle;
   private street = '';
   private streetT = 0;
   private streetPoll = 0;
@@ -172,6 +175,7 @@ export class Hud implements HudApi {
     this.coachEl.hidden = true;
     this.streetEl = el('div', 'street', root);
     this.signCard = new SignCard(engine, root);
+    this.placeTitle = new PlaceTitle(engine, root);
     this.promptEl = el('div', 'prompt', root);
     this.promptEl.hidden = true;
     this.rideEl = el('div', 'prompt', root);
@@ -310,6 +314,7 @@ export class Hud implements HudApi {
     this.streetT -= dt;
     this.streetEl.classList.toggle('on', this.streetT > 0);
     this.signCard.update(this.engine.get<PlayerApi>('player')?.mode !== 'onfoot');
+    this.placeTitle.update(dt);
     const pl = this.engine.get<PlayerApi>('player');
     const onFoot = pl?.mode === 'onfoot';
     this.speedoEl.hidden = onFoot;

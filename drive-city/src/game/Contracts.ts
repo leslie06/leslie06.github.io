@@ -481,6 +481,8 @@ export interface EnvUniforms {
   uWet: { value: number };
   /** Seconds since boot, for animated materials. */
   uTime: { value: number };
+  /** 季节（render/Season.ts）：x 国槐杨树转黄、y 落叶、z 银杏金黄、w 侧柏冬天发暗，各 0..1；没有就是夏天。 */
+  uSeason?: { value: THREE.Vector4 };
 }
 
 export interface RenderApi extends System {

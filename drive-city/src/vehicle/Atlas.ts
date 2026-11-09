@@ -1,10 +1,10 @@
 /**
- * Layout of the livery atlas (1024 x 512, drawn by CarMaterials, sampled by every car mesh except
+ * Layout of the livery atlas (1024 x 896, drawn by CarMaterials, sampled by every car mesh except
  * the paint). Rectangles are in canvas pixels (origin top left); `uv()` turns one into the
  * [u0, v0, u1, v1] a Surf maps its 0..1 face coordinates into. Shared by the geometry (Node-safe)
  * and the drawing code.
  */
-export const ATLAS_W = 1024, ATLAS_H = 768;
+export const ATLAS_W = 1024, ATLAS_H = 896;
 
 export interface PxRect { x: number; y: number; w: number; h: number }
 
@@ -38,6 +38,10 @@ export const PX = {
   // AE86 (2026-10-22): 藤原とうふ店（自家用） on the doors (black, cut out) and the Gunma plate
   tofu: { x: 256, y: 640, w: 512, h: 64 },
   plateJ: { x: 768, y: 640, w: 128, h: 64 },
+  // 每辆车自己的车牌和公交线路牌（2026-11-09）：traffic 的实例按自己的编号挑一格（`CarKit` 的 `instPlate`），
+  // 着色器把 plateF / plateR / dest 的 uv 挪到这格。车牌 8 × 2 格 128 × 40，线路牌 4 格 256 × 48。
+  plates: { x: 0, y: 768, w: 1024, h: 80 },
+  dests: { x: 0, y: 848, w: 1024, h: 48 },
 } as const satisfies Record<string, PxRect>;
 
 export type AtlasKey = keyof typeof PX;
@@ -50,3 +54,14 @@ export function uv(key: AtlasKey, pad = 2): readonly [number, number, number, nu
 
 /** Centre of the white swatch: untextured faces sample it. */
 export const WHITE: readonly [number, number] = [32 / ATLAS_W, 1 - 32 / ATLAS_H];
+
+/** Plate variants in `plates` (8 x 2 cells) and destination boards in `dests` (4 cells). */
+export const PLATE_VARIANTS = 16, PLATE_COLS = 8, PLATE_CELL = { w: 128, h: 40 } as const;
+export const DEST_VARIANTS = 4, DEST_CELL = { w: 256, h: 48 } as const;
+/** The pixel rect of plate variant `k` (0..15) or destination board `k` (0..3). */
+export function plateCell(k: number): PxRect { return { x: (k % PLATE_COLS) * PLATE_CELL.w, y: PX.plates.y + Math.floor(k / PLATE_COLS) * PLATE_CELL.h, ...PLATE_CELL }; }
+export function destCell(k: number): PxRect { return { x: k * DEST_CELL.w, y: PX.dests.y, ...DEST_CELL }; }
+/** A pixel rect as [u0, v0, u1, v1], inset like `uv()`. */
+export function uvOf(r: PxRect, pad = 2): readonly [number, number, number, number] {
+  return [(r.x + pad) / ATLAS_W, 1 - (r.y + r.h - pad) / ATLAS_H, (r.x + r.w - pad) / ATLAS_W, 1 - (r.y + pad) / ATLAS_H];
+}

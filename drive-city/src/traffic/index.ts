@@ -725,6 +725,8 @@ export async function install(engine: Engine): Promise<void> {
         // A rider comes off in anything harder than a nudge, or when the scooter goes over.
         if (n.rider && (n.car.impact > 4 || n.car.up.y < 0.6)) { unseat(n); continue; }
         if (n.car.impact > 3) n.driver!.shake();
+        // 公交进站、起步：audio/ 放报站（只报镜头附近的）
+        if (n.driver!.busEvent) { if (d < 60) engine.events.emit('traffic:bus', { x: n.car.pos.x, z: n.car.pos.z, arrive: n.driver!.busEvent === 1 }); n.driver!.busEvent = 0; }
         // Drivers lean on the horn when the player hits them or sits in their way.
         n.hornT -= dt;
         if (n.hornT <= 0 && !n.parked) {

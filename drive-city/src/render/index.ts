@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { seasonAt, type Season } from './Season';
 import type { Engine } from '../core/Engine';
 import type { EnvUniforms } from '../game/Contracts';
 import { shotMode } from '../debug/ShotMode';
@@ -34,6 +35,9 @@ export type { RenderSystem } from './RenderSystem';
  * real minute; default 0.5 = a day in 48 minutes), `?tm=aces|neutral`, `?nofx=...` (PostFx), `?lamps=0.5`
  * (street light gain, 0 = off).
  */
+/** The trees' season uniform from a Season. */
+function seasonVec(s: Season): THREE.Vector4 { return new THREE.Vector4(s.autumn, s.bare, s.ginkgo, s.cypress); }
+
 const wrap24 = (h: number) => ((h % 24) + 24) % 24;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const COS_1DEG = Math.cos(THREE.MathUtils.degToRad(1));
@@ -46,7 +50,7 @@ class Render implements RenderSystem {
   wetness = 0;
   readonly sunDir = new THREE.Vector3();
   readonly hazeColor = new THREE.Color();
-  readonly uniforms: EnvUniforms = { uNight: { value: 0 }, uWet: { value: 0 }, uTime: { value: 0 } };
+  readonly uniforms: EnvUniforms = { uNight: { value: 0 }, uWet: { value: 0 }, uTime: { value: 0 }, uSeason: { value: seasonVec(seasonAt()) } };
   readonly defaultTime: number;
   exposure = 1;
   readonly postfx: PostFx;
