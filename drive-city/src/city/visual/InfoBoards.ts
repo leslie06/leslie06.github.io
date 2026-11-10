@@ -152,6 +152,8 @@ export function install(engine: Engine): void {
     cv.width = 768; cv.height = 290;
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    // redrawn every two minutes: core/Assets.compact must not free its canvas
+    tex.userData.keepImage = true;
     const mat = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.45, roughness: 0.4 });
     const face = new THREE.Mesh(new THREE.PlaneGeometry(BOARD_W, BOARD_H), mat);
     face.position.set(0, BOARD_Y, -0.21);

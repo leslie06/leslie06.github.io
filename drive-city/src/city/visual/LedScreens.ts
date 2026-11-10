@@ -125,6 +125,8 @@ export function install(engine: Engine): void {
           cv.width = 512; cv.height = 288;
           const tex = new THREE.CanvasTexture(cv);
           tex.colorSpace = THREE.SRGBColorSpace;
+          // redrawn four times a second: core/Assets.compact must not free its canvas
+          tex.userData.keepImage = true;
           const mat = new THREE.MeshStandardMaterial({ color: '#000000', emissive: '#ffffff', emissiveMap: tex, roughness: 0.3 });
           const mesh = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), mat);
           mesh.position.set(s.x, s.y, s.z);

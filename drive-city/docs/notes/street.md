@@ -22,5 +22,10 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
     - **LED 大屏**（`city/visual/LedScreens.ts`）：三里屯、国贸、西单、王府井、五道口、中关村、前门，各商圈中心 450 米内 20 米以上、离大路最近的楼（最多 4 栋，隔 80 米），朝大路的墙上一块 16:9 的屏（最宽 26 米），放游戏自己的虚构广告（蛮牛跑车、B城交通台、南锣鼓巷饺子馆、光华路大刘修车、B城追车、后海蓝莲花），6 秒一换、有一道光扫过；全城 28 块，900 米内才建、才重画（省电档每秒一次）。`?leds=0` 关。
     - 情报板、公交道、防眩板、电线的位置开局后 2–5 秒才算（各 20–60 毫秒，错开，不压在启动里）。帧开销（国贸附近，全开对全关）：多 45 次 draw call、1 万个三角形，帧时间在误差内；第一版华灯和防眩板投影子，多了 37 万个三角形。
     - 看：`PORT=5198 CAMY=3.5 node .scratch/navvoice/shot2.mjs out "820,236,-1.5708" "tod=20"`（长安街），`GROUP=led-screens DIST=160 CY=30 node .scratch/navvoice/aimdbg.mjs x,z tod out.png [第几块]`（对准某个组里最近的一块：也可以 `roof-signs`、`info-boards`），`node .scratch/navvoice/busdbg.mjs`（俯视一段公交道的字）。
-  - 还没做：四环、五环挨着住宅的隔音屏，路口的黄色网格线。
+  - 第三轮（同一天，用户「继续做」）：
+    - **隔音屏**（`city/visual/SoundWalls.ts`）：四环、五环和快速路（京通快速路、机场高速、京藏、京承、京开……）的主路外侧，110 米内有住宅楼（skyline.json 里 20 米以上的 resid）的地方，路沿外 1.2 米每 4 米一跨：钢立柱、1.3 米实心板、上面半透明蓝绿板、顶上往路里弯；离路口 40 米内、匝道和斜着岔出去的路 4 米内断开，平行的辅路离得开 0.8 米就照样立在中间。全城约 21 公里（80 毫秒，skyline 到了以后算）。**坑**：第一版只看 60 米内的住宅，环路外侧先是辅路和绿化带，只铺了 6 公里；另外第一版把所有的路都放进网格（440 毫秒），现在只收主路附近格子里的路。没有碰撞体。`?soundwalls=0` 关。
+    - **路口黄色网状线**（`city/visual/JunctionGrid.ts`）：两条以上主干道（primary / secondary / trunk，不是环路主路和桥面）相交的路口，45 米内的路口节点归成一个（双幅路相交是四个节点），挑约三成，框放在这组节点的中心，顺着最宽的路，长宽 = 节点的范围 + 路宽的 0.42 倍（最大 24 米）。全城 149 个。**坑**：(1) 框画在 `Y.mark` 上看不见：路口中间的路面比路段标线高，现在放在 `Y.curb` 上；(2) 细线贴图用透明度裁剪（alphaTest）时，远处的贴图层级把线的透明度平均掉了，全部被裁掉，改成半透明混合。`?junctiongrid=0` 关。
+    - **坑：画布纹理会被清空**：`core/Assets.compact` 每 2 秒把场景里已上传的画布纹理的画布清成 0×0（省内存）。之后还要重画的画布（情报板、LED 大屏）要设 `texture.userData.keepImage = true`，不然重画画在空画布上，纹理就定格或变黑。
+    - 帧开销（隔音屏那段，全开对全关）：多 14 次 draw call、2 万个三角形，帧时间在误差内。
+    - 看：`node .scratch/navvoice/topdown.mjs x,z 高度 out.png`（俯视；`5626,-379` 是一个画了网状线的路口），`PORT=5198 CAMY=2.5 node .scratch/navvoice/shot2.mjs out "2935,-7930,-0.46" "tod=11"`（隔音屏）。
 - **坑（2026-11-10）**：这台 Mac 的文件监听服务（fseventsd）卡住时，Vite 改了文件不刷新（`main.ts` 一直是旧的），重启 Vite 也会卡在启动（`sample` 进程看到停在 `FSEStart`），日志一个字都没有。用不监听文件的 `FROZEN=1 node node_modules/vite/bin/vite.js --strictPort`（5198 端口），改代码后手动重启它。

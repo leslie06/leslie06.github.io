@@ -55,6 +55,8 @@ import * as busLanes from './city/visual/BusLanes';
 import * as antiGlare from './city/visual/AntiGlare';
 import * as hutongWires from './city/visual/HutongWires';
 import * as ledScreens from './city/visual/LedScreens';
+import * as soundWalls from './city/visual/SoundWalls';
+import * as junctionGrid from './city/visual/JunctionGrid';
 import * as funnel from './online/Funnel';
 import * as leaderboard from './online/Leaderboard';
 import * as feedback from './online/Feedback';
@@ -149,7 +151,7 @@ async function boot() {
   await vehicle.install(engine);
   await player.install(engine);
   await damage.install(engine);
-  if (worldName === 'city') { await traffic.install(engine); tollPlazas.install(engine); bridgeNames.install(engine); steam.install(engine); roofSigns.install(engine); infoBoards.install(engine); busLanes.install(engine); antiGlare.install(engine); hutongWires.install(engine); ledScreens.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
+  if (worldName === 'city') { await traffic.install(engine); tollPlazas.install(engine); bridgeNames.install(engine); steam.install(engine); roofSigns.install(engine); infoBoards.install(engine); busLanes.install(engine); antiGlare.install(engine); hutongWires.install(engine); ledScreens.install(engine); soundWalls.install(engine); junctionGrid.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
   if (worldName === 'city') await nav.install(engine);
   if (worldName === 'city') await travel.install(engine);
   if (worldName === 'city') lightup.install(engine);
