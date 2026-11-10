@@ -12,6 +12,9 @@ export interface TalkWorld {
   hour(): number;
   /** 0 dry .. 1 pouring. */
   rain(): number;
+  /** 0..1 snow falling, and the snow lying (render/). */
+  snow?(): number;
+  snowCover?(): number;
   /** The player's position. */
   where(): { x: number; z: number };
   /** The radio roads within reach and how far (m), nearest first: the map's road chains. */
@@ -132,6 +135,7 @@ export class Talk {
     const out: Item[] = [{ clip: pick(['radio.tr.intro1', 'radio.tr.intro2', 'radio.tr.intro3']) }, { gap: 0.35 }];
     for (const r of roads) out.push({ clip: `radio.tr.${r.id}.${this.status(r)}` }, { gap: 0.3 });
     if (this.world.rain() > 0.3) out.push({ clip: 'radio.tr.rain' });
+    else if ((this.world.snow?.() ?? 0) > 0.2 || (this.world.snowCover?.() ?? 0) > 0.5) out.push({ clip: 'radio.tr.snow' });
     else out.push({ clip: pick(['radio.tr.out1', 'radio.tr.out2', 'radio.tr.out3']) });
     return out;
   }
@@ -149,6 +153,8 @@ export class Talk {
     const h = this.world.hour(), d = this.world.day();
     if (h >= 23 || h < 4) return 'radio.wx.night';
     if (this.world.rain() > 0.3) return 'radio.wx.rain';
+    if ((this.world.snow?.() ?? 0) > 0.2) return 'radio.wx.snow';
+    if ((this.world.snowCover?.() ?? 0) > 0.5) return 'radio.wx.snowAfter';
     const opts = ['radio.wx.clear'];
     if (d >= 288 && d <= 325) opts.push('radio.wx.autumn', 'radio.wx.autumn');
     if (d >= 318 || d <= 73) opts.push('radio.wx.heat', 'radio.wx.winter');

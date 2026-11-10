@@ -465,12 +465,14 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms, defe
   if (!deferUntil) await facadePhotos;
   const facade = facadeMaterial(env, { plasterMean: new THREE.Vector3(), brickMean: new THREE.Vector3() }, tier === 'low' ? 1024 : 2048, tier === 'low');
   void facadePhotos.then(([brick, plaster]) => (facade.userData.setFacadeTex as (t: FacadeTex) => void)({ plaster: plaster.map, brick: brick.map, brickN: brick.normalMap, plasterMean: mean(plaster.map), brickMean: mean(brick.map) }));
+  // 积雪（render/Wet.ts）：车道上的雪很快被车轧化，只剩薄薄的几片；桥面同样
+  const thin = <T extends THREE.Material>(m: T) => { m.userData.snow = 0.22; return m; };
   return {
     facade,
-    road: skin(std({ roughness: 1, color: '#5c5d5f', vertexColors: true }, undefined, 0.9, 0.22, 5, 'ground'), 'asphalt_02', 7, { map: true, normal: true, rough: true }),
+    road: thin(skin(std({ roughness: 1, color: '#5c5d5f', vertexColors: true }, undefined, 0.9, 0.22, 5, 'ground'), 'asphalt_02', 7, { map: true, normal: true, rough: true })),
     sidewalk: skin(std({ roughness: 0.85, color: '#aeaaa2', vertexColors: true }, undefined, 0.75, 0.18, 1, 'ground'), 'square_brick_paving', 2.4, { map: true, normal: true }),
-    paint: std({ roughness: 0.6, color: '#ffffff', vertexColors: true }, undefined, 0, 0.12, 7, 'ground'),
-    bridge: skin(std({ roughness: 0.92, color: '#b9b6ae', vertexColors: true }, undefined, 0.55, 0.2, 0, 'surface'), 'brushed_concrete', 4, { map: true }),
+    paint: thin(std({ roughness: 0.6, color: '#ffffff', vertexColors: true }, undefined, 0, 0.12, 7, 'ground')),
+    bridge: thin(skin(std({ roughness: 0.92, color: '#b9b6ae', vertexColors: true }, undefined, 0.55, 0.2, 0, 'surface'), 'brushed_concrete', 4, { map: true })),
     roofprops: (() => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.2 }); m.userData.wet = 'surface'; return m; })(),
     ground,
     areas,

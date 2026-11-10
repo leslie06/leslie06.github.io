@@ -9,6 +9,7 @@ import type { TurnKind } from '../nav/Turns';
 import { BLIP_COLOR, INK, drawBlip, drawEdgeArrow, drawPlayer, routeColor, screenAngle, type MarkKind } from '../nav/Draw';
 import { C, F, css, el } from './theme';
 import { Labeller, type LabelStyle } from './MapLabels';
+import { hudMode } from './HudMode';
 
 css(`
 :root{--mm-left:max(24px,3vw);--mm-top:max(20px,3vh);--mm-w:clamp(210px,16vw,320px);--mm-h:calc(var(--mm-w) / 1.58 + 25px)}
@@ -161,7 +162,8 @@ export class Minimap implements System {
     // 省电档（弱手机，`engine.lite`）15 Hz：一次重画在 CPU 降速 4 倍时约 0.8 ms
     if (!this.shot && now - this.last < 1000 / (this.engine.lite ? 15 : 30) - 3) return;
     this.last = now;
-    this.draw(nav, now / 1000);
+    // 沉浸档（ui/HudMode）不画地图，只留转向提示
+    if (hudMode.value !== 'immersive') this.draw(nav, now / 1000);
     this.updateBar(nav);
     this.updateTurn(nav);
   }
@@ -190,6 +192,7 @@ export class Minimap implements System {
     if (text === this.shownBar) return;
     this.shownBar = text;
     this.bar.hidden = !tg;
+    document.body.classList.toggle('dc-nav-on', !!tg && tg.kind !== 'story');
     const [d, l, kind] = text.split('|');
     this.barD.textContent = d ?? ''; this.barL.textContent = l ?? '';
     this.barD.style.color = routeColor(kind);

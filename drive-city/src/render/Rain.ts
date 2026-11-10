@@ -21,6 +21,7 @@ uniform float uTime;
 uniform float uAmount;
 uniform float uLen;
 uniform float uWidth;
+uniform float uWobble;
 varying float vFade;
 varying vec2 vUv;
 void main() {
@@ -28,6 +29,8 @@ void main() {
   float speed = 0.85 + 0.3 * fract(aSeed.w * 7.13);
   vec3 origin = uCamPos - uBox * 0.5;
   vec3 p = aSeed.xyz * uBox + uFall * speed * uTime;
+  // snow: each flake drifts on its own little sway
+  p.xz += uWobble * vec2(sin(uTime * 1.3 + aSeed.w * 40.0), cos(uTime * 1.1 + aSeed.x * 40.0));
   p = origin + mod(p - origin, uBox);
   vec3 rel = uFall * speed - uCamVel;
   float relLen = max(length(rel), 1e-3);
@@ -46,10 +49,14 @@ void main() {
 const FRAG = /* glsl */`
 uniform vec3 uColor;
 uniform float uOpacity;
+uniform float uFlake;
 varying float vFade;
 varying vec2 vUv;
 void main() {
-  float a = (1.0 - abs(vUv.x - 0.5) * 2.0) * smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.55, vUv.y) * vFade * uOpacity;
+  float streak = (1.0 - abs(vUv.x - 0.5) * 2.0) * smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.55, vUv.y);
+  // a flake: a soft round blob (stretched when it rakes past at speed)
+  float flake = 1.0 - smoothstep(0.15, 0.5, length(vUv - 0.5));
+  float a = mix(streak, flake, uFlake) * vFade * uOpacity;
   if (a < 0.002) discard;
   gl_FragColor = vec4(uColor, a);
   #include <tonemapping_fragment>
@@ -65,7 +72,8 @@ export class Rain {
   private vel = new THREE.Vector3();
   private first = true;
 
-  constructor(count: number) {
+  /** `snow`: slow round flakes on a sway (render/index.ts keeps one of each). */
+  constructor(count: number, private readonly snow = false) {
     const base = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
     const geo = new THREE.InstancedBufferGeometry();
     geo.index = base.index;
@@ -82,14 +90,18 @@ export class Rain {
       uniforms: {
         uCamPos: { value: new THREE.Vector3() }, uCamVel: { value: new THREE.Vector3() },
         uBox: { value: new THREE.Vector3(34, 22, 34) }, uFall: { value: new THREE.Vector3(1.4, -9.5, 0.7) },
-        uTime: { value: 0 }, uAmount: { value: 0 }, uLen: { value: 0.5 }, uWidth: { value: 0.009 },
-        uColor: { value: new THREE.Color(0.5, 0.5, 0.5) }, uOpacity: { value: 0.35 },
+        uTime: { value: 0 }, uAmount: { value: 0 }, uLen: { value: snow ? 0.05 : 0.5 }, uWidth: { value: snow ? 0.05 : 0.009 },
+        uColor: { value: new THREE.Color(0.5, 0.5, 0.5) }, uOpacity: { value: 0.35 }, uWobble: { value: snow ? 0.35 : 0 }, uFlake: { value: snow ? 1 : 0 },
       },
     });
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 3;
-    this.mesh.name = 'rain';
+    this.mesh.name = snow ? 'snow' : 'rain';
+    if (snow) {
+      (mat.uniforms.uFall.value as THREE.Vector3).set(0.5, -1.3, 0.25);
+      (mat.uniforms.uBox.value as THREE.Vector3).set(30, 18, 30);
+    }
     this.mesh.visible = false;
   }
 
@@ -111,8 +123,9 @@ export class Rain {
     (u.uCamVel.value as THREE.Vector3).copy(this.camVel);
     u.uTime.value = this.time;
     u.uAmount.value = Math.min(1, amount * 1.1);
-    u.uOpacity.value = 0.16 + 0.14 * amount;
-    (u.uColor.value as THREE.Color).copy(color);
+    u.uOpacity.value = this.snow ? 0.55 + 0.3 * amount : 0.16 + 0.14 * amount;
+    if (this.snow) (u.uColor.value as THREE.Color).copy(color).multiplyScalar(2.2);
+    else (u.uColor.value as THREE.Color).copy(color);
   }
 
   /** Forget the camera's motion (after a teleport). */

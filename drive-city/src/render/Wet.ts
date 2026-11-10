@@ -39,6 +39,17 @@ export interface WetUniforms {
   dcWetness: { value: number };
   dcRain: { value: number };
   dcTime: { value: number };
+  /** 积雪（2026-11-10）：0 没有 .. 1 下透了，朝上的面按噪声铺白；每种材质再乘自己的 `snowK`。 */
+  dcSnow?: { value: number };
+}
+
+/**
+ * How much snow a material holds, of the cover (`material.userData.snow` overrides): roofs, lawns, leaves and walls'
+ * ledges all of it, pavements and plazas about half (swept, trodden), cars most, people none.
+ */
+export function snowFactor(kind: WetKind, override: unknown): number {
+  if (typeof override === 'number') return override;
+  return kind === 'ground' ? 0.55 : kind === 'surface' ? 0.85 : 1;
 }
 
 const FRAG_PARS = /* glsl */`
@@ -46,6 +57,8 @@ varying vec3 vDcWetPos;
 uniform float dcWetness;
 uniform float dcRain;
 uniform float dcTime;
+uniform float dcSnow;
+uniform float dcSnowK;
 float dcHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float dcNoise(vec2 p) {
   vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -97,17 +110,34 @@ function block(kind: WetKind, ripples: boolean): string {
     // turned into a white mirror of the overcast sky.
     dcSpecBoost = 1.0 + dcFilm * 0.25 + dcPuddle * 0.6;
   }
+  // snow on what faces up, thinning out in noisy patches as the cover goes
+  float dcS = dcSnow * dcSnowK;
+  if (dcS > 0.001) {
+    vec3 dcSN = inverseTransformDirection(dcGeoN, viewMatrix);
+    float dcSUp = smoothstep(0.45, 0.85, dcSN.y);
+    vec2 dcSP = vDcWetPos.xz;
+    float dcSn = dcFbm(dcSP * 0.23) * 0.75 + dcNoise(dcSP * 2.7) * 0.25;
+    float dcTh = 1.0 - dcS;
+    float dcSM = dcSUp * smoothstep(dcTh - 0.12, dcTh + 0.04, dcSn);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.80, 0.82, 0.86), dcSM);
+    roughnessFactor = mix(roughnessFactor, 0.85, dcSM);
+    normal = normalize(mix(normal, dcGeoN, dcSM * 0.85));
+    dcSpecBoost *= 1.0 - 0.6 * dcSM;
+  }
 }
 `;
 }
 
 /** Inject the wet-surface terms into a standard/physical material's shader (inside onBeforeCompile). */
-export function patchWet(shader: THREE.WebGLProgramParametersWithUniforms, kind: WetKind, u: WetUniforms, ripples: boolean): void {
+export function patchWet(shader: THREE.WebGLProgramParametersWithUniforms, kind: WetKind, u: WetUniforms, ripples: boolean, snowK = snowFactor(kind, undefined)): void {
   const fs = shader.fragmentShader;
   if (!fs.includes('#include <roughnessmap_fragment>') || !fs.includes('#include <normal_fragment_maps>')) return;
   shader.uniforms.dcWetness = u.dcWetness;
   shader.uniforms.dcRain = u.dcRain;
   shader.uniforms.dcTime = u.dcTime;
+  shader.uniforms.dcSnow = u.dcSnow ?? { value: 0 };
+  // per material (the program is shared by every material of the kind; the uniform is not)
+  shader.uniforms.dcSnowK = { value: snowK };
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nvarying vec3 vDcWetPos;')
     .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>

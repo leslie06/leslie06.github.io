@@ -24,7 +24,9 @@
  "archetypes": {
   "dj": {
    "name": "交通台主持人",
-   "voices": ["cosyvoice-v3.5-plus-vd-dj1-a19182d3c82845ac8525b20027cd9bb9"],
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-dj1-a19182d3c82845ac8525b20027cd9bb9"
+   ],
    "voiceDesign": [
     {
      "prompt": "青年男性，32 岁左右，北京交通广播电台主持人，普通话标准、带一点儿京腔儿化音，音色明亮浑厚，语速偏快，热情幽默，播音腔但不死板。",
@@ -40,7 +42,9 @@
   },
   "bus": {
    "name": "公交报站",
-   "voices": ["cosyvoice-v3.5-plus-vd-bus1-1c23f0f02c4147019bace7ec96ef922e"],
+   "voices": [
+    "cosyvoice-v3.5-plus-vd-bus1-1c23f0f02c4147019bace7ec96ef922e"
+   ],
    "voiceDesign": [
     {
      "prompt": "女性，30 岁左右，标准普通话播音腔，音色清亮柔和，语速平稳，吐字清晰，像公交车上的报站录音。",
@@ -1726,6 +1730,16 @@
    "instructEn": ""
   },
   {
+   "id": "radio.tr.snow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "雪天路滑，桥上和匝道尤其要当心，刹车提前点儿。",
+   "instruct": "关切地提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
    "id": "radio.wx.clear",
    "archetype": "dj",
    "trigger": "city",
@@ -1792,6 +1806,26 @@
    "emotion": "neutral",
    "text": "天儿热，车里可别放打火机和充电宝。",
    "instruct": "认真地提醒。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.snow",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "下雪啦！北京的雪可不常见，想拍照的朋友靠边儿停好了再拍，开车的慢点儿。",
+   "instruct": "高兴，带点儿兴奋。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "radio.wx.snowAfter",
+   "archetype": "dj",
+   "trigger": "city",
+   "emotion": "neutral",
+   "text": "雪停了，故宫的红墙白雪这会儿最好看。路上还有积雪，早晚结冰，大家慢行。",
+   "instruct": "轻松愉快。",
    "textEn": "",
    "instructEn": ""
   },

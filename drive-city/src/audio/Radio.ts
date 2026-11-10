@@ -94,6 +94,8 @@ export class Radio {
   private on = true;
   private audible = false;
   private readonly bus: GainNode;
+  /** Pulled down while the satnav speaks (audio/NavVoice.ts). */
+  private readonly duckG: GainNode;
   private readonly beatsBus: GainNode;
   private readonly customBus: GainNode;
   private readonly delay: DelayNode;
@@ -118,7 +120,8 @@ export class Radio {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -18; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.2;
     this.bus = ctx.createGain(); this.bus.gain.value = 0;
-    this.bus.connect(comp).connect(master);
+    this.duckG = ctx.createGain();
+    this.bus.connect(this.duckG).connect(comp).connect(master);
     this.beatsBus = ctx.createGain(); this.beatsBus.gain.value = 0.7; this.beatsBus.connect(this.bus);
     this.customBus = ctx.createGain(); this.customBus.gain.value = 0.9; this.customBus.connect(this.bus);
     this.delay = ctx.createDelay(1.0);
@@ -147,6 +150,9 @@ export class Radio {
       if (saved === 'custom') this.idx = this.stations.indexOf('custom');
     } catch { /* no playlist: the beats station alone */ }
   }
+
+  /** The satnav is talking: the radio goes down under it. */
+  duck(on: boolean): void { this.duckG.gain.setTargetAtTime(on ? 0.25 : 1, this.ctx.currentTime, on ? 0.08 : 0.4); }
 
   get station(): Station | null { return this.on ? this.stations[this.idx] : null; }
 

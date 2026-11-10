@@ -36,7 +36,7 @@ function roadTexture(kind: 'mountain' | 'valley'): THREE.CanvasTexture {
 }
 
 export function roadMaterials(): { mountain: THREE.MeshStandardMaterial; valley: THREE.MeshStandardMaterial; shoulder: THREE.MeshStandardMaterial; rail: THREE.MeshStandardMaterial; post: THREE.MeshStandardMaterial } {
-  const mk = (kind: 'mountain' | 'valley') => { const m = new THREE.MeshStandardMaterial({ map: roadTexture(kind), roughness: 0.88, metalness: 0 }); m.userData.wet = 'ground'; return m; };
+  const mk = (kind: 'mountain' | 'valley') => { const m = new THREE.MeshStandardMaterial({ map: roadTexture(kind), roughness: 0.88, metalness: 0 }); m.userData.wet = 'ground'; m.userData.snow = 0.3; return m; };
   const shoulder = new THREE.MeshStandardMaterial({ color: '#77736a', roughness: 1 }); shoulder.userData.wet = 'ground';
   const rail = new THREE.MeshStandardMaterial({ color: '#c8cbcd', roughness: 0.38, metalness: 0.65, side: THREE.DoubleSide }); rail.userData.wet = true;
   const post = new THREE.MeshStandardMaterial({ color: '#9fa3a6', roughness: 0.5, metalness: 0.5, side: THREE.DoubleSide }); post.userData.wet = true;

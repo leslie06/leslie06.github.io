@@ -7,7 +7,8 @@ const BASE: string = (import.meta as unknown as { env?: { BASE_URL?: string } })
 export class CityClips {
   private bufs = new Map<string, AudioBuffer | null>();
   private loading = new Map<string, Promise<AudioBuffer | null>>();
-  constructor(private ctx: AudioContext) {}
+  /** `dir`: the folder under public/voice/ (city: the radio and the street; nav: the satnav). */
+  constructor(private ctx: AudioContext, private dir = 'city') {}
 
   /** The decoded clip, or null while it loads or when it failed (call `load` first to start it). */
   get(id: string): AudioBuffer | null { return this.bufs.get(id) ?? null; }
@@ -19,7 +20,7 @@ export class CityClips {
     if (this.bufs.has(id)) return Promise.resolve(this.bufs.get(id)!);
     let p = this.loading.get(id);
     if (!p) {
-      p = fetch(`${BASE}voice/city/${id}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      p = fetch(`${BASE}voice/${this.dir}/${id}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
         .then((b) => this.ctx.decodeAudioData(b)).catch(() => null).then((buf) => { this.bufs.set(id, buf); this.loading.delete(id); return buf; });
       this.loading.set(id, p);
     }

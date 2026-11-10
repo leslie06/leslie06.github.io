@@ -100,6 +100,16 @@ const ring = (flat: number[]): [number, number][] => { const r: [number, number]
 const pick = <T>(a: T[], r: number): T => a[Math.min(a.length - 1, Math.floor(r * a.length))];
 const C = (hex: string) => new THREE.Color(hex);
 
+/**
+ * A blue steel-sheet roof: a low shed (≤ 9 m; workshops, stores, single-storey houses) outside the 4th Ring (the box
+ * round 天安门 the ring roughly is), 55% of them.
+ */
+function steelShed(b: BuildingRec, top: number): boolean {
+  if (top > 9 || (b.k !== 'low' && b.k !== 'hutong') || b.s > 0.55) return false;
+  const x = b.o[0], z = b.o[1];
+  return x < -8600 || x > 8200 || z < -7700 || z > 7800;
+}
+
 function facadeOf(b: BuildingRec, top: number, base: number, shops: boolean): Facade {
   const hh = hashU((b.i % 4294967296) >>> 0);
   const r = h01(hashU(hh ^ 0x68e31da4)), r2 = h01(hashU(hh ^ 0x1b873593));
@@ -251,6 +261,8 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     if (b.rc) roofCol.set(b.rc);
     else if (roofStyle === ST.ROOF_TRAD) roofCol.set(b.s < 0.7 ? '#d9a53a' : '#3f7f5a');
     else if (roofStyle === ST.ROOF_TILE) roofCol.set('#8c9194').offsetHSL(0, 0, (b.s - 0.5) * 0.06);
+    // 城乡结合部的彩钢房（2026-11-10，docs/beijing-immersion-design.md A4）：四环外的低矮厂房、库房、平房，一多半是蓝色彩钢板顶
+    else if (steelShed(b, top)) roofCol.set(pick(['#3d6fae', '#4a7cb8', '#3a66a0', '#5584bd'], b.s * 7 % 1)).offsetHSL(0, -0.05 * b.s, 0);
     else roofCol.set(pick(['#a19f98', '#aaa79f', '#959b94', '#b3afa6', '#8f999c', '#a39a8e'], b.s));
     if (pitched) pitchedRoof(rs, fb, b, top, roofCol, F);
     else {

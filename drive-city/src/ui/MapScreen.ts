@@ -12,6 +12,9 @@ import { C, F, css, el } from './theme';
 import { loadCity } from '../city/Data';
 import { decodeRail, type RailFileV2 } from '../city/visual/Railways';
 import { L } from './lang';
+import type { LightupApi } from '../lightup';
+import { LitLayer } from '../lightup/Layer';
+import { ROUTE_DONE } from '../lightup/Grid';
 
 css(`
 .navmap{position:fixed;inset:0;z-index:40;background:#0b0e10;font-family:${F.ui};color:${C.paper};user-select:none;overflow:hidden;cursor:crosshair;touch-action:none}
@@ -49,6 +52,16 @@ css(`
 .navmap .go .acts button .km{float:right;margin-left:10px;font:600 12px/1.25 ${F.num};color:${C.muted}}
 .navmap .go.hi{animation:dcGoHi 1.4s ease-out 2}
 @keyframes dcGoHi{0%{box-shadow:0 0 0 0 ${C.yellow}}40%{box-shadow:0 0 0 4px ${C.yellow}}100%{box-shadow:0 0 0 0 transparent}}
+.navmap .lit .km{font:800 15px/1.3 ${F.ui};color:${C.paper}}
+.navmap .lit .km.empty{font:600 13px/1.4 ${F.ui};color:${C.muted}}
+.navmap .lit .rows{display:grid;grid-template-columns:1fr auto;gap:5px 12px;margin-top:10px;font:600 13px/1.2 ${F.ui}}
+.navmap .lit .rows:empty{display:none}
+.navmap .lit .rows .v{font:700 13px/1.2 ${F.num};font-variant-numeric:tabular-nums;color:${C.muted};text-align:right}
+.navmap .lit .rows .v.ok{color:${C.yellow}}
+.navmap .lit .rows .sep{grid-column:1/-1;height:1px;background:${C.line};margin:2px 0}
+.navmap .lit .view{pointer-events:auto;cursor:pointer;margin-top:12px;width:100%;min-height:36px;padding:7px 10px;border-radius:8px;text-align:left;font:700 13px/1.2 ${F.ui};
+  color:${C.paper};background:rgba(243,181,15,.12);border:1px solid ${C.yellowDim};touch-action:manipulation}
+.navmap .lit .view.on{background:${C.yellow};color:${C.ink};border-color:${C.yellow}}
 .navmap .legend .row{display:flex;align-items:center;gap:10px;height:25px;font:500 13px/1 ${F.ui}}
 .navmap .legend canvas{width:22px;height:22px;flex:none}
 .navmap .keys{position:absolute;left:50%;bottom:max(20px,3vh);transform:translateX(-50%);display:flex;gap:20px;align-items:center;padding:10px 18px;border-radius:9px;
@@ -108,6 +121,12 @@ export class MapScreen implements System {
   private scaleBar: HTMLElement;
   private scaleText: Text;
   private loadEl: HTMLDivElement;
+  /** 点亮北京 (lightup/): the card and the lit roads. */
+  private litCard!: HTMLDivElement;
+  private litKm!: HTMLDivElement;
+  private litRows!: HTMLDivElement;
+  private litBtn!: HTMLButtonElement;
+  private litLayer: LitLayer | null = null;
   private keysMouse: HTMLDivElement;
   private keysPad: HTMLDivElement;
   private head: HTMLDivElement;
@@ -242,6 +261,14 @@ export class MapScreen implements System {
     this.goList = el('div', 'acts', this.go);
     this.goWhy = el('div', 'why', this.go);
     this.go.hidden = true;
+    this.litCard = el('div', 'card lit', side);
+    el('h2', '', this.litCard).appendChild(L('lit.title'));
+    this.litKm = el('div', 'km', this.litCard);
+    this.litRows = el('div', 'rows', this.litCard);
+    this.litBtn = el('button', 'view', this.litCard); this.litBtn.type = 'button';
+    this.litBtn.append('L  ', L('lit.view'));
+    for (const event of ['pointerdown', 'pointerup', 'pointermove'] as const) this.litBtn.addEventListener(event, (e) => e.stopPropagation());
+    this.litBtn.addEventListener('click', () => this.toggleLit());
     const legend = el('div', 'card legend', side);
     el('h2', '', legend).appendChild(L('map.legend'));
     const rows: [MarkKind | 'you' | 'route' | 'search', TKey][] = [['you', 'map.you'], ['waypoint', 'map.waypoint'], ['mission', 'map.mission'], ['story', 'map.story'], ['pickup', 'map.pickup'], ['dropoff', 'map.dropoff'],
@@ -268,7 +295,7 @@ export class MapScreen implements System {
       }
       return row;
     };
-    this.keysMouse = keyRow([[['@map.key.click'], 'map.set'], [['@map.key.rclick'], 'map.clear'], [['@map.key.drag', 'WASD'], 'map.pan'], [['@map.key.wheel', 'Q', 'E'], 'map.zoom'], [['Tab', 'Esc'], 'map.close']]);
+    this.keysMouse = keyRow([[['@map.key.click'], 'map.set'], [['@map.key.rclick'], 'map.clear'], [['@map.key.drag', 'WASD'], 'map.pan'], [['@map.key.wheel', 'Q', 'E'], 'map.zoom'], [['L'], 'lit.view'], [['Tab', 'Esc'], 'map.close']]);
     this.keysPad = keyRow([[['A'], 'map.set'], [['LS'], 'map.pan'], [['LT', 'RT'], 'map.zoom'], [['B'], 'map.close']]);
     this.keysPad.hidden = true;
     this.closeButton = el('button', 'close', root);
@@ -301,6 +328,7 @@ export class MapScreen implements System {
     this.engine.events.emit('game:pause', { paused: true });
     this.root.hidden = false;
     this.buildGo();
+    this.fillLit();
     this.side.classList.toggle('scroll', document.body.classList.contains('dc-touch') || innerHeight < 760);
     this.side.scrollTop = 0;
     this.go.classList.remove('hi');
@@ -427,9 +455,47 @@ export class MapScreen implements System {
       e.preventDefault();
       this.zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0018)));
     }, { passive: false });
-    window.addEventListener('keydown', (e) => { if (this.open_ && !e.repeat) { this.held.add(e.code); this.padMode = false; } });
+    window.addEventListener('keydown', (e) => {
+      if (this.open_ && !e.repeat) { this.held.add(e.code); this.padMode = false; if (e.code === 'KeyL') this.toggleLit(); }
+    });
     window.addEventListener('keyup', (e) => this.held.delete(e.code));
     window.addEventListener('blur', () => this.held.clear());
+  }
+
+  private get lit(): LightupApi | undefined { return this.engine.get<LightupApi>('lightup'); }
+
+  private toggleLit(): void {
+    const lit = this.lit;
+    if (!lit) return;
+    lit.view = !lit.view;
+    this.litBtn.classList.toggle('on', lit.view);
+    this.drawn.version = -1;
+  }
+
+  /** 点亮北京's card: km lit and the share of the city, the rings and 长安街, the districts most of whose roads are in the map. */
+  private fillLit(): void {
+    const lit = this.lit, st = lit?.stats();
+    this.litCard.hidden = !lit;
+    if (!lit) return;
+    this.litBtn.classList.toggle('on', lit.view);
+    const empty = !st || st.lit === 0;
+    this.litKm.classList.toggle('empty', empty);
+    this.litKm.textContent = empty ? t('lit.empty') : t('lit.km', { km: st.km < 10 ? st.km.toFixed(1) : Math.round(st.km), p: (st.lit / st.total * 100).toFixed(st.lit / st.total < 0.1 ? 1 : 0) });
+    this.litRows.replaceChildren();
+    if (!st || empty) return;
+    const row = (label: string, v: number, ok: boolean) => {
+      el('span', '', this.litRows).textContent = label;
+      const b = el('span', ok ? 'v ok' : 'v', this.litRows);
+      b.textContent = ok ? '✓' : v > 0 && v < 0.01 ? '<1%' : `${Math.floor(v * 100)}%`;
+    };
+    for (const id of ['r2', 'r3', 'r4', 'r5', 'changan'] as const) row(t(`lit.route.${id}` as TKey), st.routes[id], st.routes[id] >= ROUTE_DONE);
+    const roads = lit.roads();
+    if (!roads) return;
+    const ds = lit.districts.map((d, i) => ({ name: lang() === 'zh' ? d.zh : d.en.replace(/ District$/, ''), total: roads.perDistrict[i], lit: st.perDistrict[i] }))
+      .filter((d) => d.total > 3000 && d.lit > 0).sort((a, b) => b.lit / b.total - a.lit / a.total).slice(0, 5);
+    if (!ds.length) return;
+    el('i', 'sep', this.litRows);
+    for (const d of ds) row(d.name, d.lit / d.total, false);
   }
 
   /** Click: a waypoint there, or clear it when clicking the waypoint itself. */
@@ -604,6 +670,9 @@ export class MapScreen implements System {
       ctx.lineWidth = Math.max(ROAD_MIN[tier] / s, ROAD_M[tier] * 0.85);
       for (const c of cells) { const p = c.roads[tier]; if (p) ctx.stroke(p); }
     }
+    // 点亮北京: the rest dimmed, the roads driven lit
+    const lit = this.lit;
+    if (lit?.view && lit.visited.size) (this.litLayer ??= new LitLayer(lit)).draw(ctx, x0, z0, x1, z1, s, b);
 
     const ov = this.overlay;
     if (ov) {

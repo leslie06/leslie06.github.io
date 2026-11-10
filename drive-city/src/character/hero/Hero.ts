@@ -102,7 +102,7 @@ function physical(src: THREE.MeshStandardMaterial, name: string, o: AuthoredOpts
     : /low-poly|high-poly|eye/i.test(name) ? 'eye' : /shoe|boot/i.test(name) ? 'shoes' : 'cloth';
   const p = new THREE.MeshPhysicalMaterial({ name: src.name, map: src.map, normalMap: src.normalMap, color: src.color.clone() });
   if (src.normalMap) p.normalScale.copy(src.normalScale);
-  p.userData.wet = true;
+  p.userData.wet = true; p.userData.snow = 0;
   // hair cards cut at half (their soft fringe is a second, blended pass: `fringe`); brows and lashes lie on the skin,
   // blended (cut, they were thin jagged strokes)
   if (kind === 'hair') { p.alphaTest = 0.5; p.side = THREE.DoubleSide; }
@@ -290,7 +290,7 @@ export class Hero {
       for (const m of skinned) {
         m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
         const mat = m.material as THREE.MeshStandardMaterial;
-        mat.userData.wet = true;
+        mat.userData.wet = true; mat.userData.snow = 0;
         if (/hair/i.test(mat.name)) mat.color.copy(look.hair).multiplyScalar(1.6);
         else if (/superhero/i.test(mat.name)) mat.color.copy(skinTint);
       }

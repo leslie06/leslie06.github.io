@@ -78,7 +78,7 @@ function fabricNormal(kind: 'twill' | 'knit' | 'denim', size = 128): THREE.DataT
 function cloth(name: string, color: THREE.Color, roughness: number, weave: 'twill' | 'knit' | 'denim', strength: number): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, normalMap: fabricNormal(weave), side: THREE.DoubleSide });
   m.normalScale.set(strength, strength);
-  m.userData.wet = true;
+  m.userData.wet = true; m.userData.snow = 0;
   m.name = `hero-${name}`;
   return m;
 }
@@ -158,7 +158,7 @@ export function dress(body: THREE.SkinnedMesh, c: OutfitColors): THREE.SkinnedMe
       material: cloth('jacket', c.top, 0.7, 'twill', 0.45),
     },
   ];
-  garments[2].material.userData.wet = 'surface';
+  garments[2].material.userData.wet = 'surface'; garments[2].material.userData.snow = 0;
 
   const covered = new Uint8Array(tris);
   const out: THREE.SkinnedMesh[] = [];

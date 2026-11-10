@@ -39,6 +39,7 @@ export type { RenderSystem } from './RenderSystem';
 function seasonVec(s: Season): THREE.Vector4 { return new THREE.Vector4(s.autumn, s.bare, s.ginkgo, s.cypress); }
 
 const wrap24 = (h: number) => ((h % 24) + 24) % 24;
+const engineFrozen = (e: Engine) => e.paused;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const COS_1DEG = Math.cos(THREE.MathUtils.degToRad(1));
 
@@ -48,6 +49,11 @@ class Render implements RenderSystem {
   timeScale: number;
   rain: number;
   wetness = 0;
+  /** 0..1 snow falling, and the snow lying (see RenderApi.snow). */
+  snow = 0;
+  snowCover = 0;
+  /** `?snowcover=N`: the cover held at N (screenshots). */
+  private fixedCover: number | null = null;
   readonly sunDir = new THREE.Vector3();
   readonly hazeColor = new THREE.Color();
   readonly uniforms: EnvUniforms = { uNight: { value: 0 }, uWet: { value: 0 }, uTime: { value: 0 }, uSeason: { value: seasonVec(seasonAt()) } };
@@ -58,6 +64,7 @@ class Render implements RenderSystem {
   private sky: SkyDome;
   private lighting: Lighting;
   private rainFx: Rain;
+  private snowFx: Rain;
   private lamps: StreetLights;
   private focus = new THREE.Vector3();
   private wetU: WetUniforms;
@@ -86,15 +93,21 @@ class Render implements RenderSystem {
     this.timeScale = ts !== null ? ts : tod !== null || shotMode ? 0 : 0.5;
     this.rain = rain !== null ? clamp01(rain) : 0;
     this.wetness = this.rain;
+    const snow = num('snow'), cover = num('snowcover');
+    this.snow = snow !== null ? clamp01(snow) : 0;
+    this.fixedCover = cover !== null ? clamp01(cover) : null;
+    this.snowCover = this.fixedCover ?? (this.snow > 0 ? 1 : 0);
 
     const q = engine.quality;
-    this.wetU = { dcWetness: this.uniforms.uWet, dcRain: { value: this.rain }, dcTime: this.uniforms.uTime };
+    this.wetU = { dcWetness: this.uniforms.uWet, dcRain: { value: this.rain }, dcTime: this.uniforms.uTime, dcSnow: { value: this.snowCover } };
     this.lamps = new StreetLights(engine.renderer, q.tier === 'low' ? 512 : 1024, Math.max(0, num('lamps') ?? 1));
     this.lighting = new Lighting(engine, this.wetU, q.wetRipples, this.backdrop, this.lamps);
     this.sky = new SkyDome(engine.renderer, { lutWidth: q.skyLutSize, viewSteps: q.skySteps, lightSteps: q.tier === 'low' ? 4 : 6, envSize: q.envSize });
     engine.scene.add(this.sky.mesh);
     this.rainFx = new Rain(q.rainStreaks);
     engine.scene.add(this.rainFx.mesh);
+    this.snowFx = new Rain(q.rainStreaks, true);
+    engine.scene.add(this.snowFx.mesh);
     // Aerial perspective is the Atmosphere effect's job; three's fog would haze everything twice.
     engine.scene.fog = null;
     this.postfx = new PostFx(engine, this.sky.lut.texture);
@@ -139,7 +152,8 @@ class Render implements RenderSystem {
   }
 
   private updateLook(force: boolean): void {
-    const L = this.tod.compute(this.timeOfDay, this.rain, force, this.cloud);
+    // a snowy sky is a grey one, without the rain's darkness
+    const L = this.tod.compute(this.timeOfDay, this.rain, force, Math.max(this.cloud, this.snow * 0.85));
     this.uniforms.uNight.value = L.lights;
     this.sunDir.copy(L.sunDir);
     this.hazeColor.copy(L.horizon);
@@ -169,10 +183,15 @@ class Render implements RenderSystem {
     if (this.snapAll || jumped) this.exposure = target;
     else if (dt > 0) this.exposure *= Math.exp((Math.log(target) - Math.log(this.exposure)) * (1 - Math.exp(-dt / 1.2)));
     this.uniforms.uWet.value = this.wetness;
+    // snow lies in about a minute of a full fall, melts over ~40 min (not while paused)
+    this.snow = clamp01(this.snow);
+    if (this.fixedCover !== null) this.snowCover = this.fixedCover;
+    else if (dt > 0 && !engineFrozen(this.engine)) this.snowCover = clamp01(this.snowCover + (this.snow > 0.02 ? this.snow * dt / 60 : -dt / 2400));
+    this.wetU.dcSnow!.value = this.snowCover;
     this.uniforms.uTime.value = this.engine.time;
     this.wetU.dcRain.value = this.rain;
     if (this.snapAll || jumped) { this.forceEnv = true; }
-    if (this.snapAll) this.rainFx.reset();
+    if (this.snapAll) { this.rainFx.reset(); this.snowFx.reset(); }
     this.snapAll = false;
   }
 
@@ -227,6 +246,7 @@ class Render implements RenderSystem {
     this.sky.setBodies(L.sunDir, L.moonDir, L.sunDisc, L.moonDisc, L.stars, e.time);
     this.sky.follow(e.camera);
     this.rainFx.update(e.camera, dt, this.rain, L.rainColor);
+    this.snowFx.update(e.camera, dt, this.snow, L.rainColor);
     this.postfx.apply(L, this.exposure, dt);
     this.postfx.render(dt);
   }

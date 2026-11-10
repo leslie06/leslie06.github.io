@@ -28,6 +28,7 @@ import type { PresenceApi } from '../online/Presence';
 import type { DistrictApi } from '../district';
 import { journalOf } from '../npc/Journal';
 import { steppedDownFrom } from '../core/Quality';
+import { hudTip } from './HudMode';
 
 export interface UiApi extends System {
   state: MenuState;
@@ -250,6 +251,7 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
     },
   };
   menu.onStart = () => api.start();
+  if (mapScreen) hudTip(engine, () => api.state === 'playing', (text, secs) => hud.coach(text, secs));
   // Losing pointer lock (Esc, alt-tab) while driving pauses, as in any PC game.
   document.addEventListener('pointerlockchange', () => {
     if (!TOUCH && !document.pointerLockElement && api.state === 'playing' && !new URLSearchParams(location.search).has('nolock')) api.pause();

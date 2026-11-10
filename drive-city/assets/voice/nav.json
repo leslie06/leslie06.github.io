@@ -1,0 +1,7500 @@
+{
+ "version": 1,
+ "_note": "语音导航的台词：由 scripts/voice/nav.mts 从 src/audio/NavLines.ts 生成，别手改。",
+ "tts": {
+  "provider": "aliyun-bailian",
+  "model": "cosyvoice-v3.5-plus",
+  "format": "mp3",
+  "sampleRate": 24000,
+  "variantsDefault": 1,
+  "languageHints": [
+   "zh"
+  ],
+  "voiceListUrl": "https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list",
+  "emotions": [
+   "neutral",
+   "fearful",
+   "angry",
+   "sad",
+   "surprised",
+   "happy",
+   "disgusted"
+  ]
+ },
+ "archetypes": {
+  "navf": {
+   "name": "导航（普通话）",
+   "voices": ["cosyvoice-v3.5-plus-vd-navf1-69236659241348e8b2659e22a91ce149"],
+   "voiceDesign": [
+    {
+     "prompt": "年轻女性，26 岁左右，手机导航软件的语音播报，标准普通话，音色清亮甜美，吐字清晰，语速适中，温和亲切。",
+     "previewText": "前方五百米右转，进入东三环。您已偏离路线，已为您重新规划。"
+    }
+   ],
+   "style": "手机导航的女声语音提示，标准普通话，清晰温和。",
+   "styleEn": "A satnav voice prompt.",
+   "rateRange": [
+    1,
+    1
+   ]
+  },
+  "navj": {
+   "name": "导航（京腔的哥）",
+   "voices": ["cosyvoice-v3.5-plus-vd-navj1-468e79827ead4994820de2bbe845003e"],
+   "voiceDesign": [
+    {
+     "prompt": "中年男性，50 岁左右，开了二十多年出租车的老北京的哥，一口地道京腔，儿化音重，嗓音醇厚略带沙哑，语速稍快，热心幽默，爱贫嘴。",
+     "previewText": "前边儿二百米往右拐，上东三环。您走岔了，没事儿，我给您重新规划。到地儿了您呐！"
+    }
+   ],
+   "style": "老北京出租车司机给乘客指路，地道京腔，热心随和。",
+   "styleEn": "An old Beijing cabbie giving directions.",
+   "rateRange": [
+    1,
+    1
+   ]
+  }
+ },
+ "lines": [
+  {
+   "id": "nav.f.start",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "开始导航，请按路线行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.reroute",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "您已偏离路线，已为您重新规划。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.arrived",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "已到达目的地附近，本次导航结束。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.near.L",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方路口左转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.near.R",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方路口右转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.near.SL",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "请靠左行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.near.SR",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "请靠右行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.near.U",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方路口掉头。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.near.S",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "继续直行。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.near.exit",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "请进入匝道。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.near.arrive",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "目的地就在前方。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.then.L",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "随后左转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.then.R",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "随后右转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.then.SL",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "随后靠左。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.then.SR",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "随后靠右。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.then.U",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "随后掉头。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.then.S",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "随后直行。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.then.exit",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "随后进入匝道。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.then.arrive",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "随后到达目的地。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.1000.L",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方一公里左转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.1000.R",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方一公里右转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.1000.SL",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方一公里靠左行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.1000.SR",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方一公里靠右行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.1000.U",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方一公里掉头。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.1000.S",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方一公里直行。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.1000.exit",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方一公里进入匝道。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.1000.arrive",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方一公里到达目的地。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.500.L",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方五百米左转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.500.R",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方五百米右转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.500.SL",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方五百米靠左行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.500.SR",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方五百米靠右行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.500.U",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方五百米掉头。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.500.S",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方五百米直行。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.500.exit",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方五百米进入匝道。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.500.arrive",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方五百米到达目的地。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.300.L",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方三百米左转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.300.R",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方三百米右转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.300.SL",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方三百米靠左行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.300.SR",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方三百米靠右行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.300.U",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方三百米掉头。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.300.S",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方三百米直行。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.300.exit",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方三百米进入匝道。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.300.arrive",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方三百米到达目的地。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.200.L",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方两百米左转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.200.R",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方两百米右转。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.200.SL",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方两百米靠左行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.200.SR",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方两百米靠右行驶。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.200.U",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方两百米掉头。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.200.S",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方两百米直行。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.200.exit",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方两百米进入匝道。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.far.200.arrive",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前方两百米到达目的地。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.fulu",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入辅路。",
+   "instruct": "导航软件的语音提示，清晰温和，语速适中。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.h3b1s6",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北三环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.18l7gaw",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北四环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.yh8s17",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西二环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.yk3vxa",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西三环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.gk866r",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北二环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ce59t7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西长安街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.42d4v4",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西四环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1v0w3nc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东长安街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.q2bjrt",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京藏高速。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.emmukt",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入建国路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.t9gscb",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东三环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1so5sha",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东二环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.epu3na",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入中关村大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.erxbjx",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东四环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.45q4i5",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西大望路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1g4ky3v",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北五环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.bpglv",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入中关村北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1hqoddq",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京通快速路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.15n62lt",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入复兴路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ltswgj",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入崇文门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.mweps6",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南三环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1xhu3kq",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入阜成路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.at5vrm",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入崇文门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.8m76nh",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西直门北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.bb9pku",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入菜市口大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jo60wu",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西四南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.bmce1d",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入姚家园路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1bw8va2",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入紫竹院路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.fyo50k",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入宣武门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.dzf9zn",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东四北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1p08xj",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入清华东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1soxn06",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东五环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.c93rpk",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南四环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.mz7x7b",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入学院南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1602grd",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入宣武门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.vx0x6y",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入朝阳路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.8mam5u",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入成府路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.11n97lr",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入万泉河路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1gm43t6",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入学院路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1lzpl2j",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南五环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.9gobnu",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入阜成门北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.12dqccx",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入复兴门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1qqtn95",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入菜户营南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.le3d0l",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入建国门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1h9y0t8",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京开高速。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.mdtj0z",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南二环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ckkmqd",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入德胜门西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1bdjguk",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北坞村路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.105ubmf",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入朝阳北路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.19ohe3l",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入学清路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1t8ywew",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西单北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.152000u",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广安路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.58jt2h",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入颐和园路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.pjsxsn",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北京港澳高速公路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1i4yj8v",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入月泉路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1g9fa5l",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入杏石口路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1qf2gyp",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入中关村东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ns4qvm",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西直门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1u74cwg",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入知春路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1yoivtc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入德胜门东大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1q8o576",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入荷清路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.9b3bnh",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北土城西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.eusmu2",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入三里河路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ckb0ny",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入平安里西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.vobpas",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入酒仙桥路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.15ultx1",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东单北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1xxxuhf",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西五环。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1rp547c",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入新街口北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1eranhl",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入闵庄路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1fswedk",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京密路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1bbva21",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京承高速。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.18ksnfl",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京港澳高速公路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.y5wj8f",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入双清路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.12ostjw",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入地安门东大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jf5jno",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入安定门东大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1qg8pcy",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入德胜门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1fo67jo",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入高梁桥斜街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.gb6f4j",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东四南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.cezhgg",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丽泽路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.twu0ff",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入亮马桥路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.176jgp0",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入天坛东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.nx7hg6",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入旱河路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.oww6tk",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西土城路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.lujyls",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入香山路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.46llwy",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入天桥南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1t7qfz",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广渠路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.11tfa6b",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入新街口外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1szom8l",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入朝阳门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.dandni",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西四北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.17wk8ed",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西安门大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1111gx8",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入大屯路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.3dal1y",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入张自忠路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1xnx0fr",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入首都体育馆南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jff3rw",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入万寿路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jxel1j",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入卢沟桥南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jy2bae",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入珠市口东大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.j2p9mt",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入阜成门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.103i7h",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入鼓楼西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.uoy74p",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东直门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.nq0ob7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入中关村南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.zfaasr",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丰园路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ht45oa",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入和平里西街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.r2hqzi",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入永定门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.lesoke",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南苑路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.3a5hwn",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入复兴门北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1oxoejg",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广安门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.r4xm4j",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入德胜门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.nveak7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入万丰路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.hihk4v",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入车公庄大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.6tatlq",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东直门南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ftomwf",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丰科路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1uhlpvs",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入新街口南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.107c03r",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入金星西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ii8r5c",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入阜成门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1agpv0k",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京哈高速。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.dxy09l",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入右安门东滨河路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1nl73vp",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入工人体育场北路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.fp7rf0",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入骡马市大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.18vjnyu",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入安立路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ob7z07",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入宣武门西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.w5ew2i",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入朝阳门北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ztzd4v",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入莲石东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.kkxqkf",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入车公庄西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ajptn7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入雍和宫大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.n8wroe",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入五四大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1b2vssi",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北土城东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.hmiqy7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入大柳树路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1u89ohz",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入志新路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1s40cdc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入朝阳门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jgjbbr",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入牛街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.14unpbt",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入酒仙桥北路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1475vx8",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入长椿街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1qdbi40",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入右安门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.bakigx",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入地安门西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1qtqdex",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入复兴路—三里河路联络线。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.zojvj1",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入星火西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.9tvo1m",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东坝南二街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.mee62e",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北河沿大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ekfhfa",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南河沿大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.dnddsq",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广安门南滨河路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1os1s8v",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入马家堡东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.tz7qrv",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东四西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1n6nf5u",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丰体南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ort1go",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北辰西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.iahts7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北辰路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1qxs0lh",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入右安门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.141anq4",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入复兴门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.18v75jd",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入安定门西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.3f0p8s",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入宏康路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1kdf0sc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入朝阳公园南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1movtgu",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入樊羊路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.m7ghwa",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入欣宁街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.13qm0pb",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入永定门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1d5s0dk",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入玉泉路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.14thfs7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入珠市口西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.y042p2",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入花园东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.rl5v55",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入长春桥路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.legxo6",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东四十条。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1kxmkdj",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入复兴门南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1e1hez5",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广安门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.pdc5zm",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入新东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.2m6b9j",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入蓝靛厂南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1y9fn2m",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入高梁桥路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1j74h0a",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京密快速路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1r1i649",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京良路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jvkmc9",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入兴旺大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1hfaj6u",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入前门大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.kliazm",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入和平里北街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1mqngny",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入地安门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.lvbq1s",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入海淀南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.6vfaid",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入阜石路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.uqc4wr",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入阜通东大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.a02uu6",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东直门北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ceprh7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丰台西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.hepwlh",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入兴华大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.qbmdua",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入农展馆南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.hzp501",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入化工路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1t33pim",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入圆明园西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ykxsp8",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入将台路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1xd1csb",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入德贤路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.u98ktp",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入方庄路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1cuccaa",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入柳村路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.rbkkrk",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入湖光中街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.103uclq",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入科技大道。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.185jmzs",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入马家堡西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1efnnhc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入林萃路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1lmz3lx",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入莲花池东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1tschd",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入首都机场高速公路联络线。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.5pyd8f",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丰管路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1folxa1",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南新华街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.10t6p52",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入天坛路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ssrh8h",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入左家庄西街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.i2gnvc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入望京西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.qqresc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入永定门西滨河路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.eeveyq",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入皂君庙路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.s3hqzv",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入芳园西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.vv9pfa",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入草桥东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.19zjmxc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入蒲黄榆路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1fqak1u",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入金星路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.15acppc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入高碑店路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.13w7073",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北辰东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.80z6rp",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入景山前街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.3qy7sf",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入望京街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1wd333v",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入玉渊潭南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1mfsiu4",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入白纸坊西街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.zrrhxz",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入祈年大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1aueuq2",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入通惠河北路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1krseiw",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入三台山路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.10o7e78",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东直门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1d55dlf",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丰台北路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ahnq77",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入光华路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1gs2qk9",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北新华街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ugmkze",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入卢沟桥路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1x9ceez",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入厢红旗路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.u4fgvz",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入双桥路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.7tc756",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入富丰路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ig7emc",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入小屯路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1gu5wc7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广渠门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.10d3o9b",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广顺南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.10n1gx1",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入新康路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.4mhv18",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入煤市街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1nadjd3",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入玉泉山路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.mwmxcn",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入石各庄路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.15al9hj",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入石景山路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.oxh2kz",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西直门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.cmvi7c",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入辛店路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.v6ir6d",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入通久路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.pdeqy9",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入闹市口大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1vafeo",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入黄亦路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ez721s",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入交道口南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1evi2si",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入信息路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1jtit8r",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北兴路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.13muypk",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入左堤路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1rk274z",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入成寿寺路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1c6n121",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入玲珑路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.8iht2n",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入田村路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1xxw8co",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入金中都南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.carq9p",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入银泉路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.wodgwa",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入阜通西大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1fxyjor",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入霄云路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1mp7dhy",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东直门外斜街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1k8znh8",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北京西站南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.6jcpb2",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北苑路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jlytzw",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南苑东路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.10s9zv",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入双龙路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.vkgm13",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入巨山路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.14wdr6z",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入榴乡路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.o21zme",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入槐房西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.199475s",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入清华西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1mck7y7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入王庄路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.lwo94f",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入石佛营路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.19xfww2",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入科荟路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.20p9re",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入虎坊路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jm46y5",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入角门北路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1fq93x0",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入首都机场高速公路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.8i8sq6",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入高立庄南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.leth5i",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入五爱屯东街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.40y24r",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入交通大学路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1m78p3e",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南大红门路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.gzphws",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1erl24b",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入太平桥大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1lco484",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入宏福路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1hlwdv9",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入崇文门东大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.20ifk7",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入慧忠路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.18jr0mo",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入文慧园西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.jympbn",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入新源南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.4ykyoj",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入朝阳公园路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.cue635",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入柳芳北街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.uvyuf3",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入清华路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1413jf6",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入看丹路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.zjzbpj",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入花家地街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1702jai",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入莲花池西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.13fhbcp",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入莲花河东侧路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.19dwjb4",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西局西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.5zlr6y",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西直门外南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1cfai5t",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西红门路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1mmn0g5",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入郭公庄路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.f30qoh",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入青塔西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.vuldaw",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入鸭子桥路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1tukj62",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入鼓楼外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.174ednd",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ds75cj",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丰台南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.9r0583",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北纬路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.cysgjz",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广顺北大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1x456z0",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入惠新东街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ddyley",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入文津街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1u5sh0w",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入杏坛路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.azs9y1",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西什库大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1i3etz",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入镇国寺北路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1243r50",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入高粱桥斜街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1hpahgo",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入鼓楼东大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.zut4to",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入丰葆路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1itcko3",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京垡路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.17zqr5m",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入劲松路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.8vqp1n",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入北线阁街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.nvvz39",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入和平里东街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.lzypxo",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入嘉园路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1mu0y2u",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入安河桥大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1j7cnj3",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入展览馆路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1wllly",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入广渠门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.13m5anl",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入开阳路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1tekxr2",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入时村大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.14equma",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入朝阳门南小街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.rgrcpb",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入看丹南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1ioa60l",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入芦花路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1fe6t0i",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西便门内大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1esissj",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入西便门外大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.wostz5",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入远大路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.sicj4h",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入金台路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.ra1e16",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入阜成门南大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1veo5w9",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入青年北路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.166b0yd",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入香河园路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.44a4f9",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入东风南路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.3n7mr0",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入京新高速。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1iou7uw",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入光彩路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.3zdcnq",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入六圈西路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1k44ygp",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入兴业大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.adoy07",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入兴丰大街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.phjhf4",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南磨房路。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.f.road.1rlutas",
+   "archetype": "navf",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "进入南长街。",
+   "instruct": "导航软件的语音提示，平稳清晰地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.start",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "得嘞，您坐稳了，咱走着！",
+   "instruct": "热情爽快地招呼。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.reroute",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "您走岔了，没事儿，我给您重新规划。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.arrived",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "到地儿了您呐！",
+   "instruct": "高兴地招呼，带点儿得意。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.near.L",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿路口，往左一拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.near.R",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿路口，往右一拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.near.SL",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "您靠左边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.near.SR",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "您靠右边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.near.U",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿路口掉个头。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.near.S",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "接着直走，甭拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.near.exit",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "下匝道，您留神。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.near.arrive",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "到地儿了，就前边儿。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.then.L",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "紧跟着往左拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.then.R",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "紧跟着往右拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.then.SL",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "紧跟着靠左。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.then.SR",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "紧跟着靠右。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.then.U",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "紧跟着掉头。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.then.S",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "紧跟着直走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.then.exit",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "紧跟着下匝道。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.then.arrive",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "紧跟着就到了。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.1000.L",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿一公里往左拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.1000.R",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿一公里往右拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.1000.SL",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿一公里靠左边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.1000.SR",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿一公里靠右边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.1000.U",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿一公里掉头。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.1000.S",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿一公里直着走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.1000.exit",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿一公里下匝道。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.1000.arrive",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿一公里就到地儿了。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.500.L",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿五百米往左拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.500.R",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿五百米往右拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.500.SL",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿五百米靠左边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.500.SR",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿五百米靠右边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.500.U",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿五百米掉头。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.500.S",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿五百米直着走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.500.exit",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿五百米下匝道。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.500.arrive",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿五百米就到地儿了。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.300.L",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿三百米往左拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.300.R",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿三百米往右拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.300.SL",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿三百米靠左边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.300.SR",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿三百米靠右边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.300.U",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿三百米掉头。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.300.S",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿三百米直着走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.300.exit",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿三百米下匝道。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.300.arrive",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿三百米就到地儿了。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.200.L",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿二百米往左拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.200.R",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿二百米往右拐。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.200.SL",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿二百米靠左边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.200.SR",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿二百米靠右边儿走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.200.U",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿二百米掉头。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.200.S",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿二百米直着走。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.200.exit",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿二百米下匝道。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.far.200.arrive",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "前边儿二百米就到地儿了。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.fulu",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "走辅路。",
+   "instruct": "老北京的哥给乘客指路，京腔儿化音，热心随和。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.h3b1s6",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北三环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.18l7gaw",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北四环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.yh8s17",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西二环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.yk3vxa",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西三环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.gk866r",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北二环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ce59t7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西长安街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.42d4v4",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西四环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1v0w3nc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东长安街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.q2bjrt",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京藏高速。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.emmukt",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上建国路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.t9gscb",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东三环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1so5sha",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东二环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.epu3na",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上中关村大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.erxbjx",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东四环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.45q4i5",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西大望路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1g4ky3v",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北五环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.bpglv",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上中关村北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1hqoddq",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京通快速路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.15n62lt",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上复兴路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ltswgj",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上崇文门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.mweps6",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南三环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1xhu3kq",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上阜成路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.at5vrm",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上崇文门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.8m76nh",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西直门北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.bb9pku",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上菜市口大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jo60wu",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西四南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.bmce1d",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上姚家园路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1bw8va2",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上紫竹院路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.fyo50k",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上宣武门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.dzf9zn",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东四北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1p08xj",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上清华东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1soxn06",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东五环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.c93rpk",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南四环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.mz7x7b",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上学院南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1602grd",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上宣武门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.vx0x6y",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上朝阳路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.8mam5u",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上成府路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.11n97lr",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上万泉河路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1gm43t6",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上学院路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1lzpl2j",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南五环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.9gobnu",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上阜成门北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.12dqccx",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上复兴门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1qqtn95",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上菜户营南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.le3d0l",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上建国门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1h9y0t8",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京开高速。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.mdtj0z",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南二环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ckkmqd",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上德胜门西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1bdjguk",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北坞村路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.105ubmf",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上朝阳北路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.19ohe3l",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上学清路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1t8ywew",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西单北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.152000u",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广安路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.58jt2h",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上颐和园路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.pjsxsn",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北京港澳高速公路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1i4yj8v",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上月泉路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1g9fa5l",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上杏石口路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1qf2gyp",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上中关村东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ns4qvm",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西直门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1u74cwg",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上知春路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1yoivtc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上德胜门东大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1q8o576",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上荷清路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.9b3bnh",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北土城西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.eusmu2",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上三里河路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ckb0ny",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上平安里西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.vobpas",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上酒仙桥路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.15ultx1",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东单北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1xxxuhf",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西五环。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1rp547c",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上新街口北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1eranhl",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上闵庄路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1fswedk",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京密路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1bbva21",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京承高速。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.18ksnfl",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京港澳高速公路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.y5wj8f",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上双清路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.12ostjw",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上地安门东大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jf5jno",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上安定门东大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1qg8pcy",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上德胜门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1fo67jo",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上高梁桥斜街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.gb6f4j",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东四南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.cezhgg",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丽泽路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.twu0ff",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上亮马桥路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.176jgp0",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上天坛东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.nx7hg6",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上旱河路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.oww6tk",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西土城路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.lujyls",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上香山路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.46llwy",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上天桥南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1t7qfz",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广渠路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.11tfa6b",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上新街口外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1szom8l",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上朝阳门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.dandni",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西四北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.17wk8ed",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西安门大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1111gx8",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上大屯路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.3dal1y",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上张自忠路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1xnx0fr",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上首都体育馆南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jff3rw",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上万寿路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jxel1j",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上卢沟桥南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jy2bae",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上珠市口东大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.j2p9mt",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上阜成门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.103i7h",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上鼓楼西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.uoy74p",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东直门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.nq0ob7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上中关村南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.zfaasr",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丰园路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ht45oa",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上和平里西街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.r2hqzi",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上永定门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.lesoke",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南苑路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.3a5hwn",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上复兴门北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1oxoejg",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广安门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.r4xm4j",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上德胜门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.nveak7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上万丰路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.hihk4v",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上车公庄大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.6tatlq",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东直门南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ftomwf",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丰科路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1uhlpvs",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上新街口南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.107c03r",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上金星西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ii8r5c",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上阜成门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1agpv0k",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京哈高速。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.dxy09l",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上右安门东滨河路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1nl73vp",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上工人体育场北路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.fp7rf0",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上骡马市大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.18vjnyu",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上安立路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ob7z07",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上宣武门西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.w5ew2i",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上朝阳门北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ztzd4v",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上莲石东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.kkxqkf",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上车公庄西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ajptn7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上雍和宫大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.n8wroe",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上五四大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1b2vssi",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北土城东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.hmiqy7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上大柳树路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1u89ohz",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上志新路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1s40cdc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上朝阳门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jgjbbr",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上牛街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.14unpbt",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上酒仙桥北路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1475vx8",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上长椿街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1qdbi40",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上右安门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.bakigx",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上地安门西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1qtqdex",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上复兴路—三里河路联络线。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.zojvj1",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上星火西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.9tvo1m",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东坝南二街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.mee62e",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北河沿大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ekfhfa",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南河沿大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.dnddsq",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广安门南滨河路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1os1s8v",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上马家堡东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.tz7qrv",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东四西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1n6nf5u",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丰体南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ort1go",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北辰西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.iahts7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北辰路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1qxs0lh",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上右安门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.141anq4",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上复兴门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.18v75jd",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上安定门西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.3f0p8s",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上宏康路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1kdf0sc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上朝阳公园南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1movtgu",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上樊羊路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.m7ghwa",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上欣宁街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.13qm0pb",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上永定门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1d5s0dk",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上玉泉路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.14thfs7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上珠市口西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.y042p2",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上花园东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.rl5v55",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上长春桥路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.legxo6",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东四十条。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1kxmkdj",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上复兴门南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1e1hez5",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广安门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.pdc5zm",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上新东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.2m6b9j",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上蓝靛厂南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1y9fn2m",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上高梁桥路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1j74h0a",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京密快速路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1r1i649",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京良路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jvkmc9",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上兴旺大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1hfaj6u",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上前门大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.kliazm",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上和平里北街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1mqngny",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上地安门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.lvbq1s",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上海淀南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.6vfaid",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上阜石路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.uqc4wr",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上阜通东大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.a02uu6",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东直门北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ceprh7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丰台西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.hepwlh",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上兴华大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.qbmdua",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上农展馆南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.hzp501",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上化工路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1t33pim",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上圆明园西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ykxsp8",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上将台路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1xd1csb",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上德贤路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.u98ktp",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上方庄路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1cuccaa",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上柳村路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.rbkkrk",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上湖光中街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.103uclq",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上科技大道。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.185jmzs",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上马家堡西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1efnnhc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上林萃路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1lmz3lx",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上莲花池东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1tschd",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上首都机场高速公路联络线。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.5pyd8f",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丰管路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1folxa1",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南新华街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.10t6p52",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上天坛路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ssrh8h",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上左家庄西街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.i2gnvc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上望京西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.qqresc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上永定门西滨河路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.eeveyq",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上皂君庙路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.s3hqzv",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上芳园西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.vv9pfa",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上草桥东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.19zjmxc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上蒲黄榆路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1fqak1u",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上金星路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.15acppc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上高碑店路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.13w7073",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北辰东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.80z6rp",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上景山前街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.3qy7sf",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上望京街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1wd333v",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上玉渊潭南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1mfsiu4",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上白纸坊西街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.zrrhxz",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上祈年大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1aueuq2",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上通惠河北路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1krseiw",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上三台山路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.10o7e78",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东直门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1d55dlf",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丰台北路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ahnq77",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上光华路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1gs2qk9",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北新华街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ugmkze",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上卢沟桥路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1x9ceez",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上厢红旗路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.u4fgvz",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上双桥路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.7tc756",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上富丰路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ig7emc",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上小屯路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1gu5wc7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广渠门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.10d3o9b",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广顺南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.10n1gx1",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上新康路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.4mhv18",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上煤市街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1nadjd3",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上玉泉山路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.mwmxcn",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上石各庄路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.15al9hj",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上石景山路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.oxh2kz",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西直门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.cmvi7c",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上辛店路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.v6ir6d",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上通久路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.pdeqy9",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上闹市口大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1vafeo",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上黄亦路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ez721s",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上交道口南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1evi2si",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上信息路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1jtit8r",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北兴路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.13muypk",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上左堤路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1rk274z",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上成寿寺路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1c6n121",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上玲珑路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.8iht2n",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上田村路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1xxw8co",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上金中都南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.carq9p",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上银泉路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.wodgwa",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上阜通西大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1fxyjor",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上霄云路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1mp7dhy",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东直门外斜街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1k8znh8",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北京西站南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.6jcpb2",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北苑路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jlytzw",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南苑东路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.10s9zv",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上双龙路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.vkgm13",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上巨山路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.14wdr6z",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上榴乡路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.o21zme",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上槐房西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.199475s",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上清华西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1mck7y7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上王庄路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.lwo94f",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上石佛营路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.19xfww2",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上科荟路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.20p9re",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上虎坊路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jm46y5",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上角门北路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1fq93x0",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上首都机场高速公路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.8i8sq6",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上高立庄南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.leth5i",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上五爱屯东街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.40y24r",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上交通大学路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1m78p3e",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南大红门路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.gzphws",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1erl24b",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上太平桥大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1lco484",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上宏福路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1hlwdv9",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上崇文门东大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.20ifk7",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上慧忠路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.18jr0mo",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上文慧园西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.jympbn",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上新源南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.4ykyoj",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上朝阳公园路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.cue635",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上柳芳北街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.uvyuf3",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上清华路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1413jf6",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上看丹路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.zjzbpj",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上花家地街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1702jai",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上莲花池西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.13fhbcp",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上莲花河东侧路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.19dwjb4",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西局西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.5zlr6y",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西直门外南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1cfai5t",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西红门路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1mmn0g5",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上郭公庄路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.f30qoh",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上青塔西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.vuldaw",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上鸭子桥路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1tukj62",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上鼓楼外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.174ednd",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ds75cj",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丰台南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.9r0583",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北纬路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.cysgjz",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广顺北大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1x456z0",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上惠新东街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ddyley",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上文津街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1u5sh0w",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上杏坛路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.azs9y1",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西什库大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1i3etz",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上镇国寺北路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1243r50",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上高粱桥斜街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1hpahgo",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上鼓楼东大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.zut4to",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上丰葆路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1itcko3",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京垡路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.17zqr5m",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上劲松路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.8vqp1n",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上北线阁街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.nvvz39",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上和平里东街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.lzypxo",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上嘉园路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1mu0y2u",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上安河桥大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1j7cnj3",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上展览馆路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1wllly",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上广渠门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.13m5anl",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上开阳路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1tekxr2",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上时村大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.14equma",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上朝阳门南小街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.rgrcpb",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上看丹南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1ioa60l",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上芦花路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1fe6t0i",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西便门内大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1esissj",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上西便门外大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.wostz5",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上远大路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.sicj4h",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上金台路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.ra1e16",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上阜成门南大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1veo5w9",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上青年北路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.166b0yd",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上香河园路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.44a4f9",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上东风南路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.3n7mr0",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上京新高速。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1iou7uw",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上光彩路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.3zdcnq",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上六圈西路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1k44ygp",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上兴业大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.adoy07",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上兴丰大街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.phjhf4",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南磨房路。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  },
+  {
+   "id": "nav.j.road.1rlutas",
+   "archetype": "navj",
+   "trigger": "nav",
+   "emotion": "neutral",
+   "text": "上南长街。",
+   "instruct": "老北京的哥指路，京腔，平稳地说出路名。",
+   "textEn": "",
+   "instructEn": ""
+  }
+ ]
+}

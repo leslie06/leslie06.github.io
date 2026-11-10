@@ -497,6 +497,13 @@ export interface RenderApi extends System {
   /** 0..1 rain; wetness follows with a lag. Writable. */
   rain: number;
   /**
+   * 0..1 snow falling（2026-11-10，冬天的天气）; the cover (`snowCover`, roofs, lawns, trees and the road's edges white)
+   * builds over a minute of it and melts over ~40 minutes. Writable. Optional: only render/ has it.
+   */
+  snow?: number;
+  /** The snow lying, 0..1. Writable (weather/ sets it for a night's snow before the game starts). */
+  snowCover?: number;
+  /**
    * A place under an overcast sky without rain (2026-10-23, 藤原豆腐店: 「照片里那种阴天的柔光」): with the camera within
    * `inner` of (x, z) the sky is `amount` overcast (0..1), easing off to clear at `outer`; the sky follows over seconds.
    */

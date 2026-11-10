@@ -6,6 +6,8 @@ import { Radio } from './Radio';
 import type { TalkWorld } from './Talk';
 import { Soundscape, type Where } from './Soundscape';
 import { CityClips } from './CityClips';
+import { NavVoice } from './NavVoice';
+import type { DialogueApi } from '../game/Contracts';
 import type { WorldApi } from '../game/Contracts';
 import { RADIO_ROADS, type RadioRoad } from './CityLines';
 import { seasonAt } from '../render/Season';
@@ -49,6 +51,7 @@ export async function install(engine: Engine): Promise<void> {
   let trainGain: GainNode, clackLfo: OscillatorNode, hornT = 0;
   let cityGain: GainNode, passGain: GainNode, humGain: GainNode;
   let radio: Radio | null = null;
+  let navVoice: NavVoice | null = null;
   let street: StreetMusic | null = null;
   let stepDist = 0;
   let noiseBuf: AudioBuffer;
@@ -180,6 +183,8 @@ export async function install(engine: Engine): Promise<void> {
     radio = new Radio(c, master, noiseBuf, talkWorld());
     // 北京的街头声景（audio/Soundscape.ts）
     scape = new Soundscape(c, master, new CityClips(c), noiseBuf);
+    // 语音导航（audio/NavVoice.ts），只在有导航的城里
+    if (engine.get('nav')) navVoice = new NavVoice(c, master, new CityClips(c, 'nav'), (on) => radio?.duck(on));
     radio.onTrack = (label) => { if (engine.get<PlayerApi>('player')?.mode === 'driving') engine.get<HudApi>('hud')?.toast(label); };
   }
 
@@ -193,6 +198,8 @@ export async function install(engine: Engine): Promise<void> {
     return {
       hour: () => engine.get<RenderApi>('render')?.timeOfDay ?? 12,
       rain: () => engine.get<RenderApi>('render')?.rain ?? 0,
+      snow: () => engine.get<RenderApi>('render')?.snow ?? 0,
+      snowCover: () => engine.get<RenderApi>('render')?.snowCover ?? 0,
       where: () => engine.get<PlayerApi>('player')?.position ?? { x: 0, z: 0 },
       day: () => day,
       roadsNear(x, z) {
@@ -525,6 +532,8 @@ export async function install(engine: Engine): Promise<void> {
         const lm = engine.get<{ name: string; music: readonly MusicSource[] }>('life')?.music ?? [], dm = engine.get<{ name: string; music: readonly MusicSource[] }>('district')?.music;
         street.update(dm?.length ? [...lm, ...dm] : lm, cam.x, cam.z, camF.x / fl, camF.z / fl, paused);
       }
+      const nav = engine.get<NavSystem>('nav');
+      if (navVoice && nav) navVoice.update(nav, car.speed, !!driving && !paused && !muted, !!engine.get<DialogueApi>('dialogue')?.busy);
       if (scape) {
         const cam = engine.camera.position;
         engine.camera.getWorldDirection(camF);

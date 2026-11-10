@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CSM } from 'three/examples/jsm/csm/CSM.js';
 import type { Engine } from '../core/Engine';
-import { patchWet, wetKind, type WetKind, type WetUniforms } from './Wet';
+import { patchWet, snowFactor, wetKind, type WetKind, type WetUniforms } from './Wet';
 import type { StreetLights } from './StreetLights';
 
 type Hook = (shader: THREE.WebGLProgramParametersWithUniforms, renderer: THREE.WebGLRenderer) => void;
@@ -264,7 +264,7 @@ export class Lighting {
     const hook: Hook = function (this: THREE.Material, shader, renderer) {
       prev.call(this, shader, renderer);
       csmHook?.call(this, shader, renderer);
-      if (kind) patchWet(shader, kind, wet, ripples);
+      if (kind) patchWet(shader, kind, wet, ripples, snowFactor(kind, m.userData.snow));
       lamps?.patch(shader);
     };
     // Every wrapper has the same source text, and three's default program cache key is

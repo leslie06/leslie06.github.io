@@ -48,6 +48,9 @@ import * as district from './district';
 import * as resume from './resume';
 import * as tollPlazas from './city/visual/TollPlazas';
 import * as bridgeNames from './city/visual/BridgeNames';
+import * as steam from './city/visual/Steam';
+import * as roofSigns from './city/visual/RoofSigns';
+import * as infoBoards from './city/visual/InfoBoards';
 import * as funnel from './online/Funnel';
 import * as leaderboard from './online/Leaderboard';
 import * as feedback from './online/Feedback';
@@ -65,6 +68,7 @@ import * as park from './park';
 import { registerParkPoses } from './park/Poses';
 import * as home from './home';
 import * as travel from './travel';
+import * as lightup from './lightup';
 import * as estate from './estate';
 import * as daily from './daily';
 import { registerHomePoses } from './home/Poses';
@@ -141,9 +145,10 @@ async function boot() {
   await vehicle.install(engine);
   await player.install(engine);
   await damage.install(engine);
-  if (worldName === 'city') { await traffic.install(engine); tollPlazas.install(engine); bridgeNames.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
+  if (worldName === 'city') { await traffic.install(engine); tollPlazas.install(engine); bridgeNames.install(engine); steam.install(engine); roofSigns.install(engine); infoBoards.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
   if (worldName === 'city') await nav.install(engine);
   if (worldName === 'city') await travel.install(engine);
+  if (worldName === 'city') lightup.install(engine);
   if (worldName === 'city') await estate.install(engine);
   if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await checkin.install(engine); await trials.install(engine); await intro.install(engine); await events.install(engine); await npc.install(engine); await life.install(engine); await contacts.install(engine); leaderboard.install(engine); await story.install(engine); campaign.install(engine); }
   if (worldName === 'city') await adventure.install(engine);

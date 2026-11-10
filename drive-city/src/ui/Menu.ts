@@ -4,6 +4,8 @@ import { QUALITY_CHOICE_KEY, type QualityTier } from '../core/Quality';
 import { C, F, css, el } from './theme';
 import { L } from './lang';
 import { TOUCH, touchPrefs } from './Touch';
+import { HUD_MODES, hudMode } from './HudMode';
+import { NAV_VOICE_PREFS, navVoicePref } from '../audio/NavVoice';
 
 css(`
 .menu{position:fixed;inset:0;z-index:20;font-family:${F.ui};color:${C.paper};display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:32px;
@@ -31,6 +33,9 @@ css(`
 .menu .seg button{padding:9px 13px;background:transparent;color:${C.muted};font:700 12px/1 ${F.ui};letter-spacing:.1em}
 .menu .seg button.on{background:rgba(244,241,232,.14);color:${C.paper}}
 .menu .seg button:focus-visible{outline:2px solid ${C.yellow};outline-offset:-2px}
+.menu .grp{display:inline-flex;align-items:center;gap:8px}
+/* the pause screen over the game: the dial (bottom centre on a phone) sat on the settings rows */
+body:has(.menu:not([hidden])) .hud .speedo{visibility:hidden}
 .menu .seglabel{font:700 11px/1 ${F.num};letter-spacing:.2em;color:${C.muted};margin-right:2px}
 .menu .card{min-width:300px;padding:18px 20px;border-radius:10px;box-sizing:border-box;overflow:auto;
   /* never taller than the screen: a taller card pushed the start button below a 720-px window (2026-10-23) */
@@ -173,8 +178,9 @@ export class Menu {
     onLangChange(() => this.setAccount(this.accountName));
     onLangChange(() => this.setRoom(...this.roomN));
     onLangChange((l) => { [...langSeg.children].forEach((b, i) => b.classList.toggle('on', LANGS[i] === l)); if (this.onlineN) this.setOnline(...this.onlineN); });
-    const qLabel = el('span', 'seglabel', opts); qLabel.appendChild(L('settings.quality'));
-    const qSeg = el('div', 'seg', opts);
+    const qGrp = el('span', 'grp', opts);
+    const qLabel = el('span', 'seglabel', qGrp); qLabel.appendChild(L('settings.quality'));
+    const qSeg = el('div', 'seg', qGrp);
     for (const tier of ['low', 'medium', 'high'] as QualityTier[]) {
       const b = el('button', tier === engine.quality.tier ? 'on' : '', qSeg);
       b.appendChild(L(`settings.q.${tier}` as 'settings.q.low'));
@@ -184,10 +190,35 @@ export class Menu {
         const u = new URL(location.href); u.searchParams.set('quality', tier); location.href = u.toString();
       });
     }
+    // 界面三档（ui/HudMode.ts）：只在有小地图的城里
+    if (engine.get('nav')) {
+      const hGrp = el('span', 'grp', opts);
+      const hLabel = el('span', 'seglabel', hGrp); hLabel.appendChild(L('settings.hud'));
+      const hSeg = el('div', 'seg', hGrp);
+      for (const m of HUD_MODES) {
+        const b = el('button', m === hudMode.value ? 'on' : '', hSeg);
+        b.id = `hud-${m}`;
+        b.appendChild(L(`settings.hud.${m}` as 'settings.hud.full'));
+        b.addEventListener('click', () => hudMode.set(m));
+      }
+      hudMode.onChange((v) => [...hSeg.children].forEach((x, i) => x.classList.toggle('on', HUD_MODES[i] === v)));
+      // 语音导航（audio/NavVoice.ts）
+      const vGrp = el('span', 'grp', opts);
+      const vLabel = el('span', 'seglabel', vGrp); vLabel.appendChild(L('settings.navVoice'));
+      const vSeg = el('div', 'seg', vGrp);
+      for (const p of NAV_VOICE_PREFS) {
+        const b = el('button', p === navVoicePref.value ? 'on' : '', vSeg);
+        b.id = `navvoice-${p}`;
+        b.appendChild(L(`settings.navVoice.${p}` as 'settings.navVoice.j'));
+        b.addEventListener('click', () => navVoicePref.set(p));
+      }
+      navVoicePref.onChange((v) => [...vSeg.children].forEach((x, i) => x.classList.toggle('on', NAV_VOICE_PREFS[i] === v)));
+    }
     // phones: the car accelerates by itself (QQ飞车) or a gas key does it (ui/Touch.ts)
     if (TOUCH) {
-      const gLabel = el('span', 'seglabel', opts); gLabel.appendChild(L('settings.autoGas'));
-      const gSeg = el('div', 'seg', opts);
+      const gGrp = el('span', 'grp', opts);
+      const gLabel = el('span', 'seglabel', gGrp); gLabel.appendChild(L('settings.autoGas'));
+      const gSeg = el('div', 'seg', gGrp);
       for (const on of [true, false]) {
         const b = el('button', on === touchPrefs.autoGas ? 'on' : '', gSeg);
         b.id = on ? 'autogas-on' : 'autogas-off';

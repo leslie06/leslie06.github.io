@@ -73,7 +73,9 @@ export async function install(engine: Engine): Promise<void> {
   if (!pl) return;
   const [ax, az] = project(ANCHOR.lat, ANCHOR.lon);
   const menu = new GarageMenu();
-  menu.giftPaints = () => engine.get<{ name: string; paints: readonly { color: string; name: string }[] }>('daily')?.paints ?? [];
+  // 每日任务（daily/）和点亮北京（lightup/）送的车漆
+  type Gifts = { name: string; paints: readonly { color: string; name: string }[] };
+  menu.giftPaints = () => [...engine.get<Gifts>('daily')?.paints ?? [], ...engine.get<Gifts>('lightup')?.paints ?? []];
   const thumbs = new CarThumbs(engine.renderer);
   menu.thumb = (look, ready) => thumbs.get(look, ready);
   const fleet: Mine[] = readSaved().map((p) => ({ p, car: null }));
