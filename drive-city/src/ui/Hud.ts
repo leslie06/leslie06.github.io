@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
-import { onLangChange, t } from '../core/I18n';
+import { lang, onLangChange, t } from '../core/I18n';
+import type { LightupApi } from '../lightup';
 import type { CameraApi, HudApi, PlayerApi, VehicleApi, WorldApi, ParkApi } from '../game/Contracts';
 import { C, F, css, el } from './theme';
 import { L } from './lang';
@@ -47,6 +48,7 @@ css(`
 .hud .best[hidden]{display:none}
 .hud .street{position:absolute;right:var(--hud-x);bottom:calc(var(--hud-y) + 206px);text-align:right;font:800 22px/1.2 ${F.ui};letter-spacing:.06em;color:${C.paper};text-shadow:0 2px 10px rgba(0,0,0,.6);opacity:0;transition:opacity .6s}
 .hud .street.on{opacity:1}
+.hud .street .lit{display:block;margin-top:3px;font:600 13px/1.2 ${F.ui};letter-spacing:.08em;color:${C.yellow}}
 .hud .prompt{position:absolute;left:50%;bottom:17vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:800 15px/1 ${F.ui};letter-spacing:.08em;border-left:3px solid ${C.yellow}}
 .hud .toast{position:absolute;left:50%;bottom:22vh;transform:translateX(-50%);padding:9px 16px;border-radius:6px;background:${C.inkGlass};font:700 14px/1 ${F.ui};letter-spacing:.08em;opacity:0;transition:opacity .2s}
 .hud .toast.on{opacity:1}
@@ -125,6 +127,7 @@ export class Hud implements HudApi {
   private shown = { kmh: -1, rpm: -1, red: false, gear: '', best: '', score: -1, mult: -1, angle: -1, n2o: -2, n2oOn: false };
   private bestEl: HTMLElement;
   private streetEl: HTMLDivElement;
+  private streetLit = false;
   /** The guide sign ahead, big (ui/SignCard). */
   private signCard: SignCard;
   /** 进片区、上立交时的地名标题（ui/PlaceTitle）。 */
@@ -309,7 +312,16 @@ export class Hud implements HudApi {
       this.streetPoll = 0.5;
       const where = this.engine.get<PlayerApi>('player')?.position ?? car.pos;
       const name = this.engine.get<WorldApi>('world')?.placeName?.(where.x, where.z) ?? '';
-      if (name && name !== this.street) { this.street = name; this.streetEl.textContent = name; this.streetT = 4.5; }
+      if (name && name !== this.street) { this.street = name; this.streetEl.textContent = name; this.streetT = 4.5; this.streetLit = false; }
+      // 点亮北京: a road not driven before says so under its name, with how much of the district is lit now
+      if (!this.streetLit && this.streetT > 1) {
+        const f = this.engine.get<LightupApi>('lightup')?.fresh();
+        if (f) {
+          this.streetLit = true;
+          const d = f.district ? (lang() === 'zh' ? f.district.zh : f.district.en) : '';
+          el('small', 'lit', this.streetEl).textContent = d ? t('lit.new', { d, p: f.pct < 10 ? f.pct.toFixed(1) : Math.round(f.pct) }) : t('lit.newPlain');
+        }
+      }
     }
     this.streetT -= dt;
     this.streetEl.classList.toggle('on', this.streetT > 0);

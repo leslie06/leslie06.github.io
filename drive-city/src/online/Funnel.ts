@@ -1,5 +1,5 @@
 import type { Engine, System } from '../core/Engine';
-import type { PlayerApi, WantedApi } from '../game/Contracts';
+import type { CameraApi, PlayerApi, WantedApi } from '../game/Contracts';
 import type { UiApi } from '../ui';
 import { ALIVE_KEY, steppedDownFrom } from '../core/Quality';
 
@@ -23,6 +23,8 @@ import { ALIVE_KEY, steppedDownFrom } from '../core/Quality';
  *                               就是没来得及擦——被杀了
  *   qdown                       这次开局因为上次被杀把画质自动降了一档：降之前的档（'high' / 'medium'；2026-10-25，iPhone 高画质
  *                               「开着车就重新加载了」）
+ *   foot_s drive_s exits use km hood_s    徒步和开车各多少秒、下了几次车、徒步按 F 用了几次东西、开了多少公里、引擎盖/车内视角用了多少秒
+ *                               （2026-11-10，docs/street-level-design.md D：以前答不了「玩家下不下车、下车做不做事、跑了多远」）
  */
 type Stat = Record<string, number | string>;
 const S = (): Stat | null => (typeof window !== 'undefined' ? (window as unknown as { __stat?: Stat }).__stat ?? null : null);
@@ -72,7 +74,9 @@ export function install(engine: Engine): void {
   ev.on('taxi:board', () => stat.mark('fare'));
   ev.on('campaign:passed', () => stat.mark('chpass'));
   ev.on('campaign:call', (e) => { stat.mark('call'); if (e.go) stat.mark('callgo'); });
-  ev.on('player:mode', (e) => { if (e.mode === 'onfoot') stat.mark('foot'); if (e.carjacked) stat.mark('jack'); });
+  let exits = 0, uses = 0;
+  ev.on('player:mode', (e) => { if (e.mode === 'onfoot') { stat.mark('foot'); stat.set('exits', ++exits); } if (e.carjacked) stat.mark('jack'); });
+  ev.on('player:use', () => stat.set('use', ++uses));
   ev.on('combat:swing', () => stat.mark('fight'));
   ev.on('wanted:level', (e) => { if (e.up && e.level > 0) stat.mark('wanted'); });
   ev.on('wanted:busted', () => stat.mark('busted'));
@@ -96,6 +100,7 @@ export function install(engine: Engine): void {
   // clock (minutes of play would come late) and 1/dt would read a 10 fps phone as 20.
   let played = 0, poll = 0, last = performance.now();
   const fps: number[] = [], cpu: number[] = [];
+  let footS = 0, driveS = 0, hoodS = 0, metres = 0, lastP: { x: number; z: number } | null = null;
   if (engine.lite) stat.set('lite', 0);
   engine.events.on('quality:lite', ({ on }) => { if (on) stat.mark('lite'); });
   const sys: System = {
@@ -117,6 +122,16 @@ export function install(engine: Engine): void {
         if (cpu.length) { cpu.sort((x, y) => x - y); stat.set('cpu', Math.round(cpu[cpu.length >> 1] * 10) / 10); }
         fps.length = 0; cpu.length = 0;
       }
+      // how the time is spent: on foot or at the wheel, how far, through which lens
+      const pl = engine.get<PlayerApi>('player');
+      if (pl?.mode === 'onfoot') footS += dt;
+      else {
+        driveS += dt;
+        if (engine.get<CameraApi>('camera')?.mode === 'hood') hoodS += dt;
+        const p = pl?.position;
+        if (p) { const d = lastP ? Math.hypot(p.x - lastP.x, p.z - lastP.z) : 0; if (d < 80) metres += d; (lastP ??= { x: 0, z: 0 }).x = p.x; lastP.z = p.z; }
+      }
+      if (pl?.mode === 'onfoot') lastP = null;
       aliveT -= dt;
       if (aliveT <= 0) { aliveT = 5; try { localStorage.setItem(ALIVE, JSON.stringify({ p: Math.round(played), q: engine.quality.tier })); } catch { /* private mode */ } }
       if (played >= 180) stat.mark('p3m');
@@ -125,6 +140,10 @@ export function install(engine: Engine): void {
       poll -= dt;
       if (poll > 0) return;
       poll = 1;
+      if (footS >= 1) stat.set('foot_s', Math.round(footS));
+      stat.set('drive_s', Math.round(driveS));
+      stat.set('km', Math.round(metres / 100) / 10);
+      if (hoodS >= 1) stat.set('hood_s', Math.round(hoodS));
       const p = engine.get<PlayerApi>('player')?.position;
       if (p && Math.hypot(p.x - from.x, p.z - from.z) > 30) stat.mark('move');
       if (engine.get<{ name: string; running: string | null }>('campaign')?.running) stat.mark('ch');

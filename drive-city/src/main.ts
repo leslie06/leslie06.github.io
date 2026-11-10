@@ -17,6 +17,7 @@ import { readyBodies, type BodySource } from './vehicle/Bodies';
 import * as player from './player';
 import * as damage from './damage';
 import * as traffic from './traffic';
+import * as roadFeel from './traffic/RoadFeel';
 import * as parking from './parking';
 import * as standers from './people/Standers';
 import * as people from './people';
@@ -45,6 +46,7 @@ import * as dialogue from './dialogue';
 import * as story from './story';
 import * as adventure from './adventure';
 import * as district from './district';
+import * as street from './street';
 import * as resume from './resume';
 import * as tollPlazas from './city/visual/TollPlazas';
 import * as bridgeNames from './city/visual/BridgeNames';
@@ -151,7 +153,7 @@ async function boot() {
   await vehicle.install(engine);
   await player.install(engine);
   await damage.install(engine);
-  if (worldName === 'city') { await traffic.install(engine); tollPlazas.install(engine); bridgeNames.install(engine); steam.install(engine); roofSigns.install(engine); infoBoards.install(engine); busLanes.install(engine); antiGlare.install(engine); hutongWires.install(engine); ledScreens.install(engine); soundWalls.install(engine); junctionGrid.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
+  if (worldName === 'city') { await traffic.install(engine); roadFeel.install(engine); tollPlazas.install(engine); bridgeNames.install(engine); steam.install(engine); roofSigns.install(engine); infoBoards.install(engine); busLanes.install(engine); antiGlare.install(engine); hutongWires.install(engine); ledScreens.install(engine); soundWalls.install(engine); junctionGrid.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
   if (worldName === 'city') await nav.install(engine);
   if (worldName === 'city') await travel.install(engine);
   if (worldName === 'city') lightup.install(engine);
@@ -159,6 +161,7 @@ async function boot() {
   if (worldName === 'city') { await police.install(engine); await missions.install(engine); await races.install(engine); await park.install(engine); await home.install(engine); await garage.install(engine); await underground.install(engine); await stunts.install(engine); await collect.install(engine); await checkin.install(engine); await trials.install(engine); await intro.install(engine); await events.install(engine); await npc.install(engine); await life.install(engine); await contacts.install(engine); leaderboard.install(engine); await story.install(engine); campaign.install(engine); }
   if (worldName === 'city') await adventure.install(engine);
   if (worldName === 'city') await district.install(engine);
+  if (worldName === 'city') street.install(engine);
   if (worldName === 'city') resume.install(engine);
   await fx.install(engine);
   await audio.install(engine);

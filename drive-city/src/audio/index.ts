@@ -46,6 +46,7 @@ export async function install(engine: Engine): Promise<void> {
   let engineGain: GainNode, engineFilter: BiquadFilterNode, o1: OscillatorNode, o2: OscillatorNode, o3: OscillatorNode, intakeFilter: BiquadFilterNode, intakeGain: GainNode;
   let tyreGain: GainNode, tyreFilter: BiquadFilterNode, squealGain: GainNode, s1: OscillatorNode, s2: OscillatorNode;
   let windGain: GainNode, hornGain: GainNode, nitroGain: GainNode;
+  let rollGain: GainNode, rollFilter: BiquadFilterNode, rainGain: GainNode, rainFilter: BiquadFilterNode;
   let nitroWas = false;
   let sirenGain: GainNode, sirenLfo: OscillatorNode, siren2Gain: GainNode, siren2Lfo: OscillatorNode, rotorGain: GainNode, rotorLfo: OscillatorNode;
   let trainGain: GainNode, clackLfo: OscillatorNode, hornT = 0;
@@ -110,6 +111,15 @@ export async function install(engine: Engine): Promise<void> {
     const wf = c.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 520;
     windGain = c.createGain(); windGain.gain.value = 0;
     noise(c).connect(wf).connect(windGain).connect(drivingGain);
+    // The tyres rolling (2026-11-10, docs/street-level-design.md A3): until now the tyres only sounded in a skid, so a
+    // steady 60 km/h was an engine note and nothing else. Low noise that rises with speed, a little brighter the faster.
+    rollFilter = c.createBiquadFilter(); rollFilter.type = 'lowpass'; rollFilter.frequency.value = 300; rollFilter.Q.value = 0.5;
+    rollGain = c.createGain(); rollGain.gain.value = 0;
+    noise(c).connect(rollFilter).connect(rollGain).connect(drivingGain);
+    // Rain: a hiss in the street, duller and lower on the roof of a car.
+    rainFilter = c.createBiquadFilter(); rainFilter.type = 'bandpass'; rainFilter.frequency.value = 5200; rainFilter.Q.value = 0.4;
+    rainGain = c.createGain(); rainGain.gain.value = 0;
+    noise(c).connect(rainFilter).connect(rainGain).connect(master);
     // Nitro: a gas hiss (band-passed noise) with a low roar under it, while it burns.
     const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 1500; nf.Q.value = 0.6;
     const nl = c.createBiquadFilter(); nl.type = 'lowpass'; nl.frequency.value = 180;
@@ -488,6 +498,14 @@ export async function install(engine: Engine): Promise<void> {
   // A text message: the two-note phone chime, soft enough to sit under the radio.
   engine.events.on('phone:sms', () => { if (!ctx || muted) return; const t0 = ctx.currentTime; ring(t0, 1568, 0.07, 0.25); ring(t0 + 0.12, 2093, 0.07, 0.35); });
   engine.events.on('vehicle:land', ({ airTime }) => thump(Math.min(0.8, airTime * 0.5), 55));
+  // a deck's joint, a kerb under the wheels (traffic/RoadFeel.ts): a small dull knock
+  engine.events.on('road:bump', ({ strength, kind }) => {
+    if (!ctx || muted) return;
+    const c = ctx, t = c.currentTime, f = kind === 'kerb' ? 62 : 92, a = (kind === 'kerb' ? 0.1 : 0.06) * (0.5 + strength);
+    const o = c.createOscillator(); o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.55, t + 0.12);
+    const g = c.createGain(); g.gain.setValueAtTime(a, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    o.connect(g).connect(master); o.start(t); o.stop(t + 0.2);
+  });
   engine.events.on('vehicle:shift', () => { shiftDip = 0.14; });
 
   const api: AudioApi = {
@@ -566,7 +584,14 @@ export async function install(engine: Engine): Promise<void> {
       tyreGain.gain.setTargetAtTime(paused ? 0 : skid * 0.22 * sf, t, 0.05);
       squealGain.gain.setTargetAtTime(paused ? 0 : skid * skid * 0.05 * sf, t, 0.06);
       tyreFilter.frequency.setTargetAtTime(700 + car.speed * 25, t, 0.1);
-      windGain.gain.setTargetAtTime(paused ? 0 : Math.min(0.2, car.speed * car.speed / 9000), t, 0.2);
+      // wind from town speeds on (it was v²/9000: 0.03 at 60 km/h, nothing to hear), the tyres' roll under it
+      windGain.gain.setTargetAtTime(paused ? 0 : Math.min(0.2, car.speed * car.speed / 5200), t, 0.2);
+      const rolling = off && car.spec.name !== 'bike' && car.spec.name !== 'ebike' ? 0 : Math.min(1, car.speed / 30);
+      rollGain.gain.setTargetAtTime(paused || !v.occupied ? 0 : 0.11 * Math.sqrt(rolling) * (car.grounded ? 1 : 0), t, 0.12);
+      rollFilter.frequency.setTargetAtTime(220 + car.speed * 14, t, 0.2);
+      const rain = engine.get<RenderApi>('render')?.rain ?? 0, inCar = !!v.occupied && !['bike', 'ebike', 'moto'].includes(car.spec.name);
+      rainGain.gain.setTargetAtTime(paused ? 0 : rain * (inCar ? 0.035 : 0.06), t, 0.6);
+      rainFilter.frequency.setTargetAtTime(inCar ? 1800 : 5200, t, 0.4);
       const n2o = v.nitroActive && !paused;
       nitroGain.gain.setTargetAtTime(n2o ? 0.2 : 0, t, n2o ? 0.03 : 0.12);
       if (n2o && !nitroWas && !muted) { burst(t, 700, 0.7, 0.4, 0.5); burst(t, 2600, 1.2, 0.15, 0.3); }

@@ -27,6 +27,7 @@ import { DISTRICT_EN, DISTRICT_ZH } from './i18n/district';
 import { ESTATE_EN, ESTATE_ZH } from './i18n/estate';
 import { DAILY_EN, DAILY_ZH } from './i18n/daily';
 import { REC_EN, REC_ZH } from './i18n/records';
+import { STREET_EN, STREET_ZH } from './i18n/street';
 
 const STORE_KEY = 'drivecity.lang.v1';
 
@@ -38,6 +39,7 @@ const EN = {
   ...ESTATE_EN,
   ...DAILY_EN,
   ...REC_EN,
+  ...STREET_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
@@ -84,6 +86,7 @@ const EN = {
   'hud.stuckTouch': 'Stuck? Tap here to get back on the road',
   'hud.flippedTouch': 'Tap here to put the car back on its wheels',
   'hud.camera.chase': 'CAMERA · CHASE',
+  'hud.camera.high': 'CAMERA · HIGH',
   'hud.camera.far': 'CAMERA · FAR',
   'hud.camera.near': 'CAMERA · NEAR',
   'hud.camera.hood': 'CAMERA · HOOD',
@@ -269,6 +272,8 @@ const EN = {
   'lit.paint.r2': 'City Wall Grey', 'lit.paint.r3': 'Guomao Gold', 'lit.paint.r4': 'Zhongguancun Blue', 'lit.paint.r5': 'Fifth Ring Green', 'lit.paint.changan': "Chang'an Red", 'lit.paint.km100': 'Ginkgo Yellow',
   'lit.done.r2': 'The 2nd Ring all the way round', 'lit.done.r3': 'The 3rd Ring all the way round', 'lit.done.r4': 'The 4th Ring all the way round', 'lit.done.r5': 'The 5th Ring all the way round', 'lit.done.changan': "Chang'an Avenue end to end", 'lit.done.km100': '100 km of Beijing lit',
   'lit.reward': '{what} ✓  Paint "{paint}" unlocked, ¥{cash}',
+  'lit.new': 'NEW ROAD · {d} {p}%',
+  'lit.newPlain': 'NEW ROAD',
   'settings.navVoice': 'Voice guide',
   'settings.navVoice.j': 'Beijing cabbie',
   'settings.navVoice.f': 'Standard',
@@ -785,6 +790,7 @@ const ZH: Record<TKey, string> = {
   ...ESTATE_ZH,
   ...DAILY_ZH,
   ...REC_ZH,
+  ...STREET_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',
@@ -831,6 +837,7 @@ const ZH: Record<TKey, string> = {
   'hud.stuckTouch': '卡住了？点这里回到路上',
   'hud.flippedTouch': '点这里把车翻回来',
   'hud.camera.chase': '视角 · 跟车',
+  'hud.camera.high': '视角 · 高位',
   'hud.camera.far': '视角 · 远景',
   'hud.camera.near': '视角 · 近景',
   'hud.camera.hood': '视角 · 引擎盖',
@@ -1016,6 +1023,8 @@ const ZH: Record<TKey, string> = {
   'lit.paint.r2': '城墙灰', 'lit.paint.r3': '国贸金', 'lit.paint.r4': '中关村蓝', 'lit.paint.r5': '五环绿', 'lit.paint.changan': '长安红', 'lit.paint.km100': '银杏黄',
   'lit.done.r2': '二环一圈', 'lit.done.r3': '三环一圈', 'lit.done.r4': '四环一圈', 'lit.done.r5': '五环一圈', 'lit.done.changan': '长安街全程', 'lit.done.km100': '点亮 100 公里',
   'lit.reward': '{what} ✓  解锁车漆「{paint}」，奖励 ¥{cash}',
+  'lit.new': '新点亮 · {d} {p}%',
+  'lit.newPlain': '新点亮',
   'settings.navVoice': '语音导航',
   'settings.navVoice.j': '京腔',
   'settings.navVoice.f': '普通话',

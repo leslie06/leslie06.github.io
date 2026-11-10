@@ -250,7 +250,7 @@ export async function install(engine: Engine): Promise<void> {
   const tmp = { x: 0, z: 0, dx: 0, dz: 0 };
   const camDir = new THREE.Vector3();
   const renderPos = new THREE.Vector3(), renderQuat = new THREE.Quaternion();
-  let t = 0, spawnT = 0, busT = 0;
+  let t = 0, spawnT = 0, busT = 0, roomT = 0;
   /** Cars written to each kit this frame. */
   const written = new Map<BodyType, number>();
 
@@ -499,6 +499,37 @@ export async function install(engine: Engine): Promise<void> {
     }
   });
 
+  /** A physics car carries on as distant traffic (Ghosts.ts), where it is and as it is. */
+  const toGhost = (n: Npc) => {
+    const dr = n.driver;
+    if (ghosts && dr && !n.runner && !n.rider && n.body !== 'ebike') ghosts.take({ link: dr.link, s: dr.s, lane: dr.lane, v: Math.max(0, n.car.forwardSpeed), body: n.body, upper: n.upper, lower: n.lower, taxi: n.taxi });
+  };
+  /**
+   * 车流集中到眼前（2026-11-10，docs/street-level-design.md A2，「只是在地图上开车」）：实体车的名额原来谁先占谁用，一辆停在
+   * 平行小街红灯前、镜头看不到的车能占着名额到 330 米外；名额满了，前方开过来的远景车到 120 米只能消失，所以近处比远处还稀
+   * （实测 150 米内高画质 13-40 辆、低画质 5-12 辆）。现在名额满时，镜头里有远景车开进了交接圈，就让最不值的一辆实体车让位：
+   * 镜头外 90 米以上的，或者镜头里比那辆远景车还远 60 米以上的；玩家身边 70 米内的、公交进站的、被撞停的都不动。
+   */
+  const makeRoom = () => {
+    const cam = engine.camera.position;
+    const dg = ghosts!.waitingInView(cam);
+    if (!(dg < Infinity)) return;
+    engine.camera.getWorldDirection(camDir);
+    const pv = player();
+    let worst: Npc | null = null, ws = 0;
+    for (const n of pool) {
+      if (!n.active || n.parked || n.rider || n.runner || n.held || n.bike || !n.driver || n.driver.busStop || n.driver.mode !== 'drive') continue;
+      const dx = n.car.pos.x - cam.x, dz = n.car.pos.z - cam.z, d = Math.hypot(dx, dz);
+      const seen = d < 1 || (dx * camDir.x + dz * camDir.z) / d > 0.2;
+      if (seen ? d < dg + 60 : d < 90) continue;
+      if (pv && Math.hypot(pv.car.pos.x - n.car.pos.x, pv.car.pos.z - n.car.pos.z) < 70) continue;
+      const score = d * (seen ? 1 : 2.5);
+      if (score > ws) { ws = score; worst = n; }
+    }
+    if (!worst) return;
+    toGhost(worst);
+    despawn(worst);
+  };
   const despawn = (n: Npc) => {
     n.active = false; n.driver = null; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false;
     n.car.body.setTranslation({ x: 0, y: -300, z: 0 }, false);
@@ -688,6 +719,10 @@ export async function install(engine: Engine): Promise<void> {
           }
         }
       }
+      // The pool is full and a distant car the camera looks at is about to reach the ring where it must go: a physics
+      // car nobody is looking at gives up its place (it drives on as a distant one, or is gone if that is out of view too).
+      roomT -= dt;
+      if (roomT <= 0) { roomT = 0.4; if (ghosts && driving() >= carCap()) makeRoom(); }
       if (spawnT <= 0) { spawnT = 0.2; if (driving() < carCap() && !ghosts?.adoptWaiting(engine.camera.position)) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < riderCap()) spawnRider(); }
       // Buses look for a shelter ahead on their side once a second (at the kerb of the link they are on).
       busT -= dt;
@@ -741,10 +776,7 @@ export async function install(engine: Engine): Promise<void> {
         const pv = n.runner ? player() : null;
         if (n.runner ? (pv ? Math.hypot(n.car.pos.x - pv.car.pos.x, n.car.pos.z - pv.car.pos.z) : d) > 900 : (d > 330 || (dead && (d > 90 || !inView)))) {
           // Driving away past the ring: it carries on as distant traffic.
-          if (ghosts && !dead && !n.runner && !n.rider && n.driver && n.body !== 'ebike') {
-            const dr = n.driver;
-            ghosts.take({ link: dr.link, s: dr.s, lane: dr.lane, v: Math.max(0, n.car.forwardSpeed), body: n.body, upper: n.upper, lower: n.lower, taxi: n.taxi });
-          }
+          if (!dead) toGhost(n);
           despawn(n);
         }
       }

@@ -100,3 +100,9 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
   - **街头声景**（`audio/Soundscape.ts`）：每 1.5 秒看听的人在哪儿（路名像胡同 / 二环里 / 220 米内有小区 / 在公园里 / 大马路），按钟点和季节混：鸽哨（胡同和老城白天，一群鸽子绕头顶飞过，几只哨音带多普勒）、麻雀、喜鹊（冬天多）、自行车铃、夏天白天的知了、秋天夜里的蛐蛐（都是 Web Audio 合成），收旧家电的喇叭、磨剪子戗菜刀、冬天胡同里的冰糖葫芦、小区里的「倒车，请注意」（录音，从几十米外传来、喇叭那种窄频带），公交进站、起步的报站（traffic/ 新事件 `traffic:bus`：`AiDriver.busEvent`，镜头 60 米内才发，40 米内才放）。坐在关着窗的车里整体小一半、高频滤掉。
   - **录音**：台词在 `src/audio/CityLines.ts`（193 句：主持人 184、公交报站 3、吆喝 3）→ `npx tsx scripts/voice/city.mts` 写 `assets/voice/city.json` → `tools/voice-gen/run.sh design --lines assets/voice/city.json --archetypes dj,bus`（新设计了交通台主持人和公交报站女声；吆喝用路人的中年男声）→ `... synth --lines assets/voice/city.json`（约 2 分钟）→ `node scripts/voice/city-pack.mjs` 打包到 `public/voice/city/<id>.mp3`（共 2.1 MB，用到哪句下哪句；第一次进胡同或小区先下街头那 6 句）。调频 99.6 是编的，不用真实电台名。
   - 看：`node .scratch/immersion/talk.mjs 40 "tod=7.9&timescale=3"`（切到交通台，打印下载了哪些句子：台呼、早高峰「长安街拥堵」「东三环顺畅」、到点报时）；`node .scratch/immersion/hutong.mjs 150`（人放在新大仓胡同里，收废品的喇叭和公交报站都会下载）。
+
+- **「附近」面板的「身边」一栏、街头生活上地图、时钟接着走、点亮新路的提示**（2026-11-10，`docs/street-level-design.md` 第一批 C2、A4，「下车之后，几乎没事可做」「从第一批开始做」）：
+  - 面板原来只有小飞龙的冒险一张卡。现在最上面多一栏「身边」（`adventure/index.ts` 的 `around()`，`adventure/Panel.ts`）：270 米内正在进行的街头生活、150 米内每种能用的店最近的一家（最多 4 家）、1.5 公里内最近一个没打过卡的地标，按距离排，最多 8 条；点一条把它设成地图目的地（waypoint）。
+  - 街头生活的场景（交警、环卫工除外）有了地图标记：新的 `BlipKind` `'life'`（青色圆点里两个人头，`nav/Draw.ts`），图例「街头生活（能参加）」。`LifeApi.scenes()`。
+  - 时钟接着上次的钟点（`render/index.ts`，`drivecity.clock.v1`，每 30 秒和离开页面时存）：以前每次都从 15:00 开始，早上的煎饼、太极、遛鸟要等现实 28 分钟。第一次来还是 15:00；`?tod=` 和 shot mode 照旧。
+  - 点亮北京：走路也算了（胡同和步行街车进不去）。开上一条没点亮过的路，路名下面多一行「新点亮 · 东城区 35%」（`LightupApi.fresh()`，`ui/Hud.ts`）。

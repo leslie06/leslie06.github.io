@@ -4,13 +4,19 @@ import { CG, groups } from '../core/Physics';
 import type { CameraApi, CameraMode, PlayerApi, VehicleApi } from '../game/Contracts';
 import { smoothstep, wrapAngle } from '../vehicle/Tire';
 
-interface ModeCfg { dist: number; height: number; look: number; fov: number }
+/** `wide`: degrees the lens opens with speed, from `v0` to `v1` m/s. */
+interface ModeCfg { dist: number; height: number; look: number; fov: number; wide: number; v0: number; v1: number }
 const MODES: Record<Exclude<CameraMode, 'hood'>, ModeCfg> = {
-  chase: { dist: 5.9, height: 1.8, look: 1.05, fov: 62 },
-  far: { dist: 8.4, height: 2.6, look: 1.2, fov: 58 },
-  near: { dist: 4.3, height: 1.4, look: 0.95, fov: 66 },
+  // 2026-11-10 (docs/street-level-design.md A1, 「只是在地图上开车」): the default sat 2.7 m up looking 9 degrees down through a
+  // 62 degree lens - the horizon 37% down the frame, 63% of it tarmac. Now about 2.2 m up, nearly level, a 50 degree lens:
+  // the horizon near the middle, the street and what stands at its end 1.3 times the size. The lens opens with speed from
+  // 20 km/h (a narrow lens alone reads slow). The old one is `high`.
+  chase: { dist: 6.5, height: 1.1, look: 1.32, fov: 50, wide: 20, v0: 6, v1: 40 },
+  high: { dist: 5.9, height: 1.8, look: 1.05, fov: 62, wide: 16, v0: 8, v1: 48 },
+  far: { dist: 8.4, height: 2.6, look: 1.2, fov: 58, wide: 16, v0: 8, v1: 48 },
+  near: { dist: 4.3, height: 1.4, look: 0.95, fov: 66, wide: 16, v0: 8, v1: 48 },
 };
-const ORDER: CameraMode[] = ['chase', 'far', 'near', 'hood'];
+const ORDER: CameraMode[] = ['chase', 'high', 'far', 'near', 'hood'];
 
 /**
  * GTA-style chase camera.
@@ -34,8 +40,8 @@ export class CameraRig implements CameraApi {
   private orbitPitch = 0;
   private sinceOrbit = 99;
   private shakeAmt = 0;
-  private fov = 62;
-  private dist = 5.9;
+  private fov = MODES.chase.fov;
+  private dist = MODES.chase.dist;
   private snapNext = true;
   private t = 0;
   private readonly look = new THREE.Vector3();
@@ -52,6 +58,12 @@ export class CameraRig implements CameraApi {
     // Knocking a bin or a railing flying: a little jolt, not a crash.
     engine.events.on('prop:hit', ({ kind, speed }) => { this.shake(Math.min(0.35, speed / (kind === 'rail' ? 50 : 70))); engine.input.rumble(0.15, 0.35, 70); });
     engine.events.on('vehicle:land', ({ airTime }) => { this.shake(Math.min(0.6, airTime * 0.5)); engine.input.rumble(0.3, 0.6, 120); });
+    // a bridge's joint, a kerb (traffic/RoadFeel.ts): felt more than seen
+    engine.events.on('road:bump', ({ strength, kind }) => {
+      this.shake(Math.min(0.16, 0.05 + strength * 0.12));
+      engine.input.rumble(kind === 'kerb' ? 0.3 : 0.12, 0.25 + strength * 0.3, 45);
+      try { if (typeof navigator !== 'undefined' && matchMedia('(pointer: coarse)').matches) navigator.vibrate?.(kind === 'kerb' ? 18 : 10); } catch { /* no vibration */ }
+    });
     engine.events.on('vehicle:reset', () => this.snap());
   }
 
@@ -156,7 +168,7 @@ export class CameraRig implements CameraApi {
     if (lookBack) lead.negate();
     cam.lookAt(this.look.x + lead.x, this.look.y + 0.15, this.look.z + lead.z);
     cam.rotateZ(n(23, 5) * a * 0.4);
-    const wantFov = cfg.fov + 16 * smoothstep(8, 48, speed) + this.shakeAmt * 3 + (v.nitroActive ? 10 : 0);
+    const wantFov = cfg.fov + cfg.wide * smoothstep(cfg.v0, cfg.v1, speed) + this.shakeAmt * 3 + (v.nitroActive ? 10 : 0);
     this.fov += (wantFov - this.fov) * (1 - Math.exp(-dt * 4));
     cam.fov = this.fov;
     cam.updateProjectionMatrix();

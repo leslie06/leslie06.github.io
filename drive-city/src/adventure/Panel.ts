@@ -3,7 +3,8 @@ import { t } from '../core/I18n';
 import type { UiApi } from '../ui';
 import { C, F, css, el } from '../ui/theme';
 export interface Action { label: string; run(): void; disabled?: boolean }
-export interface Card { title: string; status: string; detail: string; inventory: string; actions: Action[] }
+/** `around`: what is within a walk of the player right now (a shop, people dancing in a square, a landmark), each a tap to be led there. */
+export interface Card { title: string; status: string; detail: string; inventory: string; actions: Action[]; around?: { title: string; none: string; items: Action[] } }
 css(`
 .adventure-open{position:fixed;left:var(--hud-x);top:calc(var(--mm-top,18px) + var(--mm-h,0px) + 62px);z-index:26;border:1px solid ${C.yellowDim};border-radius:8px;padding:9px 12px;background:${C.inkGlass};color:${C.paper};font:700 13px/1.2 ${F.ui};cursor:pointer;min-height:44px}
 .adventure-open[hidden],.adventure-panel[hidden]{display:none}
@@ -17,6 +18,12 @@ body.dc-touch .adventure-open{display:none}
 .adventure-panel button{min-height:46px;padding:10px 14px;border-radius:8px;border:1px solid ${C.line};background:#22303d;color:${C.paper};font:700 14px/1.4 ${F.ui};cursor:pointer;text-align:left;touch-action:manipulation}
 .adventure-panel button:focus-visible{outline:2px solid ${C.yellow};outline-offset:2px}.adventure-panel button:hover{border-color:${C.yellow}}
 .adventure-panel button:disabled{opacity:.45;cursor:default}.adventure-panel .actions button:first-child{background:${C.yellow};color:${C.ink}}
+.adventure-panel .around{margin:14px 0 4px;padding:12px;border-radius:10px;background:#0d151c;border:1px solid ${C.line}}
+.adventure-panel .around[hidden]{display:none}
+.adventure-panel .around h3{margin:0 0 8px;font:800 13px/1.2 ${F.ui};letter-spacing:.12em;color:${C.yellow}}
+.adventure-panel .around .list{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+.adventure-panel .around button{min-height:40px;padding:7px 10px;font-weight:600;background:#1a2631}
+.adventure-panel .around p{margin:0;font-size:13px}
 @media(max-height:470px){.adventure-panel{padding:8px}.adventure-panel .sheet{max-height:calc(100dvh - 16px);padding:14px}.adventure-panel h2{margin:10px 0;font-size:20px}}
 `);
 export class NearbyPanel {
@@ -29,6 +36,7 @@ export class NearbyPanel {
   private detail: HTMLParagraphElement;
   private inventory: HTMLParagraphElement;
   private actions: HTMLDivElement;
+  private around!: HTMLDivElement;
   private shown = '';
   constructor(private engine: Engine) {
     this.launch = el('button', 'adventure-open', document.body); this.launch.hidden = true;
@@ -39,6 +47,7 @@ export class NearbyPanel {
     const sheet = el('div', 'sheet', this.root), head = el('div', 'head', sheet);
     this.head = el('span', '', head); this.closeButton = el('button', '', head);
     this.closeButton.addEventListener('click', () => this.close());
+    this.around = el('div', 'around', sheet);
     this.title = el('h2', '', sheet); this.title.id = 'adventure-title';
     this.status = el('p', 'status', sheet); this.detail = el('p', '', sheet);
     this.inventory = el('p', 'inventory', sheet); this.actions = el('div', 'actions', sheet);
@@ -67,10 +76,21 @@ export class NearbyPanel {
     if (!this.open) return;
     const card = readCard();
     this.head.textContent = t('adv.nearby'); this.closeButton.textContent = t('adv.close');
-    const key = JSON.stringify([card.title, card.status, card.detail, card.inventory, card.actions.map(a => [a.label, a.disabled])]);
+    const key = JSON.stringify([card.title, card.status, card.detail, card.inventory, card.actions.map(a => [a.label, a.disabled]), card.around?.items.map(a => a.label)]);
     if (key === this.shown) return;
     this.shown = key; this.title.textContent = card.title; this.status.textContent = card.status;
     this.detail.textContent = card.detail; this.inventory.textContent = card.inventory;
+    this.around.hidden = !card.around;
+    this.around.replaceChildren();
+    if (card.around) {
+      el('h3', '', this.around).textContent = card.around.title;
+      if (!card.around.items.length) el('p', '', this.around).textContent = card.around.none;
+      const list = el('div', 'list', this.around);
+      for (const action of card.around.items) {
+        const b = el('button', '', list); b.textContent = action.label;
+        b.addEventListener('click', () => { this.close(); action.run(); });
+      }
+    }
     this.actions.replaceChildren();
     for (const action of card.actions) {
       const b = el('button', '', this.actions); b.textContent = action.label; b.disabled = !!action.disabled;

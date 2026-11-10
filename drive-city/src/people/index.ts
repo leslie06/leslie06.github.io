@@ -110,7 +110,27 @@ export async function install(engine: Engine): Promise<void> {
   const inn: number[][] = g.out.map(() => []);
   for (const l of g.links) inn[l.to].push(l.id);
   // Nobody walks an interchange's decks and ramps (they have parapets, not pavements).
-  const walkW = (l: Link) => l.hmax > 0.3 ? 0 : SIDEWALK[l.cls] ?? 0;
+  /**
+   * 胡同里有人（2026-11-10，docs/street-level-design.md B3）：行人原来只走有人行道的路，而胡同是 service / living_street，
+   * 步行街是 pedestrian，没有人行道——名字带「胡同」的路约 190 公里，近六成一个行人都没有（帽儿胡同 60 米内 0 人）。
+   * 二环以内（build.mjs 的 old 框）和名字像胡同的这三类路现在也走人：没有人行道，贴着路边走在路面上（`latOf`）。
+   */
+  const LANE_CLS = new Set(['service', 'living_street', 'pedestrian']);
+  const laneWalk = new Int8Array(g.links.length).fill(-1);
+  const isLane = (l: Link): boolean => {
+    let v = laneWalk[l.id];
+    if (v < 0) {
+      const x = l.pts[0], z = l.pts[1];
+      v = laneWalk[l.id] = LANE_CLS.has(l.cls) && l.hmax <= 0.3 && l.hw >= 1.4
+        && ((x > -4650 && x < 2850 && z > -4350 && z < 4850) || /胡同|[巷条]$|斜街|夹道/.test(l.name ?? '')) ? 1 : 0;
+    }
+    return v === 1;
+  };
+  /** A lane's walkers keep this far inside its edge (frac 0..1 of a strip 0.8 m wide). */
+  const LANE_W = 1;
+  const walkW = (l: Link) => l.hmax > 0.3 ? 0 : SIDEWALK[l.cls] ?? (isLane(l) ? LANE_W : 0);
+  /** How far from the road's middle someone walking at `frac` is: on the pavement beyond the kerb, or in a lane, along its edge. */
+  const latOf = (l: Link, frac: number, w: number) => (isLane(l) ? Math.max(0.35, l.hw - 0.35 - frac * 0.8) : l.hw + inFrom(l, frac, w));
   const edgeOf = (id: number) => { const r = g.links[id].rev; return r >= 0 ? Math.min(id, r) : id; };
   /** How far short of `node` the pavement of `l` stops: the widest other road there plus the kerb; 0 where the road just continues. */
   const kerbAt = (l: Link, node: number): number => {
@@ -137,7 +157,7 @@ export async function install(engine: Engine): Promise<void> {
   };
   /** How far in from the kerb someone walking at `frac` of the pavement is: clear of cars parked half up on it. */
   const inFrom = (l: Link, frac: number, w: number) => Math.max(frac * w, l.parkOut ? l.parkOut + 0.4 : 0);
-  const offOf = (l: Link, p: Ped) => p.side * (l.hw + inFrom(l, p.frac, walkW(l)));
+  const offOf = (l: Link, p: Ped) => p.side * latOf(l, p.frac, walkW(l));
 
   const peds: Ped[] = Array.from({ length: cap }, () => ({
     on: false, mode: 'walk' as Mode, t: 0, hold: 0, fear: 0,
@@ -185,7 +205,7 @@ export async function install(engine: Engine): Promise<void> {
       const so = spanOf(o), s = dir > 0 ? so.a : so.b;
       for (let k = 0; k < (o.oneway ? 1 : 2); k++) {
         const side = o.oneway || k === 1 ? -1 : 1;
-        g.at(o, s, side * (o.hw + inFrom(o, p.frac, w)), at2);
+        g.at(o, s, side * latOf(o, p.frac, w), at2);
         const d = Math.hypot(at2.x - ex, at2.z - ez);
         if (d > MAX_CROSS) continue;
         // Walking on around the corner beats crossing, and a short crossing beats a long diagonal
@@ -241,7 +261,7 @@ export async function install(engine: Engine): Promise<void> {
         const lat = ((p.pos.x - cx) * vz - (p.pos.z - cz) * vx) / L;
         const side = l.oneway ? -1 : lat >= 0 ? 1 : -1;
         const s = l.cum[k - 1] + u * L;
-        g.at(l, s, side * (l.hw + inFrom(l, p.frac, w)), at2);
+        g.at(l, s, side * latOf(l, p.frac, w), at2);
         const d = Math.hypot(at2.x - p.pos.x, at2.z - p.pos.z);
         if (d < bd) { bd = d; bl = id; bs = s; bside = side; }
       }
@@ -396,7 +416,7 @@ export async function install(engine: Engine): Promise<void> {
       const l = g.links[near[Math.floor(rnd() * near.length)]];
       const w = walkW(l);
       if (!w || l.len < 8 || (l.rev >= 0 && l.rev < l.id)) continue;
-      if (h < 0 && rnd() > w / 4.5) continue;   // busier on the big roads
+      if (h < 0 && rnd() > (isLane(l) ? 2.4 : w) / 4.5) continue;   // busier on the big roads (a hutong counts as a middling one)
       const sp = spanOf(l);
       p.link = l.id; p.s = sp.a + rnd() * (sp.b - sp.a);
       p.side = l.oneway ? -1 : rnd() < 0.5 ? 1 : -1; p.dir = rnd() < 0.5 ? 1 : -1;

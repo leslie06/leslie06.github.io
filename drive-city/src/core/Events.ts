@@ -4,6 +4,8 @@ export interface GameEvents {
   'vehicle:impact': { strength: number; point: [number, number, number] };
   /** All four wheels touched down after at least `airTime` seconds off the ground. */
   'vehicle:land': { airTime: number; speed: number };
+  /** The player's car over something in the road (traffic/RoadFeel.ts): a deck's joint, a kerb. `strength` 0..1. */
+  'road:bump': { strength: number; kind: 'joint' | 'kerb' };
   'vehicle:reset': Record<string, never>;
   'vehicle:shift': { gear: number };
   /** A drift ended; `score` is what it banked (0 when it ended in a crash). */
@@ -12,6 +14,10 @@ export interface GameEvents {
   'people:hit': { x: number; z: number; speed: number; byPlayer: boolean; fair?: boolean };
   /** The player got in (`carjacked`: took a traffic car) or out of a car. */
   'player:mode': { mode: 'driving' | 'onfoot'; carjacked: boolean };
+  /** F on something on offer while on foot (a shop, somebody to talk to, a bag): `label` is the prompt it showed. */
+  'player:use': { label: string };
+  /** Something bought over a shop counter in the street (street/): the sign's trade, what, and the price paid. */
+  'street:buy': { trade: string; item: string; price: number };
   /** Someone on the pavement shouted at the player (a bubble over their head). */
   'people:shout': { x: number; z: number; text: string; follow?: { readonly x: number; readonly y: number; readonly z: number } | null; name?: string; secs?: number };
   /**

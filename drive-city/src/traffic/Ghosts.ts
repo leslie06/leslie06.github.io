@@ -171,12 +171,27 @@ export class GhostTraffic {
     return null;
   }
 
+  private seen(x: number, z: number, d: number, cam: THREE.Vector3): boolean { return d < 1 || ((x - cam.x) * this.dir.x + (z - cam.z) * this.dir.z) / d > 0.3; }
+
+  /** How far the nearest ghost in view inside R_IN is (Infinity: none): one that will be gone at R_GONE unless a place is made for it. */
+  waitingInView(cam: THREE.Vector3): number {
+    let bd = Infinity;
+    for (const c of this.cars) {
+      const d = Math.hypot(c.x - cam.x, c.z - cam.z);
+      if (d < R_IN && d < bd && this.seen(c.x, c.z, d, cam)) bd = d;
+    }
+    return bd;
+  }
+
   /** Physics room came free: the nearest ghost already within R_IN takes it (before traffic spawns one of its own). */
   adoptWaiting(cam: THREE.Vector3): boolean {
-    let best = -1, bd = R_IN;
+    // the one the camera looks at before one behind it (2026-11-10: the places go where the player is looking)
+    let best = -1, bd = Infinity;
     for (let i = 0; i < this.cars.length; i++) {
       const c = this.cars[i], d = Math.hypot(c.x - cam.x, c.z - cam.z);
-      if (d < bd) { bd = d; best = i; }
+      if (d >= R_IN) continue;
+      const score = d * (this.seen(c.x, c.z, d, cam) ? 1 : 2.2);
+      if (score < bd) { bd = score; best = i; }
     }
     if (best < 0) return false;
     const c = this.cars[best];

@@ -181,7 +181,9 @@ vec3 facEmis = vec3(0.0);
   vec2 dBay = vec2(dFdx(bayC), dFdy(bayC));
   vec2 dY = vec2(dFdx(y), dFdy(y));
   vec3 dP = texture2D(tPlaster, vWall * 0.25).rgb / uPlasterMean;
-  vec3 dB = texture2D(tBrick, vWall * 0.56).rgb / uBrickMean;   // ~24 cm bricks
+  // 24 cm bricks in 6.5 cm courses: the photo is 12 courses and 3.3 bricks to a tile, so a tile is 0.78 m. (Until 2026-11-10
+  // it was 1.79 m: bricks half a metre long, 15 cm courses - a hutong wall read as blockwork. docs/street-level-design.md B3)
+  vec3 dB = texture2D(tBrick, vWall * 1.28).rgb / uBrickMean;
   float fwU = fwidth(u);
   if (sty >= ${S.ROOF_FLAT}) {
     // Roofs and roof-top objects: concrete, grey hutong tile, glazed palace tile.
@@ -398,7 +400,7 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms, defe
   // three minutes, because the browser had to finish 14 MB of images before the game appeared.
   // (The facade's brick and plaster were awaited here until 2026-10-03: ~1 MB before anything could be
   // drawn. They now arrive like the rest, onto the facade's placeholders.)
-  const facadePhotos = later.then(() => Promise.all([tex('dark_brick_wall', 3), tex('grey_plaster', 4)]));
+  const facadePhotos = later.then(() => Promise.all([tex('dark_brick_wall', 0.78), tex('grey_plaster', 4)]));
   /**
    * Give `m` its photo maps when they arrive; until then it is a flat colour. They are asked for only
    * once `later` resolves (the spawn's tiles are in): ~3 MB of them shared the link with the network

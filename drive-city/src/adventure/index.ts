@@ -1,6 +1,7 @@
+import type { StreetApi } from '../street';
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
-import { t, type TKey } from '../core/I18n';
+import { t, type TKey, lang } from '../core/I18n';
 import { Rng } from '../core/Rng';
 import type { Actor, AdventureApi, Blip, CarLook, DialogueApi, HudApi, MissionApi, PeopleApi, PlayerApi, Speaker, VehicleApi, WorldApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
@@ -293,9 +294,29 @@ export async function install(engine: Engine): Promise<void> {
     a.push({ label: t('garage.dealerApp'), run: () => engine.get<{ name: string; dealer(): void }>('garage')?.dealer() });
     return a;
   };
+  /**
+   * 身边（2026-11-10，docs/street-level-design.md C2）：面板原来只有这一件冒险，名字叫「附近」却不列附近的事。现在最上面
+   * 列出走得到的：正在进行的街头生活（270 米内）、每种能用的店最近的一家（150 米内）、最近一个没打过卡的地标（1.5 公里内）。
+   * 点一条就把它设成地图上的目的地。
+   */
+  const around = () => {
+    const P = pl.position, items: { d: number; label: string; x: number; z: number; name: string }[] = [];
+    const say = (name: string, d: number) => t('near.row', { name, d: d < 950 ? `${Math.max(10, Math.round(d / 10) * 10)} m` : `${(d / 1000).toFixed(1)} km` });
+    for (const sc of engine.get<{ name: string; scenes?: () => { kind: string; x: number; z: number }[] }>('life')?.scenes?.() ?? []) {
+      const d = dist(P, sc), name = t(`near.life.${sc.kind}` as TKey);
+      items.push({ d, label: say(name, d), x: sc.x, z: sc.z, name });
+    }
+    for (const sh of engine.get<StreetApi>('street')?.nearby(P.x, P.z, 150).slice(0, 4) ?? []) items.push({ d: sh.d, label: say(sh.name, sh.d), x: sh.x, z: sh.z, name: sh.name });
+    const ck = engine.get<{ name: string; sites: readonly { id: string; x: number; z: number; name: { zh: string; en: string } }[]; debug: { has(id: string): boolean } }>('checkin');
+    let lm: { d: number; x: number; z: number; name: string } | null = null;
+    for (const s of ck?.sites ?? []) { const d = dist(P, s); if (d < 1500 && (!lm || d < lm.d) && !ck!.debug.has(s.id)) lm = { d, x: s.x, z: s.z, name: lang() === 'zh' ? s.name.zh : s.name.en }; }
+    if (lm) items.push({ d: lm.d, label: say(t('near.landmark', { name: lm.name }), lm.d), x: lm.x, z: lm.z, name: lm.name });
+    items.sort((a, b) => a.d - b.d);
+    return { title: t('near.title'), none: t('near.none'), items: items.slice(0, 8).map((it) => ({ label: it.label, run: () => nav.setTarget({ x: it.x, z: it.z, kind: 'waypoint', label: it.name }) })) };
+  };
   const nearbyCard = () => {
     const items = [state.clue && t('adv.itemSlip'), state.keys && t('adv.itemKeys'), state.tool === 'held' && t('adv.itemTool')].filter(Boolean).join(' · ') || t('adv.noItems');
-    return { title: t('adv.title'), status: objective(), detail: t('adv.desc'), inventory: t('adv.inventory', { hp: Math.round(initialized ? damage().health(car) : state.condition), items }), actions: actions() };
+    return { title: t('adv.title'), status: objective(), detail: t('adv.desc'), inventory: t('adv.inventory', { hp: Math.round(initialized ? damage().health(car) : state.condition), items }), actions: actions(), around: around() };
   };
   const spawnNear = (actor: Actor | null, p: { x: number; z: number }, which: 'owner' | 'mechanic' | 'driver'): Actor | null => {
     if (actor?.alive && dist(pl.position, actor.pos) > 400 && which !== 'mechanic') { actor.release('vanish'); return null; }

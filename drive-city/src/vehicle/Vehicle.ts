@@ -190,6 +190,12 @@ export class Vehicle {
   private donutArmed = false;
   onShift?: (gear: number) => void;
 
+  /**
+   * Metres the road stands above its collider at (x, z), for the wheel rays: null (flat) for every car but the one a
+   * world gives a road to feel (2026-11-10: the city's ground is one flat slab, and a drive had nothing to feel).
+   */
+  roadProfile: ((x: number, z: number) => number) | null = null;
+
   constructor(private readonly physics: Physics, readonly spec: VehicleSpec, position: THREE.Vector3Like, yaw = 0) {
     const R = physics.R;
     const s = spec;
@@ -330,7 +336,8 @@ export class Vehicle {
       }
       grounded++;
       w.contact = true;
-      const len = hit.timeOfImpact - s.wheelRadius;
+      // the road's own small heights under this wheel (traffic/RoadFeel.ts: joints on a bridge, a kerb, rough paving)
+      const len = hit.timeOfImpact - s.wheelRadius - (this.roadProfile ? this.roadProfile(_mount.x + _down.x * hit.timeOfImpact, _mount.z + _down.z * hit.timeOfImpact) : 0);
       const minLen = sus.restLength - sus.travel;
       w.springLen = Math.max(len, minLen);
       w.compression = sus.restLength - w.springLen;

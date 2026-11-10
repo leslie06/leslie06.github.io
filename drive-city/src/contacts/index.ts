@@ -1,3 +1,4 @@
+import type { StreetApi } from '../street';
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { t, type TKey } from '../core/I18n';
@@ -196,6 +197,9 @@ export async function install(engine: Engine): Promise<void> {
       if (heartsOf(id) >= 3) opts.push({ label: t('con.liujie.optNews'), go: () => { engine.get<{ name: string; gossip(s: Speaker): boolean }>('life')?.gossip(sp); } });
     }
     if (id === 'feilong') opts.push({ label: t('con.feilong.optDuel'), go: () => { duel = 60; dlg()?.say(sp, t('con.feilong.duelOn'), { prio: 2 }); } });
+    // a gift in hand from a shop in the street (street/): theirs for the asking
+    const street = engine.get<StreetApi>('street'), gift = street?.gift;
+    if (gift) opts.unshift({ label: t('st.gift.give', { item: t(gift.name) }), go: () => { const n = street!.giveGift(); if (n) add(id, n); dlg()?.say(sp, t('st.gift.thanks'), { prio: 2 }); } });
     if (opts.length < 2) opts.push({ label: t('con.optChat'), go: () => dlg()?.say(sp, t(h.d.chat[Math.floor(rnd() * h.d.chat.length)]), { prio: 2 }) });
     opts.push({ label: t('con.optBye'), go: () => {} });
     dlg()?.ask(sp, t(`con.${id}.greet` as TKey), opts.slice(0, 3).map((o) => o.label), (i) => opts[i]?.go(), { prio: 3, timeout: 15, fallback: opts.length - 1 });

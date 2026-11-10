@@ -418,7 +418,7 @@ export async function install(engine: Engine): Promise<void> {
         if (use && dUse < Math.min(dCar, dBike)) { if (free) prompt = use.label; }
         else { use = null; nearCar = (!!target || !!bike) && free; if (nearCar) prompt = t('hud.enterCar'); }
         if (v.inputEnabled && inp.enterPressed && free) {
-          if (use) use.use(); else if (bike) takeSharedBike(bike); else if (target) enterCar(target);
+          if (use) { engine.events.emit('player:use', { label: use.label }); use.use(); } else if (bike) takeSharedBike(bike); else if (target) enterCar(target);
         }
       } else if (mode === 'driving' && !leapS) {
         // an offer in reach of the car (the hijack's leap) has F instead of getting out

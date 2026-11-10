@@ -68,7 +68,7 @@ export interface VehicleApi extends System {
   roadPoseNear?(x: number, y: number, z: number): { pos: { x: number; y: number; z: number }; yaw: number } | null;
 }
 
-export type CameraMode = 'chase' | 'far' | 'near' | 'hood';
+export type CameraMode = 'chase' | 'high' | 'far' | 'near' | 'hood';
 
 export interface CameraApi extends System {
   mode: CameraMode;
@@ -233,7 +233,7 @@ export interface HomeApi extends System {
 
 // --- Navigation (nav/): routes, GPS target, minimap and map blips -------------------------------
 
-export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact' | 'story' | 'friend' | 'shop' | 'estate' | 'estateSale' | 'safehouse';
+export type BlipKind = 'police' | 'target' | 'pickup' | 'dropoff' | 'car' | 'landmark' | 'landmarkDone' | 'trial' | 'jump' | 'collect' | 'parking' | 'shortcut' | 'encounter' | 'suspect' | 'contact' | 'story' | 'friend' | 'shop' | 'estate' | 'estateSale' | 'safehouse' | 'life';
 /** A marker on the minimap and map. `heading` (atan2(x, z)) turns it into an arrow. */
 export interface Blip { kind: BlipKind; x: number; z: number; heading?: number; flash?: boolean; label?: string;
   /** The label's colour (a contact's own), else the map's default. */

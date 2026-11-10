@@ -23,6 +23,7 @@ export const BLIP_COLOR: Record<MarkKind, string> = {
   friend: '#35e0c2',
   /** 南锣鼓巷 and its shops (district/): a red lantern. */
   shop: '#d8322a',
+  life: '#35b6a0',
   /** 产业 (estate/): yours, gold; for sale, grey; the safehouse a green house. */
   estate: '#e8b93a', estateSale: '#9a958a', safehouse: '#3ccf72',
 };
@@ -162,6 +163,13 @@ export function drawBlip(ctx: CanvasRenderingContext2D, kind: MarkKind, x: numbe
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(x, y - r * 0.22, r * 0.3, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(x, y + r * 0.42, r * 0.5, r * 0.3, 0, Math.PI, 0); ctx.fill();
+      break;
+    }
+    case 'life': {
+      // Something going on in the street to join or watch (life/): a teal disc with two heads.
+      disc(ctx, x, y, r, col);
+      ctx.fillStyle = '#fff';
+      for (const sx of [-0.32, 0.32]) { ctx.beginPath(); ctx.arc(x + sx * r, y - r * 0.12, r * 0.24, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.ellipse(x + sx * r, y + r * 0.46, r * 0.3, r * 0.24, 0, Math.PI, 0); ctx.fill(); }
       break;
     }
     case 'shop': {

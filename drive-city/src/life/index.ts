@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { t, type TKey } from '../core/I18n';
 import { Rng } from '../core/Rng';
-import type { Actor, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RenderApi, Speaker, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
+import type { Actor, Blip, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RenderApi, Speaker, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import type { Link } from '../traffic/LaneGraph';
 import type { MusicKind, MusicSource } from '../audio/StreetMusic';
@@ -39,6 +39,8 @@ export interface LifeApi extends System {
   gossip(who: Speaker): boolean;
   /** What is playing in the street, for audio/. */
   readonly music: readonly MusicSource[];
+  /** The scenes up now that the player can join or use (not the traffic policeman, not the sweeper): for the map and the 附近 panel. */
+  scenes(): { kind: string; x: number; z: number }[];
   debug: { spawn(kind: Kind, x?: number, z?: number): boolean; sites(): { square: number[][]; park: number[][] }; bodies(): { kind: string; mass: number; sleeping: boolean; type: number }[]; scenes(): { kind: Kind; x: number; z: number; yaw: number; cast: number; state: string; join: { x: number; z: number } | null; people: { x: number; z: number }[]; props: { kind: string; x: number; y: number; z: number; solid: boolean }[] }[]; clear(): void };
 }
 
@@ -688,10 +690,19 @@ export async function install(engine: Engine): Promise<void> {
 
   let dirT = 0;
   const music: MusicSource[] = [];
+  // On the map (2026-11-10, docs/street-level-design.md C2): the scenes had no mark at all, and their F only showed from
+  // a metre or two - ten kinds of street life nobody found.
+  const lifeBlips: Blip[] = [];
+  engine.get<NavApi>('nav')?.addBlips(() => {
+    lifeBlips.length = 0;
+    for (const sc of scenes) if (sc.kind !== 'police' && sc.kind !== 'sweeper') lifeBlips.push({ kind: 'life', x: sc.x, z: sc.z });
+    return lifeBlips;
+  });
   const api: LifeApi = {
     name: 'life',
     get music() { return music; },
     gossip: (who) => gossip(who),
+    scenes: () => scenes.filter((sc) => sc.kind !== 'police' && sc.kind !== 'sweeper').map((sc) => ({ kind: sc.kind, x: sc.x, z: sc.z })),
     debug: {
       spawn: (kind, x, z) => { load(); focus = x !== undefined && z !== undefined ? { x, z } : null; const ok = !!start(kind); focus = null; return ok; },
       sites: () => sites,

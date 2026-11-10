@@ -10,7 +10,9 @@ import { CELL, ROUTE_DONE, Roads, cellOf, decodeKeys, encodeKeys, keyOf, keyX, k
  * 二环到五环和长安街开了多少。二环到五环各开一圈（粗格子的 85%）、长安街全程、点亮 100 公里，各送一种车漆
  * （车库里金圈的那排，和每日任务的放在一起）和一笔钱。
  * 存档 `drivecity.lightup.v1`（格子坐标，见 `Grid.ts`；跟着云存档走），`drivecity.lightup.done` 是拿过的奖励。
- * 只记开车（含两轮车）经过的格子，人走路不算；shot mode 不记。
+ * 开车（含两轮车）和走路经过的格子都记（2026-11-10 起走路也算：胡同和步行街车进不去）；shot mode 不记。
+ * `fresh()`：刚点亮了没开过的路（docs/street-level-design.md A4）——HUD 在路名下面写「新点亮 · 东城区 35%」，跑图时不用开地图
+ * 也知道这条路是新的。
  */
 const KEY = 'drivecity.lightup.v1', DONE_KEY = 'drivecity.lightup.done', VIEW_KEY = 'drivecity.lightup.view';
 /** Cells within this of the car's path light up (both carriageways of most roads). */
@@ -43,6 +45,8 @@ export interface LightupApi extends System {
   view: boolean;
   /** Paints won, for the garage. */
   readonly paints: readonly { color: string; name: string }[];
+  /** A road cell not driven before lit within the last few seconds: its district and how much of that is lit now (null: no district there). */
+  fresh(): { district: District | null; pct: number } | null;
 }
 
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -64,6 +68,8 @@ export function install(engine: Engine): void {
   let version = 0, dirty = false, saveT = 0, checkT = 0, checkedAt = -1, poll = 0;
   let lastX = NaN, lastZ = NaN;
   let view = read(VIEW_KEY) !== '0';
+  /** Seconds since a new road cell lit, the district it is in, and the lit road cells per district (kept up once the roads are read). */
+  let freshT = 99, freshD = 255, perDistrict: number[] | null = null;
 
   function bump(k: number): void {
     const b = keyOf(keyX(k) >> 4, keyZ(k) >> 4);
@@ -76,6 +82,15 @@ export function install(engine: Engine): void {
       const k = keyOf(cx, cz);
       if (visited.has(k)) continue;
       visited.add(k); bump(k); version++; dirty = true;
+      if (roads?.ready) {
+        const d = roads.cells.get(k);
+        if (d === undefined) continue;
+        // counted once from the save (this cell in it), then kept up cell by cell
+        if (!perDistrict) perDistrict = roads.stats(visited).perDistrict;
+        else if (d !== 255) perDistrict[d]++;
+        // the cell under the car, not the ones beside it (they are the other carriageway, or nothing)
+        if (dx === 0 && dz === 0) { freshT = 0; freshD = d; }
+      }
     }
   };
   const save = () => { if (dirty) { dirty = false; write(KEY, encodeKeys(visited)); } };
@@ -118,8 +133,14 @@ export function install(engine: Engine): void {
     get view() { return view; },
     set view(v) { view = v; write(VIEW_KEY, v ? '1' : '0'); },
     get paints() { return REWARDS.filter((r) => done.has(r.id)).map((r) => ({ color: r.paint, name: t(r.name) })); },
+    fresh() {
+      if (freshT > 4 || !roads?.ready) return null;
+      const d = freshD === 255 ? null : roads.districts[freshD] ?? null, total = d ? roads.perDistrict[freshD] : 0;
+      return { district: d, pct: d && total && perDistrict ? Math.min(100, perDistrict[freshD] / total * 100) : 0 };
+    },
     update(dt) {
       if (shot || engine.paused) return;
+      freshT += dt;
       // the road cells, 2 ms a frame once anything is lit (the rewards need them; the map finishes them if opened first)
       if (districts && visited.size && !roads?.ready) { roads ??= new Roads(net, districts); roads.build(engine.lite ? 1 : 2); }
       if ((saveT += dt) > 15) { saveT = 0; save(); }
@@ -127,9 +148,10 @@ export function install(engine: Engine): void {
       if (version !== checkedAt && (checkT += dt) > 6) { checkT = 0; checkedAt = version; check(); }
       if ((poll -= dt) > 0) return;
       poll = 0.2;
-      const v = engine.get<VehicleApi>('vehicle');
-      if (!v?.occupied || engine.get<PlayerApi>('player')?.mode !== 'driving') { lastX = NaN; return; }
-      const p = v.car.pos;
+      const v = engine.get<VehicleApi>('vehicle'), pl = engine.get<PlayerApi>('player');
+      const foot = pl?.mode === 'onfoot' ? pl.foot : null;
+      if (!foot && !v?.occupied) { lastX = NaN; return; }
+      const p = foot ? foot.pos : v!.car.pos;
       const d = Math.hypot(p.x - lastX, p.z - lastZ);
       // a jump (快速前往, a reset): start again from here
       if (!(d < 150)) light(p.x, p.z);

@@ -53,6 +53,11 @@ export interface DistrictApi extends System {
   readonly busy: boolean;
   /** Bought or won (a save key, `hat:cap`). */
   hasWear(key: string): boolean;
+  /**
+   * The clothes shop's rails or the barber's dyes at a counter anywhere in the city (street/, 2026-11-10): the same
+   * things, owned and worn in the same save, under that shop's own board. False if the panel could not open.
+   */
+  wearPanel(which: 'clothes' | 'hair', sign: string, greet: string): boolean;
   /** A 每日任务 stamp's wear (daily/): it is the player's, in the shop and the wardrobe. False if unknown or had. */
   grant(key: string): boolean;
   debug: {
@@ -1026,6 +1031,11 @@ export async function install(engine: Engine): Promise<void> {
     get music() { return music; },
     get saved() { return save; },
     hasWear: (key) => save.owned.includes(key),
+    wearPanel(which, sign, greet) {
+      const list = which === 'hair' ? HAIR : WARDROBE.filter((w) => !w.gift || hasWear(w, save.owned));
+      const again = (): boolean => panel.render(sign, greet, missions()?.cash ?? 0, wearRows(list, () => { again(); }));
+      return again();
+    },
     grant(key) {
       const w = WARDROBE.find((q) => ownKey(q) === key) ?? null;
       if (!w || save.owned.includes(key)) return false;

@@ -71,3 +71,5 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
   - **在哪看**：排行榜里每条计时赛的榜下面多一段「纪录史」（谁、用时、日期时间、单人计时赛 / N 人联机赛，新的在前，写着一共被刷新过几次）；房间面板「一起玩」选赛道的下拉框每条写「纪录 0:50.22 阿飞」或「还没有纪录」；联机赛开局提示带「要破的纪录」。
   - **名字**：纪录用排行榜的昵称（排行榜面板里改），房间里显示的是账号名或「游客」编号，两个可能不一样。
   - 测：`node ../stats/test.mjs`（纪录 8 条）；端到端 `(cd ../stats && DB_FILE=/tmp/rec-test.sqlite PORT=8790 node server.mjs) & FROZEN=1 npx vite --port 5198` 然后 `node .scratch/rec/race.mjs outDir`（A 建房间 B 进来 → 下拉框「还没有纪录」→ 京通快速路联机赛（沿赛道 60 米一步，够服务器 40 秒的下限）→ A 第一个纪录、B 看到、结果卡 🏆 → 下拉框写 A 的纪录 → B 单人计时赛更快：破了 A 的、A 轮询听到 → 慢的不记 → 排行榜纪录史两行、新的在前，10 条）。`.scratch/mp/play.mjs` 原来的 25 条也都过。
+
+- **徒步和跑图的埋点**（2026-11-10，`docs/street-level-design.md` 第一批 D）：`online/Funnel.ts` 多记 `foot_s`、`drive_s`（徒步和开车的秒数）、`exits`（下车次数）、`use`（徒步按 F 用了几次东西，新事件 `player:use`）、`km`（开了多少公里）、`hood_s`（引擎盖视角的秒数）。服务器不用改：`worker.js` 的 `funnel()` 对所有数字字段都算 p25 / p50 / p75；看板上要显示得另加一行（没做）。`__stat` 序列化后不能超过 2048 字符，这次加的约 60 个字符。

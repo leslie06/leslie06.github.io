@@ -43,6 +43,8 @@ const engineFrozen = (e: Engine) => e.paused;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const COS_1DEG = Math.cos(THREE.MathUtils.degToRad(1));
 
+const CLOCK_KEY = 'drivecity.clock.v1';
+
 class Render implements RenderSystem {
   readonly name = 'render';
   timeOfDay: number;
@@ -83,6 +85,9 @@ class Render implements RenderSystem {
   /** Overcast zones (`addOvercast`), and the overcast now (eased towards theirs). */
   private zones: { x: number; z: number; inner: number; outer: number; amount: number }[] = [];
   private cloud = 0;
+  private keepClock = false;
+  private clockT = 0;
+  private saveClock: (() => void) | null = null;
 
   constructor(private engine: Engine) {
     const p = new URLSearchParams(location.search);
@@ -90,6 +95,17 @@ class Render implements RenderSystem {
     const tod = num('tod'), rain = num('rain'), ts = num('timescale');
     this.defaultTime = tod !== null ? wrap24(tod) : 15;   // 15:00: warm but not into the sun on the westbound spawn
     this.timeOfDay = this.defaultTime;
+    // The clock carries on where the last session left it (2026-11-10, docs/street-level-design.md C2): every session
+    // began at 15:00, so the morning's street life (煎饼, 太极, 遛鸟) was 28 real minutes away and nobody saw it.
+    // A first visit still starts at 15:00; `?tod=` and shot mode fix the clock as before.
+    this.keepClock = tod === null && !shotMode;
+    if (this.keepClock) {
+      try { const v = localStorage.getItem(CLOCK_KEY), h = Number(v); if (v !== null && Number.isFinite(h)) this.timeOfDay = wrap24(h); } catch { /* private mode */ }
+      const save = () => { try { localStorage.setItem(CLOCK_KEY, this.timeOfDay.toFixed(2)); } catch { /* private mode */ } };
+      this.saveClock = save;
+      addEventListener('pagehide', save);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+    }
     this.timeScale = ts !== null ? ts : tod !== null || shotMode ? 0 : 0.5;
     this.rain = rain !== null ? clamp01(rain) : 0;
     this.wetness = this.rain;
@@ -163,6 +179,7 @@ class Render implements RenderSystem {
 
   update(dt: number): void {
     if (dt > 0 && this.timeScale !== 0) this.timeOfDay += dt * this.timeScale / 60;
+    if (this.keepClock && (this.clockT += dt) > 30) { this.clockT = 0; this.saveClock?.(); }
     this.timeOfDay = wrap24(this.timeOfDay);
     this.rain = clamp01(this.rain);
     // Somebody set the clock (a pose, a debug key): exposure and the env map jump with it.
