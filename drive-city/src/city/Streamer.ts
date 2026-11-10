@@ -133,6 +133,10 @@ export async function spawnTileWorkers(n = workerCount()): Promise<Worker[]> {
 export class CityStreamer implements System {
   /** Zones that clear only the street (trees, lamps, kerb furniture), never a building: the footbridges' decks and stairs. Set before the first update. */
   streetClear: number[][] = [];
+  /** Zones where only the lamps and the railings go (长安街's own lamps stand there instead, visual/ChanganLamps.ts). */
+  lampClear: number[][] = [];
+  /** More lamp heads (x, z pairs) for render/StreetLights: lamps not from the tiles (长安街's). */
+  extraHeads: number[] = [];
   /** Each clear zone's and footprint's box, for picking the ones near a tile (tens of thousands with the railways'). */
   private zoneBox = new WeakMap<number[], number[]>();
   name = 'cityStreamer';
@@ -396,7 +400,7 @@ export class CityStreamer implements System {
       return b[2] > x0 && b[0] < x1 && b[3] > z0 && b[1] < z1;
     };
     const R = 120, roads = this.roadsNear(ix * T - R, iz * T - R, (ix + 1) * T + R, (iz + 1) * T + R);
-    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, document.baseURI).href, footprints: this.footprints.filter(near), clear: this.clear.filter(near), street: this.streetClear.filter(near), near: roads });
+    w.postMessage({ key: k, url: new URL(`${BASE}city/t_${k}.json`, document.baseURI).href, footprints: this.footprints.filter(near), clear: this.clear.filter(near), street: this.streetClear.filter(near), lampClear: this.lampClear.filter(near), near: roads });
   }
 
   private build(res: TileResult): void {
@@ -553,8 +557,9 @@ export class CityStreamer implements System {
     if (!render?.setStreetLamps) return;
     let n = 0;
     for (const t of this.tiles.values()) n += t.lamps.length / 3 + t.deckLamps.length / 4;
-    const out = new Float32Array(n * 2);
-    let k = 0;
+    const out = new Float32Array(n * 2 + this.extraHeads.length);
+    out.set(this.extraHeads);
+    let k = this.extraHeads.length;
     for (const t of this.tiles.values()) {
       const l = t.lamps;
       for (let i = 0; i < l.length; i += 3, k += 2) { out[k] = l[i] + Math.sin(l[i + 2]) * LAMP_REACH; out[k + 1] = l[i + 1] + Math.cos(l[i + 2]) * LAMP_REACH; }

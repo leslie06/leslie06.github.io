@@ -130,8 +130,8 @@ export function install(engine: Engine): void {
   if (new URLSearchParams(location.search).get('infoboards') === '0') return;
   const world = engine.get<WorldApi & { routes?: Routes }>('world'), net = world?.routes?.net;
   if (!net) return;
-  const signs = engine.get<GuideSignApi>('guideSigns')?.signs ?? [];
-  const boards = placeBoards(net, signs.map((s) => ({ x: s.x, z: s.z })));
+  // worked out a few seconds in, not in the boot (~60 ms on a desktop)
+  let boards: InfoBoard[] | null = null, wait = 5;
   const render = engine.get<RenderSystem & RenderApi>('render');
   const root = new THREE.Group();
   root.name = 'info-boards';
@@ -171,6 +171,10 @@ export function install(engine: Engine): void {
   engine.add({
     name: 'infoBoards',
     update(dt) {
+      if (!boards) {
+        if ((wait -= dt) > 0) return;
+        boards = placeBoards(net, (engine.get<GuideSignApi>('guideSigns')?.signs ?? []).map((s) => ({ x: s.x, z: s.z })));
+      }
       if ((poll -= dt) > 0) return;
       poll = 1;
       const cam = engine.camera.position, slot = Math.floor(Date.now() / 120000), hour = render?.timeOfDay ?? 12;

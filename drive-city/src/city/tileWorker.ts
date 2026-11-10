@@ -9,7 +9,7 @@ import { buildRoads } from './Roads';
 import { buildAreas } from './Areas';
 import { placeFurniture, type Furniture } from './visual/StreetFurniture';
 import { dropParked, placeParking } from './visual/Parking';
-import { clearStreet, inside, overlaps } from './Clear';
+import { clearStreet, dropInside, inside, overlaps } from './Clear';
 import type * as THREE from 'three';
 
 export interface PackedGeometry { name: string; attrs: { name: string; array: Float32Array; itemSize: number }[]; index?: Uint32Array }
@@ -41,10 +41,10 @@ function pack(name: string, g: THREE.BufferGeometry | null, out: PackedGeometry[
   out.push({ name, attrs, index });
 }
 
-self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][]; street?: number[][]; near?: RoadPiece[] } | { ping: true }>) => {
+self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints: number[][]; clear?: number[][]; street?: number[][]; lampClear?: number[][]; near?: RoadPiece[] } | { ping: true }>) => {
   // spawnTileWorkers: loaded, so the other workers will find this script in the cache
   if ('ping' in ev.data) { (self as unknown as Worker).postMessage({ ping: true }); return; }
-  const { key, url, footprints, clear = [], street: streetOnly = [], near = [] } = ev.data;
+  const { key, url, footprints, clear = [], street: streetOnly = [], lampClear = [], near = [] } = ev.data;
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -69,6 +69,8 @@ self.onmessage = async (ev: MessageEvent<{ key: string; url: string; footprints:
     // tree pits under the street trees the clear zones leave standing
     const zones = streetOnly.length ? [...clear, ...streetOnly] : clear;
     const street = clearStreet({ trees: data.trees, lamps: data.lamps, furniture: placeFurniture(data.roads, data.crossings, data.stops) }, zones);
+    // 长安街（visual/ChanganLamps.ts）：只换路灯、去掉白护栏，行道树留着
+    if (lampClear.length) { street.lamps = dropInside(street.lamps, 3, lampClear); street.furniture.rail = dropInside(street.furniture.rail, 5, lampClear, 0, 2); }
     // Cars parked along the kerbs, clear of what the street keeps there and of the zones.
     street.furniture.park = dropParked(placeParking(data.roads, data.crossings, data.stops, street.trees, street.lamps, street.furniture.bike, street.furniture.bin, data.ctx), zones);
     const rm = buildRoads(data.roads, data.crossings, deck, deckLamps, data.ctx, street.trees);

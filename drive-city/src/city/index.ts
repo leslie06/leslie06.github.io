@@ -1,3 +1,4 @@
+import * as changanLamps from './visual/ChanganLamps';
 import { afterTitle, boot } from '../core/Boot';
 import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
@@ -360,6 +361,8 @@ export async function install(engine: Engine): Promise<void> {
   const streamer = new CityStreamer(engine, manifest, mats, env, footprints, await tileWorkers, clear, landmarkTrees);
   streamer.setNetwork(network);
   streamer.streetClear = [...(footbridges ? footbridgeZones(footbridges) : []), ...(rail ? railZones(rail) : [])];
+  // 长安街的华灯（visual/ChanganLamps.ts）：原来的路灯和护栏在建网格时就去掉，要在第一批分块之前
+  if (network) changanLamps.install(engine, streamer, network);
   // nothing stands in a trench: no tree, lamp, bin or building
   if (tunnels) clear.push(...trenchZones(tunnels));
   streamer.onDetailChange = (keys) => sky?.setDetailed(keys);
