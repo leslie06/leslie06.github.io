@@ -20,6 +20,10 @@ export interface GameEvents {
   'street:buy': { trade: string; item: string; price: number };
   /** A ride on the underground (travel/Metro.ts): the stations' names and how many stops. */
   'metro:ride': { from: string; to: string; stops: number };
+  /** 上了公交、坐上出租车定了去哪（travel/Ride.ts）：`n` 是这一局第几次。 */
+  'ride:board': { kind: 'bus' | 'taxi'; n: number };
+  /** 下车了：坐了多少米，付了多少；`skipped` 是出租车按跳跃键直接到的。 */
+  'ride:end': { kind: 'bus' | 'taxi'; m: number; pay: number; skipped: boolean };
   /** Someone on the pavement shouted at the player (a bubble over their head). */
   'people:shout': { x: number; z: number; text: string; follow?: { readonly x: number; readonly y: number; readonly z: number } | null; name?: string; secs?: number };
   /**

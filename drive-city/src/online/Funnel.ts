@@ -84,6 +84,7 @@ export function install(engine: Engine): void {
   });
   ev.on('street:buy', () => stat.set('buy', ++buys));
   ev.on('metro:ride', () => stat.set('metro', ++rides));
+  ev.on('ride:board', (e) => stat.set(e.kind === 'bus' ? 'bus' : 'cab', e.n));
   ev.on('combat:swing', () => stat.mark('fight'));
   ev.on('wanted:level', (e) => { if (e.up && e.level > 0) stat.mark('wanted'); });
   ev.on('wanted:busted', () => stat.mark('busted'));

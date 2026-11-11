@@ -342,6 +342,7 @@ export async function install(engine: Engine): Promise<void> {
         prevFeet.copy(curFeet);
         foot.pos.copy(rideSeat.pos); foot.yaw = rideSeat.yaw; foot.vel.set(0, 0, 0);
         curFeet.copy(foot.pos);
+        jumpLatch = false;   // a jump pressed in the seat (a taxi's skip) is not a hop on getting out
         return;
       }
       const inp = engine.input.state;
@@ -413,12 +414,20 @@ export async function install(engine: Engine): Promise<void> {
         const dCar = target ? Math.hypot(target.pos.x - foot.pos.x, target.pos.z - foot.pos.z) - 1.2 : Infinity;   // a car is big: measured to its side, not its middle
         const dBike = bike ? Math.hypot(bike.x - foot.pos.x, bike.z - foot.pos.z) : Infinity;
         let use: Interaction | null = null, dUse = Infinity;
-        for (const o of offered) { const d = Math.hypot(o.x - foot.pos.x, o.z - foot.pos.z); if (d <= o.r && d < dUse) { dUse = d; use = o; } }
+        for (const o of offered) { if (o.riding) continue; const d = Math.hypot(o.x - foot.pos.x, o.z - foot.pos.z); if (d <= o.r && d < dUse) { dUse = d; use = o; } }
         const free = !foot.knock && !entering;
         if (use && dUse < Math.min(dCar, dBike)) { if (free) prompt = use.label; }
         else { use = null; nearCar = (!!target || !!bike) && free; if (nearCar) prompt = t('hud.enterCar'); }
         if (v.inputEnabled && inp.enterPressed && free) {
           if (use) { engine.events.emit('player:use', { label: use.label, kind: use.kind }); use.use(); } else if (bike) takeSharedBike(bike); else if (target) enterCar(target);
+        }
+      } else if (mode === 'onfoot' && rideSeat) {
+        // in a seat (a passenger on a bus, in a taxi: travel/Ride.ts): only what is offered to someone in a seat
+        let use: Interaction | null = null;
+        for (const o of offered) if (o.riding) { use = o; break; }
+        if (use) {
+          prompt = use.label;
+          if (v.inputEnabled && inp.enterPressed) { engine.events.emit('player:use', { label: use.label, kind: use.kind }); use.use(); }
         }
       } else if (mode === 'driving' && !leapS) {
         // an offer in reach of the car (the hijack's leap) has F instead of getting out

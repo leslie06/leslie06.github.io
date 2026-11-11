@@ -125,6 +125,35 @@ describe('Router', () => {
 
 const NETWORK = fileURLToPath(new URL('../../public/city/network.json', import.meta.url));
 
+describe('Router.routeFrom (a taxi with a fare, travel/Ride.ts)', () => {
+  it('starts on the link the driver is on and ends where the plain route does', () => {
+    const g = new LaneGraph(net(NODES, [[0, 1], [2, 3], [1, 4], [4, 2], [1, 5], [5, 2]]));
+    const router = new Router(g);
+    const on = g.links.find((l) => l.from === 0 && l.to === 1)!;
+    const r = router.routeFrom(on.id, 50, 250, 0)!;
+    expect(r).not.toBeNull();
+    expect(r.links[0]).toBe(on.id);
+    expect(legal(g, r)).toBe(true);
+    expect(r.len).toBeCloseTo(50 + NORTH + 50, 1);
+    // where on the last link it ends: 50 m along 2 -> 3
+    const last = g.links[r.links[r.links.length - 1]];
+    expect([last.from, last.to]).toEqual([2, 3]);
+    expect(r.endS).toBeCloseTo(50, 1);
+  });
+
+  it('goes round when the target is behind on the same link, and says so when there is no way', () => {
+    const g = new LaneGraph(net(NODES, [[0, 1], [2, 3], [1, 4], [4, 2], [1, 5], [5, 2]]));
+    const router = new Router(g);
+    const on = g.links.find((l) => l.from === 0 && l.to === 1)!;
+    // 80 m along 0 -> 1, the target 30 m along it: on to node 1 and back along 1 -> 0
+    const r = router.routeFrom(on.id, 80, -70, 0)!;
+    expect(r.links[0]).toBe(on.id);
+    expect(r.links.length).toBeGreaterThan(1);
+    expect(legal(g, r)).toBe(true);
+    expect(router.routeFrom(99999, 0, 0, 0)).toBeNull();
+  });
+});
+
 describe('Router on the city network', () => {
   it.skipIf(!fs.existsSync(NETWORK))('routes across central Beijing in under 5 ms', () => {
     const g = new LaneGraph(JSON.parse(fs.readFileSync(NETWORK, 'utf8')) as Network);

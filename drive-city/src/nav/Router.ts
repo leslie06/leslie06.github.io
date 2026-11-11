@@ -10,6 +10,8 @@ export interface Route {
   time: number;
   /** Directed link ids driven, in order. */
   links: number[];
+  /** Metres along the last of `links` where the drive ends. */
+  endS: number;
 }
 
 interface Source { link: number; s: number; g0: number }
@@ -108,9 +110,18 @@ export class Router {
    */
   route(fromX: number, fromZ: number, heading: number, toX: number, toZ: number): Route | null {
     const t0 = performance.now();
-    const r = this.search(fromX, fromZ, heading, toX, toZ);
+    const r = this.search(this.sources(fromX, fromZ, heading), toX, toZ);
     this.stats.ms = performance.now() - t0;
     return r;
+  }
+
+  /**
+   * The same drive for a driver already on the lane graph (a taxi with a fare, travel/Ride.ts): from `s` metres along
+   * directed link `link`, so the first of `links` is the one it is on. Null when there is no way from there.
+   */
+  routeFrom(link: number, s: number, toX: number, toZ: number): Route | null {
+    if (!this.links[link] || !this.reaches[link]) return null;
+    return this.search([{ link, s, g0: 0 }], toX, toZ);
   }
 
   /** Closest point within `r` metres on a road the GPS can route to, or null. */
@@ -124,8 +135,7 @@ export class Router {
     return best;
   }
 
-  private search(fromX: number, fromZ: number, heading: number, toX: number, toZ: number): Route | null {
-    const src = this.sources(fromX, fromZ, heading);
+  private search(src: Source[], toX: number, toZ: number): Route | null {
     const end = this.nearestRoadWide(toX, toZ);
     if (!src.length || !end) return null;
     const L = this.links, nx = this.graph.nodeX, nz = this.graph.nodeZ;
@@ -226,7 +236,7 @@ export class Router {
     let len = 0;
     for (let i = 2; i < pts.length; i += 2) len += Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]);
     if (pts.length < 4) pts.push(pts[0], pts[1]);
-    return { pts: Float32Array.from(pts), len, time: best, links };
+    return { pts: Float32Array.from(pts), len, time: best, links, endS: bestS };
   }
 
   /** Where to start: the nearby link along the heading, plus its reverse (a U-turn on the spot). */

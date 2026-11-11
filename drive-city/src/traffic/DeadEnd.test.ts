@@ -88,3 +88,52 @@ describe('traffic where the road ends', () => {
     expect(ends).toBeGreaterThan(0);
   });
 });
+
+// 2026-11-11（travel/Ride.ts，坐公交、打车）：司机照一条路线开；公交只进自己右手边的站。
+describe('a driver with somewhere to go', () => {
+  //  A(-200,0) <--> B(0,0) <--> C(200,0), and B <--> D(0,200) off to the south
+  const T = net([-200, 0, 0, 0, 200, 0, 0, 200], [[0, 1, 0], [1, 2, 0], [1, 3, 0]]);
+  const g = new LaneGraph(T), sig = new Signals(g);
+  const into = (from: number, to: number) => g.links.find((l) => l.from === from && l.to === to)!;
+
+  it('takes the links of its route in order, then drives on wherever', () => {
+    const ab = into(0, 1), bd = into(1, 3);
+    for (let seed = 1; seed <= 5; seed++) {
+      let k = seed;
+      const d = new AiDriver(g, sig, ab.id, 20, 0, () => ((k = (k * 1664525 + 1013904223) >>> 0) / 2 ** 32));
+      d.follow([ab.id, bd.id]);
+      expect(d.nextLink).toBe(bd.id);
+      expect(d.planLeft).toBe(1);
+    }
+    // a route that does not join up is dropped where it breaks
+    const d = new AiDriver(g, sig, ab.id, 20, 0, () => 0.5);
+    d.follow([ab.id, into(3, 1).id]);
+    expect(d.planLeft).toBe(0);
+    expect(d.nextLink).not.toBe(into(3, 1).id);
+  });
+
+  it('hops along its route to a spot that will do', () => {
+    const ab = into(0, 1), bd = into(1, 3);
+    const d = new AiDriver(g, sig, ab.id, 190, 0, () => 0.5);
+    d.follow([ab.id, bd.id]);
+    expect(d.hop(30, () => false)).toBe(false);
+    expect(d.link).toBe(ab.id);
+    expect(d.hop(30, (_at, link, s) => link === bd.id && Math.abs(s - 20) < 0.01)).toBe(true);
+    expect(d.link).toBe(bd.id);
+    expect(d.s).toBeCloseTo(20, 2);
+    expect(d.planLeft).toBe(0);
+  });
+
+  it('stops for the shelter at its own kerb, not the one across the road', () => {
+    // eastbound on A -> B (x east, z south): the right-hand kerb is to the south (+z)
+    const ab = into(0, 1);
+    const d = new AiDriver(g, sig, ab.id, 20, 0, () => 0.5);
+    expect(d.stopAhead(-120, 6, 15, 85)).toBeCloseTo(80, 1);
+    expect(d.stopAhead(-120, -6, 15, 85)).toBe(-1);
+    // and the one going the other way takes the northern one
+    const ba = into(1, 0);
+    const e = new AiDriver(g, sig, ba.id, 20, 0, () => 0.5);
+    expect(e.stopAhead(-120, -6, 15, 150)).toBeCloseTo(120, 1);
+    expect(e.stopAhead(-120, 6, 15, 150)).toBe(-1);
+  });
+});

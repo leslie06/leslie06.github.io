@@ -213,6 +213,11 @@ export interface Interaction {
   x: number; z: number; r: number; label: string; use(): void;
   /** What sort of thing it is, for the funnel's counts (online/Funnel.ts): 'shop' a street counter, 'metro' a metro gate. */
   kind?: string;
+  /**
+   * Offered to the player sitting in a seat (`setRiding`: a passenger on a bus or in a taxi, travel/Ride.ts): F uses it
+   * wherever it is. Offers without it are not for someone in a seat.
+   */
+  riding?: boolean;
 }
 
 // --- Amusement park (park/): 北京欢乐谷 and its rides -------------------------------------------
@@ -253,6 +258,12 @@ export interface NavTarget { x: number; z: number; kind: 'waypoint' | 'mission' 
 export interface NavApi extends System {
   /** Shortest legal drive (one-ways respected) from a point heading `heading` to a point: [x, z, ...] and metres. */
   route(fromX: number, fromZ: number, heading: number, toX: number, toZ: number): { pts: Float32Array; len: number } | null;
+  /**
+   * The same drive for a driver already on the lane graph (a taxi with a fare, travel/Ride.ts): from `s` metres along
+   * directed link `link` (traffic/LaneGraph.ts) - the links in order starting with that one, where on the last it ends,
+   * metres and estimated seconds.
+   */
+  routeFrom?(link: number, s: number, toX: number, toZ: number): { links: number[]; endS: number; len: number; time: number } | null;
   /**
    * Set the GPS target of its kind: the player's map waypoint, a mission's target or the story's start. All are
    * kept; the GPS leads to the waypoint while there is one, else the mission's. A mission target somewhere new (the

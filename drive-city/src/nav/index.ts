@@ -205,6 +205,10 @@ export async function install(engine: Engine): Promise<void> {
       const r = router.route(fromX, fromZ, heading, toX, toZ);
       return r ? { pts: r.pts, len: r.len } : null;
     },
+    routeFrom(link, s, toX, toZ) {
+      const r = router.routeFrom(link, s, toX, toZ);
+      return r ? { links: r.links, endS: r.endS, len: r.len, time: r.time } : null;
+    },
     setTarget(tg) {
       if (!tg) { slots.waypoint = null; slots.mission = null; }
       else {

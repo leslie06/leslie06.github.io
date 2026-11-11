@@ -88,6 +88,9 @@ const KEEP = 260;
 const A_MAX = 1.6, B_COMF = 2.8;
 const _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
+/** 这辆车想走哪条车道：公交一直靠最右边（`laneOn` 会收到这条路有的车道里），别的车保持自己的。 */
+const laneOf = (c: { body: BodyType; lane: number }): number => (c.body === 'bus' ? 7 : c.lane);
+
 export class GhostTraffic {
   readonly cars: GhostCar[] = [];
   private kits = new Map<BodyType, CarKit>();
@@ -183,7 +186,7 @@ export class GhostTraffic {
     const c: GhostCar = this.free.pop() ?? { link: 0, s: 0, lane: 0, v: 0, mood: 1, next: -2, body: 'sedan', upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, off: 0, brake: false, ord: 0, len: 4.6, x: 0, z: 0, dx: 0, dz: 1, k: 1,
       near: false, px: 0, pz: 0, yaw: 0, steer: 0, spin: 0, plate: 0, uid: 0, close: false, y: 0, qx: 0, qz: 0, hx: 0, hz: 1, why: 0, wait: 0, push: 0 };
     const l = this.g.links[h.link];
-    c.link = h.link; c.s = h.s; c.lane = this.g.laneOn(l, h.lane); c.v = h.v; c.mood = mood; c.next = h.next ?? -2;
+    c.link = h.link; c.s = h.s; c.lane = this.g.laneOn(l, h.body === 'bus' ? 7 : h.lane); c.v = h.v; c.mood = mood; c.next = h.next ?? -2;
     c.body = h.body; c.len = specLength(SPEC_OF[h.body]); c.upper.copy(h.upper); c.lower.copy(h.lower); c.taxi = h.taxi; c.off = this.g.laneOffset(l, c.lane); c.brake = false; c.k = 1;
     c.uid = this.plates; c.plate = this.plates++ % 8; c.spin = 0; c.steer = 0;
     this.place(c, l);
@@ -207,7 +210,7 @@ export class GhostTraffic {
     const g = this.g, look = Math.max(6, Math.min(20, 4 + c.v * 0.8));
     let tl = l, ts = c.s + look, off = c.off;
     if (ts > l.len) {
-      if (c.next >= 0) { tl = g.links[c.next]; ts = Math.min(tl.len, ts - l.len); off = g.laneOffset(tl, g.laneOn(tl, c.lane)); }
+      if (c.next >= 0) { tl = g.links[c.next]; ts = Math.min(tl.len, ts - l.len); off = g.laneOffset(tl, g.laneOn(tl, laneOf(c))); }
       else ts = l.len;
     }
     g.at(tl, ts, off, this.tmp);
@@ -346,7 +349,7 @@ export class GhostTraffic {
       c.why = 0;
       if (k < b.length) { gap = b[k].s - c.s - (b[k].len + c.len) / 2; vl = b[k].v; c.why = 1; }
       if (gap === Infinity && c.next >= 0) {
-        const nl = g.links[c.next], b2 = this.buckets.get(c.next * 8 + g.laneOn(nl, c.lane));
+        const nl = g.links[c.next], b2 = this.buckets.get(c.next * 8 + g.laneOn(nl, laneOf(c)));
         if (b2?.length) { gap = l.len - c.s + b2[0].s - (b2[0].len + c.len) / 2; vl = b2[0].v; c.why = 2; }
       }
       // A red light (or an amber one it can stop for) is a standing car at the stop line.
@@ -387,7 +390,7 @@ export class GhostTraffic {
           let lat = 1.9;
           if (o.link !== c.link && l.len - c.s < 45 && sn * so + cs * co > 0.7) {
             const ol = g.links[o.link];
-            if (ol.to === l.to && ol.len - o.s < 45) lat = c.next >= 0 && o.next === c.next && g.laneOn(g.links[c.next], c.lane) === g.laneOn(g.links[c.next], o.lane) ? 4.4 : 3.2;
+            if (ol.to === l.to && ol.len - o.s < 45) lat = c.next >= 0 && o.next === c.next && g.laneOn(g.links[c.next], laneOf(c)) === g.laneOn(g.links[c.next], laneOf(o)) ? 4.4 : 3.2;
           }
           if (along <= 0 || Math.abs(rx * cs - rz * sn) > lat) continue;
           // 两辆互相都在对方前面（交叉着开）：停着的那辆让不开（支路口等灯的车头探在主路上），动的让它；都在动或都停着，
@@ -420,7 +423,7 @@ export class GhostTraffic {
       while (c.s > l.len) {
         if (c.next < 0) { gone = true; break; }
         c.s -= l.len; c.link = c.next; c.next = -2; c.k = 1; l = g.links[c.link];
-        c.lane = g.laneOn(l, c.lane);
+        c.lane = g.laneOn(l, laneOf(c));
       }
       if (gone) { this.remove(i); continue; }
       const want = g.laneOffset(l, c.lane);
@@ -537,8 +540,14 @@ export class GhostTraffic {
       const b = this.buckets.get(id * 8 + lane);
       if (b && b.some((o) => Math.abs(o.s - s) < 14)) continue;
       const p = this.paint(l.cls);
-      const c = this.add({ link: id, s, lane, v: l.speed * 0.8, ...p });
-      if (c) { have.set(id, (have.get(id) ?? 0) + 1); if (b) b.push(c); else this.buckets.set(id * 8 + lane, this.list(c)); }
+      // 公交走最靠边的车道（2026-11-11：进站才靠得到站台，人才上得去；`add` 也会这么放，过路口时 `laneOf` 接着保持）
+      let ln = lane, bb = b;
+      if (p.body === 'bus' && (ln = g.laneOn(l, 7)) !== lane) {
+        bb = this.buckets.get(id * 8 + ln);
+        if (bb && bb.some((o) => Math.abs(o.s - s) < 18)) continue;
+      }
+      const c = this.add({ link: id, s, lane: ln, v: l.speed * 0.8, ...p });
+      if (c) { have.set(id, (have.get(id) ?? 0) + 1); if (bb) bb.push(c); else this.buckets.set(id * 8 + ln, this.list(c)); }
     }
   }
 

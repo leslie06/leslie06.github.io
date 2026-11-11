@@ -56,7 +56,7 @@ export const fare = (km: number) => Math.round(13 + Math.max(0, km - 3) * 2.3);
  * Well-known places besides the modelled landmarks. Each is anchored to its OSM street (`road`),
  * so the fare stops on the right street whatever the datum of the rough lat/lon hint.
  */
-const PLACES: { zh: string; en: string; road: string; lat: number; lon: number }[] = [
+export const PLACES: { zh: string; en: string; road: string; lat: number; lon: number }[] = [
   { zh: '王府井', en: 'Wangfujing', road: '王府井大街', lat: 39.9149, lon: 116.4108 },
   { zh: '东单', en: 'Dongdan', road: '东单北大街', lat: 39.9083, lon: 116.418 },
   { zh: '建国门', en: 'Jianguomen', road: '建国门内大街', lat: 39.9079, lon: 116.4344 },

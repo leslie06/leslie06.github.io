@@ -21,6 +21,8 @@ import { SEAT } from '../vehicle/TwoWheelers';
 
 interface Npc {
   car: Vehicle;
+  /** 玩家在等它或者坐在上面（`FareCar.keep`）：不回收、不变回轻量车。 */
+  fare?: FareCar | null;
   /** Seconds a parked one has stood still (it is put to sleep after one: `nap`). */
   rest?: number;
   driver: AiDriver | null;
@@ -50,6 +52,40 @@ export type ExternalPut = (body: BodyType, pos: THREE.Vector3, quat: THREE.Quate
 export interface ExternalCars { cars(): Vehicle[]; canTake(car: Vehicle): boolean; take(car: Vehicle): CarLook | null; park(car: Vehicle): boolean; blocking?(): readonly Vehicle[] }
 /** Parked cars a traffic kit can draw on top of traffic's own (parking/ draws the near ones in traffic's kits). */
 export const PARKED_DRAW = 64;
+
+/**
+ * 能坐的车（2026-11-11，travel/Ride.ts，docs/street-level-design.md C3）：进站的公交、招手叫停的出租车。车还是车流里的
+ * 那辆，司机照常开；这里只给乘客要的几样：叫它靠边、给它一条路线、留着别回收。
+ */
+export interface FareCar {
+  readonly car: Vehicle;
+  readonly kind: 'bus' | 'taxi';
+  /** 还在车流里、司机还在好好开（没被撞晕、没翻、没被收走、没被抢）。 */
+  readonly alive: boolean;
+  /** 靠边停稳了（公交进站，或者 `stop` 叫停的）。 */
+  readonly stopped: boolean;
+  /** 司机在哪段路（车道图的有向路段）的多少米处。 */
+  readonly link: number; readonly s: number;
+  /** `go(links)` 的路线还剩几段没开到（0：在最后一段上，或者没有路线）。 */
+  readonly left: number;
+  /** 靠边停下等着：尽快，或者停在现在这段路的 `s` 米处（得在前面）。停稳以前每步都叫；停稳以后等到 `go`。 */
+  stop(s?: number): void;
+  /** 接着开；给了路线（`NavApi.routeFrom` 的 `links`）就照着走。 */
+  go(links?: readonly number[]): void;
+  /** 留着这辆车（等它、坐在上面的时候）；用完要放（false）。离玩家 150 米外的自己会放。 */
+  keep(on: boolean): void;
+  /** 画出来的位姿（两个固定步之间插值）。 */
+  pose(alpha: number, pos: THREE.Vector3, quat: THREE.Quaternion): void;
+  /** 司机觉得前面没东西挡着（不是红灯、不是前车、不是进站）可车就是不动，已经多少秒。 */
+  readonly stuck: number;
+  /** 这段路尽头是红灯。 */
+  readonly red: boolean;
+  /**
+   * 卡死了（汇入口的护栏尖、互相别住的车）：把车沿它要走的路往前挪二三十米，落在空着的车道上。坐在车上的乘客没法自己
+   * 绕过去，所以有这一手；挪不了（前面没空地、桥面还没加载）返回 false。
+   */
+  hop(): boolean;
+}
 
 export interface TrafficApi extends TrafficCars {
   /** Cars simulated by a persistent event rather than the distance-limited traffic pool. */
@@ -83,6 +119,10 @@ export interface TrafficApi extends TrafficCars {
    * expressway): returns how many. Parked cars and riders stay.
    */
   clearNear?(x: number, z: number, r: number): number;
+  /**
+   * (x, z) 周围 `r` 米内最近的一辆能坐的车：'bus' 是正停在站上的公交，'taxi' 是司机好好开着的出租车（停着走着都算；`ok` 再挑）。
+   */
+  fareNear?(x: number, z: number, r: number, kind: 'bus' | 'taxi', ok?: (car: Vehicle) => boolean): FareCar | null;
 }
 
 // Beijing traffic: white, black and silver dominate, then grey, dark blue, red, champagne.
@@ -301,7 +341,7 @@ export async function install(engine: Engine): Promise<void> {
   /** 这辆实体车现在能不能变回远景车接着开：好好开着的，没被撞、没翻、没在进站、没被扣住，车头顺着路。 */
   const canGhost = (n: Npc): boolean => {
     const dr = n.driver;
-    if (!n.active || n.parked || n.rider || n.runner || n.held || n.bike || n.body === 'ebike' || !dr || dr.mode !== 'drive' || dr.busStop || dr.yieldT > 0) return false;
+    if (!n.active || n.parked || n.rider || n.runner || n.held || n.fare || n.bike || n.body === 'ebike' || !dr || dr.mode !== 'drive' || dr.busStop || dr.yieldT > 0) return false;
     if (n.car.up.y < 0.9 || n.car.impact > 1 || n.flipped > 0) return false;
     const l = g.links[dr.link];
     g.at(l, dr.s, 0, tmp2);
@@ -354,11 +394,12 @@ export async function install(engine: Engine): Promise<void> {
     n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
     n.car.setMoving(h.v);
     n.driver = new AiDriver(g, sig, h.link, h.s, h.lane, rnd);
+    if (body === 'bus') { n.driver.kerbside = true; n.driver.lane = g.laneOn(l, 7); }
     if (h.next !== undefined) n.driver.seed(h.next);
     n.filter.reset();
     n.upper.copy(h.upper); n.lower.copy(h.lower); n.taxi = h.taxi;
     n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
-    n.active = true; n.flipped = 0; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false; n.hornT = 0;
+    n.active = true; n.flipped = 0; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false; n.fare = null; n.hornT = 0;
     return true;
   };
   const ghosts = ghostOn ? new GhostTraffic(engine.scene, g, sig, rnd,
@@ -429,6 +470,7 @@ export async function install(engine: Engine): Promise<void> {
     n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
     n.car.setMoving(v);
     n.driver = new AiDriver(g, sig, id, s, lane, rnd);
+    if (n.body === 'bus') n.driver.kerbside = true;
     n.filter.reset();
     paint(n);
     n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
@@ -604,7 +646,7 @@ export async function install(engine: Engine): Promise<void> {
     const pv = player();
     let worst: Npc | null = null, ws = 0;
     for (const n of pool) {
-      if (!n.active || n.parked || n.rider || n.runner || n.held || n.bike || !n.driver || n.driver.busStop || n.driver.mode !== 'drive') continue;
+      if (!n.active || n.parked || n.rider || n.runner || n.held || n.fare || n.bike || !n.driver || n.driver.busStop || n.driver.mode !== 'drive') continue;
       const dx = n.car.pos.x - cam.x, dz = n.car.pos.z - cam.z, d = Math.hypot(dx, dz);
       const seen = d < 1 || (dx * camDir.x + dz * camDir.z) / d > 0.2;
       if (seen ? d < dg + 60 : d < 90) continue;
@@ -617,9 +659,75 @@ export async function install(engine: Engine): Promise<void> {
     despawn(worst);
   };
   const despawn = (n: Npc) => {
-    n.active = false; n.driver = null; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false;
+    n.active = false; n.driver = null; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false; n.fare = null;
     n.car.body.setTranslation({ x: 0, y: -300, z: 0 }, false);
     n.car.body.setEnabled(false);
+  };
+
+  /** 玩家徒步站在哪（坐在公交、出租车里的不算：人在车里，不在路上）。 */
+  const footOf = () => { const pl = engine.get<PlayerApi>('player'); return pl && !pl.riding ? pl.foot : null; };
+  /** 一辆能坐的车的把手（`FareCar`）：`n` 这个名额换了车、被收走以后就不作数了。 */
+  const fares = new WeakMap<AiDriver, FareCar>();
+  const fareOf = (n: Npc, kind: 'bus' | 'taxi'): FareCar => {
+    const car = n.car, dr0 = n.driver;
+    const live = () => n.active && n.car === car && n.driver === dr0 && !!dr0 && !n.parked && pool.includes(n);
+    const f: FareCar = {
+      car, kind,
+      // 被蹭了一下愣两秒（'shaken'）不算完；'lost' 是开不了了
+      get alive() { return live() && dr0!.mode !== 'lost' && car.up.y > 0.6; },
+      get stopped() { return live() && dr0!.atStop; },
+      get link() { return dr0!.link; },
+      get s() { return dr0!.s; },
+      get left() { return dr0!.planLeft; },
+      stop(s) {
+        if (!live() || dr0!.busStop) return;
+        const l = g.links[dr0!.link], v = Math.max(0, car.forwardSpeed);
+        // 刹得住的地方起算；这段路快到头了就停在头上（过了路口这里会再叫一次）
+        const soon = dr0!.s + v * v / (2 * 1.8) + 2;
+        dr0!.busStop = { s: Math.min(l.len - 1.5, s !== undefined && s > soon ? s : soon), dwell: 1e9 };
+      },
+      go(links) {
+        if (!live()) return;
+        dr0!.busStop = null;
+        // 有客的出租车开得快一点（红灯照等）
+        if (links) { dr0!.follow(links); dr0!.boost = links.length ? 1.15 : 1; }
+      },
+      keep(on) { if (live()) n.fare = on ? f : null; else if (!on && n.fare === f) n.fare = null; },
+      pose(alpha, pos, quat) { pos.lerpVectors(n.prevPos, n.curPos, alpha); quat.slerpQuaternions(n.prevQuat, n.curQuat, alpha); },
+      get stuck() { return live() ? dr0!.stuck : 0; },
+      get red() { return live() && dr0!.red; },
+      hop() {
+        if (!live()) return false;
+        const pv = player(), len = specLength(car.spec);
+        for (const ahead of [16, 24, 32, 42, 54, 68]) {
+          let lift = 0;
+          const done = dr0!.hop(ahead, (at, link, s) => {
+            const l = g.links[link];
+            lift = deckAt(l, s, at.x, at.z);
+            if (Number.isNaN(lift)) return false;
+            // 那儿的车道上得空着：和别的车不叠（并排车道上的不算，上下两层的不算）
+            const clear = (x: number, y: number, z: number, olen: number) => {
+              const rx = x - at.x, rz = z - at.z;
+              return Math.abs(y - lift) > 3 || Math.abs(rx * at.dz - rz * at.dx) > 2.1 || Math.abs(rx * at.dx + rz * at.dz) > (olen + len) / 2 + 1.5;
+            };
+            if (pv && !clear(pv.car.pos.x, pv.car.pos.y, pv.car.pos.z, specLength(pv.car.spec))) return false;
+            for (const o of pool) if (o !== n && o.active && !clear(o.car.pos.x, o.car.pos.y, o.car.pos.z, specLength(o.car.spec))) return false;
+            if (ghosts) for (const o of ghosts.nearList) if (!clear(o.qx, o.y, o.qz, o.len)) return false;
+            return true;
+          });
+          if (!done) continue;
+          const at = tmp;
+          g.at(g.links[dr0!.link], dr0!.s, g.laneOffset(g.links[dr0!.link], dr0!.lane), at);
+          car.reset({ x: at.x, y: lift + 0.03 + car.spec.wheelRadius + 0.04, z: at.z }, Math.atan2(at.dx, at.dz));
+          car.setMoving(3);
+          n.filter.reset(); n.flipped = 0;
+          n.prevPos.copy(car.pos); n.curPos.copy(car.pos); n.prevQuat.copy(car.quat); n.curQuat.copy(car.quat);
+          return true;
+        }
+        return false;
+      },
+    };
+    return f;
   };
 
   const leaderFor = (n: Npc): Leader | null => {
@@ -642,7 +750,7 @@ export async function install(engine: Engine): Promise<void> {
     const pv = player();
     if (pv) consider(pv.car.pos.x, pv.car.pos.y, pv.car.pos.z, pv.car.vel.x, pv.car.vel.z, specLength(pv.car.spec));
     // People in the road: drivers brake for the player on foot and for crossing pedestrians.
-    const foot = engine.get<PlayerApi>('player')?.foot;
+    const foot = footOf();
     if (foot) consider(foot.pos.x, foot.pos.y, foot.pos.z, 0, 0, 0.6, 0.4);
     const people = engine.get<PeopleApi>('people');
     if (people) for (const q of people.inRoad()) consider(q.x, 0.5, q.z, 0, 0, 0.6, 0.4);
@@ -683,11 +791,12 @@ export async function install(engine: Engine): Promise<void> {
     crowd.add(seatAt, Math.atan2(seatFwd.x, seatFwd.z), r.gait, r.look);
   };
 
-  const api: TrafficApi & { ghosts: GhostTraffic | null; debugPool(): readonly Npc[] } = {
+  const api: TrafficApi & { ghosts: GhostTraffic | null; debugPool(): readonly Npc[]; debugLeader(n: Npc): Leader | null } = {
     name: 'traffic',
     ghosts,
     /** The pool as it is (probes: `.scratch/streetlevel/lightdiag.mjs`). */
     debugPool: () => pool,
+    debugLeader: (n) => leaderFor(n),
     graph: g, signals: sig, lineStats, riderCap: RIDERS,
     get time() { return t; },
     addExternalCars: (provider) => { externalCars.push(provider); },
@@ -727,6 +836,20 @@ export async function install(engine: Engine): Promise<void> {
       }
       if (light && ghosts) k += ghosts.clearNear(x, z, r);
       return k;
+    },
+    fareNear(x, z, r, kind, ok) {
+      let best: Npc | null = null, bd = r;
+      for (const n of pool) {
+        const dr = n.driver;
+        if (!n.active || n.parked || n.runner || n.held || n.rider || !dr || dr.mode !== 'drive' || n.car.up.y < 0.8) continue;
+        if (kind === 'bus' ? n.body !== 'bus' || !dr.atStop : n.body !== 'sedan' || !n.taxi) continue;
+        const d = Math.hypot(n.car.pos.x - x, n.car.pos.z - z);
+        if (d < bd && (!ok || ok(n.car))) { bd = d; best = n; }
+      }
+      if (!best) return null;
+      let f = best.fare ?? fares.get(best.driver!);
+      if (!f) { f = fareOf(best, kind); fares.set(best.driver!, f); }
+      return f;
     },
     hold(car, on) {
       const n = pool.find((p) => p.active && p.car === car);
@@ -826,11 +949,19 @@ export async function install(engine: Engine): Promise<void> {
       if (busT <= 0) {
         busT = 1;
         const streamer = (engine.get('world') as unknown as { streamer?: { sheltersNear(x: number, z: number, r: number): number[] } } | undefined)?.streamer;
+        // 玩家徒步站在站台上等车（8 米内）：这一站每辆公交都停，刚停过别的站的也停，离得近一点也来得及就停
+        const wait = footOf();
         if (streamer) for (const n of pool) {
-          if (!n.active || n.parked || n.body !== 'bus' || !n.driver || n.driver.busStop || n.driver.busCool > 0 || n.driver.mode !== 'drive') continue;
+          if (!n.active || n.parked || n.body !== 'bus' || !n.driver || n.driver.busStop || n.driver.mode !== 'drive') continue;
+          // 车上有玩家：差不多站站停（歇 8 秒就找下一站），好让人下车
+          const cool = n.driver.busCool > (n.fare ? 22 : 0);
+          if (cool && !wait) continue;
           const sh = streamer.sheltersNear(n.car.pos.x, n.car.pos.z, 90);
           for (let i = 0; i < sh.length; i += 2) {
-            const s = n.driver.stopAhead(sh[i], sh[i + 1], 15, 85);
+            const mine = !!wait && Math.hypot(sh[i] - wait.pos.x, sh[i + 1] - wait.pos.z) < 8;
+            if (cool && !mine) continue;
+            const v = Math.max(0, n.car.forwardSpeed);
+            const s = n.driver.stopAhead(sh[i], sh[i + 1], mine ? Math.min(15, 4 + v * v / 7) : 15, 85);
             if (s >= 0) { n.driver.busStop = { s, dwell: 8 + rnd() * 4 }; break; }
           }
         }
@@ -858,7 +989,7 @@ export async function install(engine: Engine): Promise<void> {
         if (n.rider && (n.car.impact > 4 || n.car.up.y < 0.6)) { unseat(n); continue; }
         if (n.car.impact > 3) n.driver!.shake();
         // 公交进站、起步：audio/ 放报站（只报镜头附近的）
-        if (n.driver!.busEvent) { if (d < 60) engine.events.emit('traffic:bus', { x: n.car.pos.x, z: n.car.pos.z, arrive: n.driver!.busEvent === 1 }); n.driver!.busEvent = 0; }
+        if (n.driver!.busEvent) { if (d < 60 && n.body === 'bus') engine.events.emit('traffic:bus', { x: n.car.pos.x, z: n.car.pos.z, arrive: n.driver!.busEvent === 1 }); n.driver!.busEvent = 0; }
         // Drivers lean on the horn when the player hits them or sits in their way.
         n.hornT -= dt;
         if (n.hornT <= 0 && !n.parked) {
@@ -867,6 +998,13 @@ export async function install(engine: Engine): Promise<void> {
           if (n.driver!.stuck > 1.8 && pd < 14) { n.hornT = 3 + rnd() * 3; engine.events.emit('traffic:horn', { x: n.car.pos.x, z: n.car.pos.z, car: n.car }); }
         }
         n.flipped = n.car.up.y < 0.5 ? n.flipped + dt : 0;
+        // 玩家等着的、坐着的车留着（travel/Ride.ts 自己看它还行不行）；玩家走远了就不留了
+        if (n.fare) {
+          const pp = playerAt();
+          if (Math.hypot(n.car.pos.x - pp.x, n.car.pos.z - pp.z) < 150) continue;
+          n.fare = null;
+          if (n.driver!.busStop && n.driver!.busStop.dwell > 1e6) n.driver!.busStop = null;   // 叫停了没人管的：接着开
+        }
         // 轻量车模式：开出玩家身边（也不在警车、任务车旁边）的，变回远景车接着开
         if (light && ghosts && !n.runner) {
           const hx = n.car.pos.x - ghosts.hot.x, hz = n.car.pos.z - ghosts.hot.z, out = ghosts.hot.r + 25;
@@ -906,7 +1044,10 @@ export async function install(engine: Engine): Promise<void> {
       if (ghosts && light) {
         const pl = engine.get<PlayerApi>('player'), pp = playerAt(), pv = player(), cam = engine.camera.position;
         ghosts.hot.x = pp.x; ghosts.hot.z = pp.z;
-        ghosts.hot.r = (engine.lite ? 45 : 55) + Math.min(35, 1.3 * (pv && pl?.mode !== 'onfoot' ? pv.car.speed : 0));
+        // 坐在公交、出租车里：按那辆车的车速算
+        let sp = pv && pl?.mode !== 'onfoot' ? pv.car.speed : 0;
+        if (pl?.riding) for (const n of pool) if (n.active && n.fare) sp = Math.max(sp, n.car.speed);
+        ghosts.hot.r = (engine.lite ? 45 : 55) + Math.min(35, 1.3 * sp);
         const hs = ghosts.hots, bl = ghosts.blockers, mv = ghosts.movers;
         hs.length = 0; bl.length = 0; mv.length = 0;
         const solid = (c: Vehicle, hot: boolean) => {
@@ -919,7 +1060,7 @@ export async function install(engine: Engine): Promise<void> {
         for (const p of externalCars) if (p.blocking) for (const c of p.blocking()) solid(c, true);
         // 实体车：有司机的在车道的队列里（`drivers`），但骑手贴着路边、被撞歪的车横在路上，都要按位置让
         for (const n of pool) if (n.active) solid(n.car, false);
-        const foot = pl?.foot;
+        const foot = footOf();
         if (foot) bl.push(foot.pos.x, foot.pos.z, 0.4);
         const people = engine.get<PeopleApi>('people');
         if (people) for (const q of people.inRoad()) bl.push(q.x, q.z, 0.4);

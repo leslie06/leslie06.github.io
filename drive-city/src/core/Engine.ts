@@ -47,6 +47,8 @@ export class Engine {
   hitStop(ms: number): void { this.hitStopUntil = Math.max(this.hitStopUntil, performance.now() + ms); }
   renderFrame: (dt: number) => void;
   private accumulator = 0;
+  /** This frame's place between the last two fixed steps, 0..1 (what `update` is handed): for code a system calls into mid-frame. */
+  alpha = 0;
   private raf = 0;
   readonly canvas: HTMLCanvasElement;
   private maxSubSteps = 4;
@@ -211,7 +213,7 @@ export class Engine {
     this.frameMs += (interval * 1000 - this.frameMs) * 0.05;
     this.input.poll();
     this.stepFixed(dt);
-    const alpha = this.accumulator / this.physics.fixedDt;
+    const alpha = this.alpha = this.accumulator / this.physics.fixedDt;
     this.time += dt; this.frame++;
     for (const s of this.systems) s.update?.(dt, alpha);
     // Every 2 s of wall time (paused too: under the title is when the city's textures arrive), a few ms a frame at most
