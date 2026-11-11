@@ -209,7 +209,11 @@ export interface PlayerApi extends System {
   readonly move?: { action: Action; t: number; secs: number } | null;
 }
 
-export interface Interaction { x: number; z: number; r: number; label: string; use(): void }
+export interface Interaction {
+  x: number; z: number; r: number; label: string; use(): void;
+  /** What sort of thing it is, for the funnel's counts (online/Funnel.ts): 'shop' a street counter, 'metro' a metro gate. */
+  kind?: string;
+}
 
 // --- Amusement park (park/): 北京欢乐谷 and its rides -------------------------------------------
 

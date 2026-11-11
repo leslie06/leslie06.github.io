@@ -90,7 +90,7 @@ export function install(engine: Engine): void {
         if (Math.abs(g.x - f.pos.x) > 30 || Math.abs(g.z - f.pos.z) > 30) continue;
         const m = mouth(g, 1.2);
         if (Math.hypot(m.x - f.pos.x, m.z - f.pos.z) > REACH) continue;
-        pl.offer?.({ x: m.x, z: m.z, r: REACH, label: t('metro.offer', { station: nameOf(g.station) }), use: () => open(g) });
+        pl.offer?.({ x: m.x, z: m.z, r: REACH, label: t('metro.offer', { station: nameOf(g.station) }), kind: 'metro', use: () => open(g) });
         break;
       }
     },

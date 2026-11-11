@@ -102,6 +102,7 @@ const MIX: [BodyType, number][] = [['suv', 0.16], ['hatch', 0.14], ['mpv', 0.08]
  * （CarKit 空着就不画，不占绘制调用）。
  * 2026-10-19 加了蛮牛（兰博基尼风格），每档一辆。2026-10-22 加了 AE86（车行有卖），每档一辆，白车身黑下半截。
  */
+const LUX: BodyType[] = ['coupe', 'limo', 'super', 'ae86'];
 const LUX_POOL = (tier: string): [BodyType, number][] => [['coupe', tier === 'high' ? 2 : 1], ['limo', 1], ['super', 1], ['ae86', 1]];
 /** 跑车的颜色要扎眼（普通私家车那套黑白灰太低调），豪华轿车还是黑、白、银、深蓝。 */
 const COUPE_PAINT = ['#c41e1e', '#c41e1e', '#8c1d1d', '#f0b400', '#e2571a', '#1d49b5', '#f2f2ef', '#161718'];
@@ -134,6 +135,14 @@ export async function install(engine: Engine): Promise<void> {
   const heads = new SignalHeads(engine.scene, g, sig);
   const tier = engine.quality.tier;
   const max = new URLSearchParams(location.search).has('notraffic') ? 0 : tier === 'low' ? 12 : tier === 'medium' ? 26 : 42;
+  /**
+   * 「轻量车」（2026-11-11，docs/street-level-design.md A2 第二步；`?lightcars=0` 关，回到原来的做法）：实体车只留玩家身边的
+   * （`hotR`：55 米起，车速越快越远），再远的都是 Ghosts.ts 的远景车——它们现在一直开到玩家身边才变成实体车，170 米以内的用近处
+   * 车模画。实体车开出 `hotR + 25` 米又变回去。所以这里不再自己往路上放车（`spawn`），车的型号也不再受名额表限制。
+   */
+  const light = max > 0 && new URLSearchParams(location.search).get('ghosts') !== '0' && new URLSearchParams(location.search).get('lightcars') !== '0';
+  /** 每种车模多留的位置：给近处的轻量车画。 */
+  const NEAR_DRAW = !light ? 0 : tier === 'low' ? 28 : tier === 'medium' ? 44 : 70;
   const MAX_PARKED = 6;
   /**
    * Motorcycles standing at kerbs within reach of the player (bicycles are the shared bikes in the
@@ -166,7 +175,12 @@ export async function install(engine: Engine): Promise<void> {
   const kitFor = (b: BodyType): CarKit => {
     let k = kits.get(b);
     // the luxury bodies have no slot body of their own on the kerb, but parking/ puts some in others' (LUXURY_AT): room for 16
-    if (!k) { k = new CarKit(engine.scene, (counts.get(b) ?? 0) + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2 + (PARKED_BODIES.has(b) ? PARKED_DRAW : b === 'coupe' || b === 'limo' || b === 'super' || b === 'ae86' ? 16 : 0), defaultLivery(b), b); kits.set(b, k); }
+    if (!k) {
+      const lux = b === 'coupe' || b === 'limo' || b === 'super' || b === 'ae86', two = b === 'ebike' || b === 'moto' || b === 'bike';
+      // 轻量车模式下哪种车都可能占满名额（型号跟着远景车来），近处的轻量车也画在这里
+      const own = light && !two ? (lux ? (counts.get(b) ?? 0) + 8 : max + NEAR_DRAW) : (counts.get(b) ?? 0);
+      k = new CarKit(engine.scene, own + (b === 'ebike' ? RIDERS : 0) + MAX_PARKED + 2 + (PARKED_BODIES.has(b) ? PARKED_DRAW : lux ? 16 : 0), defaultLivery(b), b); kits.set(b, k);
+    }
     return k;
   };
   const rng = new Rng(4242);
@@ -247,7 +261,8 @@ export async function install(engine: Engine): Promise<void> {
   const riding = () => { let k = 0; for (const n of pool) if (n.active && n.rider) k++; return k; };
   const parkedInput = { forward: 0, back: 0, steer: 0, analog: true, handbrake: true };
   const player = () => engine.get<VehicleApi>('vehicle');
-  const tmp = { x: 0, z: 0, dx: 0, dz: 0 };
+  const tmp = { x: 0, z: 0, dx: 0, dz: 0 }, tmp2 = { x: 0, z: 0, dx: 0, dz: 0 };
+  const settled = (b: BodyType) => b === 'sedan' || bodySettled(b as BodySource);
   const camDir = new THREE.Vector3();
   const renderPos = new THREE.Vector3(), renderQuat = new THREE.Quaternion();
   let t = 0, spawnT = 0, busT = 0, roomT = 0;
@@ -275,33 +290,97 @@ export async function install(engine: Engine): Promise<void> {
     let body: BodyType = 'sedan', u = rnd();
     for (const [b, share] of MIX) { if (u < share) { body = b; break; } u -= share; }
     if ((body === 'bus' && !BUS_ROADS.has(cls)) || (body === 'truck' && cls === 'residential')) body = 'sedan';
+    // 轻量车模式下路上的车都从这里来：豪车和跑车也要有（「做的豪车和跑车在哪，我怎么没有看见」），二十辆里一辆
+    if (light && rnd() < 0.05) { const lux = LUX[Math.floor(rnd() * LUX.length)]; if (settled(lux)) body = lux; }
     const n = { body, upper: new THREE.Color(), lower: new THREE.Color(), taxi: false } as unknown as Npc;
     paint(n);
     return { body, upper: n.upper, lower: n.lower, taxi: n.taxi };
   };
+  /** 玩家在哪（车里或徒步；没有就用镜头）。 */
+  const playerAt = (): { x: number; z: number } => engine.get<PlayerApi>('player')?.position ?? engine.camera.position;
+  /** 这辆实体车现在能不能变回远景车接着开：好好开着的，没被撞、没翻、没在进站、没被扣住，车头顺着路。 */
+  const canGhost = (n: Npc): boolean => {
+    const dr = n.driver;
+    if (!n.active || n.parked || n.rider || n.runner || n.held || n.bike || n.body === 'ebike' || !dr || dr.mode !== 'drive' || dr.busStop || dr.yieldT > 0) return false;
+    if (n.car.up.y < 0.9 || n.car.impact > 1 || n.flipped > 0) return false;
+    const l = g.links[dr.link];
+    g.at(l, dr.s, 0, tmp2);
+    return n.car.fwd.x * tmp2.dx + n.car.fwd.z * tmp2.dz > 0.9;
+  };
+  /** 名额满了：让一辆比 (x, z) 离玩家更远的实体车变回远景车。 */
+  const evict = (x: number, z: number): boolean => {
+    const pp = playerAt(), d0 = Math.hypot(x - pp.x, z - pp.z) + 4;
+    let worst: Npc | null = null, wd = d0;
+    for (const n of pool) {
+      if (!n.active || n.parked || n.rider) continue;
+      const d = Math.hypot(n.car.pos.x - pp.x, n.car.pos.z - pp.z);
+      if (d > wd && canGhost(n)) { wd = d; worst = n; }
+    }
+    if (!worst) return false;
+    toGhost(worst);
+    despawn(worst);
+    return true;
+  };
   const adoptGhost = (h: Handover): boolean => {
-    if (driving() >= carCap()) return false;
-    const n = pool.find((p) => !p.active && !p.parked && p.body === h.body);
-    if (!n) return false;
+    if (!light && driving() >= carCap()) return false;
+    const body: BodyType = light && !settled(h.body) ? 'sedan' : h.body;
+    let n = pool.find((p) => !p.active && !p.parked && p.body === body);
+    if (!n && !light) return false;
     const l = g.links[h.link];
     if (l.len - h.s < 3) return false;
-    g.at(l, h.s, g.laneOffset(l, h.lane), tmp);
-    if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 9)) return false;
+    if (h.x !== undefined) { tmp.x = h.x; tmp.z = h.z!; tmp.dx = Math.sin(h.yaw!); tmp.dz = Math.cos(h.yaw!); }
+    else g.at(l, h.s, g.laneOffset(l, h.lane), tmp);
+    if (light) {
+      // 并排的两条车道只隔三米多：只有真叠在一起才不放（高架上下两层的不算）
+      const len = specLength(SPEC_OF[body]), lift0 = l.h ? g.heightAt(l, h.s) : 0;
+      const over = (c: Vehicle): boolean => {
+        const rx = c.pos.x - tmp.x, rz = c.pos.z - tmp.z;
+        if (rx * rx + rz * rz > 196) return false;
+        return Math.abs(c.pos.y - lift0) < 3 && Math.abs(rx * tmp.dz - rz * tmp.dx) < 2.1 && Math.abs(rx * tmp.dx + rz * tmp.dz) < (specLength(c.spec) + len) / 2 + 0.8;
+      };
+      const pv = player();
+      if ((pv && over(pv.car)) || pool.some((o) => o.active && over(o.car))) return false;
+    } else if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 9)) return false;
     const lift = deckAt(l, h.s, tmp.x, tmp.z);
     if (Number.isNaN(lift)) return false;
+    if (light) {
+      const x = tmp.x, z = tmp.z, dx = tmp.dx, dz = tmp.dz;
+      if (driving() >= carCap() && !evict(x, z)) return false;
+      if (!n) { n = makeNpc(newCar(body), body); pool.push(n); kitFor(body); }
+      tmp.x = x; tmp.z = z; tmp.dx = dx; tmp.dz = dz;
+    }
+    n = n!;
     n.car.body.setEnabled(true);
     n.car.reset({ x: tmp.x, y: lift + 0.03 + n.car.spec.wheelRadius + 0.04, z: tmp.z }, Math.atan2(tmp.dx, tmp.dz));
     n.car.setMoving(h.v);
     n.driver = new AiDriver(g, sig, h.link, h.s, h.lane, rnd);
+    if (h.next !== undefined) n.driver.seed(h.next);
     n.filter.reset();
     n.upper.copy(h.upper); n.lower.copy(h.lower); n.taxi = h.taxi;
     n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
-    n.active = true; n.flipped = 0;
+    n.active = true; n.flipped = 0; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false; n.hornT = 0;
     return true;
   };
   const ghosts = ghostOn ? new GhostTraffic(engine.scene, g, sig, rnd,
     tier === 'low' ? 140 : tier === 'medium' ? 260 : 420, tier === 'low' ? 450 : tier === 'medium' ? 600 : 750,
     new Set<BodyType>(tier === 'low' ? ['sedan', 'suv', 'bus'] : ['sedan', 'suv', 'hatch', 'mpv', 'bus', 'truck']), ghostPaint, adoptGhost) : null;
+  if (ghosts && light) {
+    ghosts.light = true;
+    // 低画质的近处车模少画一点（手机的 GPU），预算也少往近处偏一点（远处的路不能空）
+    ghosts.rNear = tier === 'low' ? 130 : tier === 'medium' ? 150 : 170;
+    ghosts.nearBoost = tier === 'low' ? 1.5 : tier === 'medium' ? 1.8 : 2.2;
+    // 近处的轻量车画在实体车的车模里（一种车一个 kit，不多占绘制调用）
+    ghosts.nearDraw = (c, pos, quat) => {
+      const body = settled(c.body) ? c.body : 'sedan', kit = kitFor(body);
+      pos.y += kit.spec.wheelRadius;
+      if (!kit.sees(pos)) return true;
+      const k = written.get(body) ?? 0;
+      if (k >= kit.cap) return false;
+      kit.setRail(pos, quat, c.upper, c.lower, c.taxi, c.brake, c.spin, c.steer, c.plate);
+      written.set(body, k + 1);
+      return true;
+    };
+  }
 
   /** A free car of the pool, from a random place in it: from the front, the cars at its end (the saloons, the late-loaded
    * luxury bodies) only drove when every other was out - on a 省电档 phone (half the cars) never. */
@@ -329,7 +408,7 @@ export async function install(engine: Engine): Promise<void> {
       if (n.body === 'bus' && !BUS_ROADS.has(l.cls)) continue;
       if (n.body === 'truck' && l.cls === 'residential') continue;
       const s = 6 + rnd() * (l.len - 12);
-      const lane = l.lanes > 1 ? Math.floor(rnd() * l.lanes) : 0;
+      const lane = g.laneOn(l, l.lanes > 1 ? Math.floor(rnd() * l.lanes) : 0);
       g.at(l, s, g.laneOffset(l, lane), tmp);
       const d = Math.hypot(tmp.x - cam.x, tmp.z - cam.z);
       if (d < 70 || d > 240) continue;
@@ -398,6 +477,7 @@ export async function install(engine: Engine): Promise<void> {
   /** A motorcycle left at a kerb 30-200 m from the camera, out of the road, for the player to take. */
   const spawnBike = () => {
     const cam = engine.camera.position;
+    engine.camera.getWorldDirection(camDir);
     const ids = g.near(cam.x, cam.z, 200);
     if (!ids.length) return;
     const pv = player();
@@ -410,6 +490,8 @@ export async function install(engine: Engine): Promise<void> {
       g.at(l, s, -(l.hw + 1.1 + l.parkOut), tmp);
       const d = Math.hypot(tmp.x - cam.x, tmp.z - cam.z);
       if (d < 30 || d > 200) continue;
+      // 不在镜头里的近处凭空出现（2026-11-11：探针里看到 41 米、79 米处冒出来）
+      if (d < 150 && ((tmp.x - cam.x) * camDir.x + (tmp.z - cam.z) * camDir.z) / d > 0.3) continue;
       if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 7)) continue;
       if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < 12) continue;
       const body: BodyType = 'moto';
@@ -502,7 +584,11 @@ export async function install(engine: Engine): Promise<void> {
   /** A physics car carries on as distant traffic (Ghosts.ts), where it is and as it is. */
   const toGhost = (n: Npc) => {
     const dr = n.driver;
-    if (ghosts && dr && !n.runner && !n.rider && n.body !== 'ebike') ghosts.take({ link: dr.link, s: dr.s, lane: dr.lane, v: Math.max(0, n.car.forwardSpeed), body: n.body, upper: n.upper, lower: n.lower, taxi: n.taxi });
+    if (!ghosts || !dr || n.runner || n.rider || n.body === 'ebike') return;
+    const h: Handover = { link: dr.link, s: dr.s, lane: dr.lane, v: Math.max(0, n.car.forwardSpeed), body: n.body, upper: n.upper, lower: n.lower, taxi: n.taxi };
+    // 轻量车就在镜头附近接手：从这辆车现在的位置和朝向接着画，下一段路也照司机选好的走
+    if (light) { h.next = dr.nextLink; h.x = n.car.pos.x; h.z = n.car.pos.z; h.yaw = Math.atan2(n.car.fwd.x, n.car.fwd.z); }
+    ghosts.take(h);
   };
   /**
    * 车流集中到眼前（2026-11-10，docs/street-level-design.md A2，「只是在地图上开车」）：实体车的名额原来谁先占谁用，一辆停在
@@ -565,6 +651,14 @@ export async function install(engine: Engine): Promise<void> {
     // The distant traffic on the same lane ahead (the band where both kinds drive, 220-330 m out).
     const dr = n.driver;
     if (ghosts && dr) {
+      // 近处的轻量车也按位置看（同向的：横着过来的由它让，见 Ghosts.ts；骑手从路边挤过排队的车时不再穿过去）
+      if (light) for (const o of ghosts.nearList) {
+        const rx = o.qx - c.pos.x;
+        if (rx > 62 || rx < -62) continue;
+        const rz = o.qz - c.pos.z;
+        if (rz > 62 || rz < -62 || o.hx * c.fwd.x + o.hz * c.fwd.z < 0.3) continue;
+        consider(o.qx, o.y + c.spec.wheelRadius, o.qz, o.hx * o.v, o.hz * o.v, o.len);
+      }
       const o = ghosts.leaderFor(dr.link, dr.s, dr.lane, dr.nextLink);
       if (o && o.ds < 60) {
         const gap = Math.max(0.5, o.ds - (o.len + selfLen) / 2 + 4.6);
@@ -589,9 +683,11 @@ export async function install(engine: Engine): Promise<void> {
     crowd.add(seatAt, Math.atan2(seatFwd.x, seatFwd.z), r.gait, r.look);
   };
 
-  const api: TrafficApi & { ghosts: GhostTraffic | null } = {
+  const api: TrafficApi & { ghosts: GhostTraffic | null; debugPool(): readonly Npc[] } = {
     name: 'traffic',
     ghosts,
+    /** The pool as it is (probes: `.scratch/streetlevel/lightdiag.mjs`). */
+    debugPool: () => pool,
     graph: g, signals: sig, lineStats, riderCap: RIDERS,
     get time() { return t; },
     addExternalCars: (provider) => { externalCars.push(provider); },
@@ -629,6 +725,7 @@ export async function install(engine: Engine): Promise<void> {
         if (engine.get<VehicleApi>('vehicle')?.car === n.car) continue;
         despawn(n); k++;
       }
+      if (light && ghosts) k += ghosts.clearNear(x, z, r);
       return k;
     },
     hold(car, on) {
@@ -722,8 +819,8 @@ export async function install(engine: Engine): Promise<void> {
       // The pool is full and a distant car the camera looks at is about to reach the ring where it must go: a physics
       // car nobody is looking at gives up its place (it drives on as a distant one, or is gone if that is out of view too).
       roomT -= dt;
-      if (roomT <= 0) { roomT = 0.4; if (ghosts && driving() >= carCap()) makeRoom(); }
-      if (spawnT <= 0) { spawnT = 0.2; if (driving() < carCap() && !ghosts?.adoptWaiting(engine.camera.position)) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < riderCap()) spawnRider(); }
+      if (roomT <= 0) { roomT = 0.4; if (ghosts && !light && driving() >= carCap()) makeRoom(); }
+      if (spawnT <= 0) { spawnT = 0.2; if (!light && driving() < carCap() && !ghosts?.adoptWaiting(engine.camera.position)) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < riderCap()) spawnRider(); }
       // Buses look for a shelter ahead on their side once a second (at the kerb of the link they are on).
       busT -= dt;
       if (busT <= 0) {
@@ -770,6 +867,16 @@ export async function install(engine: Engine): Promise<void> {
           if (n.driver!.stuck > 1.8 && pd < 14) { n.hornT = 3 + rnd() * 3; engine.events.emit('traffic:horn', { x: n.car.pos.x, z: n.car.pos.z, car: n.car }); }
         }
         n.flipped = n.car.up.y < 0.5 ? n.flipped + dt : 0;
+        // 轻量车模式：开出玩家身边（也不在警车、任务车旁边）的，变回远景车接着开
+        if (light && ghosts && !n.runner) {
+          const hx = n.car.pos.x - ghosts.hot.x, hz = n.car.pos.z - ghosts.hot.z, out = ghosts.hot.r + 25;
+          if (hx * hx + hz * hz > out * out) {
+            let far = true;
+            const hs = ghosts.hots;
+            for (let q = 0; far && q < hs.length; q += 3) far = Math.hypot(n.car.pos.x - hs[q], n.car.pos.z - hs[q + 1]) > hs[q + 2] + 18;
+            if (far && canGhost(n)) { toGhost(n); despawn(n); continue; }
+          }
+        }
         const inView = d < 1 || ((n.car.pos.x - cam.x) * camDir.x + (n.car.pos.z - cam.z) * camDir.z) / d > 0.2;
         const dead = n.driver!.mode === 'lost' || n.flipped > 4 || n.driver!.stuck > 15 || n.car.pos.y < -5;
         // A getaway car is measured from the player, not the camera, and only lost when far gone.
@@ -796,6 +903,27 @@ export async function install(engine: Engine): Promise<void> {
         if (n.rider) drawRider(n, _dt);
       }
       for (const draw of externalDraws) draw(putExternal, alpha);
+      if (ghosts && light) {
+        const pl = engine.get<PlayerApi>('player'), pp = playerAt(), pv = player(), cam = engine.camera.position;
+        ghosts.hot.x = pp.x; ghosts.hot.z = pp.z;
+        ghosts.hot.r = (engine.lite ? 45 : 55) + Math.min(35, 1.3 * (pv && pl?.mode !== 'onfoot' ? pv.car.speed : 0));
+        const hs = ghosts.hots, bl = ghosts.blockers, mv = ghosts.movers;
+        hs.length = 0; bl.length = 0; mv.length = 0;
+        const solid = (c: Vehicle, hot: boolean) => {
+          if (Math.hypot(c.pos.x - cam.x, c.pos.z - cam.z) > 230) return;
+          mv.push(c.pos.x, c.pos.z, c.pos.y - c.spec.wheelRadius, c.vel.x, c.vel.z, specLength(c.spec), c.spec.single ? 0.4 : 0.95);
+          if (hot) hs.push(c.pos.x, c.pos.z, 22);
+        };
+        if (pv) solid(pv.car, false);
+        for (const c of engine.get<WantedApi>('wanted')?.policeCars() ?? []) solid(c, true);
+        for (const p of externalCars) if (p.blocking) for (const c of p.blocking()) solid(c, true);
+        // 实体车：有司机的在车道的队列里（`drivers`），但骑手贴着路边、被撞歪的车横在路上，都要按位置让
+        for (const n of pool) if (n.active) solid(n.car, false);
+        const foot = pl?.foot;
+        if (foot) bl.push(foot.pos.x, foot.pos.z, 0.4);
+        const people = engine.get<PeopleApi>('people');
+        if (people) for (const q of people.inRoad()) bl.push(q.x, q.z, 0.4);
+      }
       if (ghosts) {
         const ds = ghosts.drivers;
         ds.length = 0;

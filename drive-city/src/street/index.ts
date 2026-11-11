@@ -277,7 +277,7 @@ export function install(engine: Engine): void {
       for (const u of near) if (inFront(u, foot.pos.x, foot.pos.z)) { at = u; break; }
       if (at) {
         const u = at;
-        pl.offer?.({ x: u.x + u.nx * 1.2, z: u.z + u.nz * 1.2, r: FRONT + 0.6, label: t(`st.offer.${u.service}` as TKey, { shop: u.sign.text }), use: () => { openShop(u); } });
+        pl.offer?.({ x: u.x + u.nx * 1.2, z: u.z + u.nz * 1.2, r: FRONT + 0.6, label: t(`st.offer.${u.service}` as TKey, { shop: u.sign.text }), kind: 'shop', use: () => { openShop(u); } });
       }
     },
   };

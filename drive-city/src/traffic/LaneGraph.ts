@@ -28,6 +28,8 @@ export interface Link {
   kerbR: number;
   /** How far parked cars stand up on the pavement on the right of travel (0: none, or all in the road); walkers keep clear. */
   parkOut: number;
+  /** `LaneGraph.minLane`, once worked out. */
+  lane0?: number;
 }
 
 const SPEED: Record<string, number> = {
@@ -104,6 +106,48 @@ export class LaneGraph {
   laneOffset(l: Link, lane: number): number {
     return laneOffsetOf(l.oneway, l.lanes, l.laneW, l.hw, lane);
   }
+
+  /**
+   * 这条路上能用的头一条车道（2026-11-11）：数据里有些双幅路的两幅画得比中线间距还宽（安定门内大街两幅中线隔 8 米、每幅 13 米
+   * 宽；西直门北大街也是），两边最靠里的车道叠在一起，对开的车迎面穿过去——以前车少看不出来，轻量车把近处的车加到三倍就看见了。
+   * 一条单行路的车道中线如果落在对向另一条路的路面里，这条车道就不用。第一次问的时候算，记在路段上。
+   */
+  minLane(l: Link): number {
+    if (l.lane0 !== undefined) return l.lane0;
+    let m = 0;
+    if (l.oneway && l.lanes > 1 && l.cls !== 'service') {
+      const p = { x: 0, z: 0, dx: 0, dz: 0 }, q = { x: 0, z: 0, dx: 0, dz: 0 };
+      const hp = l.h;
+      const taken = (s: number): boolean => {
+        for (const id of this.near(p.x, p.z, 14)) {
+          const o = this.links[id];
+          if (o === l || o.cls === 'service' || o.cls === 'living_street') continue;
+          // 整条路上离这一点最近的地方（`project` 只在 hint 附近找）
+          let bd = Infinity, bs = 0;
+          for (let k = 1; k < o.cum.length; k++) {
+            const ax = o.pts[k * 2 - 2], az = o.pts[k * 2 - 1], vx = o.pts[k * 2] - ax, vz = o.pts[k * 2 + 1] - az, L2 = vx * vx + vz * vz || 1;
+            const t = Math.max(0, Math.min(1, ((p.x - ax) * vx + (p.z - az) * vz) / L2)), d = Math.hypot(p.x - ax - vx * t, p.z - az - vz * t);
+            if (d < bd) { bd = d; bs = o.cum[k - 1] + t * Math.sqrt(L2); }
+          }
+          if (bd > o.hw - 0.4 || bs < 1 || bs > o.len - 1) continue;
+          this.at(o, bs, 0, q);
+          if (q.dx * p.dx + q.dz * p.dz > -0.5) continue;
+          if (Math.abs((hp ? this.heightAt(l, s) : 0) - (o.h ? this.heightAt(o, bs) : 0)) > 2) continue;
+          return true;
+        }
+        return false;
+      };
+      for (const f of [0.2, 0.5, 0.8]) {
+        const s = l.len * f;
+        let k = m;
+        for (; k < l.lanes - 1; k++) { this.at(l, s, this.laneOffset(l, k), p); if (!taken(s)) break; }
+        if (k > m) m = k;
+      }
+    }
+    return (l.lane0 = m);
+  }
+  /** 车道号 `lane` 落到 `l` 上是哪条：不超过它的车道数，不用被对向路面占了的（`minLane`）。 */
+  laneOn(l: Link, lane: number): number { return Math.max(this.minLane(l), Math.min(lane, l.lanes - 1)); }
 
   /** Position and direction at arc length `s` along link `l`, `off` metres left of the centre line. */
   at(l: Link, s: number, off: number, out: { x: number; z: number; dx: number; dz: number }): typeof out {

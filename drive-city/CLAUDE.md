@@ -1,6 +1,6 @@
 # b城追车 / B CITY CHASE（目录：drive-city）— 北京背景的 GTA 式开放世界（three.js）
 
-设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`、`docs/street-level-design.md`（开车沉浸感和下车玩法，分三批；第一批和第二批的大部分已做）。
+设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`、`docs/street-level-design.md`（开车沉浸感和下车玩法，分三批；第一批和第二批已做，只差坐公交和打车）。
 
 现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到五环（2026-10-16 从四环扩出去；2026-11-08 南边沿 4 号线扩到枣园、清源路）、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，剧情战役（`campaign/`）第一幕五章已完成（见 `docs/gta-plan.md` §5–9），近战在 `combat/`。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
 
@@ -48,6 +48,7 @@
 - 普通开发服务器上跑长时间 probe 时不要改 `src/`（HMR 会在中途重载页面）；长测用 `FROZEN=1 npx vite --port 5198`，改代码或重建城市后要重启它。
 - **高架和桥面的碰撞体只在镜头附近才建**：任务里的脚本车（`ScriptCar`）开到离镜头几百米外的高架上会穿过桥面掉下去（第五章车队就这样掉到了桥下）。远处的任务车要放在地面路段，或者像 `m5.ts` 的 `deckGuard` 那样托住。
 - **资源地址只能用相对路径**：拼地址用 `import.meta.env.BASE_URL` 或 `new URL(…, document.baseURI)`，**不能用 `location.href`**；`<audio>`、`<img>` 这类元素要设 `crossOrigin = 'anonymous'`。国内玩家的页面带一个指向阿里云镜像的 `<base>`（见 `hosting-phones.md`「国内镜像」）。`npm run deploy` 会同步镜像，所以要有服务器的 ssh 权限，没有就设 `NO_MIRROR=1`。
+- **实体车只在玩家身边**（2026-11-11 轻量车，见 `traffic.md`）：`TrafficApi.cars()`、`nearestCar()` 只有玩家身边 55–115 米内的车，再远的是 `Ghosts.ts` 的轻量车，没有刚体，撞不到也抢不了。别的模块要在远处用一辆真车，得自己造（`spawnRunner`、`ExternalCars`）；任务车带 `blocking()` 的话周围 22 米会有实体车。`?lightcars=0` 回到老做法。
 - `world.contactPairsWith` 返回的是 broad-phase 配对：说"碰到了"之前要确认 manifold 里真有接触点。
 - `render/Lighting` 串联 `onBeforeCompile` 钩子，并在第一次打补丁时冻结材质的 program key——永远不要覆盖钩子（否则人群全部塌回绑定姿势），也不要事后改 shader define（会复用旧 program）。
 - 人爬楼梯靠的是 walk-only 坡道（`walkOnly`）：用盒子拼的台阶能站不能走；而人能走的坡车也能开，所以坡道的碰撞过滤去掉了 CAR，另外再配一个只挡车的块（`CarStops`）。有楼梯的地标必须传 `colliders`。详见 `landmarks.md` / `home-park.md`。

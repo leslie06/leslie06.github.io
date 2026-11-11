@@ -57,12 +57,14 @@ export class AiDriver {
   private lineLink = -1; private lineToEnd = 0;
 
   constructor(private g: LaneGraph, private sig: Signals, link: number, s: number, lane: number, private rnd: () => number) {
-    this.link = link; this.s = s; this.lane = lane;
+    this.link = link; this.s = s; this.lane = g.laneOn(g.links[link], lane);
     this.fill();
   }
 
   /** The link after this one (-1 where the road ends): the distant traffic looks there for the car in front. */
   get nextLink(): number { return this.queue.length ? this.queue[0] : -1; }
+  /** 接着一辆轻量车已经选好的下一段路走（Ghosts.ts 交接过来时它可能已经在往那边拐了）。 */
+  seed(next: number): void { if (next >= 0 && next !== this.link) { this.queue = [next]; this.fill(); } }
 
   private fill(): void {
     // Stops short where the road ends: `next` has nothing to give, the queue stays short, and the
@@ -79,7 +81,7 @@ export class AiDriver {
   private along(ahead: number, out: { x: number; z: number; dx: number; dz: number }): void {
     let l = this.g.links[this.link], s = this.s + ahead, i = 0;
     while (s > l.len && i < this.queue.length) { s -= l.len; l = this.g.links[this.queue[i++]]; }
-    const lane = Math.min(this.lane, l.lanes - 1), off = this.g.laneOffset(l, lane);
+    const lane = this.g.laneOn(l, this.lane), off = this.g.laneOffset(l, lane);
     // Pulled over: towards the right kerb (or the cars parked along it), never past a car's half width inside it.
     this.g.at(l, s, this.kerb > 0 ? -l.kerbR + this.kerb : Math.min(off, Math.max(-l.kerbR + 1.3, off - this.shift)), out);
   }
@@ -125,7 +127,7 @@ export class AiDriver {
       this.busStop = null;   // a stop is held on its link
       this.link = this.queue.shift()!;
       l = g.links[this.link];
-      if (this.lane >= l.lanes) this.lane = l.lanes - 1;
+      this.lane = g.laneOn(l, this.lane);
       this.fill();
       this.s = g.project(l, car.pos.x, car.pos.z, Math.max(0, this.s)).s;
     }

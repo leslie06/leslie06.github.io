@@ -25,6 +25,8 @@ import { ALIVE_KEY, steppedDownFrom } from '../core/Quality';
  *                               「开着车就重新加载了」）
  *   foot_s drive_s exits use km hood_s    徒步和开车各多少秒、下了几次车、徒步按 F 用了几次东西、开了多少公里、引擎盖/车内视角用了多少秒
  *                               （2026-11-10，docs/street-level-design.md D：以前答不了「玩家下不下车、下车做不做事、跑了多远」）
+ *   shop buy gate metro         `use` 里有几次是打开沿街店面的柜台、在柜台买了几样、几次是打开地铁口的选站、坐了几次地铁
+ *                               （2026-11-11：`use` 只有次数，分不出用的是柜台、地铁还是原来就有的东西）
  */
 type Stat = Record<string, number | string>;
 const S = (): Stat | null => (typeof window !== 'undefined' ? (window as unknown as { __stat?: Stat }).__stat ?? null : null);
@@ -74,9 +76,14 @@ export function install(engine: Engine): void {
   ev.on('taxi:board', () => stat.mark('fare'));
   ev.on('campaign:passed', () => stat.mark('chpass'));
   ev.on('campaign:call', (e) => { stat.mark('call'); if (e.go) stat.mark('callgo'); });
-  let exits = 0, uses = 0;
+  let exits = 0, uses = 0, shops = 0, gates = 0, buys = 0, rides = 0;
   ev.on('player:mode', (e) => { if (e.mode === 'onfoot') { stat.mark('foot'); stat.set('exits', ++exits); } if (e.carjacked) stat.mark('jack'); });
-  ev.on('player:use', () => stat.set('use', ++uses));
+  ev.on('player:use', (e) => {
+    stat.set('use', ++uses);
+    if (e.kind === 'shop') stat.set('shop', ++shops); else if (e.kind === 'metro') stat.set('gate', ++gates);
+  });
+  ev.on('street:buy', () => stat.set('buy', ++buys));
+  ev.on('metro:ride', () => stat.set('metro', ++rides));
   ev.on('combat:swing', () => stat.mark('fight'));
   ev.on('wanted:level', (e) => { if (e.up && e.level > 0) stat.mark('wanted'); });
   ev.on('wanted:busted', () => stat.mark('busted'));

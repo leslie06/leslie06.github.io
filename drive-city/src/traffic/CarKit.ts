@@ -220,6 +220,36 @@ export class CarKit {
   }
   private still: THREE.Matrix4[][] | null = null;
 
+  /**
+   * 一辆没有 Vehicle 的行驶中的车（Ghosts.ts 的「轻量车」，2026-11-11）：停在弹簧的静止位置上，车轮按 `spin` 转、前轮按 `steer`
+   * 打方向，刹车灯和出租车部件按给的来。和 `set` 一样剔除、打包。
+   */
+  setRail(pos: THREE.Vector3, quat: THREE.Quaternion, upper: THREE.Color, lower: THREE.Color, taxi: boolean, brake: boolean, spin: number, steer: number, plate: number): void {
+    if (this.kept >= this.cap) return;
+    if (view.on && !view.frustum.intersectsSphere(view.sphere.set(pos, this.cullR))) return;
+    const i = this.kept++;
+    this._m.compose(pos, quat, this._s);
+    put16(this.matrix.array as Float32Array, i * 16, this._m);
+    const u = this.upper.array as Float32Array, l = this.lower.array as Float32Array, f = this.flags.array as Float32Array;
+    u[i * 4] = upper.r; u[i * 4 + 1] = upper.g; u[i * 4 + 2] = upper.b; u[i * 4 + 3] = paintMetal(upper);
+    l[i * 4] = lower.r; l[i * 4 + 1] = lower.g; l[i * 4 + 2] = lower.b; l[i * 4 + 3] = paintMetal(lower);
+    f[i * 4] = taxi ? 1 : 0; f[i * 4 + 1] = brake ? 1 : 0; f[i * 4 + 2] = 0; f[i * 4 + 3] = 0;
+    (this.plate.array as Float32Array)[i] = (taxi ? 0 : 8) + plate % 8;
+    for (const ws of this.wheels) {
+      for (let s = 0; s < ws.slots.length; s++) {
+        const { k, dx } = ws.slots[s];
+        this._p.copy(this.hubs[k]);
+        this._e.set(spin, k < 2 ? steer : 0, 0, 'YXZ');
+        this._l.compose(this._p, this._q.setFromEuler(this._e), this._s);
+        const side = this.hubs[k].x > 0 ? 1 : -1;
+        if (dx !== 0) this._l.multiply(this._w.makeTranslation(dx * side, 0, 0));
+        if (side < 0) this._l.multiply(_yFlip);
+        this._w.multiplyMatrices(this._m, this._l);
+        put16(ws.mesh.instanceMatrix.array as Float32Array, (i * ws.perCar + s) * 16, this._w);
+      }
+    }
+  }
+
   /** Headlamps glow at night (all cars of the kit share the lamp levels). */
   setHeadlights(on: boolean): void {
     if (on === this.headOn) return;

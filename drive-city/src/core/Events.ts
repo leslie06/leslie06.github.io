@@ -15,7 +15,7 @@ export interface GameEvents {
   /** The player got in (`carjacked`: took a traffic car) or out of a car. */
   'player:mode': { mode: 'driving' | 'onfoot'; carjacked: boolean };
   /** F on something on offer while on foot (a shop, somebody to talk to, a bag): `label` is the prompt it showed. */
-  'player:use': { label: string };
+  'player:use': { label: string; kind?: string };
   /** Something bought over a shop counter in the street (street/): the sign's trade, what, and the price paid. */
   'street:buy': { trade: string; item: string; price: number };
   /** A ride on the underground (travel/Metro.ts): the stations' names and how many stops. */
