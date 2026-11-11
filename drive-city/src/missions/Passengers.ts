@@ -3,6 +3,7 @@ import { t, type TKey, type TParams } from '../core/I18n';
 import { randomLook, type Look } from '../character/Body';
 import { voiceOf, type VoiceSpec } from '../character/Voice';
 import type { Speaker } from '../game/Contracts';
+import { Comfort, type Rough } from './Comfort';
 
 /**
  * Who gets in the taxi. Most are just passengers; the rest have a way about them that changes how a
@@ -13,6 +14,8 @@ import type { Speaker } from '../game/Contracts';
  *   streamer  live on her phone: stunts tipped double, an audience that grows with them;
  *   drunk     late at night only: rough driving makes him sick (a cleaning bill), else a tip;
  *   mystery   rare: a star on the way, triple fare if the police are lost before the drop.
+ * 普通乘客和话痨大爷到站给星（Comfort.ts，2026-11-11）：一路没吓着他们就是五星，小费按星给。别的几种各有各的
+ * 算法（晕车的看平稳度、主播看特技……），不评星。
  */
 export type PaxKind = 'normal' | 'rush' | 'queasy' | 'chatty' | 'streamer' | 'drunk' | 'mystery';
 export const PAX_COLOR: Record<PaxKind, string> = { normal: '#cfd6dd', rush: '#7fb2ff', queasy: '#9fdc8c', chatty: '#e6b35c', streamer: '#ff7fbf', drunk: '#c79bff', mystery: '#8d949b' };
@@ -61,12 +64,25 @@ export class PaxRide {
   /** mystery: 'calm' before the star, 'hot' with the police on, 'lost' once they are shaken off. */
   heat: 'calm' | 'hot' | 'lost' = 'calm';
   private prevVx = NaN; private prevVz = 0;
+  /** 评星的乘客（普通、话痨）这一路的满意分；别的种类为 null。 */
+  readonly comfort: Comfort | null;
+  /** 普通乘客路过地标说过几回了（最多两回）。 */
+  private remarks = 0; private lmFirst = -1;
 
   constructor(readonly kind: PaxKind, readonly look: Look, seed: number, private say: (who: Speaker, text: string) => void, rnd: () => number) {
     this.voice = voiceOf(look, seed);
     this.viewers = 80 + Math.round(rnd() * 160);
     this.idleT = 12 + rnd() * 8;
+    this.comfort = kind === 'normal' || kind === 'chatty' ? new Comfort() : null;
   }
+
+  /** 到站给几颗星（1–5）；不评星的乘客是 0。 */
+  get stars(): number { return this.comfort?.stars ?? 0; }
+  /** 评星的乘客到现在还是五星：这时候班上的表不走（missions/index.ts）。 */
+  get calm(): boolean { return this.comfort?.stars === 5; }
+
+  /** 出了一件吓人的事（Comfort.ts 的 `Rough`）：评星的乘客扣分。 */
+  rough(what: Rough): void { this.comfort?.mark(what); }
 
   get speaker(): Speaker { return { name: t(`pax.name.${this.kind}` as TKey), color: PAX_COLOR[this.kind], look: this.look, voice: this.voice, at: null }; }
 
@@ -88,6 +104,7 @@ export class PaxRide {
   /** Each step of the ride: driving style, chatter, nagging. */
   step(dt: number, vx: number, vz: number, speed: number, rnd: () => number): void {
     this.lineT -= dt;
+    this.comfort?.step(dt);
     if (Number.isFinite(this.prevVx)) {
       const a = Math.hypot(vx - this.prevVx, vz - this.prevVz) / dt;
       if (a > 4.5 && a < 60) {
@@ -115,11 +132,18 @@ export class PaxRide {
     }
   }
 
-  /** The chatty one passing a landmark: a story, and a tip for it. */
+  /** Passing a landmark. The chatty one has a story for each, and tips for it; an ordinary passenger says a word about two at most. */
   landmark(id: string, name: string, rnd: () => number): void {
-    if (this.kind !== 'chatty' || this.told.has(id)) return;
-    this.told.add(id); this.lmTips += 8;
-    this.line(`pax.chatty.lm${1 + Math.floor(rnd() * 3)}`, { place: name });
+    if (this.told.has(id)) return;
+    if (this.kind === 'chatty') {
+      this.told.add(id); this.lmTips += 8;
+      this.line(`pax.chatty.lm${1 + Math.floor(rnd() * 3)}`, { place: name });
+    } else if (this.kind === 'normal' && this.lineT <= 0) {
+      this.told.add(id);
+      if (this.remarks >= 2) return;
+      if (this.lmFirst < 0) this.lmFirst = Math.floor(rnd() * 3);
+      this.line(`pax.normal.lm${1 + (this.lmFirst + this.remarks++) % 3}`, { place: name });
+    }
   }
 
   /** The tip their way: `stuntTips` what stunts earned in the usual reckoning. */

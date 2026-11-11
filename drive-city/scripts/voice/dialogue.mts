@@ -137,7 +137,7 @@ const INSTRUCT: Record<string, string> = {
   'npc.thief.thanks1': '感激涕零。', 'npc.thief.thanks2': '诚恳地塞钱。',
   // passengers
   'pax.normal.board': '普通乘客上车报地方。', 'pax.normal.board2': '着急地催。', 'pax.normal.board3': '客气地叮嘱。', 'pax.normal.air': '吓得尖叫。', 'pax.normal.arrive': '客气地道谢。',
-  'pax.normal.crash': '吓了一跳，埋怨。', 'pax.normal.drift': '惊叹。', 'pax.normal.near': '惊呼。', 'pax.normal.redlight': '紧张地喊。',
+  'pax.normal.lm': '看着窗外，随口一说。', 'pax.normal.crash': '吓了一跳，埋怨。', 'pax.normal.drift': '惊叹。', 'pax.normal.near': '惊呼。', 'pax.normal.redlight': '紧张地喊。',
   'pax.rush': '焦急，语速快。', 'pax.rush.arrive': '如释重负，狂喜。', 'pax.rush.near': '兴奋地叫好。', 'pax.rush.drift': '兴奋地叫好。', 'pax.rush.redlight': '激动地叫好。', 'pax.rush.slow2': '急得直跺脚，嘟囔。',
   'pax.queasy': '晕车难受，有气无力。', 'pax.queasy.calm': '缓过来了，真心道谢。', 'pax.queasy.air': '要吐了，干呕。',
   'pax.chatty': '话痨，慢悠悠地唠嗑。', 'pax.chatty.air': '吓一跳，捂着腰。', 'pax.chatty.near': '惊叹，然后夸奖。', 'pax.chatty.drift': '笑着嗔怪。', 'pax.chatty.redlight': '摇头数落。', 'pax.chatty.arrive': '心满意足。', 'pax.chatty.crash': '摆摆手，满不在乎。',
@@ -230,7 +230,7 @@ const INSTRUCT_EN: Record<string, string> = {
   'npc.thief.angry': 'Angry accusation.', 'npc.thief.ask': 'Calm.', 'npc.thief.cry': 'Panicked shouting.', 'npc.thief.down': 'Begging, flustered.', 'npc.thief.taunt': 'Taunting smugly while running.',
   'npc.thief.thanks1': 'Overwhelmed with gratitude.', 'npc.thief.thanks2': 'Sincerely pressing money on you.',
   'pax.normal.board': 'An ordinary passenger giving the address.', 'pax.normal.board2': 'In a hurry.', 'pax.normal.board3': 'Polite request.', 'pax.normal.air': 'Screaming in fright.', 'pax.normal.arrive': 'Polite thanks.',
-  'pax.normal.crash': 'Startled, complaining.', 'pax.normal.drift': 'Impressed.', 'pax.normal.near': 'Exclaiming.', 'pax.normal.redlight': 'Nervous shout.',
+  'pax.normal.lm': 'Looking out of the window, a passing remark.', 'pax.normal.crash': 'Startled, complaining.', 'pax.normal.drift': 'Impressed.', 'pax.normal.near': 'Exclaiming.', 'pax.normal.redlight': 'Nervous shout.',
   'pax.rush': 'Anxious, talking fast.', 'pax.rush.arrive': 'Hugely relieved, overjoyed.', 'pax.rush.near': 'Excited cheering.', 'pax.rush.drift': 'Excited cheering.', 'pax.rush.redlight': 'Thrilled cheering.', 'pax.rush.slow2': 'Fretting, muttering.',
   'pax.queasy': 'Carsick and miserable, weak.', 'pax.queasy.calm': 'Recovered, sincere thanks.', 'pax.queasy.air': 'About to throw up, retching.',
   'pax.chatty': 'A talkative old man, chatting leisurely.', 'pax.chatty.air': 'Startled, clutching his back.', 'pax.chatty.near': 'Amazed, then praising.', 'pax.chatty.drift': 'Laughing, scolding gently.', 'pax.chatty.redlight': 'Shaking his head, lecturing.', 'pax.chatty.arrive': 'Contented.', 'pax.chatty.crash': 'Waving it off, unbothered.',

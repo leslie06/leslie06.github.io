@@ -6,6 +6,10 @@ import { project } from '../city/Geo';
 import { LANDMARKS } from '../city/landmarks';
 import type { Blip, DialogueApi, HudApi, MissionApi, NavApi, PeopleApi, PlayerApi, RaceApi, RenderApi, VehicleApi, WantedApi } from '../game/Contracts';
 import { paxLook, pickPax, PaxRide, type PaxKind } from './Passengers';
+import { STAR_TIME, STAR_TIP, starText } from './Comfort';
+import { kerbReach, placeLabel, rankPlaces } from './Dest';
+import { redAhead } from './RedLight';
+import type { Place } from '../nav/Places';
 import { journalOf } from '../npc/Journal';
 import type { TrafficApi } from '../traffic';
 import { Gait } from '../character/Animator';
@@ -85,7 +89,7 @@ export interface MissionSystem extends MissionApi {
     /** 送豆腐: its state (null before the first step), and starting it as if walked into. */
     tofu(): { shop: { x: number; z: number }; stage: string; level: number; dest: { x: number; z: number } | null; left: number; t: number; best: number } | null;
     startTofu(): boolean;
-    ride(): { kind: PaxKind; smooth: number; viewers: number; heat: string; vomited: boolean; told: string[] } | null;
+    ride(): { kind: PaxKind; smooth: number; viewers: number; heat: string; vomited: boolean; told: string[]; comfort: number | null; stars: number; atRed: boolean } | null;
     state(): { stage: string; pickup: { x: number; z: number } | null; dest: { x: number; z: number; label: string } | null; limit: number; elapsed: number;
       shift: { on: boolean; clock: number; fares: number; earned: number }; hailers: { x: number; z: number; tier: number; urgent: boolean }[] };
   };
@@ -146,7 +150,20 @@ export async function install(engine: Engine): Promise<void> {
   let dest: { x: number; z: number; label: string } | null = null;
   let tripLen = 0, limit = 0, elapsed = 0, crashes = 0, careT = 0, tips = 0, tier = 0, spawnT = 0, scaredT = 0, summaryT = 0;
   let summary = '';
-  const shift = { on: false, clock: 0, fares: 0, earned: 0, away: 0 };
+  const shift = { on: false, clock: 0, fares: 0, earned: 0, away: 0, five: 0 };
+  /** 等红灯不走表（RedLight.ts）：出租车停在一盏没绿的灯前面，乘客的表和班上的表都停；赶火车的不等。每 0.25 秒看一次。 */
+  let atRed = false, redT = 0;
+  /**
+   * 班上的表这会儿停着：在等红灯，或者车上评星的乘客还是五星。班只有 60 秒，是给飙车定的；不停的话好好开的人
+   * 第一单没送到就收班了（实测 729 米带一个掉头，不堵不等灯也要 63 秒）。
+   */
+  const held = () => atRed || (stage === 'ride' && !!ride?.calm);
+  /** 头两回拉到评星的乘客，说一遍规矩。 */
+  let hinted = 0;
+  try { hinted = Number(localStorage.getItem('drivecity.hint.stars') ?? 0) || 0; } catch { /* private mode */ }
+  /** `places.json` 里的地方停在哪个路边：用到才找，找过的记着（找不到记 null）。 */
+  const kerbs = new Map<Place, Kerb | null>();
+  const landmarkNames = new Set(places.map((p) => p.zh));
 
   /** `urgent`: a street event's rush fare - red, flashing, gone in URGENT_WAIT s, double pay on a tighter clock. */
   interface Hailer { id: number; pos: THREE.Vector3; yaw: number; look: Look; gait: Gait; t: number; tier: number; marker: Marker; urgent: boolean; pax: PaxKind; seed: number }
@@ -239,7 +256,7 @@ export async function install(engine: Engine): Promise<void> {
     const grade = GRADES.find(([n]) => shift.earned >= n)![1];
     const record = shift.earned > best;
     if (record) { best = shift.earned; try { localStorage.setItem('drivecity.taxi.best', String(best)); } catch { /* ignore */ } }
-    summary = t(record ? 'taxi.shiftRecord' : 'taxi.shiftEnd', { n: shift.fares, cash: shift.earned, grade });
+    summary = t(record ? 'taxi.shiftRecord' : 'taxi.shiftEnd', { n: shift.fares, cash: shift.earned, grade }) + (shift.five ? `  ·  ${t('taxi.fiveStars', { n: shift.five })}` : '');
     engine.events.emit('taxi:shift', { earned: shift.earned, fares: shift.fares });
     summaryT = 7;
     banner.show(t('taxi.shiftOver', { grade }), grade === 'S' || grade === 'A' ? '#ffc21f' : '#f4f4f1');
@@ -274,15 +291,39 @@ export async function install(engine: Engine): Promise<void> {
       if (bestP) return set(bestP.kerb!.x, bestP.kerb!.z, lang() === 'zh' ? bestP.zh : bestP.en, bestLen);
       pax = 'normal';
     }
-    for (const i of places.map((_, k) => k).sort(() => rnd() - 0.5)) {
-      const p = places[i], d = Math.hypot(p.x - car.pos.x, p.z - car.pos.z);
-      if (d > T.max || d < T.min * 0.4) continue;
-      if (p.kerb === undefined) p.kerb = resolve(p);
-      if (!p.kerb) continue;
-      const len = nav()?.route(car.pos.x, car.pos.z, heading, p.kerb.x, p.kerb.z)?.len ?? d * 1.35;
-      if (len < T.min || len > T.max) continue;
-      return set(p.kerb.x, p.kerb.z, lang() === 'zh' ? p.zh : p.en, len);
-    }
+    // 地标和那张手工表（认得出的地方），三成先从这里挑；
+    const famous = (): boolean => {
+      for (const i of places.map((_, k) => k).sort(() => rnd() - 0.5)) {
+        const p = places[i], d = Math.hypot(p.x - car.pos.x, p.z - car.pos.z);
+        if (d > T.max || d < T.min * 0.4) continue;
+        if (p.kerb === undefined) p.kerb = resolve(p);
+        if (!p.kerb) continue;
+        const len = nav()?.route(car.pos.x, car.pos.z, heading, p.kerb.x, p.kerb.z)?.len ?? d * 1.35;
+        if (len < T.min || len > T.max) continue;
+        return set(p.kerb.x, p.kerb.z, lang() === 'zh' ? p.zh : p.en, len);
+      }
+      return false;
+    };
+    // 其余的从 places.json 的小区、医院、学校、商场……里挑（Dest.ts：按钟点的口味排好，挨个按真路程试）。
+    const named = (): boolean => {
+      const all = engine.get<{ name: string; places?: readonly Place[] }>('nav')?.places;
+      if (!all?.length) return false;
+      const zh = lang() === 'zh', hour = engine.get<RenderApi>('render')?.timeOfDay ?? 15;
+      // 真路程多半是直线的 1.2–1.6 倍，所以按直线先收窄一圈，十个候选里大多数路程合适
+      // 车头前面的先试：乘客站在右手路边，往回走的地方在大路上要绕一大圈掉头，路程多半不合适。
+      const ahead = (p: Place) => (p.x - car.pos.x) * car.fwd.x + (p.z - car.pos.z) * car.fwd.z > 0;
+      const cand = rankPlaces(all, car.pos.x, car.pos.z, T.min / 1.6, T.max / 1.15, hour, rnd, zh, 16, (q) => landmarkNames.has(q.name.zh) || kerbs.get(q) === null);
+      for (const p of [...cand.filter(ahead), ...cand.filter((q) => !ahead(q))]) {
+        let k = kerbs.get(p);
+        if (k === undefined) { k = nearestKerb(g, p.x, p.z, kerbReach(p), 0.8); kerbs.set(p, k); }
+        if (!k) continue;
+        const len = nav()?.route(car.pos.x, car.pos.z, heading, k.x, k.z)?.len ?? Math.hypot(k.x - car.pos.x, k.z - car.pos.z) * 1.35;
+        if (len < T.min || len > T.max) continue;
+        return set(k.x, k.z, placeLabel(p, zh), len);
+      }
+      return false;
+    };
+    if (rnd() < 0.3 ? famous() || named() : named() || famous()) return true;
     const a = pickAddress(g, nav(), rnd, car.pos.x, car.pos.z, T.min, T.max);
     if (!a) return false;
     const len = nav()?.route(car.pos.x, car.pos.z, heading, a.x, a.z)?.len ?? Math.hypot(a.x - car.pos.x, a.z - car.pos.z) * 1.35;
@@ -292,15 +333,17 @@ export async function install(engine: Engine): Promise<void> {
   engine.events.on('vehicle:impact', (e) => {
     if (stage !== 'ride' || e.strength < 3) return;
     crashes++;
+    ride?.rough(e.strength >= 8 ? 'hard' : 'crash');
     if (careT <= 0) { ride?.react('crash'); careT = 6; }
   });
-  engine.events.on('vehicle:land', ({ airTime }) => { if (stage === 'ride' && airTime > 0.3) ride?.react('air'); });
+  engine.events.on('vehicle:land', ({ airTime }) => { if (stage === 'ride' && airTime > 0.3) { ride?.rough('air'); ride?.react('air'); } });
+  engine.events.on('people:hit', (e) => { if (stage === 'ride' && e.byPlayer && !e.fair) { ride?.rough('ped'); if (careT <= 0) { ride?.react('crash'); careT = 6; } } });
   // Stunts with a passenger aboard are tipped (Crazy Taxi's "crazy through"), and they have something to say.
   engine.events.on('stunt:event', ({ kind, points }) => {
     if (stage !== 'ride') return;
     tips += Math.max(1, Math.round(points / 12));
     const m = kind === 'near' || kind === 'oncoming' ? 'near' : kind === 'drift' ? 'drift' : kind === 'redlight' ? 'redlight' : kind === 'smash' ? 'crash' : null;
-    if (m) ride?.react(m, points);
+    if (m) { ride?.rough(kind === 'oncoming' ? 'oncoming' : m); ride?.react(m, points); }
   });
   engine.events.on('vehicle:reset', () => { if (stage === 'boarding' || stage === 'ride' || stage === 'alight') { client.visible = false; client.walkT = client.walkDur; endFare(null, 2); } });
 
@@ -348,7 +391,7 @@ export async function install(engine: Engine): Promise<void> {
         if (ok && kind) { const h = hailers[hailers.length - 1]; h.pax = kind; h.look = paxLook(kind, rnd); }
         return ok;
       },
-      ride: () => (ride ? { kind: ride.kind, smooth: ride.smooth, viewers: ride.viewers, heat: ride.heat, vomited: ride.vomited, told: [...ride.told] } : null),
+      ride: () => (ride ? { kind: ride.kind, smooth: ride.smooth, viewers: ride.viewers, heat: ride.heat, vomited: ride.vomited, told: [...ride.told], comfort: ride.comfort?.value ?? null, stars: ride.stars, atRed } : null),
       jobPosts: () => jobs?.postList ?? [],
       startJob: (kind) => jobs?.startKind(kind) ?? false,
       job: () => jobs?.kind ?? null,
@@ -394,8 +437,13 @@ export async function install(engine: Engine): Promise<void> {
       const wanted = (engine.get<WantedApi>('wanted')?.level ?? 0) > 0;
       const other = !!engine.get<RaceApi>('races')?.active || !!jobs.busy || !!tofu?.busy;
       // The shift: its clock runs while you drive the taxi; out of it for long, or into a race or a job, it ends.
+      // 等红灯不走表：停在没绿的灯前面（赶火车的那位除外）。
+      if ((redT -= dt) <= 0) {
+        redT = 0.25;
+        atRed = inTaxi() && car.speed < 1.5 && !(stage === 'ride' && pax === 'rush') && redAhead(g, tr.signals, tr.time, car.pos.x, car.pos.z, car.fwd.x, car.fwd.z);
+      }
       if (shift.on) {
-        shift.clock -= dt;
+        if (!held()) shift.clock -= dt;
         shift.away = inTaxi() ? 0 : shift.away + dt;
         if (shift.clock <= 0 || shift.away > 5 || other) endShift();
       }
@@ -435,16 +483,22 @@ export async function install(engine: Engine): Promise<void> {
           if (client.walkT >= client.walkDur) {
             client.visible = false;
             if (!chooseDestination(tier)) { endFare(null); break; }
-            if (!shift.on) { shift.on = true; shift.clock = SHIFT; shift.fares = 0; shift.earned = 0; shift.away = 0; toast(t('taxi.shiftStart', { s: SHIFT })); }
+            if (!shift.on) { shift.on = true; shift.clock = SHIFT; shift.fares = 0; shift.earned = 0; shift.away = 0; shift.five = 0; toast(t('taxi.shiftStart', { s: SHIFT })); }
             stage = 'ride';
+            if (ride?.comfort && hinted < 2) {
+              hinted++;
+              try { localStorage.setItem('drivecity.hint.stars', String(hinted)); } catch { /* ignore */ }
+              after(() => { if (stage === 'ride') toast(t('taxi.starsHint')); }, 4);
+            }
           }
           break;
         case 'ride': {
-          elapsed += dt; rideT += dt;
+          if (!atRed) elapsed += dt;
+          rideT += dt;
           if (ride) {
             ride.step(dt, car.vel.x, car.vel.z, car.speed, rnd);
             // The old Beijinger has a story for every landmark passed.
-            if (ride.kind === 'chatty' && (lmT -= dt) <= 0) {
+            if ((ride.kind === 'chatty' || ride.kind === 'normal') && (lmT -= dt) <= 0) {
               lmT = 1;
               for (const p of places) if (p.id && !ride.told.has(p.id) && Math.hypot(p.x - car.pos.x, p.z - car.pos.z) < 160) { ride.landmark(p.id, lang() === 'zh' ? p.zh : p.en, rnd); break; }
             }
@@ -463,19 +517,23 @@ export async function install(engine: Engine): Promise<void> {
             const kind = ride?.kind ?? 'normal';
             const triple = kind === 'mystery' && ride?.heat === 'lost';
             const base = Math.round(payFor(tripLen / 1000) * (urgentRide ? 2 : 1) * (triple ? 3 : 1) * fareMult), bonus = Math.round(base * r.bonus * (kind === 'rush' ? 2 : 1));
-            const stuntTip = Math.max(0, tips - crashes * 3), tip = ride ? ride.tip(stuntTip) : stuntTip;
+            // 评星的乘客（普通、话痨）：星多了加小费、给班上加秒（Comfort.ts）；只加不扣。
+            const stars = ride?.stars ?? 0, starTip = stars ? Math.round(base * STAR_TIP[stars - 1]) : 0, starTime = stars ? STAR_TIME[stars - 1] : 0;
+            const stuntTip = Math.max(0, tips - crashes * 3), tip = (ride ? ride.tip(stuntTip) : stuntTip) + starTip;
             const cleaning = ride?.vomited ? 30 : 0;
             // 老张's word at the rank (contacts/): fares +20%.
             const total = Math.max(0, Math.round((base + bonus + tip - cleaning) * (engine.get<{ name: string; fareScale: number }>('contacts')?.fareScale ?? 1)));
-            engine.events.emit('taxi:fare', { pay: total, kind });
+            engine.events.emit('taxi:fare', { pay: total, kind, stars });
             api.addCash(total);
-            shift.fares++; shift.earned += total; shift.clock += r.time;
-            toast(t('taxi.paidArcade', { rating: t(r.key), pay: base + bonus, tip, s: r.time }));
+            shift.fares++; shift.earned += total; shift.clock += r.time + starTime;
+            if (stars === 5) shift.five++;
+            toast(t('taxi.paidArcade', { rating: t(r.key), pay: base + bonus, tip, s: r.time + starTime }));
             if (ride) {
               ride.line(`pax.${kind}.arrive`);
               if (kind !== 'normal') journal.meet(`pax.${kind}`);
               const extra = triple ? t('pax.mystery.triple', { n: base }) : cleaning ? t('pax.drunk.cleaning', { n: cleaning })
-                : kind === 'queasy' ? t('pax.queasy.tip', { n: Math.round(ride.smooth), tip }) : kind === 'streamer' ? t('pax.streamer.tip', { n: ride.viewers, tip }) : '';
+                : kind === 'queasy' ? t('pax.queasy.tip', { n: Math.round(ride.smooth), tip }) : kind === 'streamer' ? t('pax.streamer.tip', { n: ride.viewers, tip })
+                : stars ? t(stars === 5 ? 'pax.stars.five' : stars >= 3 ? 'pax.stars.some' : 'pax.stars.low', { stars: starText(stars), tip: starTip }) : '';
               if (extra) { lateToast = extra; lateT = 1.7; }
             }
             ride = null;
@@ -489,14 +547,15 @@ export async function install(engine: Engine): Promise<void> {
           break;
       }
       // The objective line.
-      const clock = shift.on ? fmt(shift.clock) : '';
+      const clock = shift.on ? fmt(shift.clock) : '', clockKey = held() && !atRed ? 'taxi.clockHeld' : 'taxi.clock';   // 等红灯时后面另有一句，不用两处都写
       if (stage === 'ride' && dest) {
-        objective = t('taxi.rideLine', { place: dest.label, time: fmt(limit - elapsed) }) + (shift.on ? `  ·  ${t('taxi.clock', { t: clock })}` : '') + (tips > 0 && ride?.kind !== 'queasy' ? `  ·  ${t('taxi.tips', { n: tips })}` : '')
-          + (ride?.kind === 'queasy' ? `  ·  ${t('pax.obj.smooth', { n: Math.round(ride.smooth) })}` : ride?.kind === 'streamer' ? `  ·  ${t('pax.obj.viewers', { n: ride.viewers })}` : '');
+        objective = t('taxi.rideLine', { place: dest.label, time: fmt(limit - elapsed) }) + (shift.on ? `  ·  ${t(clockKey, { t: clock })}` : '') + (tips > 0 && ride?.kind !== 'queasy' ? `  ·  ${t('taxi.tips', { n: tips })}` : '')
+          + (ride?.kind === 'queasy' ? `  ·  ${t('pax.obj.smooth', { n: Math.round(ride.smooth) })}` : ride?.kind === 'streamer' ? `  ·  ${t('pax.obj.viewers', { n: ride.viewers })}`
+            : ride?.stars ? `  ·  ${t('pax.obj.stars', { stars: starText(ride.stars) })}` : '') + (atRed ? `  ·  ${t('taxi.redWait')}` : '');
       } else if (stage === 'boarding') objective = t('taxi.boarding');
       else if (summaryT > 0) objective = summary;
       else if ((stage === 'pickup' || stage === 'wait') && inTaxi() && !other) {
-        objective = shift.on ? t('taxi.shiftLine', { t: clock, n: shift.fares, cash: shift.earned }) : t('taxi.find');
+        objective = shift.on ? t('taxi.shiftLine', { t: clock, n: shift.fares, cash: shift.earned }) + (atRed ? `  ·  ${t('taxi.redWait')}` : '') : t('taxi.find');
       } else objective = null;
     },
     update(dt, alpha) {

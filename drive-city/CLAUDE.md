@@ -1,6 +1,6 @@
 # b城追车 / B CITY CHASE（目录：drive-city）— 北京背景的 GTA 式开放世界（three.js）
 
-设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`、`docs/street-level-design.md`（开车沉浸感和下车玩法，分三批；第一批和第二批已做）。
+设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`、`docs/street-level-design.md`（开车沉浸感和下车玩法，分三批；第一批和第二批已做，第三批做了 A7 乘客评星）。
 
 现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到五环（2026-10-16 从四环扩出去；2026-11-08 南边沿 4 号线扩到枣园、清源路）、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，剧情战役（`campaign/`）第一幕五章已完成（见 `docs/gta-plan.md` §5–9），近战在 `combat/`。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
 
@@ -17,7 +17,7 @@
 | `people.md` | 人群身体、主角模型、行人与密度、热点和站立人群、写实 MPFB 人物和动画、近战、徒步下陷 |
 | `police.md` | 通缉/目击者报警、GTA 式追捕、直升机、特警 |
 | `nav-map.md` | 寻路、GPS 转向提示、地图标注（`Labeller`）、地图上的地铁 |
-| `gameplay.md` | 电台、开局逃亡、战役框架与第一章、氮气/连击/车库/出租车、特技坡道、断桥飞跃、兔儿爷、街头事件、地下车库、胡同捷径、短信剧情、排行榜、地标打卡、计时赛、短任务、快速前往（`travel/`）、每日任务（`daily/`）、玩法 probe |
+| `gameplay.md` | 电台、开局逃亡、战役框架与第一章、氮气/连击/车库/出租车（乘客评星、等红灯不走表）、特技坡道、断桥飞跃、兔儿爷、街头事件、地下车库、胡同捷径、短信剧情、排行榜、地标打卡、计时赛、短任务、快速前往（`travel/`）、每日任务（`daily/`）、玩法 probe |
 | `npc.md` | 脚本 NPC、对话框、配音（CosyVoice 录制管线、VoiceManager）、街头遭遇、按时间的街头生活、熟人和好感度福利 |
 | `online.md` | 玩家反馈（`/fb`）和回复、在线人数、账号云存档、聊天、促销兑换码、联机、赛道纪录史（`/rec`） |
 | `home-park.md` | 我家别墅（楼梯、大门、车道的坑）、欢乐谷游乐设施和过山车 |

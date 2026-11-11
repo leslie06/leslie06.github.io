@@ -9518,6 +9518,186 @@
    "instructEn": "Impressed."
   },
   {
+   "id": "pax.normal.lm1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这儿！每回路过都想进去看看。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Oh, look! I always mean to go in there.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这儿！每回路过都想进去看看。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Oh, look! I always mean to go in there.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这儿！每回路过都想进去看看。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Oh, look! I always mean to go in there.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这儿！每回路过都想进去看看。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Oh, look! I always mean to go in there.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这儿！每回路过都想进去看看。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Oh, look! I always mean to go in there.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这儿！每回路过都想进去看看。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Oh, look! I always mean to go in there.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了？那快了。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Here already? Not far now.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了？那快了。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Here already? Not far now.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了？那快了。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Here already? Not far now.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了？那快了。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Here already? Not far now.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了？那快了。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Here already? Not far now.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到这儿了？那快了。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "Here already? Not far now.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这地方……上回来还是好几年前。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "This place... I haven't been in years.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这地方……上回来还是好几年前。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "This place... I haven't been in years.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这地方……上回来还是好几年前。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "This place... I haven't been in years.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这地方……上回来还是好几年前。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "This place... I haven't been in years.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这地方……上回来还是好几年前。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "This place... I haven't been in years.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
+   "id": "pax.normal.lm3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这地方……上回来还是好几年前。",
+   "instruct": "看着窗外，随口一说。",
+   "textEn": "This place... I haven't been in years.",
+   "instructEn": "Looking out of the window, a passing remark."
+  },
+  {
    "id": "pax.normal.near",
    "archetype": "my",
    "trigger": "dialogue",

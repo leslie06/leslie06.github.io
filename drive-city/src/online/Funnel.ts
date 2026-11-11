@@ -27,6 +27,7 @@ import { ALIVE_KEY, steppedDownFrom } from '../core/Quality';
  *                               （2026-11-10，docs/street-level-design.md D：以前答不了「玩家下不下车、下车做不做事、跑了多远」）
  *   shop buy gate metro         `use` 里有几次是打开沿街店面的柜台、在柜台买了几样、几次是打开地铁口的选站、坐了几次地铁
  *                               （2026-11-11：`use` 只有次数，分不出用的是柜台、地铁还是原来就有的东西）
+ *   fares star5                 拉到站几单、其中几单五星好评（2026-11-11，street-level-design A7：有没有人好好开）
  */
 type Stat = Record<string, number | string>;
 const S = (): Stat | null => (typeof window !== 'undefined' ? (window as unknown as { __stat?: Stat }).__stat ?? null : null);
@@ -74,6 +75,9 @@ export function install(engine: Engine): void {
     if (p) from = { x: p.x, z: p.z };
   });
   ev.on('taxi:board', () => stat.mark('fare'));
+  // 拉到站的单数，其中五星的：看有没有人好好开（street-level-design A7）
+  let fares = 0, five = 0;
+  ev.on('taxi:fare', (e) => { stat.set('fares', ++fares); if (e.stars === 5) stat.set('star5', ++five); });
   ev.on('campaign:passed', () => stat.mark('chpass'));
   ev.on('campaign:call', (e) => { stat.mark('call'); if (e.go) stat.mark('callgo'); });
   let exits = 0, uses = 0, shops = 0, gates = 0, buys = 0, rides = 0;

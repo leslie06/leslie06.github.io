@@ -2,7 +2,7 @@
 export const DAILY_EN = {
   'dly.t.drift': 'Drift {n} points in all', 'dly.t.near': 'Near-miss {n} cars', 'dly.t.oncoming': 'Drive into oncoming traffic {n} times',
   'dly.t.combo': 'Bank ¥{n} from one combo', 'dly.t.fare': 'Pick up a fare', 'dly.t.photo': "Have a photo taken at Nanluoguxiang's studio",
-  'dly.t.collect': 'Collect the takings at one of your places', 'dly.t.fares': 'Drive {n} fares', 'dly.t.jobs': 'Finish {n} short jobs',
+  'dly.t.collect': 'Collect the takings at one of your places', 'dly.t.fares': 'Drive {n} fares', 'dly.t.star5': 'Earn {n} five-star ratings from fares', 'dly.t.jobs': 'Finish {n} short jobs',
   'dly.t.race': 'Finish a street race in the top three', 'dly.t.jump': 'Fly a stunt jump {n} times', 'dly.t.deliver': 'Deliver {n} take-away orders in Nanluoguxiang',
   'dly.t.dance': 'Have a go on the dance machine', 'dly.t.landmark': "Today's landmark: go to {name}", 'dly.t.checkin': 'Check in at a landmark you have not been to',
   'dly.t.trial': 'Silver or better in a time trial', 'dly.t.escape': 'Lose a wanted level of three stars or more', 'dly.t.wreck': 'Wreck {n} police cars',
@@ -33,7 +33,7 @@ export const DAILY_EN = {
 export const DAILY_ZH: Record<keyof typeof DAILY_EN, string> = {
   'dly.t.drift': '漂移累计 {n} 分', 'dly.t.near': '擦着车过 {n} 次', 'dly.t.oncoming': '逆行开车 {n} 段',
   'dly.t.combo': '一次连击存下 ¥{n}', 'dly.t.fare': '拉一个客', 'dly.t.photo': '在南锣鼓巷的照相馆拍张照',
-  'dly.t.collect': '去自己的一家店收一次账', 'dly.t.fares': '拉 {n} 个客', 'dly.t.jobs': '做完 {n} 个短任务',
+  'dly.t.collect': '去自己的一家店收一次账', 'dly.t.fares': '拉 {n} 个客', 'dly.t.star5': '拉客拿 {n} 个五星好评', 'dly.t.jobs': '做完 {n} 个短任务',
   'dly.t.race': '跑一场街头赛进前三', 'dly.t.jump': '特技飞跃 {n} 次', 'dly.t.deliver': '在南锣鼓巷送 {n} 单外卖',
   'dly.t.dance': '玩一次跳舞机', 'dly.t.landmark': '今天的地标：去{name}', 'dly.t.checkin': '打卡一个没去过的地标',
   'dly.t.trial': '计时赛拿银牌以上', 'dly.t.escape': '甩掉一次 3 星以上的通缉', 'dly.t.wreck': '撞毁 {n} 辆警车',

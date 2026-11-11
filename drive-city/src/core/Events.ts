@@ -40,7 +40,8 @@ export interface GameEvents {
   /** A hailer is getting into the taxi (missions/): which one (`MissionApi.hailers`). */
   'taxi:board': { id: number };
   /** A taxi fare was paid (missions/). */
-  'taxi:fare': { pay: number; kind: string };
+  /** `stars`: 评星的乘客（普通、话痨）给了几颗，1–5；别的乘客是 0。 */
+  'taxi:fare': { pay: number; kind: string; stars?: number };
   /** A street event's race against the red saloon ended (events/). */
   'challenge:result': { won: boolean };
   /** A traffic officer blew the whistle (life/). */

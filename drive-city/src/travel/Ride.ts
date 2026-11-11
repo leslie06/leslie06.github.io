@@ -8,6 +8,8 @@ import type { CameraApi, HudApi, Interaction, MissionApi, NavApi, PlayerApi, Ren
 import { ShopPanel, type Row } from '../district/Panel';
 import { shotMode } from '../debug/ShotMode';
 import { fare as meter, PLACES } from '../missions';
+import { placeLabel, usable } from '../missions/Dest';
+import type { Place } from '../nav/Places';
 import type { FareCar, TrafficApi } from '../traffic';
 import type { UiApi } from '../ui';
 import { specLength } from '../vehicle/Bodies';
@@ -33,6 +35,8 @@ export interface TransitApi extends System {
 }
 
 const BUS_FARE = 2;
+/** 打车面板「附近」一栏列几个地方。 */
+const NEARBY = 14;
 /** 招手够得着的出租车：前后和横向，米。 */
 const HAIL_AHEAD = 45, HAIL_BEHIND = 8, HAIL_SIDE = 13;
 /** 叫停的出租车等多久。 */
@@ -255,6 +259,14 @@ export function install(engine: Engine): void {
       }
       return { x: px, z: pz, label: p.name, d: Math.hypot(px - x, pz - z) };
     }).filter((p) => p.d > 300).sort((a, b) => a.d - b.d);
+    // 附近叫得出名字的地方（places.json 的医院、商场、饭店、大学、公园……，和出租车活儿的乘客去的是同一批：missions/Dest.ts）
+    const known = new Set(marks.map((m) => m.label));
+    const around = (engine.get<{ name: string; places?: readonly Place[] }>('nav')?.places ?? [])
+      .filter((p) => p.rank <= 2 && p.cat !== 'metro' && Math.abs(p.x - x) < 5000 && Math.abs(p.z - z) < 5000 && usable(p, zh) && !known.has(placeLabel(p, zh)))
+      .map((p) => ({ x: p.x, z: p.z, label: placeLabel(p, zh), d: Math.hypot(p.x - x, p.z - z) }))
+      .filter((p) => p.d > 300 && p.d < 5000).sort((a, b) => a.d - b.d).slice(0, NEARBY);
+    first = true;
+    for (const p of around) { rows.push({ x: p.x, z: p.z, label: p.label, section: first ? t('ride.sec.near') : undefined }); first = false; }
     first = true;
     for (const p of marks) { rows.push({ x: p.x, z: p.z, label: p.label, section: first ? t('ride.sec.landmarks') : undefined }); first = false; }
     return { rows };
