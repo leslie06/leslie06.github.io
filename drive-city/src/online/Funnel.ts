@@ -28,6 +28,9 @@ import { ALIVE_KEY, steppedDownFrom } from '../core/Quality';
  *   shop buy gate metro         `use` 里有几次是打开沿街店面的柜台、在柜台买了几样、几次是打开地铁口的选站、坐了几次地铁
  *                               （2026-11-11：`use` 只有次数，分不出用的是柜台、地铁还是原来就有的东西）
  *   fares star5                 拉到站几单、其中几单五星好评（2026-11-11，street-level-design A7：有没有人好好开）
+ *   talk way favask favour      `use` 里有几次是对着路人按 F、其中问了几回路、路人开口求了几件事、办成了几件（2026-11-11，
+ *                               street-level-design C4：路人的委托有没有人碰上、应不应、办不办得完）
+ *   errand errdone              在柜台上接了几单活（外卖、派件、代驾）、送完了几单（2026-11-11，street-level-design C5）
  */
 type Stat = Record<string, number | string>;
 const S = (): Stat | null => (typeof window !== 'undefined' ? (window as unknown as { __stat?: Stat }).__stat ?? null : null);
@@ -84,8 +87,15 @@ export function install(engine: Engine): void {
   ev.on('player:mode', (e) => { if (e.mode === 'onfoot') { stat.mark('foot'); stat.set('exits', ++exits); } if (e.carjacked) stat.mark('jack'); });
   ev.on('player:use', (e) => {
     stat.set('use', ++uses);
-    if (e.kind === 'shop') stat.set('shop', ++shops); else if (e.kind === 'metro') stat.set('gate', ++gates);
+    if (e.kind === 'shop') stat.set('shop', ++shops); else if (e.kind === 'metro') stat.set('gate', ++gates); else if (e.kind === 'talk') stat.set('talk', ++talks);
   });
+  let talks = 0, ways = 0, asked = 0, favours = 0;
+  ev.on('favour:way', () => stat.set('way', ++ways));
+  ev.on('favour:asked', () => stat.set('favask', ++asked));
+  ev.on('favour:done', () => stat.set('favour', ++favours));
+  let errands = 0, errDone = 0;
+  ev.on('errand:taken', () => stat.set('errand', ++errands));
+  ev.on('errand:done', () => stat.set('errdone', ++errDone));
   ev.on('street:buy', () => stat.set('buy', ++buys));
   ev.on('metro:ride', () => stat.set('metro', ++rides));
   ev.on('ride:board', (e) => stat.set(e.kind === 'bus' ? 'bus' : 'cab', e.n));

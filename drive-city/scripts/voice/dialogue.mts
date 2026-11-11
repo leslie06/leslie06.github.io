@@ -122,6 +122,18 @@ const INSTRUCT: Record<string, string> = {
   'npc.bark.praise': '兴奋地叫好。', 'npc.bark.wanted': '指着大声喊。',
   'npc.chat.day1': '悠闲地搭话。', 'npc.chat.day2': '热心又自豪。', 'npc.chat.day3': '絮叨地抱怨。', 'npc.chat.day4': '神秘地透露。', 'npc.chat.day5': '好心提醒。', 'npc.chat.day6': '客气地让路。',
   'npc.chat.morning': '热情地打招呼。', 'npc.chat.night': '有点儿意外地问。', 'npc.chat.rain': '无奈地抱怨。', 'npc.chat.wanted': '紧张，结结巴巴。',
+  // 问路、路人的小委托（favours/）
+  'npc.way': '热心地给人指路，边说边比划。', 'npc.way.none': '想了想，随口说。',
+  'npc.fav': '客气地求人帮忙，口语化。', 'npc.fav.hail': '客气地叫住路过的人。', 'npc.fav.no': '不在意，客气地说。',
+  'npc.fav.deliver.thanks': '高兴地道谢，叮嘱一句。', 'npc.fav.deliver.done': '店里的人，热络地应一声。',
+  'npc.fav.photo.ask': '外地口音的游客，兴冲冲又有点儿不好意思。', 'npc.fav.photo.pose': '兴奋地喊口令。', 'npc.fav.photo.done': '开心地道谢。',
+  'npc.fav.lift.thanks': '喜出望外地道谢。', 'npc.fav.lift.ride': '坐在车里松了口气，感慨。', 'npc.fav.lift.done': '到地方了，感激地道谢。',
+  'npc.fav.lift.scared': '吓着了，慌张。', 'npc.fav.lift.gone': '等不及了，无奈。',
+  'npc.fav.find.ask': '着急，又不好意思麻烦人。', 'npc.fav.find.thanks': '感激，赶紧交代。', 'npc.fav.find.point': '一边回想一边指。',
+  'npc.fav.find.done': '又惊又喜，连声道谢。', 'npc.fav.find.gone': '叹口气，算了。',
+  // 活儿的最后一百米（errands/）、弃车跑的司机（events/）
+  'npc.err.takeout.thanks': '收到外卖，高兴地道谢。', 'npc.err.takeout.late': '等急了，不高兴地埋怨。', 'npc.err.parcel': '收到快递，随口道谢。',
+  'npc.fug': '被追上按倒在地，喘着气求饶。',
   // encounters
   'npc.courier.ask': '疼得龇牙，又急又恳切。', 'npc.courier.thanks': '如释重负，急切地催。',
   'npc.daijia.wave': '醉醺醺地招手喊。', 'npc.daijia.bump': '心疼地叫。', 'npc.daijia.done': '醉醺醺，含糊地道谢。', 'npc.daijia.ride1': '醉醺醺地嘟囔。', 'npc.daijia.ride2': '醉醺醺，开始絮叨。', 'npc.daijia.ride3': '打着嗝，迷迷糊糊。',
@@ -217,6 +229,16 @@ const INSTRUCT_EN: Record<string, string> = {
   'npc.bark.praise': 'Cheering excitedly.', 'npc.bark.wanted': 'Pointing and shouting.',
   'npc.chat.day1': 'Idle small talk.', 'npc.chat.day2': 'Helpful and proud.', 'npc.chat.day3': 'Grumbling.', 'npc.chat.day4': 'Letting you in on a secret.', 'npc.chat.day5': 'A friendly warning.', 'npc.chat.day6': 'Politely making way.',
   'npc.chat.morning': 'Warm greeting.', 'npc.chat.night': 'A little surprised.', 'npc.chat.rain': 'Resigned complaint.', 'npc.chat.wanted': 'Nervous, stammering.',
+  'npc.way': 'Helpfully giving directions, gesturing as they talk.', 'npc.way.none': 'Thinking for a moment, offhand.',
+  'npc.fav': 'Politely asking a stranger for a favour, conversational.', 'npc.fav.hail': 'Politely stopping someone walking past.', 'npc.fav.no': 'Unbothered, polite.',
+  'npc.fav.deliver.thanks': 'Pleased thanks, then a reminder.', 'npc.fav.deliver.done': 'A shopkeeper, warm and brisk.',
+  'npc.fav.photo.ask': 'An out-of-town tourist, eager and a little shy.', 'npc.fav.photo.pose': 'Excited, calling it out.', 'npc.fav.photo.done': 'Delighted thanks.',
+  'npc.fav.lift.thanks': 'Overjoyed thanks.', 'npc.fav.lift.ride': 'In the car, relieved, musing.', 'npc.fav.lift.done': 'Arriving, grateful.',
+  'npc.fav.lift.scared': 'Frightened, flustered.', 'npc.fav.lift.gone': 'Tired of waiting, resigned.',
+  'npc.fav.find.ask': 'Worried, embarrassed to ask.', 'npc.fav.find.thanks': 'Grateful, quickly describing them.', 'npc.fav.find.point': 'Trying to remember, pointing.',
+  'npc.fav.find.done': 'Surprised and delighted, thanking over and over.', 'npc.fav.find.gone': 'A sigh, giving up.',
+  'npc.err.takeout.thanks': 'Getting their food delivery, pleased thanks.', 'npc.err.takeout.late': 'Tired of waiting, annoyed.', 'npc.err.parcel': 'Getting a parcel, offhand thanks.',
+  'npc.fug': 'Caught and knocked down, panting, begging.',
   'npc.courier.ask': 'Wincing in pain, urgent and pleading.', 'npc.courier.thanks': 'Relieved, then hurrying you.',
   'npc.daijia.wave': 'Drunk, waving and calling out.', 'npc.daijia.bump': 'Crying out, worried about his car.', 'npc.daijia.done': 'Drunk, mumbled thanks.', 'npc.daijia.ride1': 'Drunk mumbling.', 'npc.daijia.ride2': 'Drunk, starting to ramble.', 'npc.daijia.ride3': 'Hiccupping, groggy.',
   'npc.foreigner.ask': 'Polite, a little nervous.', 'npc.foreigner.done': 'Very grateful and warm.', 'npc.foreigner.wave': 'Waving and calling out.', 'npc.foreigner.wow': 'Amazed, very excited.',
@@ -255,6 +277,8 @@ const voicesOf = (key: string) => {
   if (key.startsWith('npc.foreigner.')) return ['xm'];
   // Panther's thugs (the street brawl's taunts) in one voice, the one chapter 2's thugs speak in
   if (key.startsWith('npc.gang.')) return ['mm'];
+  // 弃车跑的司机（events/）是个年轻男的：只录这一种嗓音
+  if (key.startsWith('npc.fug.')) return ['my'];
   const story = /^cmp\.m\d+\.([kycdbgzw])\d+$/.exec(key);
   if (story) return [{ k: 'laok', y: 'xiaoyu', c: 'chenye', d: 'daliu', b: 'baoge', g: 'mm', z: 'laozhou', w: 'wang' }[story[1]]!];
   return GENERAL;

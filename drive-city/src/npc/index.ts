@@ -12,7 +12,7 @@ import type { TrafficApi } from '../traffic';
 import type { Link } from '../traffic/LaneGraph';
 import type { Vehicle } from '../vehicle/Vehicle';
 import { randomLook, type Look } from '../character/Body';
-import { nearestKerb, SIDEWALK } from '../people/Pavement';
+import { inbound, nearestKerb, pavementRun as runAlong, SIDEWALK } from '../people/Pavement';
 import { Marker } from '../missions/Marker';
 import { PLAYER_LOOK } from '../player';
 import { journalOf } from './Journal';
@@ -38,6 +38,11 @@ export interface NpcApi extends System {
   readonly active: Kind | null;
   /** A dashcam is fitted (the garage sells it; a scammer who sees it runs). */
   dashcam: boolean;
+  /**
+   * 接一单代驾（errands/：夜里喝酒的店的柜台，2026-11-11）：那位老板和他的车出现在附近的路边，跟他说话就开始。
+   * 没成返回 false（白天、别的事正进行、附近找不到路边）。
+   */
+  daijia(): boolean;
   debug: { start(kind: Kind): boolean; wait(): number; state(): Record<string, unknown> };
 }
 
@@ -121,51 +126,15 @@ export async function install(engine: Engine): Promise<void> {
 
   // ---------------------------------------------------------------- geometry
 
-  /** Links arriving at each node (LaneGraph keeps the ones leaving). */
-  const inn: number[][] = g.out.map(() => []);
-  for (const l of g.links) inn[l.to].push(l.id);
-  /** A run along the pavements from near (x, z), heading away from (ax, az): [x, z, ...] every 3 m, `len` m. */
-  const pavementRun = (x: number, z: number, ax: number, az: number, len: number): number[] | null => {
-    const k = nearestKerb(g, x, z, 18, 1.2);
-    if (!k) return null;
-    let l: Link = g.links[k.link], s = k.s, side = k.side;
-    g.at(l, s, 0, at);
-    let dir = at.dx * (x - ax) + at.dz * (z - az) >= 0 ? 1 : -1;
-    const pts: number[] = [];
-    let left = len, hx = at.dx * dir, hz = at.dz * dir;
-    for (let guard = 0; guard < 40 && left > 0; guard++) {
-      const end = dir > 0 ? l.len : 0;
-      for (let u = s; dir > 0 ? u < end : u > end; u += dir * 3) {
-        g.at(l, u, side * (l.hw + 0.6), at);   // along the kerb edge (a car can brush him off it)
-        pts.push(at.x, at.z); hx = at.dx * dir; hz = at.dz * dir;
-        if ((left -= 3) <= 0) break;
-      }
-      if (left <= 0) break;
-      // On round the corner: the straightest road on from this node, either way along it (not back
-      // the way it came). A one-way street is run against its traffic as happily as with it.
-      const node = dir > 0 ? l.to : l.from;
-      let best = -1, bd = -0.2, bdir = 1;
-      const consider = (c: number, d: number) => {
-        if (c === l.id || c === l.rev) return;
-        const o = g.links[c];
-        if (o.hmax > 0.3 || o.len < 4) return;
-        g.at(o, d > 0 ? Math.min(4, o.len / 2) : Math.max(o.len - 4, o.len / 2), 0, at);
-        const dot = (at.dx * hx + at.dz * hz) * d;
-        if (dot > bd) { bd = dot; best = c; bdir = d; }
-      };
-      for (const c of g.out[node]) consider(c, 1);
-      for (const c of inn[node]) consider(c, -1);
-      if (best < 0) break;
-      side = side * dir * bdir; dir = bdir; l = g.links[best]; s = dir > 0 ? 0 : l.len;
-    }
-    return pts.length >= 6 ? pts : null;
-  };
+  /** A run along the pavements from near (x, z), heading away from (ax, az) (people/Pavement.ts; events/ uses it too). */
+  const inn = inbound(g);
+  const pavementRun = (x: number, z: number, ax: number, az: number, len: number): number[] | null => runAlong(g, inn, x, z, ax, az, len);
 
   /** The player's road and how far along it they are (the link heading their way). */
   const onRoad = (c: Vehicle): { l: Link; s: number } | null => {
     let best: Link | null = null, bd = 12, bs = 0;
     for (const id of g.near(c.pos.x, c.pos.z, 30)) {
-      const l = g.links[id], pr = g.project(l, c.pos.x, c.pos.z, l.len / 2);
+      const l = g.links[id], pr = g.nearestOn(l, c.pos.x, c.pos.z);
       g.at(l, pr.s, 0, at);
       if (at.dx * c.fwd.x + at.dz * c.fwd.z < 0.5 || pr.d >= bd) continue;
       bd = pr.d; best = l; bs = pr.s;
@@ -659,7 +628,7 @@ export async function install(engine: Engine): Promise<void> {
   // ---------------------------------------------------------------- P3: four more
 
   /** A kerb ahead of the player, min..max m away, in front: where someone waves from. */
-  const kerbAhead = (min: number, max: number): { x: number; z: number; yaw: number; side: number; l: Link; s: number } | null => {
+  const kerbAhead = (min: number, max: number, any = false): { x: number; z: number; yaw: number; side: number; l: Link; s: number } | null => {
     const P = pl.position, f = facing();
     const ids = g.near(P.x, P.z, max);
     for (let k = 0; k < 30 && ids.length; k++) {
@@ -668,7 +637,7 @@ export async function install(engine: Engine): Promise<void> {
       const s = 6 + rnd() * (l.len - 12), side = l.oneway ? -1 : rnd() < 0.5 ? 1 : -1;
       g.at(l, s, side * (l.hw + 0.9), at);
       const dx = at.x - P.x, dz = at.z - P.z, d = Math.hypot(dx, dz);
-      if (d < min || d > max || (dx * f.x + dz * f.z) / d < 0.35) continue;
+      if (d < min || d > max || (!any && (dx * f.x + dz * f.z) / d < 0.35)) continue;   // `any`：不管朝哪边（玩家正对着店门）
       engine.get<ParkingApi>('parking')?.clearAround(at.x, at.z, 4, 120);   // no parked car between them and the road
       return { x: at.x, z: at.z, yaw: Math.atan2(-side * at.dz, side * at.dx), side, l, s };
     }
@@ -683,9 +652,9 @@ export async function install(engine: Engine): Promise<void> {
   };
   /** Someone waiting at a kerb: speak when the player is near, board (walk to the car and vanish) when they stop. */
   const W = { who: null as Actor | null, kerb: new THREE.Vector3(), waved: false, looks: null as Look | null, dest: null as { x: number; z: number; label: string } | null, limit: 0, elapsed: 0, n: 0, lineT: 0 };
-  const waiter = (kind: Kind, look: Look, act: Action | null, seat?: number): boolean => {
+  const waiter = (kind: Kind, look: Look, act: Action | null, seat?: number, any = false): boolean => {
     const driving = pl.mode === 'driving';
-    const k = kerbAhead(driving ? 60 : 25, driving ? 160 : 90);
+    const k = kerbAhead(driving ? 60 : 25, driving ? 160 : 90, any);
     if (!k) return false;
     const a = people.spawnActor!(k.x, k.z, { look, yaw: k.yaw });
     if (!a) return false;
@@ -769,16 +738,18 @@ export async function install(engine: Engine): Promise<void> {
   };
 
   // --- 代驾 (night)
-  const D = { car: null as Vehicle | null, dmg: 0, fee: 260 };
-  const startDaijia = (): boolean => {
+  const D = { car: null as Vehicle | null, dmg: 0, fee: 260, called: false };
+  /** `called`：玩家在柜台上接的单（errands/），不是路上碰见的：哪个方向的路边都行，目标栏说他在哪。 */
+  const startDaijia = (called = false): boolean => {
     if (!night()) return false;
     const look = randomLook(rnd);
     look.fem = 0; look.age = 0.45; look.top = 'jacket'; look.shirt = new THREE.Color('#1a1b20'); look.inner = new THREE.Color('#eef0f2'); look.pants = new THREE.Color('#1a1b20'); look.cap = null; look.mask = null; look.build = 0.8; look.glasses = rnd() < 0.5;
-    if (!waiter('daijia', look, 'stagger')) return false;
+    if (!waiter('daijia', look, 'stagger', undefined, called)) return false;
+    D.called = called;
     // his car, parked at the kerb beside him
     const a = W.who!, k = { x: a.pos.x, z: a.pos.z };
     let best: Link | null = null, bd = 20, bs = 0;
-    for (const id of g.near(k.x, k.z, 25)) { const l = g.links[id], pr = g.project(l, k.x, k.z, l.len / 2); if (pr.d < bd) { bd = pr.d; best = l; bs = pr.s; } }
+    for (const id of g.near(k.x, k.z, 25)) { const l = g.links[id], pr = g.nearestOn(l, k.x, k.z); if (pr.d < bd) { bd = pr.d; best = l; bs = pr.s; } }
     if (!best) { end(null); return false; }
     g.at(best, Math.min(best.len - 3, bs + 4), 0, at);
     const lat = ((k.x - at.x) * at.dz - (k.z - at.z) * at.dx) >= 0 ? 1 : -1;
@@ -792,9 +763,11 @@ export async function install(engine: Engine): Promise<void> {
     const sp = waiterSpeaker('npc.who.boss', '#9aa0a5');
     const v = vehicle();
     if (phase === 'wait') {
+      if (D.called) story(t('npc.obj.daijiaWave', { m: Math.round(Math.hypot(W.kerb.x - pl.position.x, W.kerb.z - pl.position.z)) }));
       if (!W.waved && W.who && Math.hypot(W.who.pos.x - pl.position.x, W.who.pos.z - pl.position.z) < 35) { W.waved = true; W.who.say(t('npc.daijia.wave'), 2.4, t('npc.who.boss')); }
       const f = pl.foot, a = W.who;
-      if (f && a?.alive && Math.hypot(a.pos.x - f.pos.x, a.pos.z - f.pos.z) < 2.6) pl.offer?.({ x: a.pos.x, z: a.pos.z, r: 2.6, label: t('npc.talk'), use: () => {
+      // 他就站在自己车旁边：交互点往玩家这边收七成，F 是跟他说话，不是上他的车
+      if (f && a?.alive && Math.hypot(a.pos.x - f.pos.x, a.pos.z - f.pos.z) < 2.6) pl.offer?.({ x: f.pos.x + (a.pos.x - f.pos.x) * 0.3, z: f.pos.z + (a.pos.z - f.pos.z) * 0.3, r: 2.6, label: t('npc.talk'), use: () => {
         setPhase('ask');
         dlg()?.ask(sp, t('npc.daijia.ask', { n: D.fee }), [t('npc.daijia.optYes'), t('npc.daijia.optNo')], (i) => {
           if (active !== 'daijia') return;
@@ -1000,6 +973,7 @@ export async function install(engine: Engine): Promise<void> {
     get active() { return active; },
     get dashcam() { return dashcam; },
     set dashcam(on: boolean) { dashcam = on; try { localStorage.setItem(DASHCAM_KEY, on ? '1' : '0'); } catch { /* ignore */ } },
+    daijia: () => !active && free() && startDaijia(true),
     debug: {
       start: (kind) => { if (active) end(null); return start(kind); },
       wait: () => wait,

@@ -3,7 +3,7 @@ import { t } from '../core/I18n';
 import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
-import type { Actor, NpcVoice, PeopleApi, PlayerApi, RenderApi, VehicleApi, VoiceApi, VoiceArchetype, VoiceTrigger, WantedApi, CharacterModel } from '../game/Contracts';
+import type { Actor, NpcVoice, Passer, PeopleApi, PlayerApi, RenderApi, VehicleApi, VoiceApi, VoiceArchetype, VoiceTrigger, WantedApi, CharacterModel } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
 import type { Link } from '../traffic/LaneGraph';
 import type { Vehicle } from '../vehicle/Vehicle';
@@ -43,6 +43,9 @@ const RUN = 4.3;
 /** Scripted people (npc/, missions/) on top of the passers-by: their slots come out of the same room. */
 const ACTORS = 40;
 
+/** 路人里带着一件事要求玩家的比例（favours/）：从 `seed` 算，不多抽一次随机数（截图的人群不变）。 */
+const asks = (seed: number): boolean => Math.floor(seed * 4096) % 8 === 0;
+
 type Mode = 'walk' | 'wait' | 'flee' | 'knocked' | 'down' | 'getup' | 'lost' | 'call' | 'script';
 
 interface Ped {
@@ -72,6 +75,10 @@ interface Ped {
   faceYaw: number;
   /** The archetype they speak as when it is not the one their look gives (a carjacked driver, a rider). */
   voiceArch: VoiceArchetype | null;
+  /** 有事要求玩家（八个里一个，favours/）；`note` 给 favours/ 记这个人打过招呼、指过路没有。走到跟前换了人就清掉。 */
+  ask: boolean; note: number;
+  /** 别的模块看到的这个路人（`PeopleApi.passersNear`、`talk`）。 */
+  view: Passer;
 }
 
 /** What a scripted person is told to do (people/ moves it in `stepPed`). */
@@ -167,14 +174,15 @@ export async function install(engine: Engine): Promise<void> {
     pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0,
     yaw: 0, want: 0, pace: 1.3, cur: 1.3, moved: 0,
     gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false,
-    actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN, voiceArch: null,
+    actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN, voiceArch: null, ask: false, note: 0, view: null as unknown as Passer,
   }));
   // Actor slots after the passers-by: a scripted person always gets one (and passers-by thin out).
   const actorSlots: Ped[] = Array.from({ length: q.has('nopeople') ? 0 : ACTORS }, () => ({ on: false, mode: 'script' as Mode, t: 0, hold: 0, fear: 0,
     link: 0, s: 0, side: 1, frac: 0.5, fracT: 0.5, dir: 1, cross: false, road: false, c0x: 0, c0z: 0, c1x: 0, c1z: 0, cl: 1, ct: 0,
     waitJ: -1, waitPhase: 0, backLink: 0, backS: 0, backDir: 1, backSide: 1,
     pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0, yaw: 0, want: 0, pace: 1.3, cur: 0, moved: 0,
-    gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false, actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN, voiceArch: null }));
+    gait: new Gait(), look: randomLook(rnd), seed: rnd(), willCall: false, actor: null, gest: null, gestT: 0, gestFor: 0, faceYaw: NaN, voiceArch: null,
+    ask: false, note: 0, view: null as unknown as Passer }));
   const all: Ped[] = [...actorSlots, ...peds];
   let actorsOn = 0;
   let active = 0, spawnT = 0, frame = 0;
@@ -437,6 +445,7 @@ export async function install(engine: Engine): Promise<void> {
       p.pace = 1.05 + rnd() * 0.55; p.cur = p.pace; p.moved = p.pace;
       place(p); p.prev.copy(p.pos); p.yaw = p.want;
       const nl = randomLook(rnd); p.look = nl; p.seed = rnd(); p.voiceArch = null;
+      p.ask = asks(p.seed); p.note = 0;
       active++;
       return;
     }
@@ -567,6 +576,7 @@ export async function install(engine: Engine): Promise<void> {
       const g0 = q.gait; q.gait = p.gait; p.gait = g0;
       q.on = true; q.look = p.look; q.seed = p.seed; q.pos.copy(p.pos); q.prev.copy(p.prev); q.yaw = p.yaw; q.want = p.yaw;
       q.vel.set(0, 0, 0); q.vy = 0; q.cross = false; q.willCall = false; q.gest = null; q.faceYaw = NaN; q.pace = 1.2 + rnd() * 0.4; q.frac = q.fracT = 0.5;
+      q.ask = false; q.note = 0;
       if (p.mode !== 'script') { q.mode = p.mode; q.t = p.t; q.hold = p.hold; q.vel.copy(p.vel); q.vy = p.vy; return; }   // still down: gets up as a passer-by
       reattach(q);
       if (q.mode === 'flee') { q.fear = how === 'flee' ? 6 + rnd() * 3 : 0.01; q.cur = how === 'flee' ? RUN : q.pace; }
@@ -596,10 +606,43 @@ export async function install(engine: Engine): Promise<void> {
   /** A gesture over the walk for `secs` (a passer-by cheering the player, pointing them out). */
   const gesture = (p: Ped, a: Action, secs: number) => { p.gest = a; p.gestT = 0; p.gestFor = secs; };
 
+  /**
+   * 别的模块看到的路人（2026-11-11，favours/）：站住、说话、收编成脚本人物。每个槽一个，槽换了人还是这个对象，所以
+   * 拿到手只能当帧用，不能留着。
+   */
+  const viewOf = (p: Ped): Passer => ({
+    get alive() { return p.on && !p.actor && (p.mode === 'walk' || p.mode === 'wait') && !p.cross; },
+    get pos() { return p.pos; },
+    get look() { return p.look; },
+    get voice() { return voiceOf(p.look, p.seed); },
+    get ask() { return p.ask; }, set ask(v: boolean) { p.ask = v; },
+    get note() { return p.note; }, set note(v: number) { p.note = v; },
+    hold(secs, x, z, a) {
+      if (!p.cross) { p.mode = 'wait'; p.t = 0; p.hold = secs + 0.4; p.waitJ = -1; }
+      p.faceYaw = Math.atan2(x - p.pos.x, z - p.pos.z);
+      if (a) gesture(p, a, secs);
+    },
+    say(text, secs = 3.2, name) { speak(p, text, secs, name); },
+    take() {
+      if (!p.on || p.actor || !actorSlots.some((r) => !r.on)) return null;
+      const look = p.look, seed = p.seed, yaw = p.yaw, x = p.pos.x, z = p.pos.z;
+      despawn(p);
+      const a = spawnActor(x, z, { look, yaw, seed }) as Act | null;
+      if (!a) return null;
+      // 步子接着走：两个槽换一下 Gait，不然人在原地跳一下姿势
+      const g0 = a.p.gait; a.p.gait = p.gait; p.gait = g0;
+      a.p.prev.copy(a.p.pos);
+      return a;
+    },
+  });
+  for (const p of peds) p.view = viewOf(p);
+
   /** F by a passer-by: they stop, turn to the player and say something to suit the hour, the weather or the stars. */
   const chat = (p: Ped) => {
     const foot = pl.foot;
     if (!foot || !calm(p) || p.actor) return;
+    // 问路、路人的委托（favours/）先接；它不接才是原来那一句
+    if (api.talk?.use(p.view)) return;
     if (!p.cross) { p.mode = 'wait'; p.t = 0; p.hold = 3.6; p.waitJ = -1; }
     p.faceYaw = Math.atan2(foot.pos.x - p.pos.x, foot.pos.z - p.pos.z);
     gesture(p, 'talk', 3.2);
@@ -734,6 +777,12 @@ export async function install(engine: Engine): Promise<void> {
     },
     witness,
     spawnActor,
+    talk: null,
+    passersNear(x, z, r, out) {
+      out.length = 0;
+      for (const p of peds) { if (!p.view.alive) continue; const dx = p.pos.x - x, dz = p.pos.z - z; if (dx * dx + dz * dz < r * r) out.push(p.view); }
+      return out;
+    },
     shove(x, z, dirX, dirZ) {
       let best: Ped | null = null, bd = 2.2;
       for (const p of all) {
@@ -760,7 +809,7 @@ export async function install(engine: Engine): Promise<void> {
       p.on = true; p.mode = 'getup'; p.t = 0; p.cross = false; p.fear = 0;
       p.pos.set(x, GROUND, z); p.prev.copy(p.pos); p.vel.set(0, 0, 0); p.vy = 0;
       p.look = randomLook(rnd); p.seed = rnd(); p.pace = 1.2 + rnd() * 0.4; p.frac = p.fracT = 0.5;
-      p.voiceArch = opts?.voice ?? null;
+      p.voiceArch = opts?.voice ?? null; p.ask = false; p.note = 0;
       if (opts?.voice && p.look.fem && opts.voice !== 'office' && opts.voice !== 'tourist' && opts.voice !== 'auntie') p.look.fem = 0;   // a man's voice: a man
       if (opts?.say) bark2(p, opts.say);
     },
@@ -881,9 +930,15 @@ export async function install(engine: Engine): Promise<void> {
         for (const p of peds) {
           if (!p.on || !(p.mode === 'walk' || p.mode === 'wait')) continue;
           const dx = p.pos.x - foot.pos.x, dz = p.pos.z - foot.pos.z, d = Math.hypot(dx, dz);
-          if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.2) { bd = d; best = p; }
+          if (d >= 1.9 || (dx * fx + dz * fz) / (d || 1) <= 0.2) continue;
+          const score = p.ask ? d - 1 : d;   // 两个人挨着：有事相求的那个先接话
+          if (score < bd) { bd = score; best = p; }
         }
-        if (best) { const b = best; pl.offer({ x: b.pos.x, z: b.pos.z, r: 1.9, label: t('npc.talk'), use: () => chat(b) }); }
+        if (best) {
+          // 有事相求的人算得近一些：他身边停着车的时候，F 是跟他说话，不是上那辆车
+          const b = best, k = b.ask ? 0.3 : 1;
+          pl.offer({ x: foot.pos.x + (b.pos.x - foot.pos.x) * k, z: foot.pos.z + (b.pos.z - foot.pos.z) * k, r: 1.9, label: api.talk?.label(b.view) ?? t('npc.talk'), kind: 'talk', use: () => chat(b) });
+        }
       }
       // Scripted people first (`all` starts with them): a full crowd drops passers-by, not them.
       for (const p of all) {

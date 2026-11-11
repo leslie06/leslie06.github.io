@@ -6,7 +6,7 @@ import { shopSigns } from '../city/visual/ShopSigns';
  * （city/visual/ShopSigns.ts 的 TRADES）对到一种柜台，每种柜台几样东西。纯数据和纯函数，Node 里测（Trades.test.ts）。
  * 回血不是主要回报：徒步很少掉血。主要是「吃遍北京」的册子、给熟人的礼物、省事（就地修车、睡一觉、换装）。
  */
-export type Service = 'eat' | 'snack' | 'gift' | 'pharmacy' | 'care' | 'hair' | 'clothes' | 'repair' | 'hotel' | 'lottery';
+export type Service = 'eat' | 'snack' | 'gift' | 'pharmacy' | 'care' | 'hair' | 'clothes' | 'repair' | 'hotel' | 'lottery' | 'courier';
 
 export interface Good {
   id: string; name: TKey; price: number;
@@ -39,6 +39,8 @@ export const SERVICE: Record<string, Service> = {
   修车: 'repair',
   宾馆: 'hotel',
   彩票: 'lottery',
+  // 没有东西卖，只接活：派一趟件（errands/，2026-11-11）
+  快递驿站: 'courier',
 };
 
 /** The things on each counter (the trades of `eat` are the pages of 吃遍北京: the first thing on each is its 招牌). */

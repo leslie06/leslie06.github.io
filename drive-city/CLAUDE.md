@@ -1,6 +1,6 @@
 # b城追车 / B CITY CHASE（目录：drive-city）— 北京背景的 GTA 式开放世界（three.js）
 
-设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`、`docs/street-level-design.md`（开车沉浸感和下车玩法，分三批；第一批和第二批已做，第三批做了 A7 乘客评星）。
+设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`、`docs/street-level-design.md`（开车沉浸感和下车玩法，分三批；第一批和第二批已做，第三批做了 A7 乘客评星、C4 路人问路和小委托、C5 柜台接活、A6 车流的北京规矩，剩 B7 名片街、B6 路面断面）。
 
 现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到五环（2026-10-16 从四环扩出去；2026-11-08 南边沿 4 号线扩到枣园、清源路）、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，剧情战役（`campaign/`）第一幕五章已完成（见 `docs/gta-plan.md` §5–9），近战在 `combat/`。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
 
@@ -13,12 +13,12 @@
 | `street.md` | 近处路灯和信号灯杆、护栏 LOD、街道设施、屋顶杂物、撞飞街道设施、路灯/候车亭避开车道、沿街店面 |
 | `city-data.md` | OSM 数据源（pbf + osmium）、区域和走廊（新框要写 `since`，否则全图编号挪位）、机器学习建筑轮廓与高度、住宅类型、树冠与绿地、指路标志、挡路建筑、建筑下穿通道 |
 | `roads-elevation.md` | 立交与高程模型（含各种坑和审计脚本）、过街天桥、地铁口、铁路、大院围墙、河道、下穿隧道、死胡同、可通行性普查 |
-| `traffic.md` | 车道图、每个路口的红绿灯、单行道尽头卡死、火车、公交进站、路边停车、远景车流（ghost） |
+| `traffic.md` | 车道图、每个路口的红绿灯、单行道尽头卡死、火车、公交进站、路边停车、远景车流（ghost）、路况表和高峰（`Flow.ts`）、变道打灯、倒计时牌、电动车抢灯 |
 | `people.md` | 人群身体、主角模型、行人与密度、热点和站立人群、写实 MPFB 人物和动画、近战、徒步下陷 |
 | `police.md` | 通缉/目击者报警、GTA 式追捕、直升机、特警 |
 | `nav-map.md` | 寻路、GPS 转向提示、地图标注（`Labeller`）、地图上的地铁 |
 | `gameplay.md` | 电台、开局逃亡、战役框架与第一章、氮气/连击/车库/出租车（乘客评星、等红灯不走表）、特技坡道、断桥飞跃、兔儿爷、街头事件、地下车库、胡同捷径、短信剧情、排行榜、地标打卡、计时赛、短任务、快速前往（`travel/`）、每日任务（`daily/`）、玩法 probe |
-| `npc.md` | 脚本 NPC、对话框、配音（CosyVoice 录制管线、VoiceManager）、街头遭遇、按时间的街头生活、熟人和好感度福利 |
+| `npc.md` | 脚本 NPC、对话框、配音（CosyVoice 录制管线、VoiceManager）、街头遭遇、按时间的街头生活、熟人和好感度福利、问路和路人的小委托（`favours/`） |
 | `online.md` | 玩家反馈（`/fb`）和回复、在线人数、账号云存档、聊天、促销兑换码、联机、赛道纪录史（`/rec`） |
 | `home-park.md` | 我家别墅（楼梯、大门、车道的坑）、欢乐谷游乐设施和过山车 |
 | `district.md` | 精华街区南锣鼓巷：Blender 脚本 `nanluo.py`（从地安门东大街到鼓楼东大街，三处拐弯，拆成 `nanluo` / `nanluo_n1` / `nanluo_n2` 三个地标）、能进的 11 家店、店主和人流、室内相机、照相馆和跳舞机、换装（`character/hero/Wear.ts`）、小酒馆驻唱、四合院、送外卖、找猫（`district/Cats.ts`）、黑豹收保护费、小飞龙和小雨碰头；后海（地标 `houhai`、`district/Houhai.ts`：酒吧街、银锭桥、划船、冬天冰场、能进的蓝莲花酒吧）；产业和安全屋（`estate/` 记账、`district/Owned.ts`：烤串摊、小酒馆、蓝莲花能买能升级、日结进账、黑豹砸店、四合院东厢房能睡觉） |
@@ -34,7 +34,7 @@
 - `core/` — 从 gunFight 拷来精简过：Engine（固定 60 Hz `fixedUpdate` → `physics.step()` → `postStep`，然后每帧 `update(dt, alpha)`）、Input（GTA-V 键位 + 手柄 + `Input.touch`）、Physics（Rapier；碰撞组 `CG.WORLD/CAR/PROP/PED`）、Quality（low/medium/high 三档）、分辨率调节器、I18n（中/英；屏幕上每个字符串都走 `t()`）、Assets.compact、`Retry.ts`、`Boot.ts`（加载进度条）。
 - `game/Contracts.ts` — 唯一的跨模块接口（VehicleApi、CameraApi、WorldApi、HudApi……）。只能增量扩展。
 - `main.ts` 启动顺序：render → world（yard 或 city）→ mountain（城市西边的出城路和妙峰山，开近了才下载）→ vehicle → player → traffic → people → police → nav → travel → estate → missions → races → park → home → garage → underground → stunts → collect → checkin → trials → intro → events → leaderboard → story →（campaign、combat、npc、life、contacts……）→ fx → audio → daily → ui。`install()` 里只能 `engine.get` 比自己早的模块；更晚的模块在运行时惰性获取。只属于城市的模块在 yard 里跳过。
-- 模块一览：`vehicle/`（Rapier 刚体上的射线车，自带轮胎模型；`Spec.ts` 调校参数、`ControlFilter`、`Autopilot` 的 PathPilot、`CarKit` 实例化车涂装）、`world/`（沙盒场地）、`render/`（天空/时间 `?tod=`、`?rain=`、CSM 阴影、后处理链、`Lighting` 材质补丁、路灯）、`city/`（OSM 分块、worker 建网格、流式加载、地标在 `city/landmarks/`、可视层在 `city/visual/`）、`mountain/`（数据边缘以西的京拉路和妙峰山山路：`scripts/city/mountain.mjs` 生成，见 `city-data.md`）、`traffic/`、`parking/`、`player/`、`character/`、`people/`、`police/`、`nav/`、`ui/`、`missions/`、`campaign/`、`combat/`、`npc/`、`life/`、`contacts/`、`dialogue/`、`voice/`、`story/`、`stunts/`、`collect/`、`checkin/`、`trials/`、`events/`、`garage/`、`home/`、`park/`、`underground/`、`district/`（南锣鼓巷的店、后海）、`travel/`（快速前往的表：只收要下车或玩法起点的地方；`Metro.ts` 坐地铁；`Ride.ts` 坐公交、打车，系统名 `transit`）、`street/`（全城店面的柜台：徒步走到沿街店面前按 F，按招牌的行当吃、买、修车、换装；「吃遍北京」）、`estate/`（产业的账：按游戏时钟进账、柜上最多 3 天、半夜日结、砸店排期、睡觉；店本身由所在的系统 `register()`）、`daily/`（每日任务：按现实日子早上 5 点换三个，只听现有事件记进度，集章换限定车漆和衣服）、`lightup/`（点亮北京：开过的路记成 32 米的格子，大地图上亮起来，环路一圈给车漆）、`weather/`（阵雨，冬天是雪）、`damage/`、`audio/`（含交通台、街头声景、语音导航）、`online/`。
+- 模块一览：`vehicle/`（Rapier 刚体上的射线车，自带轮胎模型；`Spec.ts` 调校参数、`ControlFilter`、`Autopilot` 的 PathPilot、`CarKit` 实例化车涂装）、`world/`（沙盒场地）、`render/`（天空/时间 `?tod=`、`?rain=`、CSM 阴影、后处理链、`Lighting` 材质补丁、路灯）、`city/`（OSM 分块、worker 建网格、流式加载、地标在 `city/landmarks/`、可视层在 `city/visual/`）、`mountain/`（数据边缘以西的京拉路和妙峰山山路：`scripts/city/mountain.mjs` 生成，见 `city-data.md`）、`traffic/`、`parking/`、`player/`、`character/`、`people/`、`police/`、`nav/`、`ui/`、`missions/`、`campaign/`、`combat/`、`npc/`、`life/`、`contacts/`、`dialogue/`、`voice/`、`story/`、`stunts/`、`collect/`、`checkin/`、`trials/`、`events/`、`garage/`、`home/`、`park/`、`underground/`、`district/`（南锣鼓巷的店、后海）、`travel/`（快速前往的表：只收要下车或玩法起点的地方；`Metro.ts` 坐地铁；`Ride.ts` 坐公交、打车，系统名 `transit`）、`street/`（全城店面的柜台：徒步走到沿街店面前按 F，按招牌的行当吃、买、修车、换装；「吃遍北京」）、`errands/`（柜台上接的活：外卖、派件、代驾，最后一段下车走）、`favours/`（徒步对着路人按 F：问路；约八分之一的路人头顶有「！」，带一件小委托——捎东西、合影、搭车、找钥匙）、`estate/`（产业的账：按游戏时钟进账、柜上最多 3 天、半夜日结、砸店排期、睡觉；店本身由所在的系统 `register()`）、`daily/`（每日任务：按现实日子早上 5 点换三个，只听现有事件记进度，集章换限定车漆和衣服）、`lightup/`（点亮北京：开过的路记成 32 米的格子，大地图上亮起来，环路一圈给车漆）、`weather/`（阵雨，冬天是雪）、`damage/`、`audio/`（含交通台、街头声景、语音导航）、`online/`。
 - 材质用 `userData.wet = 'ground' | 'surface' | true` 开启湿润效果；`uniforms.uNight` 驱动灯和窗户；`RenderSystem.prepare(root)` 在流式加载的分块加入场景前打补丁。
 
 ## 重建城市（改了 `scripts/city/` 或 OSM 数据之后）
@@ -50,6 +50,7 @@
 - **资源地址只能用相对路径**：拼地址用 `import.meta.env.BASE_URL` 或 `new URL(…, document.baseURI)`，**不能用 `location.href`**；`<audio>`、`<img>` 这类元素要设 `crossOrigin = 'anonymous'`。国内玩家的页面带一个指向阿里云镜像的 `<base>`（见 `hosting-phones.md`「国内镜像」）。`npm run deploy` 会同步镜像，所以要有服务器的 ssh 权限，没有就设 `NO_MIRROR=1`。
 - **实体车只在玩家身边**（2026-11-11 轻量车，见 `traffic.md`）：`TrafficApi.cars()`、`nearestCar()` 只有玩家身边 55–115 米内的车，再远的是 `Ghosts.ts` 的轻量车，没有刚体，撞不到也抢不了。别的模块要在远处用一辆真车，得自己造（`spawnRunner`、`ExternalCars`）；任务车带 `blocking()` 的话周围 22 米会有实体车。`?lightcars=0` 回到老做法。
 - **坐在公交、出租车里的玩家**（2026-11-11，`travel/Ride.ts`）：`pl.mode` 还是 `'onfoot'`，`pl.riding` 为真，`pl.position` 跟着那辆车走，自己的车留在原地。按「徒步的玩家在哪」做事的代码（让行、搭话、柜台）要先看 `pl.riding`；给坐着的人的 F 提示要带 `Interaction.riding`，别的提示坐着时不生效。
+- **`LaneGraph.project(l, x, z, hint)` 只在 `hint` 附近（前 25 米、后 40 米）找**，是给跟着车走的司机用的；问「这个点离这条路多远、在它的多少米处」要用 `nearestOn(l, x, z)`（2026-11-11，见 `traffic.md`）。
 - `world.contactPairsWith` 返回的是 broad-phase 配对：说"碰到了"之前要确认 manifold 里真有接触点。
 - `render/Lighting` 串联 `onBeforeCompile` 钩子，并在第一次打补丁时冻结材质的 program key——永远不要覆盖钩子（否则人群全部塌回绑定姿势），也不要事后改 shader define（会复用旧 program）。
 - 人爬楼梯靠的是 walk-only 坡道（`walkOnly`）：用盒子拼的台阶能站不能走；而人能走的坡车也能开，所以坡道的碰撞过滤去掉了 CAR，另外再配一个只挡车的块（`CarStops`）。有楼梯的地标必须传 `colliders`。详见 `landmarks.md` / `home-park.md`。

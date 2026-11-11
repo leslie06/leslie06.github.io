@@ -224,6 +224,14 @@ export class Signals {
     return u < g ? g - u : 0;
   }
 
+  /** 路段 `l` 尽头这盏灯还有多少秒变（绿灯剩多少、黄灯剩多少、红灯还要等多少）；没有灯的是 0。倒计时牌用。 */
+  left(l: Link, t: number): number {
+    const c = this.cluster[l.to];
+    if (c < 0 || this.cluster[l.from] === c) return 0;
+    const phase = this.phaseOf(l), p = this.plans[c], u = this.local(c, phase, t), g = p.green[phase];
+    return u < g ? g - u : u < g + AMBER ? g + AMBER - u : p.cycle - u;
+  }
+
   /** Light facing traffic at the end of link `l` at time `t` (s). Unsignalised ends are green. */
   state(l: Link, t: number): Light {
     const c = this.cluster[l.to];
@@ -274,10 +282,62 @@ function mastArm(geo: THREE.BufferGeometry, extra: number): THREE.BufferGeometry
   return geo;
 }
 
+/**
+ * 倒计时牌的材质（2026-11-11，street-level-design A6「红灯倒计时牌」）：一块黑底的小板，上面两位七段数码，由着色器按每个
+ * 实例的数（`aNum`，-1 是灭）和颜色（`aCol`，和灯一个色）画出来，不用贴图。亮的笔画是 HDR 的，辉光会带上。
+ */
+function countdownMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    vertexShader: /* glsl */`
+      attribute float aNum; attribute vec3 aCol;
+      varying vec2 vUv; varying float vNum; varying vec3 vCol;
+      void main() {
+        vUv = uv; vNum = aNum; vCol = aCol;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */`
+      varying vec2 vUv; varying float vNum; varying vec3 vCol;
+      // 一位数码：p 在这一位的格子里（0..1），d 是 0-9；返回这一点亮不亮
+      float digit(vec2 p, float d) {
+        if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 0.0;
+        const float T = 0.17;
+        int m = d < 0.5 ? 63 : d < 1.5 ? 6 : d < 2.5 ? 91 : d < 3.5 ? 79 : d < 4.5 ? 102 : d < 5.5 ? 109 : d < 6.5 ? 125 : d < 7.5 ? 7 : d < 8.5 ? 127 : 111;
+        bool left = p.x < T, right = p.x > 1.0 - T, top = p.y > 0.5, mid = abs(p.y - 0.5) < T * 0.4;
+        bool on = false;
+        if (p.y > 1.0 - T * 0.8 && (m & 1) != 0) on = true;          // a 上
+        if (right && top && (m & 2) != 0) on = true;                 // b 右上
+        if (right && !top && (m & 4) != 0) on = true;                // c 右下
+        if (p.y < T * 0.8 && (m & 8) != 0) on = true;                // d 下
+        if (left && !top && (m & 16) != 0) on = true;                // e 左下
+        if (left && top && (m & 32) != 0) on = true;                 // f 左上
+        if (mid && (m & 64) != 0) on = true;                         // g 中
+        return on ? 1.0 : 0.0;
+      }
+      void main() {
+        vec3 c = vec3(0.012);
+        if (vNum >= 0.0) {
+          float n = min(99.0, floor(vNum + 0.5)), tens = floor(n / 10.0), ones = n - tens * 10.0;
+          float lit = digit((vUv - vec2(0.56, 0.16)) / vec2(0.34, 0.68), ones);
+          if (tens > 0.5) lit += digit((vUv - vec2(0.10, 0.16)) / vec2(0.34, 0.68), tens);
+          c = mix(c, vCol, min(1.0, lit));
+        }
+        gl_FragColor = vec4(c, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+/** 倒计时牌：宽、高，挂在灯箱朝立杆那一侧多远。 */
+const COUNT = { w: 0.52, h: 0.44, in: 0.62 };
+
 /** Poles with three-lamp heads across the junction from each signalised approach near the player. */
 export class SignalHeads {
   private poles: THREE.InstancedMesh;
   private lamps: THREE.InstancedMesh;
+  /** 每个灯头旁边一块倒计时牌（`countdownMaterial`）。 */
+  private counts: THREE.InstancedMesh;
+  private num: THREE.InstancedBufferAttribute; private numCol: THREE.InstancedBufferAttribute;
+  private countT = 0;
   private heads: { l: Link; lamp: number }[] = [];
   private lastX = Infinity; private lastZ = Infinity;
   private _m = new THREE.Matrix4(); private _q = new THREE.Quaternion(); private _v = new THREE.Vector3(); private _s = new THREE.Vector3(1, 1, 1);
@@ -301,7 +361,13 @@ export class SignalHeads {
     // Three lamps per head: one instanced mesh, per-instance colour (lit colours are HDR for bloom).
     const lamp = new THREE.CircleGeometry(0.13, 16).rotateY(Math.PI).translate(0, 0, 0);
     this.lamps = new THREE.InstancedMesh(lamp, new THREE.MeshBasicMaterial({ color: '#ffffff' }), cap * 3);
-    for (const m of [this.poles, this.lamps]) { m.count = 0; m.frustumCulled = false; scene.add(m); }
+    const cg = new THREE.PlaneGeometry(COUNT.w, COUNT.h).rotateY(Math.PI);
+    this.num = new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(-1), 1).setUsage(THREE.DynamicDrawUsage);
+    this.numCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage);
+    cg.setAttribute('aNum', this.num); cg.setAttribute('aCol', this.numCol);
+    this.counts = new THREE.InstancedMesh(cg, countdownMaterial(), cap);
+    this.counts.name = 'signal-countdowns';
+    for (const m of [this.poles, this.lamps, this.counts]) { m.count = 0; m.frustumCulled = false; scene.add(m); }
     this.poles.castShadow = true;
     // Lit colours are HDR for the bloom, but not so bright that AgX bleaches them: at 3.2-3.6 the red
     // read as salmon and the green as mint. Keep one channel dominant and the peak under ~1.8.
@@ -319,6 +385,18 @@ export class SignalHeads {
       this.lamps.setColorAt(i * 3 + 2, st === 0 ? this.cols[0] : dark);
     }
     if (this.lamps.instanceColor) this.lamps.instanceColor.needsUpdate = true;
+    // 倒计时牌一秒四回就够：红灯、绿灯剩几秒（和灯一个色），黄灯时灭
+    if (Math.abs(t - this.countT) >= 0.25) {
+      this.countT = t;
+      const n = this.num.array as Float32Array, c = this.numCol.array as Float32Array;
+      for (let i = 0; i < this.heads.length; i++) {
+        const l = this.heads[i].l, st = this.sig.state(l, t);
+        n[i] = st === 1 ? -1 : Math.ceil(this.sig.left(l, t));
+        const col = this.cols[st];
+        c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b;
+      }
+      this.num.needsUpdate = true; this.numCol.needsUpdate = true;
+    }
   }
 
   /**
@@ -409,11 +487,20 @@ export class SignalHeads {
         this._v.set(p.x + local.x - p.dx * LAMP_PROUD, local.y, p.z + local.z - p.dz * LAMP_PROUD);
         const face = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-p.dx, 0, -p.dz));
         this.lamps.setMatrixAt(i * 3 + k, this._m.compose(this._v, face, this._s));
+        if (k === 1) {
+          // 倒计时牌挂在灯箱朝立杆的那一侧，和灯一个朝向
+          const lc = new THREE.Vector3(0, HOUSING.y, HOUSING.out + ARM_EXTRA - COUNT.in).applyQuaternion(this._q);
+          this._v.set(p.x + lc.x - p.dx * LAMP_PROUD, lc.y, p.z + lc.z - p.dz * LAMP_PROUD);
+          this.counts.setMatrixAt(i, this._m.compose(this._v, face, this._s));
+        }
       }
       this.heads.push({ l, lamp: i });
     }
     this.poles.count = this.heads.length;
     this.lamps.count = this.heads.length * 3;
+    this.counts.count = this.heads.length;
+    this.counts.instanceMatrix.needsUpdate = true;
+    this.countT = -1;
     this.poles.instanceMatrix.needsUpdate = true;
     this.lamps.instanceMatrix.needsUpdate = true;
   }

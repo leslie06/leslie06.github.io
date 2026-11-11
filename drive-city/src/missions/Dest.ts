@@ -51,8 +51,9 @@ export function catWeights(hour: number): Partial<Record<PlaceCat, number>> {
  * 一个（大地方——rank 0、1——多一倍机会）。调用的人再按真路程挨个试。
  */
 export function rankPlaces(places: readonly Place[], x: number, z: number, min: number, max: number, hour: number, rnd: () => number, zh: boolean, n = 8,
-  skip?: (p: Place) => boolean): Place[] {
-  const w = catWeights(hour), by = new Map<PlaceCat, Place[]>();
+  skip?: (p: Place) => boolean, weights?: Partial<Record<PlaceCat, number>>): Place[] {
+  // `weights`：不按乘客的口味（外卖有自己的：errands/Errand.ts）
+  const w = weights ?? catWeights(hour), by = new Map<PlaceCat, Place[]>();
   for (const p of places) {
     if (!w[p.cat]) continue;
     const dx = p.x - x, dz = p.z - z;

@@ -391,6 +391,34 @@ export interface PeopleApi extends System {
    * anyone. Null when there is no slot.
    */
   spawnActor?(x: number, z: number, opts?: { look?: Look; yaw?: number; seed?: number }): Actor | null;
+  /**
+   * 徒步对着路人按 F（2026-11-11，favours/：问路、路人的小委托）：`label` 给提示上的字（null 用原来的「交谈」），`use`
+   * 返回 true 是这次搭话它接了，people/ 自己不再说那一句。
+   */
+  talk?: { label(p: Passer): string | null; use(p: Passer): boolean } | null;
+  /** (x, z) 周围 `r` 米内站着、走着的路人，写进 `out`（复用）。favours/ 从里头挑 `ask` 的。 */
+  passersNear?(x: number, z: number, r: number, out: Passer[]): Passer[];
+}
+
+/**
+ * 一个路人（people/ 的人群里的一个，不是脚本人物）。对象跟着人群的槽走，槽换了人还是它：拿到手只在当帧用。
+ */
+export interface Passer {
+  /** 还是个站着或走着的路人（没被撞、没在过马路、没被收编）。 */
+  readonly alive: boolean;
+  readonly pos: THREE.Vector3;
+  readonly look: Look;
+  readonly voice: VoiceSpec;
+  /** 有事要求玩家（约八个里一个）；问过了清掉。 */
+  ask: boolean;
+  /** favours/ 自己记的事（招呼过、指过路）；换了人归零。 */
+  note: number;
+  /** 站住 `secs` 秒，转向 (x, z)，做 `a` 这个动作。 */
+  hold(secs: number, x: number, z: number, a?: Action): void;
+  /** 头顶一句话，用自己的嗓音。 */
+  say(text: string, secs?: number, name?: string): void;
+  /** 原地变成脚本人物（长相不变），路人槽空出来；没有空位返回 null，人还是路人。 */
+  take(): Actor | null;
 }
 
 /** A scripted person. Everything is in world metres; the owner polls it (hits, arrived, alive). */

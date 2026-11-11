@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { CarKit } from './CarKit';
 import type { LaneGraph, Link } from './LaneGraph';
 import type { Signals } from './Signals';
-import { STOP_LINE } from './AiDriver';
+import { driveOffset, STOP_LINE } from './AiDriver';
 import { SPEC_OF } from '../vehicle/Spec';
 import { bodySettled, specLength, type BodySource, type BodyType } from '../vehicle/Bodies';
 import { defaultLivery } from '../vehicle/CarModel';
+import { DENS, flowKey, headingOf, hourBand, hourDensity, levelAt, SPEED, type Level } from './Flow';
 
 /**
  * The distant traffic (2026-10-11, 「街道太空」: the physics traffic lives within 330 m of the camera, so down a
@@ -52,6 +53,11 @@ export interface GhostCar {
    * 堵死：探针里一辆轻量车和两个骑手在 10 米长的小路口互相等了 200 秒，后面排了一串）。
    */
   wait: number; push: number;
+  /**
+   * 变道（2026-11-11，A6）：`lc` 秒内不再变；`blink` 打着哪边的转向灯（+1 左、-1 右），还亮 `blinkT` 秒；`turn` 是前面路口
+   * 要往哪边拐（进路口前 45 米起打灯）。近处的才画灯。
+   */
+  lc: number; blink: number; blinkT: number; turn: number;
 }
 /** A car in a lane's list: a ghost, or a physics car's driver (`ord` -1). */
 type Entry = GhostCar | { s: number; v: number; ord: -1; len: number };
@@ -85,6 +91,8 @@ const R_NEAR = 170;
 const NEAR_BOOST = 2.2;
 /** 镜头跳走的时候，玩家身边这么远以内的轻量车留着。 */
 const KEEP = 260;
+/** 缓行、拥堵的路段，离镜头这么近的那一截按路况表的满值放车。 */
+const JAM_NEAR = 300;
 const A_MAX = 1.6, B_COMF = 2.8;
 const _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -134,8 +142,32 @@ export class GhostTraffic {
   readonly nearList: GhostCar[] = [];
   /** 把一辆近处的轻量车画进 traffic 的近处车模里（画不下返回 false，退回远处车模）。 */
   nearDraw: ((c: GhostCar, pos: THREE.Vector3, quat: THREE.Quaternion) => boolean) | null = null;
-  /** 交接了多少次（探针用）。 */
-  readonly counts = { promoted: 0, demoted: 0 };
+  /** 交接了多少次、变了多少回道（探针用）。 */
+  readonly counts = { promoted: 0, demoted: 0, lane: 0 };
+  /** 钟点和路况时段（traffic 每帧给）：密度和车速按路况表（Flow.ts）来。`?rush=0` 时 traffic 不给，一直是 12 点、全畅通。 */
+  hour = 12; slot = 0; flowOn = false;
+  /** 被慢车挡住会不会变道（`?lanechange=0` 关）。 */
+  laneChange = true;
+  /** 表里的路全按这一种路况算（`?flow=0|1|2`，探针和截图用）；-1 按路况表。 */
+  force = -1;
+  private stamp = -1;
+  private lvl: Int8Array; private lvlStamp: Int32Array;
+  private tmpF = { x: 0, z: 0, dx: 0, dz: 0 };
+  /** 这段路现在的路况（按它的中点算，一个时段、一个钟点段算一次）。 */
+  levelOf(l: Link): Level {
+    if (!this.flowOn) return 0;
+    if (this.lvlStamp[l.id] !== this.stamp) {
+      this.lvlStamp[l.id] = this.stamp;
+      const key = flowKey(l.name, l.cls);
+      let v: Level = 0;
+      if (key && this.force >= 0) v = this.force as Level;
+      else if (key) { this.g.at(l, l.len / 2, 0, this.tmpF); v = levelAt(key, headingOf(this.tmpF.dx, this.tmpF.dz), this.tmpF.x, this.tmpF.z, this.hour, this.slot); }
+      this.lvl[l.id] = v;
+    }
+    return this.lvl[l.id] as Level;
+  }
+  /** 把一辆近处轻量车的转向灯画出来（traffic 的 Blinkers）：车在地面上的位置、朝向、车身、哪边。 */
+  blinkDraw: ((x: number, y: number, z: number, yaw: number, body: BodyType, side: number) => void) | null = null;
   private plates = 0;
 
   /**
@@ -164,6 +196,7 @@ export class GhostTraffic {
     this.lights.frustumCulled = false;
     this.lights.name = 'ghost-lights';
     scene.add(this.lights);
+    this.lvl = new Int8Array(g.links.length); this.lvlStamp = new Int32Array(g.links.length).fill(-1);
   }
 
   private bodyOf(b: BodyType): BodyType {
@@ -184,13 +217,13 @@ export class GhostTraffic {
       if (!this.busy) this.dropFar();
     }
     const c: GhostCar = this.free.pop() ?? { link: 0, s: 0, lane: 0, v: 0, mood: 1, next: -2, body: 'sedan', upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, off: 0, brake: false, ord: 0, len: 4.6, x: 0, z: 0, dx: 0, dz: 1, k: 1,
-      near: false, px: 0, pz: 0, yaw: 0, steer: 0, spin: 0, plate: 0, uid: 0, close: false, y: 0, qx: 0, qz: 0, hx: 0, hz: 1, why: 0, wait: 0, push: 0 };
+      near: false, px: 0, pz: 0, yaw: 0, steer: 0, spin: 0, plate: 0, uid: 0, close: false, y: 0, qx: 0, qz: 0, hx: 0, hz: 1, why: 0, wait: 0, push: 0, lc: 0, blink: 0, blinkT: 0, turn: 0 };
     const l = this.g.links[h.link];
     c.link = h.link; c.s = h.s; c.lane = this.g.laneOn(l, h.body === 'bus' ? 7 : h.lane); c.v = h.v; c.mood = mood; c.next = h.next ?? -2;
-    c.body = h.body; c.len = specLength(SPEC_OF[h.body]); c.upper.copy(h.upper); c.lower.copy(h.lower); c.taxi = h.taxi; c.off = this.g.laneOffset(l, c.lane); c.brake = false; c.k = 1;
+    c.body = h.body; c.len = specLength(SPEC_OF[h.body]); c.upper.copy(h.upper); c.lower.copy(h.lower); c.taxi = h.taxi; c.off = driveOffset(this.g, l, c.lane, c.body === 'bus'); c.brake = false; c.k = 1;
     c.uid = this.plates; c.plate = this.plates++ % 8; c.spin = 0; c.steer = 0;
     this.place(c, l);
-    c.wait = 0; c.push = 0;
+    c.wait = 0; c.push = 0; c.lc = 2 + this.rnd() * 6; c.blink = 0; c.blinkT = 0; c.turn = 0;
     c.near = h.x !== undefined; c.close = c.near; c.y = l.h ? this.g.heightAt(l, c.s) : 0;
     if (c.near) { c.px = h.x!; c.pz = h.z!; c.yaw = h.yaw!; }
     this.cars.push(c);
@@ -210,7 +243,7 @@ export class GhostTraffic {
     const g = this.g, look = Math.max(6, Math.min(20, 4 + c.v * 0.8));
     let tl = l, ts = c.s + look, off = c.off;
     if (ts > l.len) {
-      if (c.next >= 0) { tl = g.links[c.next]; ts = Math.min(tl.len, ts - l.len); off = g.laneOffset(tl, g.laneOn(tl, laneOf(c))); }
+      if (c.next >= 0) { tl = g.links[c.next]; ts = Math.min(tl.len, ts - l.len); off = driveOffset(g, tl, g.laneOn(tl, laneOf(c)), c.body === 'bus'); }
       else ts = l.len;
     }
     g.at(tl, ts, off, this.tmp);
@@ -227,6 +260,34 @@ export class GhostTraffic {
     c.steer += (Math.atan(kappa * 2.7) - c.steer) * Math.min(1, dt * 8);
     c.spin += ds / 0.32;
   }
+  /**
+   * 被同车道的慢车挡住了（`gap` 是到它的空当）：左右哪条车道前面宽敞至少 10 米、旁边和后面没车，就变过去。快到路口了
+   * （70 米内）不变——过路口要走自己那条道。公交不变（它一直靠右）。按车道的队列看，所以只看得见车流里的车；玩家的车
+   * 不在队列里，但玩家身边的都是实体车，由 traffic/ 自己看（`laneChange`）。
+   */
+  private tryLane(c: GhostCar, l: Link, gap: number): void {
+    const g = this.g;
+    c.lc = 1.5;
+    if (c.body === 'bus' || c.s < 12 || l.len - c.s < 70 || l.lanes - g.minLane(l) < 2) return;
+    let best = -1, bestGap = gap + 10;
+    for (const dl of [-1, 1]) {
+      const t = c.lane + dl;
+      if (t < 0 || g.laneOn(l, t) !== t) continue;
+      const b = this.buckets.get(c.link * 8 + t);
+      let ahead = Infinity, ok = true;
+      if (b) for (const o of b) {
+        const ds = o.s - c.s, half = (o.len + c.len) / 2;
+        if (ds >= 0) { if (ds - half < 7) { ok = false; break; } ahead = Math.min(ahead, ds - half); }
+        else if (-ds - half < 5 + o.v * 0.9) { ok = false; break; }
+      }
+      if (ok && ahead > bestGap) { bestGap = ahead; best = t; }
+    }
+    if (best < 0) return;
+    c.blink = g.laneOffset(l, best) > g.laneOffset(l, c.lane) ? 1 : -1; c.blinkT = 3.2;
+    c.lane = best; c.lc = 7 + this.rnd() * 8;
+    this.counts.lane++;
+  }
+
   /** Put `c` at its s and offset on its link (as `LaneGraph.at`, walking on from the segment it was on). */
   private place(c: GhostCar, l: Link): void {
     const m = l.cum.length, s = Math.max(0, Math.min(l.len, c.s));
@@ -314,6 +375,7 @@ export class GhostTraffic {
     this.last.copy(cam);
     this.dir.copy(camDir);
     this.warm = Math.max(0, this.warm - dt);
+    this.stamp = this.flowOn ? this.slot * 16 + hourBand(this.hour) : 0;
     const inView = (x: number, z: number, d: number) => d < 1 || ((x - cam.x) * camDir.x + (z - cam.z) * camDir.z) / d > 0.3;
 
     // Lanes: every ghost and every physics car in its link and lane, in order along it.
@@ -404,12 +466,20 @@ export class GhostTraffic {
           if (gb < gap) { gap = gb; vl = Math.max(0, o.v * (sn * so + cs * co)); c.why = 7; }
         }
       }
-      let v0 = l.speed * c.mood;
-      if (c.next >= 0 && l.len - c.s < 40) {
+      // 路况表：缓行、拥堵的路段开不到限速
+      let v0 = l.speed * c.mood * SPEED[this.levelOf(l)];
+      c.turn = 0;
+      if (c.next >= 0 && l.len - c.s < 45) {
         const nl = g.links[c.next];
         const turn = Math.acos(Math.max(-1, Math.min(1, l.d1x * nl.d0x + l.d1z * nl.d0z)));
-        if (turn > 0.3) v0 = Math.min(v0, Math.sqrt(2.6 * 28 / turn));
+        if (turn > 0.3 && l.len - c.s < 40) v0 = Math.min(v0, Math.sqrt(2.6 * 28 / turn));
+        // 要拐弯：打灯（左手方向是 (dz, -dx)）
+        if (turn > 0.5) c.turn = nl.d0x * l.d1z - nl.d0z * l.d1x > 0 ? 1 : -1;
       }
+      // 被慢车挡住：旁边的车道空着就变过去，打灯
+      if (c.lc > 0) c.lc -= dt;
+      else if (this.laneChange && c.why === 1 && vl < v0 * 0.72 && gap < 22 + c.v) this.tryLane(c, l, gap);
+      if (c.blinkT > 0) c.blinkT -= dt;
       const sStar = 2.5 + c.v * 1.3 + c.v * (c.v - vl) / (2 * Math.sqrt(A_MAX * B_COMF));
       const a = A_MAX * (1 - (c.v / Math.max(1, v0)) ** 4 - (gap < Infinity ? (Math.max(0, sStar) / Math.max(0.1, gap)) ** 2 : 0));
       c.v = Math.max(0, c.v + Math.max(-8, a) * dt);
@@ -426,7 +496,7 @@ export class GhostTraffic {
         c.lane = g.laneOn(l, laneOf(c));
       }
       if (gone) { this.remove(i); continue; }
-      const want = g.laneOffset(l, c.lane);
+      const want = driveOffset(g, l, c.lane, c.body === 'bus');
       c.off += Math.max(-1.5 * dt, Math.min(1.5 * dt, want - c.off));
       // At the edges: into the physics traffic, or out of range.
       this.place(c, l);
@@ -464,12 +534,15 @@ export class GhostTraffic {
   private refill(cam: THREE.Vector3, inView: (x: number, z: number, d: number) => boolean): void {
     if (this.cars.length >= this.cap) return;
     const g = this.g, ids = g.near(cam.x, cam.z, this.rOut);
-    const want: number[] = [], who: number[] = [], full: number[] = [];
-    const light = this.light, rMin = light ? 45 : R_IN + 20;
+    const want: number[] = [], who: number[] = [], full: number[] = [], pri: number[] = [];
+    let priSum = 0;
+    const light = this.light, rMin = light ? 45 : R_IN + 20, hd = hourDensity(this.hour);
     let total = 0;
     for (const id of ids) {
-      const l = g.links[id], dens = DENSITY[l.cls];
-      if (!dens || l.len < 15 || g.avoid.has(id)) continue;
+      const l = g.links[id], base = DENSITY[l.cls];
+      if (!base || l.len < 15 || g.avoid.has(id)) continue;
+      // 路况表：拥堵、缓行的路段车多；全城的车随钟点多少
+      const dens = this.flowOn ? base * DENS[this.levelOf(l)] * hd : base;
       // Its share by the part of it in reach, in view and nearer (points every ~50 m along it: judged by its middle,
       // a long link starting by the camera got nothing - the lanes ahead stayed empty to 450 m).
       let pts = this.samples.get(id);
@@ -479,12 +552,13 @@ export class GhostTraffic {
         for (let k = 0; k < n; k++) { g.at(l, (k + 0.5) / n * l.len, 0, this.tmp); pts[k * 2] = this.tmp.x; pts[k * 2 + 1] = this.tmp.z; }
         this.samples.set(id, pts);
       }
-      let share = 0, cnt = 0;
+      let share = 0, cnt = 0, nearCnt = 0;
       const n = pts.length / 2;
       for (let k = 0; k < n; k++) {
         const x = pts[k * 2], z = pts[k * 2 + 1], d = Math.hypot(x - cam.x, z - cam.z);
         if (d < rMin || d > this.rOut) continue;
         cnt++;
+        if (d < JAM_NEAR) nearCnt++;
         const far = d < 450 ? 1 : 1 - 0.5 * (d - 450) / (this.rOut - 450 || 1);
         // 轻量车：近处多给（玩家身边才是看得见的地方），背后近处也不能太空（镜头一转就看到）
         share += light ? (inView(x, z, d) ? 1 : d < 200 ? 0.6 : BEHIND) * (d < 330 ? this.nearBoost : d < 450 ? 1 + (this.nearBoost - 1) * (450 - d) / 120 : far)
@@ -496,15 +570,20 @@ export class GhostTraffic {
       const w = l.len * ul * dens / 1000 * share / n;
       want.push(w); who.push(id); total += w;
       full.push(light ? l.len * ul * dens / 1000 * cnt / n : Infinity);
+      // 缓行、拥堵的路段在玩家身边的那一截先放满（不按名额打折）：堵车要挨着才像堵车，名额有限，摊到 750 米就稀了
+      const p = light && this.flowOn && this.levelOf(l) > 0 ? l.len * ul * dens / 1000 * nearCnt / n : 0;
+      pri.push(p); priSum += p;
     }
     if (!total) return;
-    const scale = Math.min(1, this.cap / total);
+    // 先放满的那些最多占六成名额，剩下的各条路按比例分
+    const pk = priSum > this.cap * 0.6 ? this.cap * 0.6 / priSum : 1;
+    const scale = Math.min(1, Math.max(0.12, (this.cap - priSum * pk) / total));
     this.demand = total;
     const have = new Map<number, number>();
     for (const c of this.cars) have.set(c.link, (have.get(c.link) ?? 0) + 1);
     // 轻量车模式下实体车就在这些路上，也算在已有的里面
     if (light) for (let i = 0; i < this.drivers.length; i += 5) have.set(this.drivers[i], (have.get(this.drivers[i]) ?? 0) + 1);
-    const short = (i: number) => Math.max(0, Math.min(full[i], want[i] * scale) - (have.get(who[i]) ?? 0));
+    const short = (i: number) => Math.max(0, Math.min(full[i], Math.max(pri[i] * pk, want[i] * scale)) - (have.get(who[i]) ?? 0));
     // Full, and the view short of its share: let the furthest ones out of view go (they would only be seen on turning round).
     if (this.cars.length >= this.cap - 4) {
       let freed = 0;
@@ -566,6 +645,8 @@ export class GhostTraffic {
       if (c.near && this.nearDraw) {
         this.pos.set(c.px, y + 0.03, c.pz);
         this.quat.setFromEuler(_e.set(-pitch, c.yaw, 0));
+        const side = c.blinkT > 0 ? c.blink : c.turn;
+        if (side && this.blinkDraw) this.blinkDraw(c.px, y + 0.03, c.pz, c.yaw, c.body, side);
         if (this.nearDraw(c, this.pos, this.quat)) continue;
       }
       this.pos.set(c.x, y + 0.03 + spec.wheelRadius, c.z);

@@ -7,6 +7,7 @@ import type { Network } from '../Data';
 import type { Routes } from '../Routes';
 import type { GuideSignApi } from './GuideSigns';
 import { shortName } from '../Signs';
+import { headingOf, levelAt, slotNow } from '../../traffic/Flow';
 
 /**
  * 环路上的可变情报板（2026-11-10，docs/beijing-immersion-design.md A3）：北京二环到五环的主路上隔一两公里就有一座龙门架，
@@ -15,7 +16,9 @@ import { shortName } from '../Signs';
  * （顺着这条环路往前找 `br` 立交名），立交之间的色条按钟点变（早晚高峰红黄多），两分钟换一次。离镜头 900 米内才建。
  * 位置在 traffic 装好以后算（约 30 毫秒）。`?infoboards=0` 关。
  */
-export interface InfoBoard { x: number; z: number; dx: number; dz: number; w: number; ring: string; ahead: string[] }
+export interface InfoBoard { x: number; z: number; dx: number; dz: number; w: number; ring: string; ahead: string[];
+  /** 前方每座立交在哪（x, z 一对一对，和 `ahead` 对齐）：每一段的路况按段的中点查路况表。 */
+  at: number[] }
 
 const RING = /^[东西南北][二三四五]环$/;
 const MAIN = /^(trunk|motorway)$/;
@@ -57,7 +60,7 @@ export function placeBoards(net: Network, avoid: { x: number; z: number }[] = []
   const br = net.br ?? [];
   return picked.map((c) => {
     // walk the ring forward (the straightest way on with the same name) for up to 7 km, noting the interchanges passed
-    const ahead: string[] = [];
+    const ahead: string[] = [], at: number[] = [];
     let ei = c.ei, walked = 0, dx = c.dx, dz = c.dz, first = true;
     const seen = new Set<number>();
     while (walked < 7000 && ahead.length < 3 && !seen.has(ei)) {
@@ -66,7 +69,7 @@ export function placeBoards(net: Network, avoid: { x: number; z: number }[] = []
       for (let i = 0; i + 1 < p.length; i += 2) {
         if (first && (p[i] - c.x) * c.dx + (p[i + 1] - c.z) * c.dz < 0) continue;
         if (i % 6 === 0) for (const [bx, bz, n] of br) {
-          if (Math.abs(bx - p[i]) < 150 && Math.abs(bz - p[i + 1]) < 150 && Math.hypot(bx - p[i], bz - p[i + 1]) < 150 && !ahead.includes(n) && (bx - c.x) * c.dx + (bz - c.z) * c.dz > 60) ahead.push(n);
+          if (Math.abs(bx - p[i]) < 150 && Math.abs(bz - p[i + 1]) < 150 && Math.hypot(bx - p[i], bz - p[i + 1]) < 150 && !ahead.includes(n) && (bx - c.x) * c.dx + (bz - c.z) * c.dz > 60) { ahead.push(n); at.push(bx, bz); }
         }
         if (i >= 2) { walked += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]); dx = p[i] - p[i - 2]; dz = p[i + 1] - p[i - 1]; }
       }
@@ -82,7 +85,7 @@ export function placeBoards(net: Network, avoid: { x: number; z: number }[] = []
       if (next < 0) break;
       ei = next;
     }
-    return { x: c.x, z: c.z, dx: c.dx, dz: c.dz, w: c.w, ring: c.ring, ahead };
+    return { x: c.x, z: c.z, dx: c.dx, dz: c.dz, w: c.w, ring: c.ring, ahead, at };
   }).filter((b) => b.ahead.length >= 2);
 }
 
@@ -117,13 +120,20 @@ function drawBoard(g: CanvasRenderingContext2D, W: number, H: number, b: InfoBoa
   });
 }
 
-/** The traffic on a stretch at this hour (rush hours more red), the same for every board for two minutes. */
-function status(hour: number, seed: number): Status {
-  const x = Math.abs(Math.sin(seed * 91.7 + Math.floor(Date.now() / 120000) * 3.1) * 43758.5) % 1;
-  const rush = (hour >= 7 && hour < 9.5) || (hour >= 17 && hour < 19.5);
-  if (hour >= 22 || hour < 6) return x < 0.9 ? 0 : 1;
-  if (rush) return x < 0.35 ? 2 : x < 0.8 ? 1 : 0;
-  return x < 0.1 ? 2 : x < 0.4 ? 1 : 0;
+/**
+ * 板上每一段的路况（2026-11-11，street-level-design A6）：按路况表（traffic/Flow.ts）查这条环路、这个方向、这一段中点
+ * 所在的那一格——和路上的车读的是同一张表，所以板上红的那一段开过去真的堵。原来是按钟点掷骰子，和路上的车没关系。
+ * `force`：`?flow=0|1|2` 把路况定死的时候板子也跟着。
+ */
+export function stretches(b: InfoBoard, hour: number, slot: number, force = -1): Status[] {
+  const dir = headingOf(b.dx, b.dz), out: Status[] = [];
+  let px = b.x, pz = b.z;
+  for (let i = 0; i < b.ahead.length; i++) {
+    const x = b.at[i * 2], z = b.at[i * 2 + 1];
+    out.push(force >= 0 ? force as Status : levelAt(b.ring, dir, (px + x) / 2, (pz + z) / 2, hour, slot));
+    px = x; pz = z;
+  }
+  return out;
 }
 
 export function install(engine: Engine): void {
@@ -179,7 +189,10 @@ export function install(engine: Engine): void {
       }
       if ((poll -= dt) > 0) return;
       poll = 1;
-      const cam = engine.camera.position, slot = Math.floor(Date.now() / 120000), hour = render?.timeOfDay ?? 12;
+      // 路况表关着（`?rush=0`）或被定死（`?flow=`）的时候跟着车流那边
+      const gh = engine.get<{ name: string; ghosts?: { flowOn: boolean; force: number } | null }>('traffic')?.ghosts;
+      const on = gh ? gh.flowOn : true, force = gh ? gh.force : -1;
+      const cam = engine.camera.position, hour = render?.timeOfDay ?? 12, slot = slotNow() * 16 + Math.floor(hour);
       for (const b of boards) {
         const d = Math.hypot(b.x - cam.x, b.z - cam.z);
         let l = live.get(b);
@@ -193,8 +206,7 @@ export function install(engine: Engine): void {
         if (l) l.mat.emissiveIntensity = 0.45 - 0.17 * (render?.night ?? 0);
         if (l && l.drawnAt !== slot) {
           l.drawnAt = slot;
-          const seed = Math.round(b.x) * 7 + Math.round(b.z);
-          drawBoard(l.cv.getContext('2d')!, l.cv.width, l.cv.height, b, b.ahead.map((_, i) => status(hour, seed + i * 13)));
+          drawBoard(l.cv.getContext('2d')!, l.cv.width, l.cv.height, b, on ? stretches(b, hour, slotNow(), force) : b.ahead.map(() => 0 as Status));
           l.tex.needsUpdate = true;
         }
       }

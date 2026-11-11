@@ -6,6 +6,17 @@ import type { Light, Signals } from './Signals';
 export interface Leader { gap: number; speed: number }
 
 const A_MAX = 2.2, B_COMF = 3.2, S0 = 3, HEADWAY = 1.25, CAR_LEN = 4.6;
+/**
+ * 最右一条车道里的车往左让这么多（2026-11-11，A6）：多车道的路上最右车道的中线离路边只有 1.6–2 米，电动车贴着路边
+ * 骑（离路边 0.5–0.8 米），和排队的车只隔一米，挤不过去（两个都是实体，会蹭上）。车往左让 0.4 米，给路边留出一条缝。
+ */
+export const EDGE_ROOM = 0.4;
+/** 这条车道上的车画在、开在离路中线多远：最右车道（公交除外，它要靠站台）往左让 `EDGE_ROOM`。 */
+export const driveOffset = (g: LaneGraph, l: { lanes: number; oneway: boolean; laneW: number; hw: number }, lane: number, bus = false): number => {
+  const link = l as Parameters<LaneGraph['laneOffset']>[0];
+  const off = g.laneOffset(link, lane);
+  return !bus && lane === l.lanes - 1 && l.lanes - g.minLane(link) >= 2 ? off + EDGE_ROOM : off;
+};
 /** Where a driver stops for a red: this far short of the junction node. */
 export const STOP_LINE = 7;
 
@@ -53,6 +64,25 @@ export class AiDriver {
   atStop = false;
   /** The light at the end of its link is red this step. */
   red = false;
+  /**
+   * 电动车抢灯（2026-11-11，A6「绿灯头几秒电动车一拥而上」）：自己这边再过 `eager` 秒就绿了，现在就走；等红灯时停在汽车
+   * 停车线前面 `ahead` 米。汽车都是 0。
+   */
+  eager = 0; ahead = 0;
+  /** 前面路口要往哪边拐（+1 左、-1 右、0 直行）：进路口前 45 米起，traffic/ 拿它打转向灯。 */
+  turn = 0;
+  /**
+   * 变道是慢慢并过去的：`slide` 是这会儿离新车道中线还差多少米（带符号，往左为正），每秒收 1.3 米。一下子把目标换到
+   * 新车道，车速十几米每秒时两秒就横着甩过去 3 米多，冲过头蹭上中央护栏（2026-11-11 探针里撞飞过护栏）。
+   */
+  private slide = 0;
+  changeLane(lane: number): void {
+    const l = this.g.links[this.link];
+    this.slide += driveOffset(this.g, l, this.lane, this.kerbside) - driveOffset(this.g, l, lane, this.kerbside);
+    this.lane = lane;
+  }
+  /** 路况（traffic/ 设，Flow.ts）：这段路现在开得到限速的几成。 */
+  static pace: (link: number) => number = () => 1;
   /** 有客的出租车照着走的路（`follow`）：还没进队列的路段，按顺序。走完了又随便开。 */
   private plan: number[] = [];
   private timer = 0;
@@ -124,7 +154,7 @@ export class AiDriver {
   private along(ahead: number, out: { x: number; z: number; dx: number; dz: number }): void {
     let l = this.g.links[this.link], s = this.s + ahead, i = 0;
     while (s > l.len && i < this.queue.length) { s -= l.len; l = this.g.links[this.queue[i++]]; }
-    const lane = this.g.laneOn(l, this.kerbside ? 7 : this.lane), off = this.g.laneOffset(l, lane);
+    const lane = this.g.laneOn(l, this.kerbside ? 7 : this.lane), off = driveOffset(this.g, l, lane, this.kerbside) + this.slide;
     // Pulled over: towards the right kerb (or the cars parked along it), never past a car's half width inside it.
     this.g.at(l, s, this.kerb > 0 ? -l.kerbR + this.kerb : Math.min(off, Math.max(-l.kerbR + 1.3, off - this.shift)), out);
   }
@@ -199,6 +229,7 @@ export class AiDriver {
     if (this.busStop && toStop < -3) this.busStop = null;   // gone past it (pushed, or the stop was behind)
     const pulling = !!this.busStop && toStop < 45;
     this.shift += ((yielding ? 3.2 : pulling ? 2.4 : 0) - this.shift) * Math.min(1, dt * 1.6);
+    if (this.slide) this.slide -= Math.sign(this.slide) * Math.min(Math.abs(this.slide), 1.3 * dt);
     // Steering: pure pursuit on a point ahead at the lane offset.
     const look = Math.max(6, Math.min(24, 4 + v * 0.8));
     this.along(look, this.p);
@@ -209,7 +240,7 @@ export class AiDriver {
     inp.steer = Math.max(-1, Math.min(1, -wheel / Math.max(0.05, car.maxSteerAngle(v))));
 
     // Target speed: road class, the turn within the next ~45 m, then the light at the end.
-    let vt = yielding ? Math.min(l.speed, 3.5) : Math.min(this.vmax, l.speed * this.boost);
+    let vt = yielding ? Math.min(l.speed, 3.5) : Math.min(this.vmax, l.speed * this.boost * (this.reckless ? 1 : AiDriver.pace(this.link)));
     this.along(Math.max(8, v * 1.2), this.q);
     const h0x = this.q.dx, h0z = this.q.dz;
     this.along(Math.max(8, v * 1.2) + 28, this.q);
@@ -218,10 +249,18 @@ export class AiDriver {
     const toEnd = l.len - this.s;
     // Brake for the end of a road that ends, as for a red light at it.
     if (ending) vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 2.6 * (toEnd - 1.5))));
-    const light: Light = this.sig.state(l, t);
-    this.red = light === 2;
-    const stopAt = toEnd - STOP_LINE;
-    if (this.lineLink === this.link && this.lineToEnd > STOP_LINE && toEnd <= STOP_LINE && this.sig.junctionOf(l.to) >= 0) {
+    const real: Light = this.sig.state(l, t);
+    // 抢灯的把「马上就绿」当绿灯
+    const light: Light = real === 2 && this.eager > 0 && this.sig.state(l, t + this.eager) === 0 ? 0 : real;
+    this.red = real === 2;
+    const line = STOP_LINE - this.ahead;
+    const stopAt = toEnd - line;
+    this.turn = 0;
+    if (this.queue.length && toEnd < 45) {
+      const nl = g.links[this.queue[0]];
+      if (l.d1x * nl.d0x + l.d1z * nl.d0z < 0.878) this.turn = nl.d0x * l.d1z - nl.d0z * l.d1x > 0 ? 1 : -1;   // 拐过 0.5 弧度；左手方向是 (dz, -dx)
+    }
+    if (this.lineLink === this.link && this.lineToEnd > line && toEnd <= line && this.sig.junctionOf(l.to) >= 0) {
       lineStats.crossed++;
       if (light === 2) lineStats.onRed++;
     }

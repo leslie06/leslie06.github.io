@@ -12,6 +12,7 @@ import type { DamageApi } from '../damage';
 import type { DistrictApi } from '../district';
 import { ShopPanel, type Row } from '../district/Panel';
 import type { EstateApi } from '../estate';
+import type { ErrandsApi } from '../errands';
 import type { UiApi } from '../ui';
 import { shotMode } from '../debug/ShotMode';
 import {
@@ -45,6 +46,8 @@ export interface StreetApi extends System {
   readonly busy: boolean;
   /** The nearest usable shop of each kind within `r` of (x, z), nearest first (the 附近 panel). */
   nearby(x: number, z: number, r: number): { x: number; z: number; name: string; service: Service; d: number }[];
+  /** 每一家开着门、有柜台的店（不只每种最近的一家），近的在前：favours/ 的「捎东西」挑一家送。 */
+  fronts(x: number, z: number, r: number): { x: number; z: number; name: string; d: number }[];
   debug: {
     /** The shop units in reach of a counter round (x, z): where to stand for each, its sign and service. */
     near(x: number, z: number, r: number): { x: number; z: number; sign: string; trade: string; service: Service }[];
@@ -58,7 +61,7 @@ const FRONT = 3.2, SIDE = 1.3;
 /** Badges over usable shops within this of the player on foot; the map's marks the same. */
 const BADGE_R = 28, BADGES = 8, BADGES_LITE = 4;
 const REPAIR_R = 40;
-const BADGE: Record<Service, string> = { eat: '吃', snack: '买', gift: '礼', pharmacy: '药', care: '足', hair: '发', clothes: '衣', repair: '修', hotel: '住', lottery: '彩' };
+const BADGE: Record<Service, string> = { eat: '吃', snack: '买', gift: '礼', pharmacy: '药', care: '足', hair: '发', clothes: '衣', repair: '修', hotel: '住', lottery: '彩', courier: '递' };
 
 interface Unit { x: number; z: number; nx: number; nz: number; w: number; gh: number; sign: ShopSign; service: Service; d: number }
 
@@ -223,6 +226,8 @@ export function install(engine: Engine): void {
     if (s === 'hair' || s === 'clothes') return engine.get<DistrictApi>('district')?.wearPanel(s, name, greet) ?? false;
     const again = (): boolean => {
       const rows = s === 'repair' ? repairRows(u, () => { again(); }) : s === 'hotel' ? hotelRows(u) : s === 'lottery' ? lotteryRows(u, () => { again(); }) : goodsRows(u, () => { again(); });
+      // 这家店能接的活（errands/：外卖、派件、代驾）接在后面
+      rows.push(...(engine.get<ErrandsApi>('errands')?.rows({ x: u.x + u.nx * 1.4, z: u.z + u.nz * 1.4, name, trade: u.sign.trade, service: s }, () => panel.close()) ?? []));
       return panel.render(name, s === 'eat' ? `${greet}  ·  ${albumLine()}` : greet, missions()?.cash ?? 0, rows, () => { open = null; });
     };
     open = u;
@@ -241,6 +246,11 @@ export function install(engine: Engine): void {
       const out: Unit[] = [], seen = new Set<Service>();
       scan(x, z, Math.min(r, 256), out);
       return out.filter((u) => !seen.has(u.service) && !!seen.add(u.service)).map((u) => ({ x: u.x + u.nx * 1.4, z: u.z + u.nz * 1.4, name: u.sign.text, service: u.service, d: u.d }));
+    },
+    fronts(x, z, r) {
+      const out: Unit[] = [];
+      scan(x, z, Math.min(r, 256), out);
+      return out.map((u) => ({ x: u.x + u.nx * 1.4, z: u.z + u.nz * 1.4, name: u.sign.text, d: u.d }));
     },
     debug: {
       near(x, z, r) { const out: Unit[] = []; scan(x, z, r, out); return out.map((u) => ({ x: u.x + u.nx * 1.4, z: u.z + u.nz * 1.4, sign: u.sign.text, trade: u.sign.trade, service: u.service })); },

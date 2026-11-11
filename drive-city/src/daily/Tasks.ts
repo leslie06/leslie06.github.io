@@ -51,6 +51,7 @@ export const TASKS: readonly TaskDef[] = [
   def({ id: 'fare1', tier: 0, cat: 'money', n: 1, name: 'dly.t.fare', on: 'taxi:fare', count: () => 1 }),
   def({ id: 'photo', tier: 0, cat: 'lane', n: 1, name: 'dly.t.photo', on: 'district:photo', count: () => 1, where: 'nanluo' }),
   def({ id: 'collect', tier: 0, cat: 'money', n: 1, name: 'dly.t.collect', on: 'estate:collected', count: () => 1, open: (c) => c.owns }),
+  def({ id: 'favour', tier: 0, cat: 'roam', n: 1, name: 'dly.t.favour', on: 'favour:done', count: () => 1 }),
   // 中等
   def({ id: 'fares', tier: 1, cat: 'money', n: 3, name: 'dly.t.fares', on: 'taxi:fare', count: () => 1 }),
   def({ id: 'star5', tier: 1, cat: 'money', n: 2, name: 'dly.t.star5', on: 'taxi:fare', count: (e) => (e.stars === 5 ? 1 : 0) }),

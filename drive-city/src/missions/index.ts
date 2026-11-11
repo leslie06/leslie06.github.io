@@ -435,7 +435,9 @@ export async function install(engine: Engine): Promise<void> {
       }
       if (!v.inputEnabled) return;
       const wanted = (engine.get<WantedApi>('wanted')?.level ?? 0) > 0;
-      const other = !!engine.get<RaceApi>('races')?.active || !!jobs.busy || !!tofu?.busy;
+      // 车里坐着搭车的路人（favours/ 的 lift）也算：这一趟不拉招手的
+      const other = !!engine.get<RaceApi>('races')?.active || !!jobs.busy || !!tofu?.busy || engine.get<{ name: string; active: string | null }>('favours')?.active === 'lift'
+        || !!engine.get<{ name: string; active: string | null }>('errands')?.active;   // 手上有外卖、包裹（errands/）也不拉
       // The shift: its clock runs while you drive the taxi; out of it for long, or into a race or a job, it ends.
       // 等红灯不走表：停在没绿的灯前面（赶火车的那位除外）。
       if ((redT -= dt) <= 0) {

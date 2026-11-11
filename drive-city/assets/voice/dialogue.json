@@ -4528,6 +4528,1686 @@
    "instructEn": "Drunk, waving and calling out."
   },
   {
+   "id": "npc.err.parcel.thanks1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是我的，谢谢啊！",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "That's mine. Thanks!",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是我的，谢谢啊！",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "That's mine. Thanks!",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是我的，谢谢啊！",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "That's mine. Thanks!",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是我的，谢谢啊！",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "That's mine. Thanks!",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是我的，谢谢啊！",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "That's mine. Thanks!",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是我的，谢谢啊！",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "That's mine. Thanks!",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟可算到了！麻烦您跑一趟。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "Oh, it came at last! Thank you for bringing it over.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟可算到了！麻烦您跑一趟。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "Oh, it came at last! Thank you for bringing it over.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟可算到了！麻烦您跑一趟。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "Oh, it came at last! Thank you for bringing it over.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟可算到了！麻烦您跑一趟。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "Oh, it came at last! Thank you for bringing it over.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟可算到了！麻烦您跑一趟。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "Oh, it came at last! Thank you for bringing it over.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎哟可算到了！麻烦您跑一趟。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "Oh, it came at last! Thank you for bringing it over.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的件儿？搁这儿吧，谢了。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "For me? Just put it here. Cheers.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的件儿？搁这儿吧，谢了。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "For me? Just put it here. Cheers.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的件儿？搁这儿吧，谢了。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "For me? Just put it here. Cheers.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的件儿？搁这儿吧，谢了。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "For me? Just put it here. Cheers.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的件儿？搁这儿吧，谢了。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "For me? Just put it here. Cheers.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.parcel.thanks3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "我的件儿？搁这儿吧，谢了。",
+   "instruct": "收到快递，随口道谢。",
+   "textEn": "For me? Just put it here. Cheers.",
+   "instructEn": "Getting a parcel, offhand thanks."
+  },
+  {
+   "id": "npc.err.takeout.late",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "怎么才来啊？都凉了。",
+   "instruct": "等急了，不高兴地埋怨。",
+   "textEn": "What took you so long? It's gone cold.",
+   "instructEn": "Tired of waiting, annoyed."
+  },
+  {
+   "id": "npc.err.takeout.late",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "怎么才来啊？都凉了。",
+   "instruct": "等急了，不高兴地埋怨。",
+   "textEn": "What took you so long? It's gone cold.",
+   "instructEn": "Tired of waiting, annoyed."
+  },
+  {
+   "id": "npc.err.takeout.late",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "怎么才来啊？都凉了。",
+   "instruct": "等急了，不高兴地埋怨。",
+   "textEn": "What took you so long? It's gone cold.",
+   "instructEn": "Tired of waiting, annoyed."
+  },
+  {
+   "id": "npc.err.takeout.late",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "怎么才来啊？都凉了。",
+   "instruct": "等急了，不高兴地埋怨。",
+   "textEn": "What took you so long? It's gone cold.",
+   "instructEn": "Tired of waiting, annoyed."
+  },
+  {
+   "id": "npc.err.takeout.late",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "怎么才来啊？都凉了。",
+   "instruct": "等急了，不高兴地埋怨。",
+   "textEn": "What took you so long? It's gone cold.",
+   "instructEn": "Tired of waiting, annoyed."
+  },
+  {
+   "id": "npc.err.takeout.late",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "怎么才来啊？都凉了。",
+   "instruct": "等急了，不高兴地埋怨。",
+   "textEn": "What took you so long? It's gone cold.",
+   "instructEn": "Tired of waiting, annoyed."
+  },
+  {
+   "id": "npc.err.takeout.thanks1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么快！谢谢啊，搁这儿就行。",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "That was quick! Thanks - just leave it here.",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么快！谢谢啊，搁这儿就行。",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "That was quick! Thanks - just leave it here.",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么快！谢谢啊，搁这儿就行。",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "That was quick! Thanks - just leave it here.",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么快！谢谢啊，搁这儿就行。",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "That was quick! Thanks - just leave it here.",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么快！谢谢啊，搁这儿就行。",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "That was quick! Thanks - just leave it here.",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这么快！谢谢啊，搁这儿就行。",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "That was quick! Thanks - just leave it here.",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？太好了，饿坏了都。谢谢您！",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "Here already? Great, I'm starving. Thank you!",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？太好了，饿坏了都。谢谢您！",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "Here already? Great, I'm starving. Thank you!",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？太好了，饿坏了都。谢谢您！",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "Here already? Great, I'm starving. Thank you!",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？太好了，饿坏了都。谢谢您！",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "Here already? Great, I'm starving. Thank you!",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？太好了，饿坏了都。谢谢您！",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "Here already? Great, I'm starving. Thank you!",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.err.takeout.thanks2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了？太好了，饿坏了都。谢谢您！",
+   "instruct": "收到外卖，高兴地道谢。",
+   "textEn": "Here already? Great, I'm starving. Thank you!",
+   "instructEn": "Getting their food delivery, pleased thanks."
+  },
+  {
+   "id": "npc.fav.deliver.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾您个事儿：这袋东西帮我捎到前头那家店成吗？没多远。我这儿实在走不开。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Could I ask you a favour? Would you drop this bag at the shop up the road? It's not far. I really can't leave this spot.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.deliver.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾您个事儿：这袋东西帮我捎到前头那家店成吗？没多远。我这儿实在走不开。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Could I ask you a favour? Would you drop this bag at the shop up the road? It's not far. I really can't leave this spot.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.deliver.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾您个事儿：这袋东西帮我捎到前头那家店成吗？没多远。我这儿实在走不开。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Could I ask you a favour? Would you drop this bag at the shop up the road? It's not far. I really can't leave this spot.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.deliver.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾您个事儿：这袋东西帮我捎到前头那家店成吗？没多远。我这儿实在走不开。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Could I ask you a favour? Would you drop this bag at the shop up the road? It's not far. I really can't leave this spot.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.deliver.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾您个事儿：这袋东西帮我捎到前头那家店成吗？没多远。我这儿实在走不开。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Could I ask you a favour? Would you drop this bag at the shop up the road? It's not far. I really can't leave this spot.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.deliver.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "劳驾您个事儿：这袋东西帮我捎到前头那家店成吗？没多远。我这儿实在走不开。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Could I ask you a favour? Would you drop this bag at the shop up the road? It's not far. I really can't leave this spot.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.deliver.done",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，替街坊捎来的？搁这儿吧，辛苦您跑一趟。",
+   "instruct": "店里的人，热络地应一声。",
+   "textEn": "Oh, from the neighbour? Leave it here. Thanks for coming all this way.",
+   "instructEn": "A shopkeeper, warm and brisk."
+  },
+  {
+   "id": "npc.fav.deliver.done",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，替街坊捎来的？搁这儿吧，辛苦您跑一趟。",
+   "instruct": "店里的人，热络地应一声。",
+   "textEn": "Oh, from the neighbour? Leave it here. Thanks for coming all this way.",
+   "instructEn": "A shopkeeper, warm and brisk."
+  },
+  {
+   "id": "npc.fav.deliver.done",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，替街坊捎来的？搁这儿吧，辛苦您跑一趟。",
+   "instruct": "店里的人，热络地应一声。",
+   "textEn": "Oh, from the neighbour? Leave it here. Thanks for coming all this way.",
+   "instructEn": "A shopkeeper, warm and brisk."
+  },
+  {
+   "id": "npc.fav.deliver.done",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，替街坊捎来的？搁这儿吧，辛苦您跑一趟。",
+   "instruct": "店里的人，热络地应一声。",
+   "textEn": "Oh, from the neighbour? Leave it here. Thanks for coming all this way.",
+   "instructEn": "A shopkeeper, warm and brisk."
+  },
+  {
+   "id": "npc.fav.deliver.done",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，替街坊捎来的？搁这儿吧，辛苦您跑一趟。",
+   "instruct": "店里的人，热络地应一声。",
+   "textEn": "Oh, from the neighbour? Leave it here. Thanks for coming all this way.",
+   "instructEn": "A shopkeeper, warm and brisk."
+  },
+  {
+   "id": "npc.fav.deliver.done",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哟，替街坊捎来的？搁这儿吧，辛苦您跑一趟。",
+   "instruct": "店里的人，热络地应一声。",
+   "textEn": "Oh, from the neighbour? Leave it here. Thanks for coming all this way.",
+   "instructEn": "A shopkeeper, warm and brisk."
+  },
+  {
+   "id": "npc.fav.deliver.thanks",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您嘞！跟店里说是老街坊捎的就成。",
+   "instruct": "高兴地道谢，叮嘱一句。",
+   "textEn": "Thank you so much! Just tell them it's from the neighbour.",
+   "instructEn": "Pleased thanks, then a reminder."
+  },
+  {
+   "id": "npc.fav.deliver.thanks",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您嘞！跟店里说是老街坊捎的就成。",
+   "instruct": "高兴地道谢，叮嘱一句。",
+   "textEn": "Thank you so much! Just tell them it's from the neighbour.",
+   "instructEn": "Pleased thanks, then a reminder."
+  },
+  {
+   "id": "npc.fav.deliver.thanks",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您嘞！跟店里说是老街坊捎的就成。",
+   "instruct": "高兴地道谢，叮嘱一句。",
+   "textEn": "Thank you so much! Just tell them it's from the neighbour.",
+   "instructEn": "Pleased thanks, then a reminder."
+  },
+  {
+   "id": "npc.fav.deliver.thanks",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您嘞！跟店里说是老街坊捎的就成。",
+   "instruct": "高兴地道谢，叮嘱一句。",
+   "textEn": "Thank you so much! Just tell them it's from the neighbour.",
+   "instructEn": "Pleased thanks, then a reminder."
+  },
+  {
+   "id": "npc.fav.deliver.thanks",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您嘞！跟店里说是老街坊捎的就成。",
+   "instruct": "高兴地道谢，叮嘱一句。",
+   "textEn": "Thank you so much! Just tell them it's from the neighbour.",
+   "instructEn": "Pleased thanks, then a reminder."
+  },
+  {
+   "id": "npc.fav.deliver.thanks",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您嘞！跟店里说是老街坊捎的就成。",
+   "instruct": "高兴地道谢，叮嘱一句。",
+   "textEn": "Thank you so much! Just tell them it's from the neighbour.",
+   "instructEn": "Pleased thanks, then a reminder."
+  },
+  {
+   "id": "npc.fav.find.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀师傅，我钥匙掉了，就掉这附近，您眼神好，帮我找找成吗？",
+   "instruct": "着急，又不好意思麻烦人。",
+   "textEn": "Oh dear - I've dropped my keys somewhere round here. Your eyes are better than mine: would you help me look?",
+   "instructEn": "Worried, embarrassed to ask."
+  },
+  {
+   "id": "npc.fav.find.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀师傅，我钥匙掉了，就掉这附近，您眼神好，帮我找找成吗？",
+   "instruct": "着急，又不好意思麻烦人。",
+   "textEn": "Oh dear - I've dropped my keys somewhere round here. Your eyes are better than mine: would you help me look?",
+   "instructEn": "Worried, embarrassed to ask."
+  },
+  {
+   "id": "npc.fav.find.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀师傅，我钥匙掉了，就掉这附近，您眼神好，帮我找找成吗？",
+   "instruct": "着急，又不好意思麻烦人。",
+   "textEn": "Oh dear - I've dropped my keys somewhere round here. Your eyes are better than mine: would you help me look?",
+   "instructEn": "Worried, embarrassed to ask."
+  },
+  {
+   "id": "npc.fav.find.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀师傅，我钥匙掉了，就掉这附近，您眼神好，帮我找找成吗？",
+   "instruct": "着急，又不好意思麻烦人。",
+   "textEn": "Oh dear - I've dropped my keys somewhere round here. Your eyes are better than mine: would you help me look?",
+   "instructEn": "Worried, embarrassed to ask."
+  },
+  {
+   "id": "npc.fav.find.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀师傅，我钥匙掉了，就掉这附近，您眼神好，帮我找找成吗？",
+   "instruct": "着急，又不好意思麻烦人。",
+   "textEn": "Oh dear - I've dropped my keys somewhere round here. Your eyes are better than mine: would you help me look?",
+   "instructEn": "Worried, embarrassed to ask."
+  },
+  {
+   "id": "npc.fav.find.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎呀师傅，我钥匙掉了，就掉这附近，您眼神好，帮我找找成吗？",
+   "instruct": "着急，又不好意思麻烦人。",
+   "textEn": "Oh dear - I've dropped my keys somewhere round here. Your eyes are better than mine: would you help me look?",
+   "instructEn": "Worried, embarrassed to ask."
+  },
+  {
+   "id": "npc.fav.find.done",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可不就是它嘛！太谢谢您了，这点儿心意您拿着。",
+   "instruct": "又惊又喜，连声道谢。",
+   "textEn": "That's them! Thank you so much. Please, take this.",
+   "instructEn": "Surprised and delighted, thanking over and over."
+  },
+  {
+   "id": "npc.fav.find.done",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可不就是它嘛！太谢谢您了，这点儿心意您拿着。",
+   "instruct": "又惊又喜，连声道谢。",
+   "textEn": "That's them! Thank you so much. Please, take this.",
+   "instructEn": "Surprised and delighted, thanking over and over."
+  },
+  {
+   "id": "npc.fav.find.done",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可不就是它嘛！太谢谢您了，这点儿心意您拿着。",
+   "instruct": "又惊又喜，连声道谢。",
+   "textEn": "That's them! Thank you so much. Please, take this.",
+   "instructEn": "Surprised and delighted, thanking over and over."
+  },
+  {
+   "id": "npc.fav.find.done",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可不就是它嘛！太谢谢您了，这点儿心意您拿着。",
+   "instruct": "又惊又喜，连声道谢。",
+   "textEn": "That's them! Thank you so much. Please, take this.",
+   "instructEn": "Surprised and delighted, thanking over and over."
+  },
+  {
+   "id": "npc.fav.find.done",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可不就是它嘛！太谢谢您了，这点儿心意您拿着。",
+   "instruct": "又惊又喜，连声道谢。",
+   "textEn": "That's them! Thank you so much. Please, take this.",
+   "instructEn": "Surprised and delighted, thanking over and over."
+  },
+  {
+   "id": "npc.fav.find.done",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "可不就是它嘛！太谢谢您了，这点儿心意您拿着。",
+   "instruct": "又惊又喜，连声道谢。",
+   "textEn": "That's them! Thank you so much. Please, take this.",
+   "instructEn": "Surprised and delighted, thanking over and over."
+  },
+  {
+   "id": "npc.fav.find.gone",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找不着就算了，回头我再配一把。",
+   "instruct": "叹口气，算了。",
+   "textEn": "Never mind if they can't be found. I'll get another set cut.",
+   "instructEn": "A sigh, giving up."
+  },
+  {
+   "id": "npc.fav.find.gone",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找不着就算了，回头我再配一把。",
+   "instruct": "叹口气，算了。",
+   "textEn": "Never mind if they can't be found. I'll get another set cut.",
+   "instructEn": "A sigh, giving up."
+  },
+  {
+   "id": "npc.fav.find.gone",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找不着就算了，回头我再配一把。",
+   "instruct": "叹口气，算了。",
+   "textEn": "Never mind if they can't be found. I'll get another set cut.",
+   "instructEn": "A sigh, giving up."
+  },
+  {
+   "id": "npc.fav.find.gone",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找不着就算了，回头我再配一把。",
+   "instruct": "叹口气，算了。",
+   "textEn": "Never mind if they can't be found. I'll get another set cut.",
+   "instructEn": "A sigh, giving up."
+  },
+  {
+   "id": "npc.fav.find.gone",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找不着就算了，回头我再配一把。",
+   "instruct": "叹口气，算了。",
+   "textEn": "Never mind if they can't be found. I'll get another set cut.",
+   "instructEn": "A sigh, giving up."
+  },
+  {
+   "id": "npc.fav.find.gone",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "找不着就算了，回头我再配一把。",
+   "instruct": "叹口气，算了。",
+   "textEn": "Never mind if they can't be found. I'll get another set cut.",
+   "instructEn": "A sigh, giving up."
+  },
+  {
+   "id": "npc.fav.find.point",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是不是掉那边儿了？您往那边瞧瞧。",
+   "instruct": "一边回想一边指。",
+   "textEn": "Could they have fallen over there? Have a look that way.",
+   "instructEn": "Trying to remember, pointing."
+  },
+  {
+   "id": "npc.fav.find.point",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是不是掉那边儿了？您往那边瞧瞧。",
+   "instruct": "一边回想一边指。",
+   "textEn": "Could they have fallen over there? Have a look that way.",
+   "instructEn": "Trying to remember, pointing."
+  },
+  {
+   "id": "npc.fav.find.point",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是不是掉那边儿了？您往那边瞧瞧。",
+   "instruct": "一边回想一边指。",
+   "textEn": "Could they have fallen over there? Have a look that way.",
+   "instructEn": "Trying to remember, pointing."
+  },
+  {
+   "id": "npc.fav.find.point",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是不是掉那边儿了？您往那边瞧瞧。",
+   "instruct": "一边回想一边指。",
+   "textEn": "Could they have fallen over there? Have a look that way.",
+   "instructEn": "Trying to remember, pointing."
+  },
+  {
+   "id": "npc.fav.find.point",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是不是掉那边儿了？您往那边瞧瞧。",
+   "instruct": "一边回想一边指。",
+   "textEn": "Could they have fallen over there? Have a look that way.",
+   "instructEn": "Trying to remember, pointing."
+  },
+  {
+   "id": "npc.fav.find.point",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "是不是掉那边儿了？您往那边瞧瞧。",
+   "instruct": "一边回想一边指。",
+   "textEn": "Could they have fallen over there? Have a look that way.",
+   "instructEn": "Trying to remember, pointing."
+  },
+  {
+   "id": "npc.fav.find.thanks",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您！一串钥匙，上头拴个红绳儿。",
+   "instruct": "感激，赶紧交代。",
+   "textEn": "Thank you! A bunch of keys on a red string.",
+   "instructEn": "Grateful, quickly describing them."
+  },
+  {
+   "id": "npc.fav.find.thanks",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您！一串钥匙，上头拴个红绳儿。",
+   "instruct": "感激，赶紧交代。",
+   "textEn": "Thank you! A bunch of keys on a red string.",
+   "instructEn": "Grateful, quickly describing them."
+  },
+  {
+   "id": "npc.fav.find.thanks",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您！一串钥匙，上头拴个红绳儿。",
+   "instruct": "感激，赶紧交代。",
+   "textEn": "Thank you! A bunch of keys on a red string.",
+   "instructEn": "Grateful, quickly describing them."
+  },
+  {
+   "id": "npc.fav.find.thanks",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您！一串钥匙，上头拴个红绳儿。",
+   "instruct": "感激，赶紧交代。",
+   "textEn": "Thank you! A bunch of keys on a red string.",
+   "instructEn": "Grateful, quickly describing them."
+  },
+  {
+   "id": "npc.fav.find.thanks",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您！一串钥匙，上头拴个红绳儿。",
+   "instruct": "感激，赶紧交代。",
+   "textEn": "Thank you! A bunch of keys on a red string.",
+   "instructEn": "Grateful, quickly describing them."
+  },
+  {
+   "id": "npc.fav.find.thanks",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "谢谢您！一串钥匙，上头拴个红绳儿。",
+   "instruct": "感激，赶紧交代。",
+   "textEn": "Thank you! A bunch of keys on a red string.",
+   "instructEn": "Grateful, quickly describing them."
+  },
+  {
+   "id": "npc.fav.hail1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，劳驾！帮个忙成吗？",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Excuse me! Could you give me a hand?",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，劳驾！帮个忙成吗？",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Excuse me! Could you give me a hand?",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，劳驾！帮个忙成吗？",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Excuse me! Could you give me a hand?",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，劳驾！帮个忙成吗？",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Excuse me! Could you give me a hand?",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，劳驾！帮个忙成吗？",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Excuse me! Could you give me a hand?",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，劳驾！帮个忙成吗？",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Excuse me! Could you give me a hand?",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这位师傅，留步！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hey, hold on a second!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这位师傅，留步！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hey, hold on a second!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这位师傅，留步！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hey, hold on a second!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这位师傅，留步！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hey, hold on a second!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这位师傅，留步！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hey, hold on a second!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "哎，这位师傅，留步！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hey, hold on a second!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail3",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，打扰一下！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hello! Sorry to bother you!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail3",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，打扰一下！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hello! Sorry to bother you!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail3",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，打扰一下！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hello! Sorry to bother you!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail3",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，打扰一下！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hello! Sorry to bother you!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail3",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，打扰一下！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hello! Sorry to bother you!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.hail3",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，打扰一下！",
+   "instruct": "客气地叫住路过的人。",
+   "textEn": "Hello! Sorry to bother you!",
+   "instructEn": "Politely stopping someone walking past."
+  },
+  {
+   "id": "npc.fav.lift.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，那是您的车吧？我赶着去个地方，捎我一段成吗？油钱我出。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Is that your car? I'm in a hurry to get somewhere - could you give me a lift? I'll pay for the petrol.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.lift.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，那是您的车吧？我赶着去个地方，捎我一段成吗？油钱我出。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Is that your car? I'm in a hurry to get somewhere - could you give me a lift? I'll pay for the petrol.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.lift.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，那是您的车吧？我赶着去个地方，捎我一段成吗？油钱我出。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Is that your car? I'm in a hurry to get somewhere - could you give me a lift? I'll pay for the petrol.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.lift.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，那是您的车吧？我赶着去个地方，捎我一段成吗？油钱我出。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Is that your car? I'm in a hurry to get somewhere - could you give me a lift? I'll pay for the petrol.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.lift.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，那是您的车吧？我赶着去个地方，捎我一段成吗？油钱我出。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Is that your car? I'm in a hurry to get somewhere - could you give me a lift? I'll pay for the petrol.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.lift.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "师傅，那是您的车吧？我赶着去个地方，捎我一段成吗？油钱我出。",
+   "instruct": "客气地求人帮忙，口语化。",
+   "textEn": "Is that your car? I'm in a hurry to get somewhere - could you give me a lift? I'll pay for the petrol.",
+   "instructEn": "Politely asking a stranger for a favour, conversational."
+  },
+  {
+   "id": "npc.fav.lift.done",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了，就这儿。谢谢师傅，您慢点儿开。",
+   "instruct": "到地方了，感激地道谢。",
+   "textEn": "Here we are, this is it. Thank you - drive safely.",
+   "instructEn": "Arriving, grateful."
+  },
+  {
+   "id": "npc.fav.lift.done",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了，就这儿。谢谢师傅，您慢点儿开。",
+   "instruct": "到地方了，感激地道谢。",
+   "textEn": "Here we are, this is it. Thank you - drive safely.",
+   "instructEn": "Arriving, grateful."
+  },
+  {
+   "id": "npc.fav.lift.done",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了，就这儿。谢谢师傅，您慢点儿开。",
+   "instruct": "到地方了，感激地道谢。",
+   "textEn": "Here we are, this is it. Thank you - drive safely.",
+   "instructEn": "Arriving, grateful."
+  },
+  {
+   "id": "npc.fav.lift.done",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了，就这儿。谢谢师傅，您慢点儿开。",
+   "instruct": "到地方了，感激地道谢。",
+   "textEn": "Here we are, this is it. Thank you - drive safely.",
+   "instructEn": "Arriving, grateful."
+  },
+  {
+   "id": "npc.fav.lift.done",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了，就这儿。谢谢师傅，您慢点儿开。",
+   "instruct": "到地方了，感激地道谢。",
+   "textEn": "Here we are, this is it. Thank you - drive safely.",
+   "instructEn": "Arriving, grateful."
+  },
+  {
+   "id": "npc.fav.lift.done",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "到了到了，就这儿。谢谢师傅，您慢点儿开。",
+   "instruct": "到地方了，感激地道谢。",
+   "textEn": "Here we are, this is it. Thank you - drive safely.",
+   "instructEn": "Arriving, grateful."
+  },
+  {
+   "id": "npc.fav.lift.gone",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算了算了，我自个儿走吧。",
+   "instruct": "等不及了，无奈。",
+   "textEn": "Never mind, I'll walk.",
+   "instructEn": "Tired of waiting, resigned."
+  },
+  {
+   "id": "npc.fav.lift.gone",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算了算了，我自个儿走吧。",
+   "instruct": "等不及了，无奈。",
+   "textEn": "Never mind, I'll walk.",
+   "instructEn": "Tired of waiting, resigned."
+  },
+  {
+   "id": "npc.fav.lift.gone",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算了算了，我自个儿走吧。",
+   "instruct": "等不及了，无奈。",
+   "textEn": "Never mind, I'll walk.",
+   "instructEn": "Tired of waiting, resigned."
+  },
+  {
+   "id": "npc.fav.lift.gone",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算了算了，我自个儿走吧。",
+   "instruct": "等不及了，无奈。",
+   "textEn": "Never mind, I'll walk.",
+   "instructEn": "Tired of waiting, resigned."
+  },
+  {
+   "id": "npc.fav.lift.gone",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算了算了，我自个儿走吧。",
+   "instruct": "等不及了，无奈。",
+   "textEn": "Never mind, I'll walk.",
+   "instructEn": "Tired of waiting, resigned."
+  },
+  {
+   "id": "npc.fav.lift.gone",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "算了算了，我自个儿走吧。",
+   "instruct": "等不及了，无奈。",
+   "textEn": "Never mind, I'll walk.",
+   "instructEn": "Tired of waiting, resigned."
+  },
+  {
+   "id": "npc.fav.lift.ride",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿可算碰上好人了，等半天车都没打着。",
+   "instruct": "坐在车里松了口气，感慨。",
+   "textEn": "A kind soul at last. I'd been trying to get a cab for ages.",
+   "instructEn": "In the car, relieved, musing."
+  },
+  {
+   "id": "npc.fav.lift.ride",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿可算碰上好人了，等半天车都没打着。",
+   "instruct": "坐在车里松了口气，感慨。",
+   "textEn": "A kind soul at last. I'd been trying to get a cab for ages.",
+   "instructEn": "In the car, relieved, musing."
+  },
+  {
+   "id": "npc.fav.lift.ride",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿可算碰上好人了，等半天车都没打着。",
+   "instruct": "坐在车里松了口气，感慨。",
+   "textEn": "A kind soul at last. I'd been trying to get a cab for ages.",
+   "instructEn": "In the car, relieved, musing."
+  },
+  {
+   "id": "npc.fav.lift.ride",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿可算碰上好人了，等半天车都没打着。",
+   "instruct": "坐在车里松了口气，感慨。",
+   "textEn": "A kind soul at last. I'd been trying to get a cab for ages.",
+   "instructEn": "In the car, relieved, musing."
+  },
+  {
+   "id": "npc.fav.lift.ride",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿可算碰上好人了，等半天车都没打着。",
+   "instruct": "坐在车里松了口气，感慨。",
+   "textEn": "A kind soul at last. I'd been trying to get a cab for ages.",
+   "instructEn": "In the car, relieved, musing."
+  },
+  {
+   "id": "npc.fav.lift.ride",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "今儿可算碰上好人了，等半天车都没打着。",
+   "instruct": "坐在车里松了口气，感慨。",
+   "textEn": "A kind soul at last. I'd been trying to get a cab for ages.",
+   "instructEn": "In the car, relieved, musing."
+  },
+  {
+   "id": "npc.fav.lift.scared",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这……我还是下去走吧！",
+   "instruct": "吓着了，慌张。",
+   "textEn": "This... I think I'll get out and walk!",
+   "instructEn": "Frightened, flustered."
+  },
+  {
+   "id": "npc.fav.lift.scared",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这……我还是下去走吧！",
+   "instruct": "吓着了，慌张。",
+   "textEn": "This... I think I'll get out and walk!",
+   "instructEn": "Frightened, flustered."
+  },
+  {
+   "id": "npc.fav.lift.scared",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这……我还是下去走吧！",
+   "instruct": "吓着了，慌张。",
+   "textEn": "This... I think I'll get out and walk!",
+   "instructEn": "Frightened, flustered."
+  },
+  {
+   "id": "npc.fav.lift.scared",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这……我还是下去走吧！",
+   "instruct": "吓着了，慌张。",
+   "textEn": "This... I think I'll get out and walk!",
+   "instructEn": "Frightened, flustered."
+  },
+  {
+   "id": "npc.fav.lift.scared",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这……我还是下去走吧！",
+   "instruct": "吓着了，慌张。",
+   "textEn": "This... I think I'll get out and walk!",
+   "instructEn": "Frightened, flustered."
+  },
+  {
+   "id": "npc.fav.lift.scared",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这……我还是下去走吧！",
+   "instruct": "吓着了，慌张。",
+   "textEn": "This... I think I'll get out and walk!",
+   "instructEn": "Frightened, flustered."
+  },
+  {
+   "id": "npc.fav.lift.thanks",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢了！我跟着您。",
+   "instruct": "喜出望外地道谢。",
+   "textEn": "Thank you so much! I'll follow you.",
+   "instructEn": "Overjoyed thanks."
+  },
+  {
+   "id": "npc.fav.lift.thanks",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢了！我跟着您。",
+   "instruct": "喜出望外地道谢。",
+   "textEn": "Thank you so much! I'll follow you.",
+   "instructEn": "Overjoyed thanks."
+  },
+  {
+   "id": "npc.fav.lift.thanks",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢了！我跟着您。",
+   "instruct": "喜出望外地道谢。",
+   "textEn": "Thank you so much! I'll follow you.",
+   "instructEn": "Overjoyed thanks."
+  },
+  {
+   "id": "npc.fav.lift.thanks",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢了！我跟着您。",
+   "instruct": "喜出望外地道谢。",
+   "textEn": "Thank you so much! I'll follow you.",
+   "instructEn": "Overjoyed thanks."
+  },
+  {
+   "id": "npc.fav.lift.thanks",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢了！我跟着您。",
+   "instruct": "喜出望外地道谢。",
+   "textEn": "Thank you so much! I'll follow you.",
+   "instructEn": "Overjoyed thanks."
+  },
+  {
+   "id": "npc.fav.lift.thanks",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "太谢谢了！我跟着您。",
+   "instruct": "喜出望外地道谢。",
+   "textEn": "Thank you so much! I'll follow you.",
+   "instructEn": "Overjoyed thanks."
+  },
+  {
+   "id": "npc.fav.no1",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，您忙您的。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "No problem, don't let me keep you.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no1",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，您忙您的。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "No problem, don't let me keep you.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no1",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，您忙您的。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "No problem, don't let me keep you.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no1",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，您忙您的。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "No problem, don't let me keep you.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no1",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，您忙您的。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "No problem, don't let me keep you.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no1",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "没事儿，您忙您的。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "No problem, don't let me keep you.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no2",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "成，那我再问问别人。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "All right, I'll ask someone else.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no2",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "成，那我再问问别人。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "All right, I'll ask someone else.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no2",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "成，那我再问问别人。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "All right, I'll ask someone else.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no2",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "成，那我再问问别人。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "All right, I'll ask someone else.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no2",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "成，那我再问问别人。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "All right, I'll ask someone else.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.no2",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "成，那我再问问别人。",
+   "instruct": "不在意，客气地说。",
+   "textEn": "All right, I'll ask someone else.",
+   "instructEn": "Unbothered, polite."
+  },
+  {
+   "id": "npc.fav.photo.ask",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，我头一回来北京，能跟您合个影吗？回去给家里人瞧瞧。",
+   "instruct": "外地口音的游客，兴冲冲又有点儿不好意思。",
+   "textEn": "Hello! It's my first time in Beijing - could I take a photo with you? To show the family back home.",
+   "instructEn": "An out-of-town tourist, eager and a little shy."
+  },
+  {
+   "id": "npc.fav.photo.ask",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，我头一回来北京，能跟您合个影吗？回去给家里人瞧瞧。",
+   "instruct": "外地口音的游客，兴冲冲又有点儿不好意思。",
+   "textEn": "Hello! It's my first time in Beijing - could I take a photo with you? To show the family back home.",
+   "instructEn": "An out-of-town tourist, eager and a little shy."
+  },
+  {
+   "id": "npc.fav.photo.ask",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，我头一回来北京，能跟您合个影吗？回去给家里人瞧瞧。",
+   "instruct": "外地口音的游客，兴冲冲又有点儿不好意思。",
+   "textEn": "Hello! It's my first time in Beijing - could I take a photo with you? To show the family back home.",
+   "instructEn": "An out-of-town tourist, eager and a little shy."
+  },
+  {
+   "id": "npc.fav.photo.ask",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，我头一回来北京，能跟您合个影吗？回去给家里人瞧瞧。",
+   "instruct": "外地口音的游客，兴冲冲又有点儿不好意思。",
+   "textEn": "Hello! It's my first time in Beijing - could I take a photo with you? To show the family back home.",
+   "instructEn": "An out-of-town tourist, eager and a little shy."
+  },
+  {
+   "id": "npc.fav.photo.ask",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，我头一回来北京，能跟您合个影吗？回去给家里人瞧瞧。",
+   "instruct": "外地口音的游客，兴冲冲又有点儿不好意思。",
+   "textEn": "Hello! It's my first time in Beijing - could I take a photo with you? To show the family back home.",
+   "instructEn": "An out-of-town tourist, eager and a little shy."
+  },
+  {
+   "id": "npc.fav.photo.ask",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "您好，我头一回来北京，能跟您合个影吗？回去给家里人瞧瞧。",
+   "instruct": "外地口音的游客，兴冲冲又有点儿不好意思。",
+   "textEn": "Hello! It's my first time in Beijing - could I take a photo with you? To show the family back home.",
+   "instructEn": "An out-of-town tourist, eager and a little shy."
+  },
+  {
+   "id": "npc.fav.photo.done",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拍得真好！谢谢您，北京人真热情。",
+   "instruct": "开心地道谢。",
+   "textEn": "What a great shot! Thank you. People here are so friendly.",
+   "instructEn": "Delighted thanks."
+  },
+  {
+   "id": "npc.fav.photo.done",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拍得真好！谢谢您，北京人真热情。",
+   "instruct": "开心地道谢。",
+   "textEn": "What a great shot! Thank you. People here are so friendly.",
+   "instructEn": "Delighted thanks."
+  },
+  {
+   "id": "npc.fav.photo.done",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拍得真好！谢谢您，北京人真热情。",
+   "instruct": "开心地道谢。",
+   "textEn": "What a great shot! Thank you. People here are so friendly.",
+   "instructEn": "Delighted thanks."
+  },
+  {
+   "id": "npc.fav.photo.done",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拍得真好！谢谢您，北京人真热情。",
+   "instruct": "开心地道谢。",
+   "textEn": "What a great shot! Thank you. People here are so friendly.",
+   "instructEn": "Delighted thanks."
+  },
+  {
+   "id": "npc.fav.photo.done",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拍得真好！谢谢您，北京人真热情。",
+   "instruct": "开心地道谢。",
+   "textEn": "What a great shot! Thank you. People here are so friendly.",
+   "instructEn": "Delighted thanks."
+  },
+  {
+   "id": "npc.fav.photo.done",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "拍得真好！谢谢您，北京人真热情。",
+   "instruct": "开心地道谢。",
+   "textEn": "What a great shot! Thank you. People here are so friendly.",
+   "instructEn": "Delighted thanks."
+  },
+  {
+   "id": "npc.fav.photo.pose",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来，看镜头——茄子！",
+   "instruct": "兴奋地喊口令。",
+   "textEn": "Okay, look at the camera - cheese!",
+   "instructEn": "Excited, calling it out."
+  },
+  {
+   "id": "npc.fav.photo.pose",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来，看镜头——茄子！",
+   "instruct": "兴奋地喊口令。",
+   "textEn": "Okay, look at the camera - cheese!",
+   "instructEn": "Excited, calling it out."
+  },
+  {
+   "id": "npc.fav.photo.pose",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来，看镜头——茄子！",
+   "instruct": "兴奋地喊口令。",
+   "textEn": "Okay, look at the camera - cheese!",
+   "instructEn": "Excited, calling it out."
+  },
+  {
+   "id": "npc.fav.photo.pose",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来，看镜头——茄子！",
+   "instruct": "兴奋地喊口令。",
+   "textEn": "Okay, look at the camera - cheese!",
+   "instructEn": "Excited, calling it out."
+  },
+  {
+   "id": "npc.fav.photo.pose",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来，看镜头——茄子！",
+   "instruct": "兴奋地喊口令。",
+   "textEn": "Okay, look at the camera - cheese!",
+   "instructEn": "Excited, calling it out."
+  },
+  {
+   "id": "npc.fav.photo.pose",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "来，看镜头——茄子！",
+   "instruct": "兴奋地喊口令。",
+   "textEn": "Okay, look at the camera - cheese!",
+   "instructEn": "Excited, calling it out."
+  },
+  {
    "id": "npc.foreigner.ask",
    "archetype": "xm",
    "trigger": "dialogue",
@@ -4566,6 +6246,16 @@
    "instruct": "惊叹，非常兴奋。",
    "textEn": "Wow! What is that? Amazing!",
    "instructEn": "Amazed, very excited."
+  },
+  {
+   "id": "npc.fug.down",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "别打了别打了！我认栽，我跟你走！",
+   "instruct": "被追上按倒在地，喘着气求饶。",
+   "textEn": "All right, all right! I give up - don't hit me!",
+   "instructEn": "Caught and knocked down, panting, begging."
   },
   {
    "id": "npc.gang.taunt1",
@@ -7176,6 +8866,306 @@
    "instruct": "诚恳地塞钱。",
    "textEn": "Please, take this. Buy yourself something nice.",
    "instructEn": "Sincerely pressing money on you."
+  },
+  {
+   "id": "npc.way.drive",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那可不近，在那边儿呢，您开车去吧。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "That's a fair way off, over there. Better take the car.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.drive",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那可不近，在那边儿呢，您开车去吧。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "That's a fair way off, over there. Better take the car.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.drive",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那可不近，在那边儿呢，您开车去吧。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "That's a fair way off, over there. Better take the car.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.drive",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那可不近，在那边儿呢，您开车去吧。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "That's a fair way off, over there. Better take the car.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.drive",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那可不近，在那边儿呢，您开车去吧。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "That's a fair way off, over there. Better take the car.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.drive",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "那可不近，在那边儿呢，您开车去吧。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "That's a fair way off, over there. Better take the car.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.here",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这儿，您到了。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Right here - you've arrived.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.here",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这儿，您到了。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Right here - you've arrived.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.here",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这儿，您到了。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Right here - you've arrived.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.here",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这儿，您到了。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Right here - you've arrived.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.here",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这儿，您到了。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Right here - you've arrived.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.here",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "就这儿，您到了。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Right here - you've arrived.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.near",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这附近？往那边走一段，有个去处，您瞧瞧去。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Round here? There's something just over that way. Worth a look.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.near",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这附近？往那边走一段，有个去处，您瞧瞧去。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Round here? There's something just over that way. Worth a look.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.near",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这附近？往那边走一段，有个去处，您瞧瞧去。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Round here? There's something just over that way. Worth a look.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.near",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这附近？往那边走一段，有个去处，您瞧瞧去。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Round here? There's something just over that way. Worth a look.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.near",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这附近？往那边走一段，有个去处，您瞧瞧去。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Round here? There's something just over that way. Worth a look.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.near",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这附近？往那边走一段，有个去处，您瞧瞧去。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Round here? There's something just over that way. Worth a look.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.none",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿没什么新鲜的，您往热闹地方转转。",
+   "instruct": "想了想，随口说。",
+   "textEn": "Nothing much on this street. Try somewhere busier.",
+   "instructEn": "Thinking for a moment, offhand."
+  },
+  {
+   "id": "npc.way.none",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿没什么新鲜的，您往热闹地方转转。",
+   "instruct": "想了想，随口说。",
+   "textEn": "Nothing much on this street. Try somewhere busier.",
+   "instructEn": "Thinking for a moment, offhand."
+  },
+  {
+   "id": "npc.way.none",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿没什么新鲜的，您往热闹地方转转。",
+   "instruct": "想了想，随口说。",
+   "textEn": "Nothing much on this street. Try somewhere busier.",
+   "instructEn": "Thinking for a moment, offhand."
+  },
+  {
+   "id": "npc.way.none",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿没什么新鲜的，您往热闹地方转转。",
+   "instruct": "想了想，随口说。",
+   "textEn": "Nothing much on this street. Try somewhere busier.",
+   "instructEn": "Thinking for a moment, offhand."
+  },
+  {
+   "id": "npc.way.none",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿没什么新鲜的，您往热闹地方转转。",
+   "instruct": "想了想，随口说。",
+   "textEn": "Nothing much on this street. Try somewhere busier.",
+   "instructEn": "Thinking for a moment, offhand."
+  },
+  {
+   "id": "npc.way.none",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "这片儿没什么新鲜的，您往热闹地方转转。",
+   "instruct": "想了想，随口说。",
+   "textEn": "Nothing much on this street. Try somewhere busier.",
+   "instructEn": "Thinking for a moment, offhand."
+  },
+  {
+   "id": "npc.way.walk",
+   "archetype": "my",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "往那边走，没多远，腿儿着就到。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Head that way, not far. You can walk it.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.walk",
+   "archetype": "mm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "往那边走，没多远，腿儿着就到。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Head that way, not far. You can walk it.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.walk",
+   "archetype": "mo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "往那边走，没多远，腿儿着就到。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Head that way, not far. You can walk it.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.walk",
+   "archetype": "fy",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "往那边走，没多远，腿儿着就到。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Head that way, not far. You can walk it.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.walk",
+   "archetype": "fm",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "往那边走，没多远，腿儿着就到。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Head that way, not far. You can walk it.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
+  },
+  {
+   "id": "npc.way.walk",
+   "archetype": "fo",
+   "trigger": "dialogue",
+   "emotion": "neutral",
+   "text": "往那边走，没多远，腿儿着就到。",
+   "instruct": "热心地给人指路，边说边比划。",
+   "textEn": "Head that way, not far. You can walk it.",
+   "instructEn": "Helpfully giving directions, gesturing as they talk."
   },
   {
    "id": "pax.chatty.air",

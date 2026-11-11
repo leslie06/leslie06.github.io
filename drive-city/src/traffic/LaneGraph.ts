@@ -176,6 +176,21 @@ export class LaneGraph {
     return h[k - 1] + (h[k] - h[k - 1]) * t;
   }
 
+  /**
+   * 整段路上离 (x, z) 最近的那一点（`project` 只在 `hint` 前 25 米、后 40 米的折线段里找：给跟着车走的司机用的，拿路段中点当
+   * `hint` 去问一条三百米长、拐了弯的路，会落在中间那一截上，离得老远——2026-11-11 骑手、楼门都栽在这上面）。
+   */
+  nearestOn(l: Link, x: number, z: number): { s: number; d: number } {
+    let bs = 0, bd = Infinity;
+    for (let k = 1; k < l.cum.length; k++) {
+      const ax = l.pts[k * 2 - 2], az = l.pts[k * 2 - 1], vx = l.pts[k * 2] - ax, vz = l.pts[k * 2 + 1] - az, L2 = vx * vx + vz * vz || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L2));
+      const d = Math.hypot(x - ax - vx * t, z - az - vz * t);
+      if (d < bd) { bd = d; bs = l.cum[k - 1] + t * Math.sqrt(L2); }
+    }
+    return { s: bs, d: bd };
+  }
+
   /** Arc length on `l` closest to (x, z), searched near `hint`. */
   project(l: Link, x: number, z: number, hint: number): { s: number; d: number } {
     let best = { s: hint, d: Infinity };

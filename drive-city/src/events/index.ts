@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { t } from '../core/I18n';
 import { Rng } from '../core/Rng';
-import type { Blip, DialogueApi, HudApi, MissionApi, NavApi, NavTarget, PlayerApi, RaceApi, VehicleApi, WantedApi } from '../game/Contracts';
+import type { Actor, Blip, DialogueApi, HudApi, MissionApi, NavApi, NavTarget, PeopleApi, PlayerApi, RaceApi, VehicleApi, WantedApi } from '../game/Contracts';
 import type { GarageApi } from '../garage';
 import type { IntroApi } from '../intro';
 import { pickAddress } from '../missions/Address';
@@ -15,6 +15,9 @@ import { ControlFilter } from '../vehicle/ControlFilter';
 import { TAXI, type VehicleSpec } from '../vehicle/Spec';
 import { Vehicle } from '../vehicle/Vehicle';
 import { journalOf } from '../npc/Journal';
+import { inbound, pavementRun } from '../people/Pavement';
+import { randomLook } from '../character/Body';
+import { BAIL_BONUS, BAIL_CHANCE } from '../errands/Errand';
 
 /** Seconds of free driving between events: the first comes sooner. */
 const FIRST = [35, 55], GAP = [55, 100];
@@ -33,7 +36,7 @@ const PIRATE = new THREE.Color('#2b2c2f');
 export interface EventsApi extends System {
   readonly active: Kind | null;
   /** `accept`: say yes to the street race on offer (the probes; players answer in the dialogue box). */
-  debug: { start(kind: Kind): boolean; accept(): boolean; wait(): number; state(): { black: { id: number; x: number; z: number; hits: number } | null; kind: Kind | null; hits: number; left: number; rivalLeft: number; playerLeft: number; runner: { x: number; z: number; yaw: number; speed: number } | null } };
+  debug: { start(kind: Kind): boolean; /** 下一回拦下逃逸车，司机一定弃车跑。 */ bail(on: boolean): void; accept(): boolean; wait(): number; state(): { black: { id: number; x: number; z: number; hits: number } | null; kind: Kind | null; hits: number; left: number; rivalLeft: number; playerLeft: number; runner: { x: number; z: number; yaw: number; speed: number } | null; bail: { x: number; z: number; t: number; hits: number } | null } };
 }
 
 /**
@@ -45,6 +48,9 @@ export interface EventsApi extends System {
  *              metres ahead wins RACE_PRIZE (it drives the route with the police pursuit driver,
  *              rubber-banded like the race rivals);
  *   urgent     in a taxi, a rush fare appears on the kerb (missions' `urgentFare`).
+ * 逃逸车被拦下以后有一半的机会司机弃车跑（2026-11-11，street-level-design C5「街头事件加允许下车解决的变体」）：车就地
+ * 停着，人沿人行道跑（people/Pavement.ts 的 `pavementRun`，npc/ 抢包贼那一套）；下车追上推倒，或者开车蹭倒，赏金多
+ * BAIL_BONUS；BAIL_TIME 秒抓不到或让他跑出 110 米，只给拦车的赏金。这一段下车不算「不玩了」。
  * Each has a banner, a line in the objective slot (`MissionApi.story`) and a flashing blip.
  */
 export async function install(engine: Engine): Promise<void> {
@@ -61,7 +67,14 @@ export async function install(engine: Engine): Promise<void> {
   rival.car.body.setEnabled(false);
 
   let active: Kind | null = null, wait = FIRST[0] + rnd() * (FIRST[1] - FIRST[0]), clock = 0, hits = 0, hitCd = 0, stillT = 0;
-  let runner: { car: Vehicle; release(): void } | null = null;
+  let runner: { car: Vehicle; release(): void; park?(): void } | null = null;
+  /** 弃车跑的司机：跑了多久、离开玩家视线多久。 */
+  let bail: { man: Actor; t: number; lost: number } | null = null;
+  /** 拦下了、司机要跑：等车停稳他才下来（车还在滑的时候下来，会被自己的车带倒，算成抓到了）。 */
+  let bailCar: Vehicle | null = null, bailWait = 0;
+  const BAIL_TIME = 60, BAIL_SPEED = 5;
+  const inn = inbound(tr.graph);
+  const people = () => engine.get<PeopleApi>('people');
   let finish: { x: number; z: number; label: string } | null = null, racing = false, rivalOn = false;
   /** 黑车抢客: the hailer it is going for, and how often the player has rammed it; the rival's paint; seconds it drives off for after. */
   let black: { id: number; x: number; z: number; hits: number } | null = null, shoutT = 0, leaving = 0;
@@ -72,6 +85,8 @@ export async function install(engine: Engine): Promise<void> {
    * target whoever had set it). Only a race the player said yes to takes it; the waypoint they had comes back after.
    */
   let ownsNav = false, savedWaypoint: NavTarget | null = null;
+  /** 探针：下一回拦下逃逸车司机一定弃车跑。 */
+  let forceBail = false;
   const leaveGoal = new THREE.Vector3();
 
   const vehicle = () => engine.get<VehicleApi>('vehicle')!;
@@ -96,6 +111,8 @@ export async function install(engine: Engine): Promise<void> {
     if (msg) toast(msg);
     if (pay) missions()?.addCash(pay);
     if (runner) { runner.release(); runner = null; }
+    if (bail) { if (bail.man.alive) bail.man.release('flee'); bail = null; }
+    bailCar = null;
     // The pirate cab and a racer turned down drive off before they go (they would vanish in plain view); a racer
     // that raced goes at once.
     if (rivalOn && (active === 'blackcab' || !racing)) { leaving = 10; leaveGoal.copy(rival.car.pos).addScaledVector(rival.car.fwd, 300); }
@@ -117,6 +134,25 @@ export async function install(engine: Engine): Promise<void> {
     active = 'fugitive'; clock = 0; hits = 0; stillT = 0;
     flash(t('event.bountyBanner'), '#ff4d4d');
     toast(t('event.bounty', { n: BOUNTY }));
+    return true;
+  };
+
+  /** 逃逸车停下了，司机推门就跑：车变成一辆停着的车，人沿人行道跑。没处跑（没有人行道、没有空位）就算了。 */
+  const startBail = (rc: Vehicle): boolean => {
+    const P = pl.position, pp = people();
+    if (!pp?.spawnActor) return false;
+    const x = rc.pos.x + rc.left.x * 1.6, z = rc.pos.z + rc.left.z * 1.6;
+    const run = pavementRun(tr.graph, inn, x, z, P.x, P.z, 260);
+    if (!run || run.length < 60) return false;
+    const look = randomLook(rnd);
+    look.fem = 0; look.age = 0.3; look.top = 'hoodie'; look.shirt = new THREE.Color('#23262b'); look.inner = look.shirt.clone(); look.pants = new THREE.Color('#15171b'); look.cap = new THREE.Color('#121314'); look.mask = null; look.print = false;
+    const man = pp.spawnActor(x, z, { look, yaw: Math.atan2(run[0] - x, run[1] - z) });
+    if (!man) return false;
+    man.fair = true; man.downFor = 3;
+    man.follow(run, BAIL_SPEED);
+    bail = { man, t: 0, lost: 0 };
+    flash(t('event.bailBanner'), '#ff4d4d');
+    toast(t('event.bail', { n: BAIL_BONUS }));
     return true;
   };
 
@@ -251,11 +287,12 @@ export async function install(engine: Engine): Promise<void> {
     get active() { return active; },
     debug: {
       start: (kind) => start(kind),
+      bail: (on) => { forceBail = on; },
       accept: () => acceptRace(),
       wait: () => wait,
       state: () => {
         const c = vehicle().car;
-        return { black, kind: active, hits, left: FUGITIVE_TIME - clock,
+        return { black, kind: active, hits, left: FUGITIVE_TIME - clock, bail: bail ? { x: bail.man.pos.x, z: bail.man.pos.z, t: bail.t, hits: bail.man.hits } : null,
           rivalLeft: finish ? Math.hypot(rival.car.pos.x - finish.x, rival.car.pos.z - finish.z) : -1,
           playerLeft: finish ? Math.hypot(c.pos.x - finish.x, c.pos.z - finish.z) : -1,
           runner: runner ? { x: runner.car.pos.x, z: runner.car.pos.z, yaw: Math.atan2(runner.car.fwd.x, runner.car.fwd.z), speed: runner.car.speed } : null };
@@ -292,6 +329,8 @@ export async function install(engine: Engine): Promise<void> {
         clock += dt;
         // The hailer gone (picked up by the player: taxi:board ends it; dropped by the fares system): over.
         if (!m?.hailers?.().some((h) => h.id === black!.id)) { end(null); return; }
+        // 下了车就不抢了（2026-11-11：原来这件事要挂满 90 秒，下车以后路人的委托、街头遭遇都被它挡着）
+        if (pl.mode !== 'driving' && clock > 3) { end(null); return; }
         if (it < 8 && rc.speed < 3.5) {
           m.taken?.(black.id, rc.pos.x - rc.left.x * 1.3, rc.pos.z - rc.left.z * 1.3);
           journalOf(engine).meet('enc.blackcab');
@@ -313,12 +352,42 @@ export async function install(engine: Engine): Promise<void> {
         return;
       }
       clock += dt;
+      if (active === 'fugitive' && bailCar) {
+        bailWait += dt;
+        if (bailCar.speed < 1.5 || bailWait > 3) { const car = bailCar; bailCar = null; if (!startBail(car)) end(t('event.caught', { n: BOUNTY }), BOUNTY); }
+        return;
+      }
+      if (active === 'fugitive' && bail) {
+        const man = bail.man, P = pl.position, d = Math.hypot(man.pos.x - P.x, man.pos.z - P.z);
+        bail.t += dt;
+        if (!man.alive) { bail = null; end(t('event.bailGone', { n: BOUNTY }), BOUNTY); return; }
+        if (man.hits > 0) {
+          man.say(t('npc.fug.down'), 2.8);
+          const m = man; bail = null;
+          setTimeout(() => { if (m.alive) m.release('walk'); }, 6000);
+          end(t('event.bailCaught', { n: BOUNTY + BAIL_BONUS }), BOUNTY + BAIL_BONUS);
+          return;
+        }
+        // 跑到头了再找一段，离玩家越远越好
+        if (man.arrived && man.state === 'script') {
+          const run = pavementRun(tr.graph, inn, man.pos.x, man.pos.z, P.x, P.z, 220);
+          if (run && run.length >= 20) man.follow(run, BAIL_SPEED);
+          else { const l = d || 1; man.goTo(man.pos.x + (man.pos.x - P.x) / l * 50, man.pos.z + (man.pos.z - P.z) / l * 50, BAIL_SPEED); }
+        }
+        bail.lost = d > 110 ? bail.lost + dt : 0;
+        if (bail.lost > 4 || bail.t > BAIL_TIME) { end(t('event.bailGone', { n: BOUNTY }), BOUNTY); return; }
+        story(t('event.bailLine', { m: Math.round(d), time: fmt(BAIL_TIME - bail.t) }));
+        return;
+      }
       if (pl.mode !== 'driving' && clock > 3) { end(t('event.abandon')); return; }
       if (active === 'fugitive' && runner) {
         const rc = runner.car, d = Math.hypot(rc.pos.x - c.pos.x, rc.pos.z - c.pos.z);
         // Boxed in: stopped with the player right there.
         stillT = rc.speed < 1.5 && d < 9 ? stillT + dt : 0;
-        if (hits >= RAMS || stillT > 1.5) { end(t('event.caught', { n: BOUNTY }), BOUNTY); return; }
+        if (hits >= RAMS || stillT > 1.5) {
+          if ((forceBail || rnd() < BAIL_CHANCE) && runner.park && people()?.spawnActor) { bailCar = runner.car; bailWait = 0; runner.park(); runner = null; return; }
+          end(t('event.caught', { n: BOUNTY }), BOUNTY); return;
+        }
         if (clock > FUGITIVE_TIME || d > 450) { end(t('event.escaped')); return; }
         story(t('event.bountyLine', { time: fmt(FUGITIVE_TIME - clock), hits, of: RAMS }));
       }
@@ -367,6 +436,7 @@ export async function install(engine: Engine): Promise<void> {
         blipsOn = true;
         n.addBlips(() => {
           blips.length = 0;
+          if (active === 'fugitive' && bail?.man.alive) blips.push({ kind: 'suspect', x: bail.man.pos.x, z: bail.man.pos.z, flash: true });
           if (active === 'fugitive' && runner) blips.push({ kind: 'car', x: runner.car.pos.x, z: runner.car.pos.z, heading: Math.atan2(runner.car.fwd.x, runner.car.fwd.z), flash: true });
           if (active === 'blackcab' && rivalOn) blips.push({ kind: 'suspect', x: rival.car.pos.x, z: rival.car.pos.z, heading: Math.atan2(rival.car.fwd.x, rival.car.fwd.z), flash: true });
           if (active === 'challenge' && rivalOn) blips.push({ kind: 'car', x: rival.car.pos.x, z: rival.car.pos.z, heading: Math.atan2(rival.car.fwd.x, rival.car.fwd.z) });

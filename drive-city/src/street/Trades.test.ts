@@ -11,7 +11,7 @@ describe('street counters', () => {
   });
   it('a counter that sells things has things, each with a name in both languages', () => {
     for (const [trade, s] of Object.entries(SERVICE)) {
-      if (s === 'hair' || s === 'clothes' || s === 'repair' || s === 'hotel' || s === 'lottery') continue;
+      if (s === 'hair' || s === 'clothes' || s === 'repair' || s === 'hotel' || s === 'lottery' || s === 'courier') continue;   // 快递驿站不卖东西，只接活（errands/）
       expect(GOODS[trade]?.length, trade).toBeGreaterThan(0);
       for (const g of GOODS[trade]) { expect(STREET_EN[g.name as keyof typeof STREET_EN], g.id).toBeTruthy(); expect(STREET_ZH[g.name as keyof typeof STREET_ZH], g.id).toBeTruthy(); expect(g.price).toBeGreaterThan(0); }
     }

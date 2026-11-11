@@ -136,6 +136,7 @@ export class PhotoCard extends Modal {
   readonly root: HTMLDivElement;
   readonly canvas: HTMLCanvasElement;
   private zh: HTMLDivElement; private date: HTMLDivElement; private save: HTMLButtonElement; private done: HTMLButtonElement;
+  private file = 'nanluoguxiang';
   constructor(engine: Engine) {
     super(engine);
     this.root = el('div', 'nl-photo', document.body); this.root.hidden = true;
@@ -152,12 +153,13 @@ export class PhotoCard extends Modal {
     this.done.addEventListener('click', () => this.close());
     for (const ev of ['pointerdown', 'mousedown', 'touchstart', 'wheel']) this.root.addEventListener(ev, (e) => e.stopPropagation());
   }
-  /** Show the canvas as it now is. */
-  present(onClose?: () => void): boolean {
+  /** Show the canvas as it now is. `cap`: another caption (favours/ 的街头合影：标题、地名、存的文件名)，默认是照相馆的。 */
+  present(onClose?: () => void, cap?: { title: string; where: string; file: string }): boolean {
     if (!this.show(onClose)) return false;
-    this.zh.textContent = t('nl.photo.card');
+    this.zh.textContent = cap?.title ?? t('nl.photo.card');
+    this.file = cap?.file ?? 'nanluoguxiang';
     const d = new Date();
-    this.date.textContent = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} · ${t('nl.name')}`;
+    this.date.textContent = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} · ${cap?.where ?? t('nl.name')}`;
     this.save.textContent = t('nl.photo.save');
     this.done.textContent = t('nl.photo.close');
     this.done.focus();
@@ -167,7 +169,7 @@ export class PhotoCard extends Modal {
     try {
       const a = document.createElement('a');
       a.href = this.canvas.toDataURL('image/jpeg', 0.9);
-      a.download = `nanluoguxiang-${Date.now()}.jpg`;
+      a.download = `${this.file}-${Date.now()}.jpg`;
       document.body.appendChild(a); a.click(); a.remove();
     } catch { /* a tainted canvas or no downloads: nothing to save */ }
   }

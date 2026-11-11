@@ -223,11 +223,20 @@ export async function install(engine: Engine): Promise<void> {
             return { road, pts };
           }).filter((r) => r.pts.length);
         }
-        const out: { road: RadioRoad; d: number }[] = [];
+        // 路况表（traffic/Flow.ts，车流那边按路段缓存的 `levelOf`）：这条路离玩家最近的那一点上，两个方向里差的那个。
+        // 表关着（`?rush=0`）就不给，交通台按钟点猜
+        const tr = engine.get<TrafficApi & { ghosts?: { flowOn: boolean; levelOf(l: unknown): number } | null }>('traffic');
+        const gh = tr?.ghosts?.flowOn ? tr.ghosts : null;
+        const out: { road: RadioRoad; d: number; level?: number }[] = [];
         for (const r of roads) {
-          let d = Infinity;
-          for (let i = 0; i < r.pts.length; i += 2) d = Math.min(d, Math.hypot(r.pts[i] - x, r.pts[i + 1] - z));
-          out.push({ road: r.road, d });
+          let d = Infinity, nx = 0, nz = 0;
+          for (let i = 0; i < r.pts.length; i += 2) { const q = Math.hypot(r.pts[i] - x, r.pts[i + 1] - z); if (q < d) { d = q; nx = r.pts[i]; nz = r.pts[i + 1]; } }
+          let level: number | undefined;
+          if (gh && tr && d < 5000) {
+            level = 0;
+            for (const id of tr.graph.near(nx, nz, 80)) { const l = tr.graph.links[id]; if (l.name && r.road.match.test(l.name)) level = Math.max(level, gh.levelOf(l)); }
+          }
+          out.push({ road: r.road, d, level });
         }
         return out.sort((a, b) => a.d - b.d);
       },
@@ -455,11 +464,14 @@ export async function install(engine: Engine): Promise<void> {
     [1319, 1760, 2093].forEach((f, i) => ring(t0 + 0.18 + i * 0.08, f, 0.1, 0.55));
   });
   // The photo studio's camera in 南锣鼓巷 (district/): the shutter alone.
-  engine.events.on('district:photo', () => {
+  const shutter = () => {
     if (!ctx || muted) return;
     const t0 = ctx.currentTime;
     burst(t0, 3200, 1.6, 0.45, 0.025); burst(t0 + 0.075, 2200, 1.3, 0.35, 0.035);
-  });
+  };
+  engine.events.on('district:photo', shutter);
+  // 街头合影（favours/）也是这一声
+  engine.events.on('favour:photo', shutter);
   // A cat (district/'s café, its lost cat): a mew - a voice gliding up and down through two vowel formants.
   engine.events.on('district:meow', ({ x, z }) => {
     if (!ctx || muted) return;

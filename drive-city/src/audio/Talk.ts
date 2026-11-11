@@ -17,8 +17,11 @@ export interface TalkWorld {
   snowCover?(): number;
   /** The player's position. */
   where(): { x: number; z: number };
-  /** The radio roads within reach and how far (m), nearest first: the map's road chains. */
-  roadsNear(x: number, z: number): { road: RadioRoad; d: number }[];
+  /**
+   * The radio roads within reach and how far (m), nearest first: the map's road chains. `level`：这条路离玩家最近的那一段现在
+   * 的路况（traffic/Flow.ts 的路况表，两个方向里差的那个：0 畅通、1 缓行、2 拥堵）；没有就按钟点猜（表关着，或没查到）。
+   */
+  roadsNear(x: number, z: number): { road: RadioRoad; d: number; level?: number }[];
   /** Day of the year in Beijing (render/Season.ts), for the season lines. */
   day(): number;
 }
@@ -129,11 +132,13 @@ export class Talk {
   private traffic(): Item[] {
     const p = this.world.where();
     const near = this.world.roadsNear(p.x, p.z).filter((r) => r.d < 5000);
-    const roads: RadioRoad[] = [];
-    for (const r of near) { if (roads.length >= 3) break; if (Math.random() < 0.8) roads.push(r.road); }
+    const roads: RadioRoad[] = [], level = new Map<RadioRoad, number>();
+    for (const r of near) { if (roads.length >= 3) break; if (Math.random() < 0.8) { roads.push(r.road); if (r.level !== undefined) level.set(r.road, r.level); } }
     while (roads.length < 2) { const r = pick(RADIO_ROADS); if (!roads.includes(r)) roads.push(r); }
     const out: Item[] = [{ clip: pick(['radio.tr.intro1', 'radio.tr.intro2', 'radio.tr.intro3']) }, { gap: 0.35 }];
-    for (const r of roads) out.push({ clip: `radio.tr.${r.id}.${this.status(r)}` }, { gap: 0.3 });
+    // 身边的路按路况表报（2026-11-11，A6：广播里说堵的那条路真的堵）；凑数的远处的路还是按钟点猜
+    const said = (r: RadioRoad): RoadStatus => { const lv = level.get(r); return lv === undefined ? this.status(r) : lv === 2 ? 'jam' : lv === 1 ? 'slow' : 'ok'; };
+    for (const r of roads) out.push({ clip: `radio.tr.${r.id}.${said(r)}` }, { gap: 0.3 });
     if (this.world.rain() > 0.3) out.push({ clip: 'radio.tr.rain' });
     else if ((this.world.snow?.() ?? 0) > 0.2 || (this.world.snowCover?.() ?? 0) > 0.5) out.push({ clip: 'radio.tr.snow' });
     else out.push({ clip: pick(['radio.tr.out1', 'radio.tr.out2', 'radio.tr.out3']) });

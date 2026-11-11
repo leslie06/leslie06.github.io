@@ -5,12 +5,14 @@ import { CG, groups } from '../core/Physics';
 import type { CarLook, SharedBike, PeopleApi, PlayerApi, RenderApi, TrafficCars, VehicleApi, WantedApi, WorldApi } from '../game/Contracts';
 import type { Routes } from '../city/Routes';
 import { Vehicle } from '../vehicle/Vehicle';
-import { SPEC_OF } from '../vehicle/Spec';
+import { SPEC_OF, type VehicleSpec } from '../vehicle/Spec';
 import { bodyOfSpec, bodySettled, readyBodies, specLength, type BodySource, type BodyType } from '../vehicle/Bodies';
 import { defaultLivery } from '../vehicle/CarModel';
 import { ControlFilter } from '../vehicle/ControlFilter';
 import { LaneGraph } from './LaneGraph';
 import { Signals, SignalHeads } from './Signals';
+import { Blinkers } from './Blinkers';
+import { slotNow, SPEED } from './Flow';
 import { CarKit } from './CarKit';
 import { readyKitLod } from '../vehicle/KitLod';
 import { AiDriver, lineStats, type Leader } from './AiDriver';
@@ -44,6 +46,10 @@ interface Npc {
   rider: { gait: Gait; look: Look } | null;
   /** Stopped where it is, handbrake on, kept however far away (its driver got out: npc/'s road rage). */
   held: boolean;
+  /** 变道（2026-11-11，A6）：被慢车挡了多久、多久之内不再变、打着哪边的灯（+1 左）、还亮几秒；`lead` 是上一步的前车。 */
+  slowT: number; lcT: number; blink: number; blinkT: number; lead: Leader | null;
+  /** 骑手绕开路边缝里停着的东西（倒着的电动车、等灯的前一个骑手）：往路中间挪了以后还有几秒挪回去；`kerb0` 是原来离路边多远。 */
+  dodgeT: number; kerb0: number;
 }
 
 /** A car drawn by `addExternalDraw`. */
@@ -106,7 +112,8 @@ export interface TrafficApi extends TrafficCars {
   /** Stop lines traffic has crossed, and how many on red (diagnostics: `.scratch/order.mjs`). */
   readonly lineStats: { crossed: number; onRed: number; yields: number };
   /** A getaway car for the chase job: spawned on the road 90-200 m from (x, z), fast and blind to red lights, until released. */
-  spawnRunner(x: number, z: number, hx: number, hz: number, opts?: { calm?: boolean }): { car: Vehicle; release(): void; bolt(): void } | null;
+  /** `park`：就地变成一辆停着的车（events/：逃逸车被拦下、司机弃车跑了；直接 `release` 是在眼前消失）。 */
+  spawnRunner(x: number, z: number, hx: number, hz: number, opts?: { calm?: boolean }): { car: Vehicle; release(): void; bolt(): void; park(): void } | null;
   /** Riders on electric scooters at most (they take places in the player's crowd before the pedestrians). */
   readonly riderCap: number;
   /**
@@ -256,7 +263,8 @@ export async function install(engine: Engine): Promise<void> {
     return hit && Math.abs(hit.point[1] - h) < 0.6 ? hit.point[1] : NaN;
   };
   const makeNpc = (car: Vehicle, body: BodyType): Npc => ({ car, driver: null, filter: new ControlFilter(), active: false, bike: false, hornT: 0, runner: false, prevPos: new THREE.Vector3(), curPos: new THREE.Vector3(), prevQuat: new THREE.Quaternion(), curQuat: new THREE.Quaternion(),
-    upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, body, flipped: 0, parked: false, rider: null, held: false });
+    upper: new THREE.Color(), lower: new THREE.Color(), taxi: false, body, flipped: 0, parked: false, rider: null, held: false,
+    slowT: 0, lcT: 3, blink: 0, blinkT: 0, lead: null, dodgeT: 0, kerb0: 0 });
   // Each body's cars once its model is in (readyBodies in main.ts loads the saloon first, the rest after the
   // spawn's tiles): until then the pool's places go to saloons, which give theirs back as the others arrive.
   const fill = (b: BodyType, n: number) => {
@@ -400,6 +408,7 @@ export async function install(engine: Engine): Promise<void> {
     n.upper.copy(h.upper); n.lower.copy(h.lower); n.taxi = h.taxi;
     n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
     n.active = true; n.flipped = 0; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false; n.fare = null; n.hornT = 0;
+    n.slowT = 0; n.lcT = 2 + rnd() * 4; n.blink = 0; n.blinkT = 0; n.lead = null;
     return true;
   };
   const ghosts = ghostOn ? new GhostTraffic(engine.scene, g, sig, rnd,
@@ -422,6 +431,77 @@ export async function install(engine: Engine): Promise<void> {
       return true;
     };
   }
+
+  /**
+   * 车流的北京规矩（2026-11-11，docs/street-level-design.md A6）：路况表（Flow.ts）定哪段路车多、开得慢；被慢车挡住的变道、
+   * 打灯；拐弯打灯。`?rush=0` 关掉路况（哪个钟点都一样多、都畅通），`?lanechange=0` 关掉变道。
+   */
+  const qs = new URLSearchParams(location.search);
+  // shot mode 下路况表默认关着（时段跟现实时钟走，截图就不确定了），要看就 `?rush=1`
+  const flowOn = qs.has('shot') ? qs.get('rush') === '1' : qs.get('rush') !== '0', laneChangeOn = qs.get('lanechange') !== '0';
+  const blinkers = new Blinkers(engine.scene, tier === 'low' ? 32 : 64);
+  if (ghosts) {
+    ghosts.flowOn = flowOn; ghosts.laneChange = laneChangeOn;
+    if (qs.has('flow')) ghosts.force = Math.max(0, Math.min(2, Number(qs.get('flow')) || 0));
+    ghosts.blinkDraw = (x, y, z, yaw, body, side) => blinkers.add(x, y, z, yaw, settled(body) ? body : 'sedan', side);
+    if (flowOn) AiDriver.pace = (link) => SPEED[ghosts.levelOf(g.links[link])];
+  }
+  let lcN = 0;
+  /**
+   * 实体车变道：被前车压着开了一秒半（前车比这段路该开的速度慢三成以上、离得近），旁边的车道在车身前后都空着、前面
+   * 比现在宽敞十米以上，就换过去；`AiDriver` 追的是车道中线前方的一点，换了车道号车自己就并过去了。按位置看别的车
+   * （实体车、玩家、警车、近处的轻量车），所以玩家在旁边并排的时候不会往玩家身上并。公交、骑手、逃逸车、被扣住的不变。
+   */
+  const laneChange = (n: Npc, dt: number): void => {
+    const dr = n.driver!, c = n.car, lead = n.lead;
+    if (n.blinkT > 0) n.blinkT -= dt;
+    if (n.rider) {
+      // 骑手：路边那条缝里前面停着东西（倒着的电动车、等灯的前一个骑手）两秒半不动，就往路中间挪一个车把的距离绕过去；
+      // 绕过去、又走起来六秒以后挪回路边。等红灯的时候后来的就这样停到前一个旁边，停车线前面聚成一堆。
+      if (n.dodgeT > 0) {
+        if (c.speed > 1) n.dodgeT -= dt;
+        if (n.dodgeT <= 0) dr.kerb = n.kerb0;
+      } else if (lead && lead.speed < 0.3 && lead.gap < 9 && c.speed < 0.5) {
+        n.slowT += dt;
+        if (n.slowT > 2.5) { n.slowT = 0; n.kerb0 = dr.kerb; dr.kerb = Math.min(2.6, dr.kerb + 1.25); n.dodgeT = 6; }
+      } else n.slowT = 0;
+      return;
+    }
+    if (n.lcT > 0) { n.lcT -= dt; return; }
+    if (!laneChangeOn || n.rider || n.runner || n.held || dr.kerbside || dr.kerb > 0 || dr.mode !== 'drive' || dr.busStop || dr.yieldT > 0 || dr.atStop) { n.slowT = 0; return; }
+    const l = g.links[dr.link], v = Math.max(0, c.forwardSpeed);
+    const want = l.speed * AiDriver.pace(dr.link);
+    if (!lead || lead.gap > 20 + v || lead.speed > want * 0.72 || dr.s < 12 || l.len - dr.s < 70 || l.lanes - g.minLane(l) < 2) { n.slowT = 0; return; }
+    n.slowT += dt;
+    if (n.slowT < 1.5) return;
+    n.slowT = 0; n.lcT = 1.5;
+    let best = -1, bestGap = lead.gap + 10;
+    for (const dl of [-1, 1]) {
+      const t = dr.lane + dl;
+      if (t < 0 || g.laneOn(l, t) !== t) continue;
+      g.at(l, dr.s, g.laneOffset(l, t), tmp);
+      const px = tmp.x, pz = tmp.z, dx = tmp.dx, dz = tmp.dz;
+      let ahead = Infinity, ok = true;
+      const look = (x: number, y: number, z: number, sp: number, len: number) => {
+        if (!ok || Math.abs(y - c.pos.y) > 3) return;
+        const rx = x - px, rz = z - pz, along = rx * dx + rz * dz;
+        if (along < -40 || along > 70 || Math.abs(rx * dz - rz * dx) > 1.7) return;
+        const half = (len + 4.6) / 2;
+        if (along >= 0) { if (along - half < 7) ok = false; else ahead = Math.min(ahead, along - half); }
+        else if (-along - half < 5 + sp * 0.9) ok = false;
+      };
+      for (const o of pool) if (o !== n && o.active) look(o.car.pos.x, o.car.pos.y, o.car.pos.z, o.car.speed, specLength(o.car.spec));
+      const pv = player();
+      if (pv) look(pv.car.pos.x, pv.car.pos.y, pv.car.pos.z, pv.car.speed, specLength(pv.car.spec));
+      for (const pc of engine.get<WantedApi>('wanted')?.policeCars() ?? []) look(pc.pos.x, pc.pos.y, pc.pos.z, pc.speed, 4.6);
+      if (ghosts) for (const o of ghosts.nearList) look(o.qx, o.y + c.spec.wheelRadius, o.qz, o.v, o.len);
+      if (ok && ahead > bestGap) { bestGap = ahead; best = t; }
+    }
+    if (best < 0) return;
+    n.blink = g.laneOffset(l, best) > g.laneOffset(l, dr.lane) ? 1 : -1; n.blinkT = 3.2;
+    dr.changeLane(best); n.lcT = 8 + rnd() * 8;
+    lcN++;
+  };
 
   /** A free car of the pool, from a random place in it: from the front, the cars at its end (the saloons, the late-loaded
    * luxury bodies) only drove when every other was out - on a 省电档 phone (half the cars) never. */
@@ -564,6 +644,48 @@ export async function install(engine: Engine): Promise<void> {
     return l;
   };
 
+  /** 骑手被调到玩家身后几回、在玩家身后放了几个（探针）。 */
+  const riderStat = { pulled: 0, behind: 0, tried: 0 };
+  /** 玩家正开着车往一个有灯的路口去（150 米内，身后这段路还有 40 米以上）：在哪段路的多少米处；不是就 null。 */
+  const approach = (): { id: number; s: number } | null => {
+    const pv = player();
+    if (!pv || engine.get<PlayerApi>('player')?.mode !== 'driving') return null;
+    const pc = pv.car;
+    let best: { id: number; s: number } | null = null, bd = Infinity;
+    for (const id of g.near(pc.pos.x, pc.pos.z, 30)) {
+      const l = g.links[id];
+      if (NO_RIDERS.has(l.cls) || sig.junctionOf(l.to) < 0 || l.hmax > 0.3) continue;
+      const pr = g.nearestOn(l, pc.pos.x, pc.pos.z);
+      g.at(l, pr.s, 0, tmp);
+      // 在这段路的路面上（离中线不超过半幅宽：三车道的路最右一条离中线九米）、车头顺着它
+      if (tmp.dx * pc.fwd.x + tmp.dz * pc.fwd.z < 0.7 || pr.d >= bd || pr.d > l.hw + 1 || l.len - pr.s > 150 || pr.s < 40) continue;
+      bd = pr.d; best = { id, s: pr.s };
+    }
+    return best;
+  };
+  /**
+   * 骑手的名额满了、可都在别处：玩家在路口前慢下来（等灯、排队）而身边 110 米内不到三个骑手时，让最远的一个（140 米外、
+   * 镜头看不见）走，下一回就补在玩家身后。不然车一停，骑手全在两三百米外转，等十个灯也碰不上一个。
+   */
+  const pullRider = (): void => {
+    const pv = player();
+    const ap = pv && pv.car.speed <= 6 ? approach() : null;
+    if (!pv || !ap) return;
+    const pc = pv.car.pos, cam = engine.camera.position;
+    engine.camera.getWorldDirection(camDir);
+    let nearN = 0, far: Npc | null = null, fd = 100;
+    for (const n of pool) {
+      if (!n.active || !n.rider) continue;
+      const d = Math.hypot(n.car.pos.x - pc.x, n.car.pos.z - pc.z);
+      // 「身边」：在玩家这段路上往路口去的，或者就在跟前
+      if (d < 100 && (n.driver?.link === ap.id || d < 40)) { nearN++; continue; }
+      const cd = Math.hypot(n.car.pos.x - cam.x, n.car.pos.z - cam.z);
+      const seen = cd < 1 || ((n.car.pos.x - cam.x) * camDir.x + (n.car.pos.z - cam.z) * camDir.z) / cd > 0.2;
+      if (d > fd && !(seen && cd < 200)) { fd = d; far = n; }
+    }
+    if (nearN < 4 && far) { despawn(far); riderStat.pulled++; }
+  };
+
   /** Someone on an electric scooter, along the right-hand kerb of a street 70-240 m away, out of sight. */
   const spawnRider = () => {
     const cam = engine.camera.position;
@@ -571,17 +693,29 @@ export async function install(engine: Engine): Promise<void> {
     const ids = g.near(cam.x, cam.z, 240);
     if (!ids.length) return;
     const pv = player();
+    // 绿灯头几秒电动车一拥而上（2026-11-11，A6）：玩家往一个有灯的路口开（150 米内）时，一多半的骑手放在玩家身后同一段
+    // 路上 30–90 米（镜头看不见）。他们贴着路边从排队的车旁边挤上来，停到停车线前面，灯快绿了就先走。
+    const ap = rnd() < 0.7 ? approach() : null;
+    const behind = ap ? { id: ap.id, s: Math.max(6, ap.s - 30 - rnd() * 60) } : null;
+    if (behind) riderStat.tried++;
     for (let attempt = 0; attempt < 10; attempt++) {
-      const id = ids[Math.floor(rnd() * ids.length)];
+      const near = !!behind && attempt < 3;
+      const id = near ? behind!.id : ids[Math.floor(rnd() * ids.length)];
       const l = g.links[id];
       if (l.len < 24 || NO_RIDERS.has(l.cls) || g.endsAfter(id) || g.avoid.has(id)) continue;
-      const s = 6 + rnd() * (l.len - 12);
+      const s = near ? Math.max(6, behind!.s - attempt * 7) : 6 + rnd() * (l.len - 12);
       g.at(l, s, -l.kerbR + 0.8, tmp);   // inside the cars parked along the kerb, where there are any
       const d = Math.hypot(tmp.x - cam.x, tmp.z - cam.z);
-      if (d < 70 || d > 240) continue;
-      if (d < 190 && ((tmp.x - cam.x) * camDir.x + (tmp.z - cam.z) * camDir.z) / d > 0.3) continue;
-      if (pool.some((o) => o.active && Math.hypot(o.car.pos.x - tmp.x, o.car.pos.z - tmp.z) < 10)) continue;
-      if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < 25) continue;
+      const ahead = d > 0 ? ((tmp.x - cam.x) * camDir.x + (tmp.z - cam.z) * camDir.z) / d : 1;
+      if (near) { if (d < 22 || ahead > 0.1) continue; }   // 身后的：不进镜头就行
+      else if (d < 70 || d > 240 || (d < 190 && ahead > 0.3)) continue;
+      // 身后的那些放在排队的车旁边的路边缝里：只要不压着哪辆车（横着 1.2 米、前后 4 米以内）就行
+      if (pool.some((o) => {
+        if (!o.active) return false;
+        const rx = tmp.x - o.car.pos.x, rz = tmp.z - o.car.pos.z;
+        return near ? Math.abs(rx * o.car.left.x + rz * o.car.left.z) < 1.2 && Math.abs(rx * o.car.fwd.x + rz * o.car.fwd.z) < 4 : Math.hypot(rx, rz) < 10;
+      })) continue;
+      if (pv && Math.hypot(pv.car.pos.x - tmp.x, pv.car.pos.z - tmp.z) < (near ? 18 : 25)) continue;
       const lift = deckAt(l, s, tmp.x, tmp.z);
       if (Number.isNaN(lift)) continue;
       const body: BodyType = 'ebike';
@@ -594,7 +728,10 @@ export async function install(engine: Engine): Promise<void> {
       const vmax = delivery ? 8 + rnd() * 3 : 5.5 + rnd() * 3;
       n.car.setMoving(Math.min(vmax, l.speed) * 0.8);
       n.driver = new AiDriver(g, sig, id, s, 0, rnd);
-      n.driver.vmax = vmax; n.driver.kerb = 0.75 + rnd() * 0.4;
+      n.driver.vmax = vmax; n.driver.kerb = 0.45 + rnd() * 0.15;   // 贴着路边：最右车道的车往左让了 0.4 米（AiDriver 的 EDGE_ROOM），留出这条缝
+      // 骑手等红灯压在汽车的停车线前面；四个里三个抢灯（自己这边快绿了就走：路口全红的那两秒里）
+      n.driver.ahead = 2 + rnd() * 2.5; n.driver.eager = rnd() < 0.75 ? 0.9 + rnd() * 0.9 : 0;
+      if (near) riderStat.behind++;
       n.filter.reset();
       n.taxi = false; n.upper.set(EBIKE_BODY[Math.floor(rnd() * EBIKE_BODY.length)]);
       n.lower.set(delivery ?? (rnd() < 0.6 ? '#2a2b2d' : '#d9d9d4'));
@@ -660,6 +797,7 @@ export async function install(engine: Engine): Promise<void> {
   };
   const despawn = (n: Npc) => {
     n.active = false; n.driver = null; n.parked = false; n.bike = false; n.runner = false; n.rider = null; n.held = false; n.fare = null;
+    n.slowT = 0; n.lcT = 3; n.blink = 0; n.blinkT = 0; n.lead = null; n.dodgeT = 0;
     n.car.body.setTranslation({ x: 0, y: -300, z: 0 }, false);
     n.car.body.setEnabled(false);
   };
@@ -730,6 +868,12 @@ export async function install(engine: Engine): Promise<void> {
     return f;
   };
 
+  const widths = new Map<VehicleSpec, number>();
+  const halfWidth = (spec: VehicleSpec): number => {
+    let w = widths.get(spec);
+    if (w === undefined) { w = 0.95; for (const c of spec.chassis) w = Math.max(w, Math.abs(c.at[0]) + c.half[0]); widths.set(spec, w); }
+    return w;
+  };
   const leaderFor = (n: Npc): Leader | null => {
     const c = n.car;
     let best: Leader | null = null, bestAlong = Infinity;
@@ -741,12 +885,14 @@ export async function install(engine: Engine): Promise<void> {
       const along = rx * c.fwd.x + rz * c.fwd.z;
       if (along < 1 || along > 60) return;
       const lat = Math.abs(rx * c.left.x + rz * c.left.z);
-      if (lat > selfHw + hw + along * 0.03) return;
+      // 骑手贴着路边从排队的车旁边过：只让真挡在自己这条缝里的（不随距离放宽）
+      if (lat > selfHw + hw + (n.rider ? -0.05 : along * 0.03)) return;
       // Not a car on the deck above or the road below (an interchange stacks them in plan).
       if (Math.abs(py - c.pos.y) > 3) return;
       if (along < bestAlong) { bestAlong = along; best = { gap: Math.max(0.5, along - (len + selfLen) / 2 + 4.6), speed: Math.max(0, vx * c.fwd.x + vz * c.fwd.z) }; }
     };
-    for (const o of pool) if (o !== n && o.active) consider(o.car.pos.x, o.car.pos.y, o.car.pos.z, o.car.vel.x, o.car.vel.z, specLength(o.car.spec), o.car.spec.single ? 0.4 : 0.95);
+    // （骑手贴着车身过，所以要按真车宽：公交、货车比轿车宽三十公分）
+    for (const o of pool) if (o !== n && o.active) consider(o.car.pos.x, o.car.pos.y, o.car.pos.z, o.car.vel.x, o.car.vel.z, specLength(o.car.spec), o.car.spec.single ? 0.4 : n.rider ? halfWidth(o.car.spec) : 0.95);
     const pv = player();
     if (pv) consider(pv.car.pos.x, pv.car.pos.y, pv.car.pos.z, pv.car.vel.x, pv.car.vel.z, specLength(pv.car.spec));
     // People in the road: drivers brake for the player on foot and for crossing pedestrians.
@@ -791,12 +937,15 @@ export async function install(engine: Engine): Promise<void> {
     crowd.add(seatAt, Math.atan2(seatFwd.x, seatFwd.z), r.gait, r.look);
   };
 
-  const api: TrafficApi & { ghosts: GhostTraffic | null; debugPool(): readonly Npc[]; debugLeader(n: Npc): Leader | null } = {
+  const api: TrafficApi & { ghosts: GhostTraffic | null; debugPool(): readonly Npc[]; debugLeader(n: Npc): Leader | null;
+    debugFlow(): { riders: { pulled: number; behind: number; tried: number }; on: boolean; hour: number; laneChanges: number; solid: number; blinkers: number } } = {
     name: 'traffic',
     ghosts,
     /** The pool as it is (probes: `.scratch/streetlevel/lightdiag.mjs`). */
     debugPool: () => pool,
     debugLeader: (n) => leaderFor(n),
+    /** 变道、转向灯、路况（探针 `.scratch/streetlevel/flowprobe.mjs`）。 */
+    debugFlow: () => ({ riders: { ...riderStat }, on: flowOn, hour: ghosts?.hour ?? 12, laneChanges: lcN + (ghosts?.counts.lane ?? 0), solid: lcN, blinkers: blinkers.count }),
     graph: g, signals: sig, lineStats, riderCap: RIDERS,
     get time() { return t; },
     addExternalCars: (provider) => { externalCars.push(provider); },
@@ -865,7 +1014,7 @@ export async function install(engine: Engine): Promise<void> {
       for (const id of g.near(x, z, 60)) {
         const l = g.links[id];
         if (l.cls === 'service' || l.cls === 'living_street') continue;
-        const pr = g.project(l, x, z, l.len / 2);
+        const pr = g.nearestOn(l, x, z);
         g.at(l, pr.s, 0, tmp);
         if (tmp.dx * hx + tmp.dz * hz < 0.4 || pr.d >= bd) continue;
         bd = pr.d; best = id; bs = pr.s;
@@ -894,7 +1043,8 @@ export async function install(engine: Engine): Promise<void> {
         n.prevPos.copy(n.car.pos); n.curPos.copy(n.car.pos); n.prevQuat.copy(n.car.quat); n.curQuat.copy(n.car.quat);
         n.active = true; n.parked = false; n.bike = false; n.runner = true; n.flipped = 0;
         const npc = n;
-        return { car: npc.car, release: () => { if (npc.active && npc.runner) despawn(npc); }, bolt: () => { if (npc.driver) { npc.driver.boost = 1.35; npc.driver.reckless = true; } } };
+        return { car: npc.car, release: () => { if (npc.active && npc.runner) despawn(npc); }, bolt: () => { if (npc.driver) { npc.driver.boost = 1.35; npc.driver.reckless = true; } },
+          park: () => { if (npc.active && npc.runner) { npc.runner = false; npc.driver = null; npc.parked = true; npc.held = false; npc.filter.reset(); } } };
       }
       return null;
     },
@@ -943,7 +1093,7 @@ export async function install(engine: Engine): Promise<void> {
       // car nobody is looking at gives up its place (it drives on as a distant one, or is gone if that is out of view too).
       roomT -= dt;
       if (roomT <= 0) { roomT = 0.4; if (ghosts && !light && driving() >= carCap()) makeRoom(); }
-      if (spawnT <= 0) { spawnT = 0.2; if (!light && driving() < carCap() && !ghosts?.adoptWaiting(engine.camera.position)) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < riderCap()) spawnRider(); }
+      if (spawnT <= 0) { spawnT = 0.2; if (!light && driving() < carCap() && !ghosts?.adoptWaiting(engine.camera.position)) spawn(); if (pool.filter((n) => n.active && n.bike).length < BIKES) spawnBike(); if (riding() < riderCap()) spawnRider(); else pullRider(); }
       // Buses look for a shelter ahead on their side once a second (at the kerb of the link they are on).
       busT -= dt;
       if (busT <= 0) {
@@ -969,7 +1119,8 @@ export async function install(engine: Engine): Promise<void> {
       for (const n of pool) {
         if (!n.active) continue;
         if (n.parked && nap(n, dt)) continue;
-        const inp = n.parked || n.held ? parkedInput : n.driver!.update(n.car, dt, t, leaderFor(n));
+        let inp = parkedInput;
+        if (!n.parked && !n.held) { n.lead = leaderFor(n); laneChange(n, dt); inp = n.driver!.update(n.car, dt, t, n.lead); }
         const c = n.filter.update(inp, n.car.forwardSpeed, dt);
         n.prevPos.copy(n.curPos); n.prevQuat.copy(n.curQuat);
         n.car.step(c, dt);
@@ -1029,6 +1180,8 @@ export async function install(engine: Engine): Promise<void> {
     update(_dt, alpha) {
       // Traffic updates before police, races and events: set the view every kit culls against.
       CarKit.view(engine.camera);
+      blinkers.begin(t);
+      if (ghosts && flowOn) { ghosts.hour = engine.get<RenderApi>('render')?.timeOfDay ?? 12; ghosts.slot = slotNow(); }
       for (const b of kits.keys()) written.set(b, 0);
       for (const n of pool) {
         if (!n.active) continue;
@@ -1039,6 +1192,10 @@ export async function install(engine: Engine): Promise<void> {
         kit.set(k, renderPos, renderQuat, n.car, n.upper, n.lower, n.taxi);
         written.set(n.body, k + 1);
         if (n.rider) drawRider(n, _dt);
+        else if (n.driver && !n.parked) {
+          const side = n.blinkT > 0 ? n.blink : n.driver.turn;
+          if (side) blinkers.add(renderPos.x, renderPos.y - n.car.spec.wheelRadius, renderPos.z, Math.atan2(n.car.fwd.x, n.car.fwd.z), n.body, side);
+        }
       }
       for (const draw of externalDraws) draw(putExternal, alpha);
       if (ghosts && light) {
@@ -1073,6 +1230,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       const night = (engine.get<RenderApi>('render')?.night ?? 0) > 0.35;
       for (const [b, kit] of kits) { kit.commit(written.get(b) ?? 0); kit.setHeadlights(night); }
+      blinkers.commit();
       const cam = engine.camera.position;
       heads.update(cam.x, cam.z, t);
     },

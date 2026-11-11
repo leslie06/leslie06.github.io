@@ -39,6 +39,14 @@ export interface GameEvents {
   'campaign:call': { id: string; go: boolean };
   /** A hailer is getting into the taxi (missions/): which one (`MissionApi.hailers`). */
   'taxi:board': { id: number };
+  /** 帮路人办完了一件事（favours/）：哪一种（deliver、photo、lift、find）。 */
+  'favour:done': { kind: string };
+  /** 问了一回路（favours/）：指的是导航目标（`target`）还是附近的一件事。 */
+  'favour:way': { target: boolean };
+  /** 路人开口求了一件事，玩家应了（`taken`）还是回绝了。 */
+  'favour:asked': { kind: string; taken: boolean };
+  /** 街头合影的快门（audio/ 出声）。 */
+  'favour:photo': Record<string, never>;
   /** A taxi fare was paid (missions/). */
   /** `stars`: 评星的乘客（普通、话痨）给了几颗，1–5；别的乘客是 0。 */
   'taxi:fare': { pay: number; kind: string; stars?: number };
@@ -107,7 +115,11 @@ export interface GameEvents {
   'wanted:escaped': { level: number };
   /** 送豆腐 (missions/Tofu.ts): the tofu up at the top, with the water left in the cup (0..1). */
   'tofu:delivered': { water: number };
-  /** A short job (missions/Jobs.ts) finished, paid. */
+  /** 在柜台上接了一单活（errands/）：takeout、parcels、daijia。 */
+  'errand:taken': { kind: string };
+  /** 一单活送完了、给了钱（errands/；同时也发 `job:done`）。 */
+  'errand:done': { kind: string; pay: number };
+  /** A short job (missions/Jobs.ts) finished, paid; errands/ 的外卖和派件送完也发。 */
   'job:done': { kind: string };
   /** This player set a course's record (online/Leaderboard.ts): the board, the time (ms). */
   'rec:broken': { board: string; ms: number };
