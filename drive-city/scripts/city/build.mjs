@@ -1965,6 +1965,32 @@ function hutongContext(x, z) {
 // the old guess put 金地购物中心, a mall, at 207 m). Matched by a point inside the footprint.
 const curated = fs.existsSync('scripts/city/heights.json') ? JSON.parse(fs.readFileSync('scripts/city/heights.json', 'utf8')).map((q) => ({ ...q, p: project(q.lat, q.lon) })) : [];
 const curatedFor = (b) => curated.find((q) => q.p[0] >= b.bb[0] && q.p[0] <= b.bb[2] && q.p[1] >= b.bb[1] && q.p[1] <= b.bb[3] && pip(q.p[0], q.p[1], b.ring));
+// 一个小区一个样（2026-11-10，docs/street-level-design.md B5，「每个地方除了地名不同，其他都差不多一样」）：住宅的类型、
+// 平改坡、墙色原来按每栋楼自己的编号抽，同一个小区相邻的楼各抽各的，全城成了均匀的杂色。现在按「小区」抽：
+// OSM 的 landuse=residential 多边形（1,500 m² 到 40 万 m²；更大的是整片街道办，不算），没有多边形的地方按 160 米的
+// 格子。同一个小区的楼同一种类型（高度、年代相同时）、同一个墙色、屋顶改不改坡也一起。
+const estateIndex = new Map();
+let nEstates = 0;
+for (const e of [...ways, ...rels]) {
+  const t = e.tags; if (!t || e._road || t.building || t.landuse !== 'residential') continue;
+  const rs = e.type === 'way' ? (e.geometry && e.geometry.length >= 4 ? [openRing(proj(e.geometry))] : []) : assemble((e.members ?? []).filter((m) => m.type === 'way' && m.geometry && m.role !== 'inner').map((m) => proj(m.geometry)));
+  for (const ring of rs) {
+    if (ring.length < 3) continue;
+    const area = Math.abs(signedArea(ring));
+    if (area < 1500 || area > 400000) continue;
+    const L = { id: e.id, ring, bb: bboxOf(ring), area };
+    nEstates++;
+    eachTile(L.bb, (ix, iz) => { const k = `${ix}_${iz}`; (estateIndex.get(k) ?? estateIndex.set(k, []).get(k)).push(L); });
+  }
+}
+for (const list of estateIndex.values()) list.sort((a, b) => a.area - b.area);
+console.log(`estates: ${nEstates} residential polygons to give one look each`);
+/** The estate a point is in: its polygon's id (the smallest that holds it), else its 160 m cell. */
+const estateOf = (x, z) => {
+  for (const L of estateIndex.get(tileOf(x, z).join('_')) ?? []) if (x >= L.bb[0] && x <= L.bb[2] && z >= L.bb[1] && z <= L.bb[3] && pip(x, z, L.ring)) return L.id;
+  return 7e12 + (Math.floor(x / 160) + 4096) * 8192 + (Math.floor(z / 160) + 4096);
+};
+let nGlassOut = 0;
 const kinds = {}, btys = {};
 const named = {};
 const bIndex = new Map(); // tile -> buildings (by bbox) for tree exclusion
@@ -1973,12 +1999,14 @@ for (const b of buildings) {
   const levels = parseFloat(t['building:levels']), minLevel = parseFloat(t['building:min_level']), roofLevels = parseFloat(t['roof:levels']);
   const r = rnd(b.id, 1), r2 = rnd(b.id, 2);
   let kind;
+  /** An office, a hotel, a bank: a tower of these is a curtain wall wherever it stands (below). */
+  let towerLike = false;
   if (bt === 'wall') kind = 'wall';
   else if (z === 'palace' || z === 'temple' || t.historic || /temple|shrine|pagoda|palace|gate/.test(bt) || t.amenity === 'place_of_worship') kind = 'trad';
   else if (/station|transportation/.test(bt) || t.railway === 'station') kind = 'station';
   else if (/industrial|warehouse|garage|garages|shed|kiosk|toilets|service|hut|roof|carport|construction/.test(bt)) kind = 'low';
   else if (z === 'old' && b.area < 420 && !(levels > 2)) kind = 'hutong';
-  else if (/commercial|office|retail|hotel|bank|mall/.test(bt)) kind = z === 'cbd' ? 'glass' : 'office';
+  else if (/commercial|office|retail|hotel|bank|mall/.test(bt)) { kind = z === 'cbd' ? 'glass' : 'office'; towerLike = /commercial|office|hotel|bank/.test(bt); }
   else if (/school|university|college|hospital|public|government|civic|kindergarten|library|museum/.test(bt)) kind = 'office';
   else if (/apartments|residential|dormitory|house|detached/.test(bt)) kind = 'resid';
   else if (z === 'cbd' && b.area > 600) kind = 'glass';
@@ -2017,7 +2045,7 @@ for (const b of buildings) {
   if (DEBUG_AT && Math.hypot(cx - DEBUG_AT[0], cz - DEBUG_AT[1]) < DEBUG_AT[2]) console.log('bld', b.id, bt, kind, 'area', Math.round(b.area), 'h', h && h.toFixed(1), 'levels', levels, 'ext', ext && [ext.globfp, ext.cmab, ext.fn], 'houses', hutongContext(cx, cz).toFixed(2));
   // What CMAB says it is used for, for the buildings OSM only calls building=yes.
   if (ext?.fn && bt === 'yes' && kind === 'resid') {
-    if (ext.fn === 'Office' || ext.fn === 'Commerce' || ext.fn === 'Public service') kind = z === 'cbd' && b.area > 600 ? 'glass' : 'office';
+    if (ext.fn === 'Office' || ext.fn === 'Commerce' || ext.fn === 'Public service') { kind = z === 'cbd' && b.area > 600 ? 'glass' : 'office'; towerLike = ext.fn === 'Office'; }
     else if (ext.fn === 'Industry' && !(h > 12)) kind = 'low';
   }
   if (!(h > 0)) {
@@ -2033,6 +2061,9 @@ for (const b of buildings) {
       : kind === 'office' ? 14 + 22 * r + (z === 'city' || z === 'cbd' ? 14 : 0)
       : b.area < 500 ? 11 + 8 * r : 18 + 28 * r + (z === 'city' ? 12 : 0);
   }
+  // 玻璃幕墙不只在国贸（2026-11-10，B5）：glass 原来只在 cbd 那个 1.85 × 2.4 公里的框里（425 栋里 416 栋），金融街、中关村、
+  // 望京、丽泽的写字楼都按米色办公楼画。框外 60 米以上（二环里 80 米以上）的写字楼、酒店、银行也是幕墙；1998 年以前的不算。
+  if (kind === 'office' && towerLike && h >= (z === 'old' ? 80 : 60) && !(ext?.year && ext.year < 1998)) { kind = 'glass'; nGlassOut++; }
   let minH = parseLen(t.min_height);
   if (!(minH > 0)) minH = minLevel > 0 ? minLevel * 3.2 : 0;
   if (minH >= h) minH = 0;
@@ -2044,7 +2075,9 @@ for (const b of buildings) {
   // six-storey slabs, pale tile or grey render, many given a pitched roof in the 2000s 平改坡); 3 塔楼
   // (1990s point blocks, white tile); 4 new high-rise estates (2000s on: warm render, sand to terracotta).
   let bty = 0;
-  const year = ext?.year ?? 0, rt = rnd(b.id, 7);
+  // the estate's draw, not the building's (see estateOf): one 小区, one look
+  const estate = kind === 'resid' ? estateOf(cx, cz) : b.id;
+  const year = ext?.year ?? 0, rt = rnd(estate, 7);
   if (kind === 'resid' && !(t['building:colour'] || t.colour)) {
     const aspect = o.hl / Math.max(1, o.hw), point = aspect < 1.7 && o.hl < 28;
     if (h <= 21) bty = (year && year <= 1985 ? (h <= 17 && rt < 0.5) : (!year && z === 'old' && rt < 0.4)) ? 1 : 2;
@@ -2082,7 +2115,7 @@ for (const b of buildings) {
     for (let k = 0; k < pas.length; k += 5) rec.ps.push(...pas.slice(k, k + 5), ch);
   }
   if (t.name) { rec.n = t.name; named[t.name] = [q1(cx), q1(cz)]; }
-  rec.s = +(r2).toFixed(3);
+  rec.s = +(kind === 'resid' ? rnd(estate, 2) : r2).toFixed(3);
   // A building a deck runs through goes (a ramp of 国贸桥 ran through a kiosk 15 m tall and the car
   // stopped dead against its walls); one low enough to stand under the deck's soffit stays.
   let deck = deckOver(cx, cz);
@@ -2126,6 +2159,7 @@ for (const b of buildings) {
 }
 console.log('heights:', heightFrom);
 console.log('housing types (1 苏式, 2 板楼, 3 塔楼, 4 new):', btys);
+console.log(`glass towers outside the CBD box: ${nGlassOut}`);
 console.log('buildings removed from carriageways:', roadBlockers, 'given a passage:', roadPassages);
 if (process.env.BLOCK_LOG) fs.writeFileSync('.scratch/blocklog.txt', blockLog.join('\n'));
 if (process.env.GUESS_LOG) fs.writeFileSync('.scratch/guesslog.json', JSON.stringify(guessLog));
@@ -2439,6 +2473,17 @@ if (!CHM) for (const a of areaPolys) {
 }
 // Street trees and lamps along the drivable roads.
 const STREET_TREES = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'trunk']);
+// 一条街一种树（2026-11-10，docs/street-level-design.md B5）：行道树原来每棵独立按 62 / 22 / 16% 抽国槐、杨、银杏，哪条街都是
+// 同一种杂色。现在按路名抽（没名字的按路的编号）：二环里多国槐，外面杨树多一些；约一成的街还是混着种。同一条路的
+// 上下行、各段都同名，所以整条街一个样——银杏的街到 11 月整条金黄。故宫、天坛里的柏树不变（treeType）。
+const nameHash = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+const streetSpecies = (w, x, z) => {
+  const zz = zone(x, z);
+  if (zz === 'temple' || zz === 'palace') return undefined;
+  const r = rnd(w.tags?.name ? nameHash(w.tags.name) : w.id, 13);
+  if (r > 0.9) return undefined;   // a mixed street: each tree its own, as before
+  return zz === 'old' ? (r < 0.62 ? 0 : r < 0.68 ? 1 : 3) : (r < 0.42 ? 0 : r < 0.7 ? 1 : 3);
+};
 // Every street is lit, the lanes too (a residential street with no lamps was a black canyon at
 // night): lamp spacing in metres per class. Service roads (driveways, car parks) stay dark.
 const LAMPS = {
@@ -2454,6 +2499,7 @@ for (const w of ways) {
   // Lamps start half a gap in: from 0, every way put one at its junction end, so they bunched at
   // corners (three or four within 10 m) and left the middle of short blocks dark.
   let acc = 0, lampAcc = (LAMPS[info.cls] ?? 0) / 2, side = 1;
+  const species = streetSpecies(w, p[0][0], p[0][1]);
   for (let i = 1; i < p.length; i++) {
     const [ax, az] = p[i - 1], [bx, bz] = p[i];
     const L = Math.hypot(bx - ax, bz - az); if (L < 0.5) continue;
@@ -2464,7 +2510,7 @@ for (const w of ways) {
       // None along a deck or a ramp (`drop`: the seed is spent all the same, see addTree).
       const up = Math.abs(heightAlong(w, acc + s)) > 0.3;
       if (STREET_TREES.has(info.cls)) for (const sd of info.oneway ? [1] : [1, -1]) {
-        addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2), undefined, up);
+        addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2), species, up);
       }
     }
     const gap = LAMPS[info.cls];

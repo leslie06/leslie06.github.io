@@ -68,6 +68,17 @@ void main() {
     float a = 1.0 - smoothstep(0.86, 1.0, r);
     col = mix(col, uMoonDisc * shade * (0.85 + 0.15 * sqrt(max(1.0 - r * r, 0.0))) + col * 0.2, a);
   }
+  // 西山、燕山（2026-11-10，docs/street-level-design.md B1）：北京的西边和北边地平线上是山，开车朝西、朝北一抬眼就知道
+  // 方向；城里的地是平的，天边原来四面一个样。从西南（房山）经正西、西北到东北（怀柔）一道低低的山脊：西北最高
+  // （约 2 度，香山、妙峰山），往东北矮下去，东边和南边没有。只是天上的一层剪影，比天色暗一点、偏蓝，雾霾再盖在上面。
+  if (d.y > -0.02 && d.y < 0.05) {
+    float az = atan(d.x, -d.z);   // 0 north, +pi/2 east, -pi/2 west
+    float env = smoothstep(-2.7, -2.1, az) * (1.0 - smoothstep(0.9, 1.4, az));
+    float peak = mix(0.5, 1.0, exp(-pow((az + 1.2) / 0.9, 2.0)));
+    float ridge = 0.036 * env * peak * (0.5 + 0.5 * (0.6 * skyNoise2(vec2(az * 6.0, 3.7)) + 0.4 * skyNoise2(vec2(az * 17.0, 9.1))));
+    float a = smoothstep(0.0, 0.004, ridge - d.y) * 0.5;
+    col = mix(col, col * vec3(0.6, 0.67, 0.78), a);
+  }
   // Stars: one per ~70 cells of a 3D grid around the sphere, projected onto it; 1-2 px, twinkling.
   if (uStars > 0.0 && d.y > 0.0) {
     vec3 p = d * 260.0;

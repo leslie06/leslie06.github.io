@@ -481,6 +481,11 @@ export interface EnvUniforms {
   uWet: { value: number };
   /** Seconds since boot, for animated materials. */
   uTime: { value: number };
+  /**
+   * How late in the night it is, 0..1 (2026-11-10): 0 through the evening (to 21:30), 1 from half past midnight to five,
+   * back to 0 by half past six. Homes go dark with it, offices sooner; without it every window stayed lit all night.
+   */
+  uLate?: { value: number };
   /** 季节（render/Season.ts）：x 国槐杨树转黄、y 落叶、z 银杏金黄、w 侧柏冬天发暗，各 0..1；没有就是夏天。 */
   uSeason?: { value: THREE.Vector4 };
 }

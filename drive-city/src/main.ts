@@ -47,6 +47,7 @@ import * as story from './story';
 import * as adventure from './adventure';
 import * as district from './district';
 import * as street from './street';
+import * as metro from './travel/Metro';
 import * as resume from './resume';
 import * as tollPlazas from './city/visual/TollPlazas';
 import * as bridgeNames from './city/visual/BridgeNames';
@@ -162,6 +163,7 @@ async function boot() {
   if (worldName === 'city') await adventure.install(engine);
   if (worldName === 'city') await district.install(engine);
   if (worldName === 'city') street.install(engine);
+  if (worldName === 'city') metro.install(engine);
   if (worldName === 'city') resume.install(engine);
   await fx.install(engine);
   await audio.install(engine);

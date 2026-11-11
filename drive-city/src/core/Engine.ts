@@ -120,7 +120,9 @@ export class Engine {
 
     const aspect = container.clientWidth / Math.max(1, container.clientHeight);
     // Near at 0.3: the aerial poses sit 170 m up over paint 1 cm off the ground.
-    this.camera = new THREE.PerspectiveCamera(62, aspect, 0.3, 4000);
+    // far: 12 km since 2026-11-10 (docs/street-level-design.md B1). At 4 km 中国尊 was cut off from 建国门 (4.1 km away): the
+    // skyline ended where the far plane did. Depth precision is set by the near plane, not this.
+    this.camera = new THREE.PerspectiveCamera(62, aspect, 0.3, 12000);
     this.input = new Input(this.canvas);
     this.renderFrame = () => this.renderer.render(this.scene, this.camera);
 

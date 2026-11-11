@@ -163,6 +163,8 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
           engine.scene.remove(group);
           disposeGlbLandmark(group);
           group = null; job.live = false;
+          // its stand-in back (a tower's prism: the skyline keeps it while the model is away)
+          engine.scene.add(placeholder);
         },
       };
       jobs.push(job);

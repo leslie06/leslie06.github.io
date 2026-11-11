@@ -41,11 +41,12 @@ export class SkylineLod {
     mat.customProgramCacheKey = () => 'skyline2';
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uNight = env.uNight;
+      sh.uniforms.uLate = env.uLate ?? { value: 0 };
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nattribute float aKind;\nvarying float vKind;\nvarying vec3 vW;\nvarying vec3 vN;')
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvKind = aKind;\nvW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;\nvN = normalize(mat3(modelMatrix * instanceMatrix) * normal);');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying float vKind;\nvarying vec3 vW;\nvarying vec3 vN;\nfloat skyHash(vec2 p){return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);}\nfloat skyWin; float skyGlass;')
+        .replace('#include <common>', '#include <common>\nuniform float uNight, uLate;\nvarying float vKind;\nvarying vec3 vW;\nvarying vec3 vN;\nfloat skyHash(vec2 p){return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);}\nfloat skyWin; float skyGlass;')
         .replace('#include <color_fragment>', `#include <color_fragment>
 {
   float side = 1.0 - abs(vN.y);
@@ -65,8 +66,10 @@ export class SkylineLod {
 {
   float u = abs(vN.x) > abs(vN.z) ? vW.z : vW.x;
   vec2 cell = vec2(u / 3.2, vW.y / 3.2);
-  float on = step(0.52, skyHash(floor(cell) + floor(vW.xz / 40.0)));
-  totalEmissiveRadiance += vec3(1.0, 0.75, 0.45) * skyWin * on * uNight * 1.6;
+  // as the detailed facades (Materials.ts): fewer lit the later it is, glass towers a cool white, housing warm; dim enough
+  // to keep its colour under the night's exposure
+  float on = step(mix(0.52, 0.9, uLate), skyHash(floor(cell) + floor(vW.xz / 40.0)));
+  totalEmissiveRadiance += mix(vec3(1.0, 0.7, 0.4), vec3(0.62, 0.8, 1.0), skyGlass) * skyWin * on * uNight * 0.4;
 }`);
     };
     this.mesh = new THREE.InstancedMesh(geo, mat, n);

@@ -39,3 +39,10 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
   - 存档 `drivecity.street.v1`（尝过的行当、急救包、手上的礼物）。事件 `street:buy`。shot mode 不装（`?street=1` 才装）。
   - 实测：`node .scratch/streetlevel/shopprobe.mjs`（广顺北大街 120 米内 33 间能用，药店、服装、便利店、火锅、茶叶各走了一遍）；`node .scratch/streetlevel/footcheck.mjs`（14 条路下车，100 米内有能用的店或 270 米内有街头生活的：14 / 14；国贸和西直门桥下没有店，靠的是街头生活）。
   - **没做**：店主站在门口、营业时间、快递驿站和房产中介的柜台、每家店不同的菜。
+
+- **店招按片区**（2026-11-10，`docs/street-level-design.md` 第二批 B4，「继续下一步」）：全城原来 96 块招牌按哈希均匀分配。现在图集是 192 格（`SIGN_COLS` 8 × 24，3072 × 1728）：前 96 块原样不动，后面 8 种片区口味各 12 块（`ShopSigns.ts` 的 `FLAVOURS`：高校、写字楼、电子城、餐饮街、酒吧街、胡同、城乡结合部、医院；新行当有书店、轻食、西餐、电脑、数码、麻辣小龙虾、烤鸭、烤鱼、酒吧、精酿、小卖部、糖葫芦、裁缝、建材、旅馆……）。
+  - 一栋楼的口味：`city/visual/Flavours.ts` 的 `flavourAt`。数据 `flavours.gen.json`（46 KB，2,869 个圆）由 `node scripts/city/flavours.mjs` 从 `places.json` 和 `network.json` 生成，先到先得：手工指定的名街（簋街、三里屯和工体、后海、中关村大街、成府路、鼓楼和前门一带、金融街和国贸……，沿路每 50 米一个圆）→ 医院周边 → 高校周边 → 300 米格子里 4 个以上写字楼的地方。圆以外：胡同平房是「胡同」，离天安门 12 公里以外的厂房和三成多的楼是「城乡结合部」。
+  - 有口味的楼，店面六成从本口味的 12 块里抽、四成从通用的抽：`signIndex`，瓦片 worker（`Buildings.ts`）和立面着色器（`Materials.ts`）各算一遍，必须一致。口味放在每段墙标志位的第 5 位以上（第 2–4 位是住宅类型）。
+  - 实测 150 米内的招牌（`node .scratch/streetlevel/signs.mjs`）：中关村大街是电脑维修、电脑、数码；东直门内大街是烧烤、火锅、烤鸭；三里屯路是酒吧 66、精酿 35、西餐 25；成府路是奶茶、轻食、文具、书店；广顺北大街、荣华中路还是通用的。
+  - `street/Trades.ts` 给新的吃喝行当配了东西：「吃遍北京」现在包括炸酱面、早点、烤鸭、麻小、酒吧这些，旅馆能睡觉。
+  - **坑**：改了 `flavours.mjs` 的表或重建城市后要重跑它，再重启开发服务器（数据打包在 worker 里）。招牌图集大了一倍，手机内存没量过。

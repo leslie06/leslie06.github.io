@@ -234,6 +234,9 @@ const FLOOD_SHAPE = { base: 0.2, under: 0.6, top: 0.15, foot: 0.45, footH: 6 };
 const FLOOD = '#ffcf94';
 
 /** The curtain wall a material asks for with its `facade` custom property, if any. */
+/** From this height (m) a landmark is one of the skyline's: a stand-in before it loads, a darker far level. */
+const TALL = 100;
+
 export function facadeSpecOf(mat: THREE.Material): FacadeSpec | null {
   const f = (mat.userData as { facade?: unknown }).facade;
   if (!f) return null;
@@ -326,11 +329,19 @@ export function buildGlbModel(scene: THREE.Object3D, env: EnvUniforms, meta: Glb
   const detail: THREE.Mesh[] = [], far: THREE.Mesh[] = [], colliders: ColliderSpec[] = [];
   // Curtain walls: one kit facade material per Blender material, shared by both levels.
   const facades = new Map<string, THREE.Material>();
-  const facadeOf = (m: THREE.Material): THREE.Material => {
+  // A tower's far level is what the skyline shows of it from kilometres off (2026-11-10, docs/street-level-design.md B1):
+  // as a mirror of the sky (metal 0.85, rough 0.08) it was a pale sliver against that same sky - 3.5 km away 国贸三期
+  // was 71 px of light grey. Its far level gets its own material: the same wall, darker and matt, so it reads as a shape.
+  const tall = (meta.height ?? 0) >= TALL;
+  const facadeOf = (m: THREE.Material, farLevel = false): THREE.Material => {
     const spec = facadeSpecOf(m);
     if (!spec) return m;
-    let f = facades.get(m.uuid);
-    if (!f) { f = facadeMaterial(env, spec); f.name = m.name; patched.add(f); facades.set(m.uuid, f); }
+    const key = farLevel && tall ? `${m.uuid}:far` : m.uuid;
+    let f = facades.get(key);
+    if (!f) {
+      const sp = farLevel && tall ? { ...spec, metal: Math.min(spec.metal ?? 0.85, 0.3), rough: Math.max(spec.rough ?? 0.08, 0.5), glass: `#${new THREE.Color(spec.glass).multiplyScalar(0.62).getHexString()}` } : spec;
+      f = facadeMaterial(env, sp); f.name = m.name; patched.add(f); facades.set(key, f);
+    }
     return f;
   };
   scene.traverse((o) => {
@@ -343,7 +354,8 @@ export function buildGlbModel(scene: THREE.Object3D, env: EnvUniforms, meta: Glb
       if (c) colliders.push(c);
       return;
     }
-    mesh.material = Array.isArray(mesh.material) ? mesh.material.map(facadeOf) : facadeOf(mesh.material);
+    const farLevel = role === 'far';
+    mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => facadeOf(m, farLevel)) : facadeOf(mesh.material, farLevel);
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) prepareMaterial(m, env);
     (role === 'far' ? far : detail).push(mesh);
   });
@@ -438,6 +450,17 @@ export function glbLandmark(meta: GlbMeta): LandmarkDef {
     build: () => {
       const group = new THREE.Group();
       group.name = meta.id;
+      // A tower stands on the skyline before its file is in, and on a phone when it is too far to keep loaded (2.2 km):
+      // a plain dark prism its height, a little slimmer than its plot. The model takes its place when it loads.
+      if ((meta.height ?? 0) >= TALL) {
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (const [x, z] of meta.footprint) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+        const w = Math.max(12, Math.min(60, Math.min(x1 - x0, z1 - z0) * 0.6));
+        const box = new THREE.Mesh(new THREE.BoxGeometry(w, meta.height, w), new THREE.MeshStandardMaterial({ color: '#4e6272', roughness: 0.6, metalness: 0.2 }));
+        box.position.set((x0 + x1) / 2, meta.height / 2, (z0 + z1) / 2);
+        box.name = 'standin';
+        group.add(box);
+      }
       return { group, colliders: [], footprint: meta.footprint, moreFootprints: meta.moreFootprints, clear: meta.clear, trees: meta.trees, height: meta.height };
     },
     load: async (env) => {

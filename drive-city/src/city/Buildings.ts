@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import type { BuildingRec, RoadPiece } from './Data';
 import { FLAG_SHOP, FLAG_STREET, ST, TYPE_COLOURS, WALL_COLOURS, type Style } from './visual/styles';
 import { hash3, hashU, h01, rng } from './visual/hash';
-import { SIGN_COUNT } from './visual/ShopSigns';
+import { signIndex } from './visual/ShopSigns';
+import { flavourAt } from './visual/Flavours';
 import ROOF_PROPS from './visual/roofprops.json';
 
 /** Per-building facade parameters (see the facade shader in Materials.ts). */
@@ -120,7 +121,8 @@ function facadeOf(b: BuildingRec, top: number, base: number, shops: boolean): Fa
     case 'office': style = r < 0.5 ? ST.OFF_RIBBON : ST.OFF_GRID; fh = 3.6 + 0.3 * r2; bw = 3.2; break;
     case 'resid':
       // by the build's Beijing housing type where it has one, else as before
-      style = b.t === 1 ? ST.BRICK : b.t === 2 ? ST.SLAB : b.t === 3 ? ST.TOWER : b.t === 4 ? (r < 0.55 ? ST.TOWER : ST.SLAB)
+      // (a new estate's towers or slabs by the estate's draw, `s`, not the building's: one 小区, one look - 2026-11-10)
+      style = b.t === 1 ? ST.BRICK : b.t === 2 ? ST.SLAB : b.t === 3 ? ST.TOWER : b.t === 4 ? ((b.s * 7.31) % 1 < 0.55 ? ST.TOWER : ST.SLAB)
         : H < 21 ? (r < 0.45 ? ST.BRICK : ST.SLAB) : (r < 0.6 ? ST.TOWER : ST.SLAB);
       fh = 2.85 + 0.2 * r2; bw = style === ST.TOWER ? 3.5 : style === ST.BRICK ? 3.0 : 3.3; break;
     case 'hutong': style = ST.HUTONG; fh = Math.max(2.4, H); bw = 4.2 + r2; break;
@@ -202,6 +204,8 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     }));
     const hasShops = segFlags.some((fl) => fl.some((f) => f & FLAG_SHOP));
     const F = facadeOf(b, top, base, hasShops);
+    // what kind of district its shops are of (visual/Flavours.ts): in the segment flags from bit 5 up, for the shader's signs
+    const flavour = hasShops ? flavourAt(rings[0][0][0], rings[0][0][1], b.k, b.s) : 0;
     const flatStyle = F.style !== ST.HUTONG && F.style !== ST.TRAD && F.style !== ST.WALL;
     const ph = !pitched && flatStyle && top - base > 5 ? (F.style === ST.GLASS ? 1.4 : F.style === ST.LOW ? 0.5 : 0.9) : 0;
     const wallTop = top + ph;
@@ -220,13 +224,13 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
         const nb = L >= F.bw * 0.6 ? Math.max(1, Math.round(L / F.bw)) : 0;
         const style = nb ? F.style : (F.style === ST.HUTONG || F.style === ST.WALL ? F.style : ST.BLANK);
         const bayW = nb ? L / nb : L;
-        const fl = segFlags[ri][i];
+        const fl = segFlags[ri][i] | (flavour << 5);   // bits 2-4 are the housing type (FacadeBucket.vert)
         // The shop units on it as the shader lays them out (Materials.ts: k bays a unit, counted from B, hash per unit).
         if (fl & FLAG_SHOP && F.gh > 0 && nb && style !== ST.GLASS) {
           const k = Math.max(1, Math.floor(4.8 / bayW + 0.5));
           for (let si = 0; (si + 1) * k <= nb + 1e-6; si++) {
             const hs = hash3(F.seed, si + 4096, 555), t = 1 - (si + 0.5) * k / nb;
-            shops.push(ax + dx * t, az + dz * t, nx, nz, 0.9 * k * bayW, F.gh, hs % 10 !== 0 ? (hs >>> 4) % SIGN_COUNT : -1,
+            shops.push(ax + dx * t, az + dz * t, nx, nz, 0.9 * k * bayW, F.gh, hs % 10 !== 0 ? signIndex(hs, flavour) : -1,
               ((hs >>> 9) % 8 === 5 ? 1 : 0) | (F.style === ST.HUTONG ? 2 : 0) | (top - F.gh > 2.5 ? 4 : 0), hs, segRoom[ri][i]);
           }
         }

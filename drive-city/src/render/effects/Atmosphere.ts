@@ -47,10 +47,13 @@ vec3 atmoWorld(const in vec2 uv, const in float depth) {
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
   bool sky = depth >= 0.99999;
-  vec3 wp = atmoWorld(uv, min(depth, 0.9999));
+  vec3 wp = atmoWorld(uv, depth);
   vec3 ray = wp - uCamPos;
   float dist = length(ray);
   vec3 dir = ray / max(dist, 1e-4);
+  // The haze on geometry stops thickening at 1.7 km (it did by a clamp on the depth, min(depth, 0.9999), which was
+  // 1.7 km with the far plane at 4 km and would be 2.4 km with it at 12): far towers keep the contrast they had.
+  if (!sky && dist > 1700.0) { dist = 1700.0; wp = uCamPos + dir * dist; }
   if (sky) { dist = 8000.0; wp = uCamPos + dir * dist; }
   float k = uHeightFalloff;
   float dy = wp.y - uCamPos.y;

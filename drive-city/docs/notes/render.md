@@ -17,3 +17,14 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
   - **天气**（`weather/index.ts`）：按北京的日子，11 月 21 日起到 3 月 11 日，阵雨有一定概率是雪（12–2 月一定是）；这段日子开局还有三成概率「昨晚下过雪」（一开始就白）。交通台下雪时播「雪天路滑……」，雪后播「雪停了，故宫的红墙白雪这会儿最好看……」（`CityLines.ts` 的 `radio.tr.snow`、`radio.wx.snow`、`radio.wx.snowAfter`）。
   - **白汽**（`city/visual/Steam.ts`）：供暖季（11 月 15 日到 3 月 15 日）从远景楼群（skyline.json）里挑约一成的 20 米以上住宅楼，镜头 1.8 公里内最近的 40 栋（省电档 20）楼顶各冒一缕：6 团软雾升起、变大、顺风飘，全在顶点着色器里动，一次 draw call；早上 7–8 点最浓，晚上被城市的灯映暗。skyline.json 开局 25 秒后才取。`?steam=1` 强制（shot mode 默认关）、`?steam=0` 关。
   - 截图：`CAMY=30 node .scratch/navvoice/snowshot.mjs out "x,z,yaw" "season=winter&snowcover=1;season=winter&snow=1&snowcover=0.5"`；白汽对准一栋楼：`node .scratch/navvoice/steamdbg.mjs`。
+
+- **夜晚分片区、分钟点**（2026-11-10，`docs/street-level-design.md` 第二批 B2，「继续下一步」）：亮灯比例原来固定（45–55%），不看钟点；颜色八成暖黄，但夜间曝光是 6.5，乘完都过曝成米白色块。
+  - 新 uniform `uLate`（`EnvUniforms`，`render/index.ts`）：21:30 以前是 0，0:30 到 5:00 是 1，6:30 回到 0。
+  - `city/Materials.ts`：住宅亮灯比例 × mix(1, 0.16, uLate)，办公 × mix(0.75, 0.08)，胡同 × mix(0.6, 0.12)；玻璃幕墙的亮格从一半降到后半夜的八分之一。住宅的灯三种颜色（钨丝黄、暖白、冷白），办公楼冷白为主。发光强度降到曝光后还有颜色：窗 0.07 + 0.3 × 明度（原 0.5 + 2.4），幕墙 0.3（原 1.3），店招 0.55（原 1.9），店面玻璃 0.3（原 0.75）。远景盒子（`city/Skyline.ts`）同样处理。
+  - 截图：`.scratch/streetlevel/b2/n21/`（21 点）和 `n01/`（1 点）。**没做**：商圈的霓虹、路灯分色、整体压暗。
+- **天际线**（2026-11-10，同上 B1）：
+  - 相机远裁剪面 4 公里 → 12 公里（`core/Engine.ts`）。原来建国门内大街看中国尊（4.1 公里）直接被裁掉。深度精度由近裁剪面决定，没变。
+  - 雾：`render/effects/Atmosphere.ts` 原来用 `min(depth, 0.9999)` 钳深度，远裁剪面是 4 公里时相当于 1.7 公里以外雾不再变浓；远裁剪面拉到 12 公里它会变成 2.4 公里。改成直接钳距离 1700 米，远处的对比度和以前一样。
+  - 100 米以上的地标（中国尊、国贸三期、央视、电视塔、奥林匹克塔……）：远模换一份更暗、不反光的材质（`city/landmarks/glb/Glb.ts`，原来是镜面，映着天，贴着天色）；模型没加载时（开局头几秒、手机上 2.2 公里以外）原位立一根同高的深色棱柱，卸载后也放回来（`city/index.ts`）。
+  - 西山、燕山：`render/SkyDome.ts` 在天空里画一道低山脊，从西南经正西、西北到东北，西北最高约 2 度，东边和南边没有。
+  - 截图：`.scratch/streetlevel/b2/vista/`（`cbd-high` 建国门内大街 60 米高看国贸，中国尊最高；`west-high` 复兴路朝西，电视塔和山脊）。街面高度仍然会被行道树和路边的楼挡住。**没做**：能见度按天变化、把对着地标的几条路的视线让出来。

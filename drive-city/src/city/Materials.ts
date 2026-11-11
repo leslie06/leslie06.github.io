@@ -4,7 +4,7 @@ import type { Engine } from '../core/Engine';
 import type { EnvUniforms } from '../game/Contracts';
 import { loadCity, loadNetwork, type AreaKind, type Manifest, type Network } from './Data';
 import { facadeAtlas, signAtlas } from './visual/FacadeAtlas';
-import { SIGN_COLS, SIGN_COUNT, SIGN_ROWS } from './visual/ShopSigns';
+import { FLAVOUR_SHARE, GENERIC, PER_FLAVOUR, SIGN_COLS, SIGN_ROWS } from './visual/ShopSigns';
 import { GLSL_HASH } from './visual/hash';
 import { ST, GLASS_TINTS } from './visual/styles';
 
@@ -131,6 +131,7 @@ function facadeMaterial(env: EnvUniforms, tx: FacadeTex, atlasSize: number, low:
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
     sh.uniforms.uNight = env.uNight;
+    sh.uniforms.uLate = env.uLate ?? { value: 0 };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
 attribute vec4 aFac;
@@ -144,7 +145,7 @@ flat varying float vSeed;`)
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 ${low ? '#define FAC_LOW' : ''}
-uniform float uNight;
+uniform float uNight, uLate;
 uniform sampler2D tFacCol, tFacMat, tSigns, tPlaster, tBrick;
 uniform vec3 uPlasterMean, uBrickMean;
 uniform vec3 uGlassTints[${GLASS_TINTS.length}];
@@ -170,8 +171,9 @@ vec3 facEmis = vec3(0.0);
   float flags = vFac.z;
   bool shopSeg = mod(flags, 2.0) > 0.5;
   bool street = mod(floor(flags * 0.5 + 0.01), 2.0) > 0.5;
-  // Beijing housing type (Buildings.ts: flags + type * 4): 2 板楼, 3 塔楼, 4 new estate
-  float ty = floor(flags / 4.0 + 0.01);
+  // Beijing housing type (Buildings.ts: flags + type * 4, in bits 2-4): 2 板楼, 3 塔楼, 4 new estate; the district's
+  // flavour for the shop signs above it (from bit 5)
+  float ty = floor(mod(flags, 32.0) / 4.0 + 0.01);
   uint seed = uint(vSeed + 0.5);
   float u = vWall.x, v = vWall.y;
   float bayC = vFac.x, bayW = max(vFac.y, 0.5);
@@ -251,8 +253,10 @@ vec3 facEmis = vec3(0.0);
     facMetal = mix(mix(0.9, 0.7, sp), 0.8, fr);
     facTilt = (vec2(cityH01(hp >> 3), cityH01(hp >> 13)) - 0.5) * 0.09;
     facPanel = (1.0 - fr) * (1.0 - sp);
-    float on = step(0.5, cityH01(cityHash3(seed, uint(int(fl6) + 4096), uint(int(floor(pc / 7.0)) + 99))));
-    facEmis += vec3(0.78, 0.88, 1.0) * on * (1.0 - sp) * glassM * uNight * 1.3;
+    // office floors: half of them lit in the evening, one in eight in the small hours; a cool white that is still a
+    // colour once the night's exposure (6.5) has had it (at 1.3 every lit pane clipped to white - 2026-11-10)
+    float on = step(mix(0.5, 0.88, uLate), cityH01(cityHash3(seed, uint(int(fl6) + 4096), uint(int(floor(pc / 7.0)) + 99))));
+    facEmis += vec3(0.62, 0.8, 1.0) * on * (1.0 - sp) * glassM * uNight * 0.3;
   } else if (sty == ${S.SLAB} || sty == ${S.TOWER}) {
     // 板楼: a balcony every other bay, mostly glazed in (封阳台); the rest as before
     uint per = ty > 1.5 && ty < 2.5 ? 2u : sty == ${S.SLAB} ? 3u : 2u;
@@ -289,19 +293,21 @@ vec3 facEmis = vec3(0.0);
       if (y > sBot && y < sTop) {
         if (hs % 10u != 0u) {
           // ShopSigns.ts: the worker picks the same sign for the unit's props
-          uint idx = (hs >> 4) % ${SIGN_COUNT}u;
+          // ShopSigns.ts signIndex: a flavoured building's shops mostly from its flavour's dozen, the rest from the generic ones
+          uint flav = uint(floor(flags / 32.0 + 0.01));
+          uint idx = flav > 0u && (hs >> 13) % 100u < ${FLAVOUR_SHARE}u ? ${GENERIC}u + (flav - 1u) * ${PER_FLAVOUR}u + (hs >> 4) % ${PER_FLAVOUR}u : (hs >> 4) % ${GENERIC}u;
           vec2 q = vec2(clamp(qx, 0.004, 0.996), (y - sBot) / (sTop - sBot));
           const float SC = ${SIGN_COLS}.0, SR = ${SIGN_ROWS}.0;
           vec2 suv = vec2((float(idx % ${SIGN_COLS}u) + q.x) / SC, 1.0 - (float(idx / ${SIGN_COLS}u) + 1.0 - q.y) / SR);
           vec4 sgn = textureGrad(tSigns, suv, vec2(sgx.x / SC, sgx.y / (sTop - sBot) / SR), vec2(sgy.x / SC, sgy.y / (sTop - sBot) / SR));
           col = sgn.rgb; cover = 1.0; facRough = 0.35;
-          facEmis += sgn.rgb * uNight * 1.9;
+          facEmis += sgn.rgb * uNight * 0.55;
         }
       } else if (y <= sBot) {
         facSample(float((hs >> 9) % 8u), 6.0, vec2(qx, y / sBot), vec2(sgx.x, sgx.y / sBot), vec2(sgy.x, sgy.y / sBot), mc, mm);
         cover = mm.r; glassM = mm.g;
         col = mix(wallC, mc.rgb, cover) * mm.b;
-        facEmis += mc.rgb * vec3(1.0, 0.9, 0.75) * glassM * uNight * step(0.15, cityH01(hs >> 2)) * 0.75;
+        facEmis += mc.rgb * vec3(1.0, 0.86, 0.62) * glassM * uNight * step(mix(0.15, 0.7, uLate), cityH01(hs >> 2)) * 0.3;
       } else { col = wallC * 0.9; }
     } else { col = mix(wallC, vec3(0.62, 0.61, 0.58), 0.6); }
   } else if (ground && row >= 0.0 && sty != ${S.HUTONG} && sty != ${S.TRAD}) {
@@ -314,9 +320,17 @@ vec3 facEmis = vec3(0.0);
     cover = mm.r; glassM = mm.g;
     col = mix(wallC, mc.rgb, cover) * mm.b;
     float litR = cityH01(cityHashU(hc ^ 0x5bd1e995u));
-    float on = step(1.0 - litShare, litR);
-    vec3 warm = mix(vec3(1.0, 0.7, 0.4), vec3(0.8, 0.87, 1.0), step(0.8, fract(litR * 7.3)));
-    facEmis += warm * on * glassM * uNight * (0.5 + 2.4 * dot(mc.rgb, vec3(0.3, 0.55, 0.15)));
+    // 夜晚分片区、分钟点（2026-11-10，docs/street-level-design.md B2）：亮灯比例原来固定，不看钟点；颜色八成暖黄两成冷白，
+    // 乘上夜里的曝光（6.5）全都过曝成米白色块，住宅区和写字楼分不出来。现在：住宅傍晚亮得多、后半夜只剩一成多；办公楼
+    // 晚上亮得少、后半夜几乎全黑，而且是冷白；胡同只有零星几扇窗。住宅的灯三种颜色（钨丝灯黄、暖白、冷白）；亮度降到
+    // 曝光之后还看得出颜色。
+    bool office = sty == ${S.OFF_RIBBON} || sty == ${S.OFF_GRID};
+    float share = litShare * (office ? mix(0.75, 0.08, uLate) : sty == ${S.HUTONG} ? mix(0.6, 0.12, uLate) : mix(1.0, 0.16, uLate));
+    float on = step(1.0 - share, litR);
+    float tone = fract(litR * 7.3);
+    vec3 warm = office ? mix(vec3(0.66, 0.82, 1.0), vec3(1.0, 0.9, 0.72), step(0.85, tone))
+      : tone < 0.45 ? vec3(1.0, 0.6, 0.26) : tone < 0.8 ? vec3(1.0, 0.8, 0.52) : vec3(0.7, 0.84, 1.0);
+    facEmis += warm * on * glassM * uNight * (0.07 + 0.3 * dot(mc.rgb, vec3(0.3, 0.55, 0.15)));
   }
   // Floor slab bands on housing blocks, the coping on parapets and walls.
   if ((sty == ${S.SLAB} || sty == ${S.BRICK} || sty == ${S.TOWER}) && y > gh && v < top) {

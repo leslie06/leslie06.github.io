@@ -58,7 +58,7 @@ class Render implements RenderSystem {
   private fixedCover: number | null = null;
   readonly sunDir = new THREE.Vector3();
   readonly hazeColor = new THREE.Color();
-  readonly uniforms: EnvUniforms = { uNight: { value: 0 }, uWet: { value: 0 }, uTime: { value: 0 }, uSeason: { value: seasonVec(seasonAt()) } };
+  readonly uniforms: EnvUniforms = { uNight: { value: 0 }, uWet: { value: 0 }, uTime: { value: 0 }, uLate: { value: 0 }, uSeason: { value: seasonVec(seasonAt()) } };
   readonly defaultTime: number;
   exposure = 1;
   readonly postfx: PostFx;
@@ -171,6 +171,9 @@ class Render implements RenderSystem {
     // a snowy sky is a grey one, without the rain's darkness
     const L = this.tod.compute(this.timeOfDay, this.rain, force, Math.max(this.cloud, this.snow * 0.85));
     this.uniforms.uNight.value = L.lights;
+    // late: 21:30 -> 00:30 up, 05:00 -> 06:30 down (hours past 18:00, so the night is one stretch)
+    const hn = (this.timeOfDay + 6) % 24;   // 18:00 -> 0, 06:00 -> 12
+    this.uniforms.uLate!.value = hn > 12.5 ? 0 : clamp01((hn - 3.5) / 3) * (1 - clamp01((hn - 11) / 1.5));
     this.sunDir.copy(L.sunDir);
     this.hazeColor.copy(L.horizon);
     const b = this.backdrop.value, h = L.horizon, r = this.refHorizon;

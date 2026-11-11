@@ -38,7 +38,7 @@ export interface BuildingRec {
   /** Oriented box [cx, cz, angle of long axis, half length, half width] for pitched roofs. */
   ob?: [number, number, number, number, number];
   n?: string;
-  /** Per-building random 0..1. */
+  /** A random 0..1: the building's own, or for housing its estate's (the same for every block of a 小区, since 2026-11-10). */
   s: number;
   /** Beijing housing type (scripts/city/build.mjs): 1 苏式 brick walk-up, 2 板楼, 3 塔楼, 4 new high-rise estate. */
   t?: number;

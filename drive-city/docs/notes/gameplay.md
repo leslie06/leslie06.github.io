@@ -106,3 +106,5 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
   - 街头生活的场景（交警、环卫工除外）有了地图标记：新的 `BlipKind` `'life'`（青色圆点里两个人头，`nav/Draw.ts`），图例「街头生活（能参加）」。`LifeApi.scenes()`。
   - 时钟接着上次的钟点（`render/index.ts`，`drivecity.clock.v1`，每 30 秒和离开页面时存）：以前每次都从 15:00 开始，早上的煎饼、太极、遛鸟要等现实 28 分钟。第一次来还是 15:00；`?tod=` 和 shot mode 照旧。
   - 点亮北京：走路也算了（胡同和步行街车进不去）。开上一条没点亮过的路，路名下面多一行「新点亮 · 东城区 35%」（`LightupApi.fresh()`，`ui/Hud.ts`）。
+
+- **坐地铁**（2026-11-10，`docs/street-level-design.md` 第二批 C3，「下车之后，几乎没事可做」「继续下一步」）：`travel/Metro.ts`。徒步走到地铁口亭子的开口前（全城 694 个口、191 站）按 F，面板按线路列出各站（只列有亭子的），选一站：车费 ¥3 起、每 4 站加 ¥1、最多 ¥8；每站算 2.5 分钟，游戏里的钟跟着走；黑一下屏（`TravelApi.land`），从那一站的一个口走出来。车留在原地，所以它不在「快速前往」的表里（「不能太杂，挑几个值得瞬移的场景」）。被通缉、任务不让走时不能坐。事件 `metro:ride`。实测 `node .scratch/streetlevel/metroprobe.mjs`：国贸站 59 行，坐到大望路，¥3，落在 1.8 公里外的人行道上。「几站」是按有亭子的站数的，不是真实站数。**没做**：坐公交、打车。

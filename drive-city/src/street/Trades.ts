@@ -27,6 +27,9 @@ const gift = (id: string, price: number, pts: number): Good => ({ id, name: `st.
 export const SERVICE: Record<string, Service> = {
   面馆: 'eat', 拉面: 'eat', 饺子馆: 'eat', 包子铺: 'eat', 烧烤: 'eat', 火锅: 'eat', 麻辣烫: 'eat', 炸酱面: 'eat', 卤煮: 'eat', 涮肉: 'eat',
   快餐: 'eat', 黄焖鸡米饭: 'eat', 早点: 'eat', 粥铺: 'eat', 川菜馆: 'eat', 东北菜: 'eat', 奶茶: 'eat', 咖啡: 'eat',
+  // the districts' own (ShopSigns.ts FLAVOUR_TRADES, 2026-11-10)
+  轻食: 'eat', 西餐: 'eat', 麻辣小龙虾: 'eat', 烤鸭: 'eat', 烤鱼: 'eat', 酒吧: 'eat', 精酿: 'eat', 糖葫芦: 'eat',
+  小卖部: 'snack', 旅馆: 'hotel',
   便利店: 'snack', 超市: 'snack', 日用百货: 'snack',
   水果: 'gift', 烟酒: 'gift', 茶叶: 'gift', 花店: 'gift',
   药店: 'pharmacy', 大药房: 'pharmacy',
@@ -58,6 +61,15 @@ export const GOODS: Record<string, Good[]> = {
   东北菜: [G('guobaorou', 42, 70), G('disanxian', 26, 45)],
   奶茶: [G('bubbletea', 15, 15), G('mangosago', 20, 20)],
   咖啡: [G('americano', 18, 10), G('latte', 24, 15)],
+  轻食: [G('salad', 32, 30), G('sandwich', 26, 30)],
+  西餐: [G('steak', 128, 100), G('pasta', 58, 60)],
+  麻辣小龙虾: [G('maxiao', 98, 90), G('edamame', 12, 10)],
+  烤鸭: [G('roastduck', 138, 100), G('duckroll', 28, 35)],
+  烤鱼: [G('kaoyu', 88, 90), G('rice', 3, 8)],
+  酒吧: [G('draught', 30, 10), G('cocktail', 60, 12)],
+  精酿: [G('ipa', 45, 12), G('fries', 25, 20)],
+  糖葫芦: [G('tanghulu', 10, 15), G('sugarstrawberry', 15, 15)],
+  小卖部: [G('water', 3, 8), G('icecream', 4, 8), G('bread', 6, 15)],
   便利店: [G('water', 3, 8), G('bread', 6, 15), G('ricebox', 15, 30)],
   超市: [G('water', 3, 8), G('bread', 6, 15), G('ricebox', 15, 30)],
   日用百货: [G('water', 3, 8), G('bread', 6, 15)],
@@ -71,8 +83,8 @@ export const GOODS: Record<string, Good[]> = {
 };
 
 /**
- * The trades that are pages of 吃遍北京: the eating ones some sign in the city carries (the 96 signs are drawn by a seed
- * from the trades' weights, and 炸酱面 and 早点 did not come up: they join when the signs are redrawn by district).
+ * The trades that are pages of 吃遍北京: the eating ones some sign in the city carries (the 96 generic signs are drawn by a seed
+ * from the trades' weights and 炸酱面 and 早点 did not come up there: they and the districts' own are in the flavours' dozens).
  */
 export const EAT_TRADES: readonly string[] = [...new Set(shopSigns().map((g) => g.trade))].filter((k) => SERVICE[k] === 'eat');
 /** How many trades tried pays what (once each). */

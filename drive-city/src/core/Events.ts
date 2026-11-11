@@ -18,6 +18,8 @@ export interface GameEvents {
   'player:use': { label: string };
   /** Something bought over a shop counter in the street (street/): the sign's trade, what, and the price paid. */
   'street:buy': { trade: string; item: string; price: number };
+  /** A ride on the underground (travel/Metro.ts): the stations' names and how many stops. */
+  'metro:ride': { from: string; to: string; stops: number };
   /** Someone on the pavement shouted at the player (a bubble over their head). */
   'people:shout': { x: number; z: number; text: string; follow?: { readonly x: number; readonly y: number; readonly z: number } | null; name?: string; secs?: number };
   /**

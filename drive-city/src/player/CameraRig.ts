@@ -3,6 +3,9 @@ import type { Engine } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
 import type { CameraApi, CameraMode, PlayerApi, VehicleApi } from '../game/Contracts';
 import { smoothstep, wrapAngle } from '../vehicle/Tire';
+import { Cockpit, eyeOf } from './Cockpit';
+
+const _head = new THREE.Euler(), _hq = new THREE.Quaternion();
 
 /** `wide`: degrees the lens opens with speed, from `v0` to `v1` m/s. */
 interface ModeCfg { dist: number; height: number; look: number; fov: number; wide: number; v0: number; v1: number }
@@ -49,8 +52,12 @@ export class CameraRig implements CameraApi {
   private readonly fwd = new THREE.Vector3();
   private readonly tmp = new THREE.Vector3();
   private readonly rayGroups = groups(CG.CAR, CG.WORLD);
+  private readonly cockpit: Cockpit;
+  private headYaw = 0;
+  private headPitch = 0;
 
   constructor(private engine: Engine) {
+    this.cockpit = new Cockpit(engine);
     engine.events.on('vehicle:impact', ({ strength }) => {
       this.shake(Math.min(1.2, strength / 7));
       if (strength > 3) engine.input.rumble(Math.min(1, strength / 10), Math.min(1, strength / 6), 90 + Math.min(260, strength * 22));
@@ -75,24 +82,45 @@ export class CameraRig implements CameraApi {
 
   update(dt: number): void {
     const cam = this.engine.camera;
-    if (this.override) { this.override(cam, dt); this.snapNext = true; return; }
+    if (this.override) { this.cockpit.group.visible = false; this.override(cam, dt); this.snapNext = true; return; }
     const v = this.engine.get<VehicleApi>('vehicle');
     if (!v) return;
     this.t += dt;
     const inp = this.engine.input.state;
     if (inp.cameraPressed && v.inputEnabled) this.mode = ORDER[(ORDER.indexOf(this.mode) + 1) % ORDER.length];
     const pl = this.engine.get<PlayerApi>('player');
-    if (pl?.foot) { this.onFoot(cam, dt, pl.foot, v.inputEnabled); return; }
+    if (pl?.foot) { this.cockpit.update(v, false); this.onFoot(cam, dt, pl.foot, v.inputEnabled); return; }
     const car = v.car;
     const p = v.renderPos;
     this.fwd.set(0, 0, 1).applyQuaternion(v.renderQuat);
     const carYaw = Math.atan2(this.fwd.x, this.fwd.z);
     const speed = car.speed;
 
+    // 车内 (Cockpit.ts): a small four-wheeled car has a cabin to sit in; a bus, a lorry and a two-wheeler keep the old point
+    const cabin = this.mode === 'hood' && v.occupied && v.model.size.length < 5.6 && v.model.size.width > 1.2 && !['moto', 'bike', 'ebike'].includes(v.look.body ?? '');
+    this.cockpit.update(v, cabin);
     if (this.mode === 'hood') {
-      cam.position.copy(this.tmp.set(0, 0.92, 0.35).applyQuaternion(v.renderQuat).add(p));
-      cam.quaternion.copy(v.renderQuat).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
-      this.fov = 74 + 8 * smoothstep(10, 45, speed);
+      if (cabin) {
+        // the head turns with the mouse or the right stick, and comes back to the road after a second and a half
+        if (v.inputEnabled && (inp.lookDX !== 0 || inp.lookDY !== 0)) {
+          this.headYaw = THREE.MathUtils.clamp(this.headYaw - inp.lookDX * 0.0032, -2, 2);
+          this.headPitch = THREE.MathUtils.clamp(this.headPitch - inp.lookDY * 0.0025, -0.45, 0.4);
+          this.sinceOrbit = 0;
+        } else this.sinceOrbit += dt;
+        if (this.sinceOrbit > 1.5) { const k = 1 - Math.exp(-dt * 3); this.headYaw -= this.headYaw * k; this.headPitch -= this.headPitch * k; }
+        const back = v.inputEnabled && inp.lookBack ? 2.7 : 0;
+        cam.position.copy(eyeOf(v.model.size.width).applyQuaternion(v.renderQuat).add(p));
+        this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.4);
+        const a = this.shakeAmt * this.shakeAmt * 0.12 + 0.004 * smoothstep(15, 50, speed);
+        cam.position.y += Math.sin(this.t * 37 + 2) * a;
+        _head.set(this.headPitch, Math.PI + this.headYaw + back, 0, 'YXZ');
+        cam.quaternion.copy(v.renderQuat).multiply(_hq.setFromEuler(_head));
+        this.fov += (64 + 8 * smoothstep(10, 45, speed) - this.fov) * (1 - Math.exp(-dt * 4));
+      } else {
+        cam.position.copy(this.tmp.set(0, 0.92, 0.35).applyQuaternion(v.renderQuat).add(p));
+        cam.quaternion.copy(v.renderQuat).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+        this.fov = 74 + 8 * smoothstep(10, 45, speed);
+      }
       cam.fov = this.fov; cam.updateProjectionMatrix();
       this.snapNext = true;
       return;
