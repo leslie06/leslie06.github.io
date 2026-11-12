@@ -69,3 +69,6 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
 ## 老浏览器补丁（2026-10-24）
 
 「游戏有时候报这个错」：手机百度浏览器上整屏红字 `TypeError: r.roundRect is not a function`。canvas 的 `roundRect` 到 Chrome 99 / Safari 16 才有，百度、部分国产浏览器的内核更老；游戏有五处用它画东西（地图标注、雷达图标、地铁口标志、地标贴图），走到哪个地标、打开哪张图才会画到，所以是「有时候」。`src/core/Polyfill.ts` 补上 `roundRect`（2D 画布、OffscreenCanvas、Path2D），在 `main.ts` 第一行引入。其他可能缺的新 API（`findLast`、`structuredClone`、`Object.hasOwn`、`toSorted`、`replaceAll`、`.at(-1)`）查过源码里没用。看：`node .scratch/title/oldcanvas.mjs`（删掉原生 `roundRect` 再开游戏：确认补丁接上、没有报错、和原生画法逐像素一致）。
+
+
+- **柜台和地图的快速连续点击**（2026-11-12，「继续做吧」，名片街收尾时发现）：`Touch.ts` 的全局 `noZoom` 会取消 350 ms 内第二次 `touchend`，误吞原生 `click`——点开柜台马上买东西，按钮没有反应。现在对游戏操控区以外、明确设了 `touch-action: manipulation` 的原生按钮/链接保留 click；这些控件的双击缩放交给 CSS，操控区原来的防缩放和全局防捏合保留。`node scripts/qa/famous.mjs phone` 在 851×393 横屏验证三条街的触屏前进、开柜台后购买、离开、打开并关闭地图；390×844 竖屏重新打开柜台并点离开，无页面横向溢出、无浏览器错误。低画质与省电档一并开启；这是 Chromium 模拟，未做 iOS Safari / 安卓实机验证。

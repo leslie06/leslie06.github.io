@@ -257,7 +257,8 @@ export interface NavTarget { x: number; z: number; kind: 'waypoint' | 'mission' 
 
 export interface NavApi extends System {
   /** Shortest legal drive (one-ways respected) from a point heading `heading` to a point: [x, z, ...] and metres. */
-  route(fromX: number, fromZ: number, heading: number, toX: number, toZ: number): { pts: Float32Array; len: number } | null;
+  /** `links`：开过的有向路段（交通车道图的编号），按顺序；看路上堵不堵用（`TrafficApi.jamSlack`）。 */
+  route(fromX: number, fromZ: number, heading: number, toX: number, toZ: number): { pts: Float32Array; len: number; links?: readonly number[] } | null;
   /**
    * The same drive for a driver already on the lane graph (a taxi with a fare, travel/Ride.ts): from `s` metres along
    * directed link `link` (traffic/LaneGraph.ts) - the links in order starting with that one, where on the last it ends,

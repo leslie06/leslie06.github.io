@@ -128,7 +128,9 @@ export function install(engine: Engine): void {
   };
   const startTakeout = (shop: ShopRef, o: { place: string; gate: Kerb; len: number }) => {
     orders.delete(`${Math.round(shop.x)}_${Math.round(shop.z)}`);
-    job = { kind: 'takeout', shop: shop.name, place: o.place, gate: o.gate, door: null, len: o.len, limit: takeoutLimit(o.len), clock: 0, who: null };
+    // 路上堵的路段补时（traffic/Flow.ts `jamSlack`，和出租车一样）
+    const links = nav()?.route(shop.x, shop.z, NaN, o.gate.x, o.gate.z)?.links, jam = links ? tr.jamSlack?.(links, 7) ?? 0 : 0;
+    job = { kind: 'takeout', shop: shop.name, place: o.place, gate: o.gate, door: null, len: o.len, limit: takeoutLimit(o.len) + jam, clock: 0, who: null };
     nav()?.setTarget({ x: o.gate.x, z: o.gate.z, kind: 'mission', label: o.place });
     marker.show(o.gate.x, o.gate.z, C.gate, 0.6);
     toast(t('err.takeout.got', { shop: shop.name, place: o.place }), 3.5);

@@ -203,7 +203,7 @@ export async function install(engine: Engine): Promise<void> {
     setMapOpen(open) { mapOpen = open; if (open) startCrawl(); },
     route(fromX, fromZ, heading, toX, toZ) {
       const r = router.route(fromX, fromZ, heading, toX, toZ);
-      return r ? { pts: r.pts, len: r.len } : null;
+      return r ? { pts: r.pts, len: r.len, links: r.links } : null;
     },
     routeFrom(link, s, toX, toZ) {
       const r = router.routeFrom(link, s, toX, toZ);

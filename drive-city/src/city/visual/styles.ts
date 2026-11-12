@@ -11,6 +11,8 @@ export type Style = (typeof ST)[keyof typeof ST];
 
 /** Segment flags (aFac.z): the ground floor has shop units / the wall faces a street. */
 export const FLAG_SHOP = 1, FLAG_STREET = 2;
+/** 名片街的门脸（city/Famous.ts）：第 9 位；霓虹（三里屯）再加第 10 位。第 2–4 位是住宅类型，第 5–8 位是片区口味。 */
+export const FLAG_FAMOUS = 512, FLAG_NEON = 1024;
 
 /** Wall colours by style (sRGB): pale tile, beige, grey render, white, some brick red. */
 export const WALL_COLOURS: Record<number, string[]> = {

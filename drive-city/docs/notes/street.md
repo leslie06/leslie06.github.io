@@ -46,3 +46,12 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
   - 实测 150 米内的招牌（`node .scratch/streetlevel/signs.mjs`）：中关村大街是电脑维修、电脑、数码；东直门内大街是烧烤、火锅、烤鸭；三里屯路是酒吧 66、精酿 35、西餐 25；成府路是奶茶、轻食、文具、书店；广顺北大街、荣华中路还是通用的。
   - `street/Trades.ts` 给新的吃喝行当配了东西：「吃遍北京」现在包括炸酱面、早点、烤鸭、麻小、酒吧这些，旅馆能睡觉。
   - **坑**：改了 `flavours.mjs` 的表或重建城市后要重跑它，再重启开发服务器（数据打包在 worker 里）。招牌图集大了一倍，手机内存没量过。
+
+
+- **三条名片街**（2026-11-11 开始，2026-11-12 收尾，「按你的顺序做」「继续做吧」；`docs/street-level-design.md` 第三批 B7）：簋街（东直门内大街）、三里屯酒吧街（三里屯路）、烟袋斜街。规则表在 `city/Famous.ts`：街的折线、走廊、营业热闹时段、招牌口味、灯笼或霓虹、补楼规格。进入街区时显示街名（`ui/PlaceTitle.ts`）。
+  - **连续门脸**：`scripts/city/famous.mts` 沿街空当补了 327 栋铺面，避开原建筑、水面和横街，紧贴街面的旧院墙让位；结果是 `src/city/famous.gen.json`。瓦片 worker 按建筑中心分块加入，清掉铺面下的树、路灯和停车，地标的排除区域仍生效。`Buildings.ts` 只升级面对该街且没被前排建筑遮挡的墙面，低矮胡同房垫高墙面以容纳招牌。修改名片街规则或重建城市后，手动运行 `npx tsx scripts/city/famous.mts` 并重启 Vite；目前没有接入 `build.mjs`。
+  - **店招和灯**：九成招牌来自本街口味；名片街不拉卷帘，所有标记为名片街的店面都有可用柜台。`ShopSigns.ts` 的 `FAMOUS_SKIP` 跳过本街口味里没有柜台的行当，11-12 补上 `FAMOUS_GENERIC`，避免剩下一成通用招牌抽到银行、五金等纯装饰店。worker 与 GLSL 共用替换表。簋街、烟袋斜街挂灯笼，三里屯加霓虹；都用实例化网格，夜里点亮。
+  - **修复招牌与柜台不一致**：立面着色器的 `vSeed` 是 flat 传入的精确 24 位整数，原来 `uint(vSeed + 0.5)` 会在超过 2^23 的奇数上被 float32 舍入到下一整数。改为 `uint(vSeed)`；影响的是招牌绘制，柜台种子及存档编号不变。这也修正了普通街同类招牌偏差。
+  - **验收**：`Famous.test.ts` 检查三条街的补楼不侵入街心通道，327 栋补楼彼此及与保留原建筑无超过 0.02 平方米的重叠；`Trades.test.ts` 覆盖所有口味的本地、通用招牌柜台筛选。`node scripts/qa/famous.mjs desktop` 和 `node scripts/qa/famous.mjs phone`（本地 FROZEN 服务器 5198）从标题进入真实帧循环，提取游戏实际编译的立面 GLSL 与 worker 对照：每种设备 2016 组通过，包含 2^23 精度边界；三个街段分别扫描 84、84、94 个名片街店面，均有柜台；每街实际打开/关闭 3 家餐饮柜台、购买一件商品。沿街按住前进 3 秒，电脑移动 9.0–10.6 米、模拟手机 10.6–10.9 米，无浏览器错误。截图和报告在 `.scratch/streetlevel/accept-desktop/`、`accept-phone/`；旧招牌特写检查在 `.scratch/streetlevel/famous/signs/`。
+  - **最终回归（11-12）**：`npm run build` 通过；`npm test -- --maxWorkers=2 --testTimeout=120000` 为 432 通过、3 跳过。默认 60 秒时限下，原有 `Signs.test.ts` 的全城高架扫描超时（修改前已有），最终只通过命令行延长时限，未改测试断言。`.scratch/ring5/` 的 `jumpprobe` 飞跃约 37 米、奖励 ¥250；`shortcutprobe` 12/12 条通行；`underprobe` 能驶入地下、领取 ¥500、街面托住车辆、两星约 14 秒消退。日志在 `.scratch/streetlevel/*-20261112.log`。
+  - **边界**：这是规则生成的商业街和门前柜台，没有给每家店做室内。手机验收是 Chromium 触屏模拟（851×393 横屏、390×844 竖屏，low + lite），不是实机或 Safari 性能结论。B6 道路断面尚未开始。

@@ -4,6 +4,7 @@ import type { PlayerApi, WorldApi } from '../game/Contracts';
 import type { NavSystem } from '../nav';
 import type { Name, Place } from '../nav/Places';
 import { css, el } from './theme';
+import { FAMOUS, famousAt } from '../city/Famous';
 
 css(`
 .hud .ptitle{position:absolute;left:50%;top:24%;transform:translate(-50%,6px);text-align:center;pointer-events:none;opacity:0;
@@ -63,6 +64,8 @@ export class PlaceTitle {
   private area: Place | null = null;
   private district: District | null = null;
   private bridge: string | null = null;
+  /** 在哪条名片街上（city/Famous.ts 的序号 + 1，0 不在）。 */
+  private famous = 0;
   private seen = new Map<string, number>();
   private districts: District[] | null = null;
   private loading = false;
@@ -140,14 +143,19 @@ export class PlaceTitle {
     // 立交：车下的路段本身叫「国贸桥」（匝道和桥面在车道图里按立交命名），或者离 network 的立交点 60 米内
     const road = this.engine.get<WorldApi>('world')?.placeName?.(x, z) ?? '';
     const bridge = pl.mode === 'onfoot' ? null : /桥$/.test(road) ? (nav.bridgeAt(x, z, 400)?.zh === road ? nav.bridgeAt(x, z, 400) : { zh: road, en: road }) : nav.bridgeAt(x, z, BRIDGE_R);
+    // 名片街：一进街就出街名（走廊里，离中线不超过街本身的宽度）
+    const fam = famousAt(x, z, -Math.min(20, FAMOUS.reduce((a, f) => Math.min(a, f.r), 99) / 2));
     if (bridge && bridge.zh !== this.bridge) {
       this.show(`b:${bridge.zh}`, nm(bridge), dist ? nm(dist.name) : '');
+    } else if (fam && fam !== this.famous) {
+      this.show(`f:${FAMOUS[fam - 1].id}`, nm(FAMOUS[fam - 1].name), dist ? nm(dist.name) : '');
     } else if (area && area !== this.area) {
       this.show(`a:${area.name.zh}`, nm(area.name), dist ? nm(dist.name) : '');
     } else if (dist && dist !== this.district && this.district) {
       this.show(`d:${dist.name.zh}`, nm(dist.name), '');
     }
     this.bridge = bridge?.zh ?? null;
+    this.famous = fam;
     this.area = area;
     if (dist) this.district = dist;
   }

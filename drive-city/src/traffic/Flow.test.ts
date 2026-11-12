@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELL, DENS, flowKey, headingOf, hourBand, hourDensity, isRing, levelAt, odds, SPEED, worstAt } from './Flow';
+import { CELL, DENS, flowKey, headingOf, hourBand, hourDensity, isRing, jamSlack, levelAt, odds, SPEED, worstAt } from './Flow';
 
 describe('路况表', () => {
   it('只有有名字的环路、高速和主干道在表里；环路各段、辅路收成一个名字', () => {
@@ -48,5 +48,15 @@ describe('路况表', () => {
   });
   it('钟点段：密度和机会变的钟点都是一段的边', () => {
     for (const edge of [5, 6, 6.5, 7, 9.5, 17, 19.5, 22]) expect(hourBand(edge - 0.01)).not.toBe(hourBand(edge + 0.01));
+  });
+  it('堵车补时：畅通不补，缓行少补，拥堵多补，永远不扣', () => {
+    const v = 80 / 3.6;
+    expect(jamSlack(2000, v, 0, 10.5)).toBe(0);
+    const slow = jamSlack(2000, v, 1, 10.5), jam = jamSlack(2000, v, 2, 10.5);
+    expect(slow).toBeGreaterThan(30); expect(jam).toBeGreaterThan(slow);
+    // 拥堵时补完的时限够按 16 km/h（实测 17）开完这两公里
+    expect(2000 / 10.5 + jam).toBeGreaterThanOrEqual(2000 / (16 / 3.6));
+    // 胡同里限速低的小路，平均车速本来就算得宽：不会补出负数
+    expect(jamSlack(500, 30 / 3.6, 1, 10.5)).toBeGreaterThanOrEqual(0);
   });
 });

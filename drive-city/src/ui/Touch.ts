@@ -215,14 +215,20 @@ body.dc-touch .hud .objective{top:calc(10px + env(safe-area-inset-top,0px));font
 /**
  * Safari on iPad and iPhone zooms the page on a double tap and a pinch even with `touch-action: none` (2026-10-12,
  * 「ipad点了几下反击，屏幕就放大了」: hammering a button zoomed the game, and with every gesture taken by the game
- * there was no pinching back). A second tap within 350 ms has its touchend cancelled (not in text fields), and
+ * there was no pinching back). A second tap within 350 ms has its touchend cancelled (except text fields and
+ * native UI buttons that use touch-action: manipulation), and
  * Safari's pinch gestures are cancelled.
  */
 function noZoom(): void {
   let last = 0;
   document.addEventListener('touchend', (e) => {
     const now = e.timeStamp, el = e.target as HTMLElement | null;
-    if (now - last < 350 && !(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) e.preventDefault();
+    // 柜台购买、离开和地图关闭用原生 click；它们已有 manipulation 禁双击缩放。
+    // 再取消 touchend 会吞掉快速连续点按的第二个 click（打开柜台后马上买东西、买完马上离开）。
+    // 游戏操控键按 pointerdown 工作，仍保留原来的防缩放。
+    const control = el?.closest('button, a[href], [role="button"]');
+    const nativeTap = control && !control.closest('.touch') && getComputedStyle(control).touchAction === 'manipulation';
+    if (now - last < 350 && !nativeTap && !(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) e.preventDefault();
     last = now;
   }, { passive: false });
   for (const ev of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });

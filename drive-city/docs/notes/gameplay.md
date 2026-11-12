@@ -129,6 +129,7 @@ Moved verbatim from CLAUDE.md on 2026-10-13. Dated entries say when and why (the
   - **事件和埋点**：`taxi:fare` 多了 `stars`（不评星的是 0）；每日任务多一个中等的「拉客拿 2 个五星好评」（`star5`）；埋点 `fares`（拉到站几单）、`star5`（其中几单五星），见 `online.md`。
   - **没做、要知道的**：方案里写的是「小费翻倍」，做成了按星给车费的一成到一半（好好开的时候没有特技小费，翻倍是零）。没有超速这一条（游戏里没有限速）。评星只有普通乘客和话痨，晕车大姐、醉酒小伙也喜欢稳，但班上的表对他们照走。被别的车追尾也算在玩家头上。**没有人实际开过**：探针的自动驾驶走车道中线、不带车流；带着车流好好开能不能保住五星、等灯多不多、一班能拉多久，都要人玩了才知道。
   - 测：`npx vitest run src/missions`（`Comfort.test.ts`、`Dest.test.ts`、`RedLight.test.ts`）；`MODE=dest|clean|red|rough|lm [LG=en] [Q=low] [PARAMS=] node .scratch/streetlevel/fareprobe.mjs`（真实帧循环，从标题画面起：各处各钟点挑出来的地方 / 守规矩的司机拉一单 / 停在红灯前看两块表 / 路上报几件事看星怎么掉 / 路过地标说话和取录音；默认带 `notraffic`），`node .scratch/streetlevel/nearrows.mjs [zh|en]` 列打车面板。`missions.debug.ride()` 多了 `comfort`、`stars`、`atRed`。
+  - **堵车补时**（2026-11-11，「按你的顺序做」）：早晚高峰环路全车道 17 km/h，按「路程 ÷ 10.5 + 10」算的时限送不到。接单时按导航路线上缓行、拥堵的路段补时（`TrafficApi.jamSlack`，细节和实测见 `traffic.md`「车流的北京规矩」最后一条），上车头 8 秒目标行里说「路上堵，多给 X」。外卖、搭车、跑腿（`Jobs.ts` 的送货）的时限同样补。排行榜规则没动。
 
 - 活儿的最后一百米（2026-11-11，docs/street-level-design.md C5，「按照你的建议做」）：从沿街店面的柜台上接活，最后一段都得下车走（`errands/`，系统名 `errands`，纯逻辑在 `Errand.ts`；shot mode 不装，除非 `?errands=1`）。柜台面板（street/）最下面多「接活」一栏，行由 `ErrandsApi.rows` 给。
   - **外卖**：任何吃的店都能接一单，送到路上 400–2200 米的一个小区、写字楼、学校、医院、宾馆（`places.json`，`takeoutWeights` 按钟点定哪类多；`rankPlaces` 多了个权重参数）。先到门口（开车、骑车、走着都行），离门口 45 米内才定楼门（那时周围的楼和墙才有碰撞体）：从人行道往院里用射线找头一处走得通的空地（`doorTries`，最深 55 米），找不到（临街是墙）就在沿人行道 32 米外；顾客站在楼门口招手。徒步走到 2.6 米内送到。时限 `路程/7 + 75` 秒，按时 `20 + 米/50 + 15` 块，超时六成，超过 2.2 倍时限取消。

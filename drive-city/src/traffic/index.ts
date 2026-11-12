@@ -12,7 +12,7 @@ import { ControlFilter } from '../vehicle/ControlFilter';
 import { LaneGraph } from './LaneGraph';
 import { Signals, SignalHeads } from './Signals';
 import { Blinkers } from './Blinkers';
-import { slotNow, SPEED } from './Flow';
+import { jamSlack, slotNow, SPEED } from './Flow';
 import { CarKit } from './CarKit';
 import { readyKitLod } from '../vehicle/KitLod';
 import { AiDriver, lineStats, type Leader } from './AiDriver';
@@ -116,6 +116,11 @@ export interface TrafficApi extends TrafficCars {
   spawnRunner(x: number, z: number, hx: number, hz: number, opts?: { calm?: boolean }): { car: Vehicle; release(): void; bolt(): void; park(): void } | null;
   /** Riders on electric scooters at most (they take places in the player's crowd before the pedestrians). */
   readonly riderCap: number;
+  /**
+   * 这串路段（导航路线的 `links`）里缓行、拥堵的地方，按 `pace` 米每秒算时限的话要补多少秒（Flow.ts `jamSlack`）。
+   * 路况关了（`?rush=0`、shot mode）是 0。出租车乘客、外卖、跑腿的时限用。
+   */
+  jamSlack?(links: readonly number[], pace: number): number;
   /**
    * Stop a traffic car where it is and keep it (true), or let its driver drive on (false). False when
    * `car` is not a driven traffic car (parked, a scooter, a getaway car, the police).
@@ -947,6 +952,12 @@ export async function install(engine: Engine): Promise<void> {
     /** 变道、转向灯、路况（探针 `.scratch/streetlevel/flowprobe.mjs`）。 */
     debugFlow: () => ({ riders: { ...riderStat }, on: flowOn, hour: ghosts?.hour ?? 12, laneChanges: lcN + (ghosts?.counts.lane ?? 0), solid: lcN, blinkers: blinkers.count }),
     graph: g, signals: sig, lineStats, riderCap: RIDERS,
+    jamSlack(links, pace) {
+      if (!ghosts || !flowOn) return 0;
+      let s = 0;
+      for (const id of links) { const l = g.links[id]; if (l) s += jamSlack(l.len, l.speed, ghosts.levelOf(l), pace); }
+      return s;
+    },
     get time() { return t; },
     addExternalCars: (provider) => { externalCars.push(provider); },
     addExternalDraw: (draw) => { externalDraws.push(draw); },

@@ -15,8 +15,10 @@ import { SHOP_STRIDE } from '../city/Buildings';
 import type { CityStreamer } from '../city/Streamer';
 import { voiceOf, type VoiceSpec } from '../character/Voice';
 import { installWalkers } from './Walkers';
+import { installStrollers } from './Strollers';
 
 import { SIDEWALK } from './Pavement';
+import { FAMOUS, busyAt, famousAt } from '../city/Famous';
 const GROUND = 0.045;
 /** Longest walk across a junction. Wider roads are not crossed at street level (Beijing has underpasses). */
 const MAX_CROSS = 26;
@@ -418,7 +420,7 @@ export async function install(engine: Engine): Promise<void> {
     if (!ids.length) return;
     for (let attempt = 0; attempt < 8; attempt++) {
       // near somewhere people go: the pavement of a road beside it, a few metres either way
-      const h = hot.length && rnd() < HOT_SHARE ? Math.floor(rnd() * hot.length / 2) * 2 : -1;
+      const h = hot.length && rnd() < hotShare ? Math.floor(rnd() * hot.length / 2) * 2 : -1;
       const near = h >= 0 ? g.near(hot[h], hot[h + 1], 24) : ids;
       if (!near.length) continue;
       const l = g.links[near[Math.floor(rnd() * near.length)]];
@@ -452,8 +454,9 @@ export async function install(engine: Engine): Promise<void> {
   };
   const despawn = (p: Ped) => { p.on = false; active--; };
   /** Where people go near the camera: [x, z, ...] of open shops, bus shelters and subway entrances, every 2 s. */
-  let hot: number[] = [], hotT = 0, kiosks: number[][] = [];
+  let hot: number[] = [], hotT = 0, kiosks: number[][] = [], hotShare = HOT_SHARE;
   void loadCity<{ e: number[][] }>('entrances.json').then((e) => { kiosks = e.e; }).catch(() => {});
+  const hour = () => engine.get<RenderApi>('render')?.timeOfDay ?? 15;
   const refreshHot = () => {
     const streamer = (engine.get('world') as unknown as { streamer?: CityStreamer } | undefined)?.streamer, cam = engine.camera.position;
     const out: number[] = [];
@@ -463,11 +466,16 @@ export async function install(engine: Engine): Promise<void> {
       for (const list of streamer.shops.values()) for (let i = 0; i < list.length; i += SHOP_STRIDE) {
         if (list[i + 7] & 1 || list[i + 6] < 0) continue;
         const dx = list[i] - cam.x, dz = list[i + 1] - cam.z;
-        if (dx * dx + dz * dz < SPAWN_R * SPAWN_R) out.push(list[i], list[i + 1]);
+        if (dx * dx + dz * dz >= SPAWN_R * SPAWN_R) continue;
+        out.push(list[i], list[i + 1]);
+        // 名片街的店（city/Famous.ts，单位标志 8）：按这条街这个钟点有多热闹，再多算两到四回
+        if (list[i + 7] & 8) { const f = famousAt(list[i], list[i + 1]); const k = f ? Math.round(1 + 3 * busyAt(FAMOUS[f - 1], hour())) : 0; for (let j = 0; j < k; j++) out.push(list[i], list[i + 1]); }
       }
     }
     for (const e of kiosks) if (Math.hypot(e[0] - cam.x, e[1] - cam.z) < SPAWN_R) out.push(e[0], e[1], e[0], e[1], e[0], e[1]);   // a subway entrance thrice
     hot = out;
+    // 镜头在名片街上：新来的路人八成多往热点（主要是这条街的店门口）去，人都聚到街上来
+    hotShare = famousAt(cam.x, cam.z, 40) ? 0.85 : HOT_SHARE;
   };
 
   /** Cars near the camera, gathered once a step: x, z, vx, vz, speed. */
@@ -962,6 +970,8 @@ export async function install(engine: Engine): Promise<void> {
       }
     },
   };
+  // 名片街上逛街的人（people/Strollers.ts）：装在路人前面，人群画满了先丢路人
+  if (pl?.crowd && !q.has('nopeople') && q.get('strollers') !== '0') installStrollers(engine, pl.crowd);
   engine.add(api);
   // People out of the subway and over the footbridges (people/Walkers.ts), in the crowd's room left over.
   const WALKERS = { low: 12, medium: 24, high: 30 } as const;

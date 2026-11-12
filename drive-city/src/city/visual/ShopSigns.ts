@@ -1,3 +1,4 @@
+import { FAMOUS_SHARE } from '../Famous';
 /**
  * The shop signs over Beijing's ground floors (2026-10-11): names made the way the street makes them - a name
  * (a family, a lucky word, the place) and the trade: 老王烧烤, 鑫源超市, 京味炸酱面 - with each trade's colours, a
@@ -27,9 +28,13 @@ export type Flavour = (typeof FLAVOURS)[number];
 /** Of a flavoured building's shops, this share (of 100) takes the flavour's own signs. */
 export const FLAVOUR_SHARE = 60;
 /** The sign of a shop unit: `hs` its hash (as the shader's `hs`), `flavour` 0 or 1 + the index in FLAVOURS. Keep in step with Materials.ts. */
-export function signIndex(hs: number, flavour: number): number {
+export function signIndex(hs: number, flavour: number, famous = false): number {
   const pick = hs >>> 4;
-  return flavour > 0 && (hs >>> 13) % 100 < FLAVOUR_SHARE ? GENERIC + (flavour - 1) * PER_FLAVOUR + pick % PER_FLAVOUR : pick % GENERIC;
+  if (!(flavour > 0 && (hs >>> 13) % 100 < (famous ? FAMOUS_SHARE : FLAVOUR_SHARE))) return famous ? FAMOUS_GENERIC[pick % GENERIC] : pick % GENERIC;
+  let c = pick % PER_FLAVOUR;
+  // 名片街：本街口味里没有柜台的行当（修自行车、裁缝……）跳到下一个（Materials.ts 同样跳）
+  if (famous) { const m = FAMOUS_SKIP[flavour - 1]; for (let k = 0; k < PER_FLAVOUR && (m >> c) & 1; k++) c = (c + 1) % PER_FLAVOUR; }
+  return GENERIC + (flavour - 1) * PER_FLAVOUR + c;
 }
 
 /** Trades: name, kind, weight, colour schemes [background, lettering]. */
@@ -119,6 +124,13 @@ const FLAVOUR_TRADES: Record<Flavour, string[]> = {
   fringe: ['五金', '建材', '修车', '废品回收', '劳保用品', '快递驿站', '小卖部', '拉面', '旅馆', '彩票', '建材', '修车'],
   hospital: ['大药房', '药店', '花店', '水果', '旅馆', '粥铺', '医疗器械', '便利店', '大药房', '水果', '快餐', '花店'],
 };
+/**
+ * 名片街上不挂的本街口味招牌：没有柜台的行当（street/Trades.ts 的 SERVICE 里没有它；Trades.test.ts 对表）。名片街要「柜台全开」，
+ * 本街口味的一打招牌里抽到这些就换下一块。每种口味一个 12 位的掩码，着色器（Materials.ts）用同一份。
+ */
+export const NO_COUNTER: ReadonlySet<string> = new Set(['银行', '通讯', '房产', '洗衣', '手机维修', '五金', '开锁', '眼镜', '文具', '打印复印', '书店', '电脑', '数码', '电脑维修', '修自行车', '裁缝', '建材', '废品回收', '劳保用品', '医疗器械']);
+export const FAMOUS_SKIP: readonly number[] = FLAVOURS.map((f) => FLAVOUR_TRADES[f].reduce((m, t, i) => (NO_COUNTER.has(t) ? m | (1 << i) : m), 0));
+
 /** The name in front: families (+记), lucky words, places. */
 const NAMES = ['老王', '老李', '张记', '刘记', '马记', '小马', '老张', '鑫源', '金鼎', '福满', '兴隆', '惠民', '百姓', '便民', '好邻居',
   '四季', '京味', '胡同', '老北京', '华联', '万家', '东城', '朝阳', '双井', '金台', '旺铺', '鸿运', '盛达', '佳佳', '一品', '大红',
@@ -185,3 +197,10 @@ export function shopSigns(): ShopSign[] {
   }
   return (cache = out);
 }
+
+/** 名片街剩下的一成通用招牌也要有柜台；保持原图集编号，worker 和 GLSL 共用这张替换表。 */
+export const FAMOUS_GENERIC: readonly number[] = shopSigns().slice(0, GENERIC).map((_, i, signs) => {
+  let next = i;
+  for (let n = 0; n < GENERIC && NO_COUNTER.has(signs[next].trade); n++) next = (next + 1) % GENERIC;
+  return next;
+});

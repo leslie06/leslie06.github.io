@@ -79,3 +79,14 @@ export function hourDensity(hour: number): number {
 
 /** 钟点分成几段（密度和机会只在换段时变）：路况缓存按「时段 × 钟点段」记。 */
 export const hourBand = (hour: number): number => (hour < 5 ? 0 : hour < 6 ? 1 : hour < 6.5 ? 2 : hour < 7 ? 3 : hour < 9.5 ? 4 : hour < 17 ? 5 : hour < 19.5 ? 6 : hour < 22 ? 7 : 8);
+
+/**
+ * 堵着的路段该多给的时间（秒）：出租车乘客、外卖、跑腿的时限按一个平均车速（`pace` 米每秒）算，
+ * 缓行和拥堵的路段上按实际开得动的速度（限速 × SPEED × JAM_PACE）重算，多出来的就是要补的。畅通的路段不补，也不扣。
+ * JAM_PACE 0.6：东三环拥堵实测 17 km/h（限速 80 × 0.32 × 0.6 = 15），缓行实测 31 km/h（× 0.6 × 0.6 = 29）。
+ */
+export const JAM_PACE = 0.6;
+export function jamSlack(len: number, speed: number, level: Level, pace: number): number {
+  if (level === 0 || len <= 0) return 0;
+  return Math.max(0, len / (speed * SPEED[level] * JAM_PACE) - len / pace);
+}

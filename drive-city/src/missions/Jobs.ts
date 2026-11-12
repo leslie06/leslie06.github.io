@@ -99,6 +99,12 @@ export class Jobs {
     return this.nav()?.route(c.pos.x, c.pos.z, NaN, x, z)?.len ?? Math.hypot(x - c.pos.x, z - c.pos.z) * 1.4;
   }
 
+  /** 时限按 `len / pace` 算的话，路上缓行、拥堵的路段要补的秒数（traffic/Flow.ts `jamSlack`）。 */
+  private jam(x: number, z: number, pace: number): number {
+    const c = this.car(), links = this.nav()?.route(c.pos.x, c.pos.z, NaN, x, z)?.links;
+    return links ? this.engine.get<TrafficApi>('traffic')?.jamSlack?.(links, pace) ?? 0 : 0;
+  }
+
   private aim(s: Stop | null): void {
     if (!s) { this.nav()?.clearTarget('mission'); this.target.hide(); return; }
     this.nav()?.setTarget({ x: s.x, z: s.z, kind: 'mission', label: s.label });
@@ -143,7 +149,7 @@ export class Jobs {
   private nextStop(): void {
     const s = this.stops[this.idx];
     // Generous: a phone player in traffic averages 25-30 km/h, and the clock is the fun, not the fail.
-    this.t = 0; this.limit = this.routeLen(s.x, s.z) / 7 + 40;
+    this.t = 0; this.limit = this.routeLen(s.x, s.z) / 7 + 40 + this.jam(s.x, s.z, 7);
     this.aim(s);
   }
 

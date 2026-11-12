@@ -1,6 +1,6 @@
 # b城追车 / B CITY CHASE（目录：drive-city）— 北京背景的 GTA 式开放世界（three.js）
 
-设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`、`docs/street-level-design.md`（开车沉浸感和下车玩法，分三批；第一批和第二批已做，第三批做了 A7 乘客评星、C4 路人问路和小委托、C5 柜台接活、A6 车流的北京规矩，剩 B7 名片街、B6 路面断面）。
+设计文档：https://claude.ai/code/artifact/f84d740e-9e09-4de4-8d47-41c433772ad6（里程碑 M0–M5）。计划文档：`docs/gta-plan.md`（剧情任务，没有枪）、`docs/characters.md`（写实人物管线和人物标准）、`docs/melee.md`（徒步近战）、`docs/open-world-play-design.md`、`docs/street-level-design.md`（开车沉浸感和下车玩法，分三批；第一批和第二批已做，第三批做了 A7 乘客评星、C4 路人问路和小委托、C5 柜台接活、A6 车流的北京规矩、B7 名片街（11-12 收尾，待提交），剩 B6 路面断面）。
 
 现状：M0 车辆沙盒完成（操控评审 7.0/10）；M1–M3 完成（按 OSM 还原北京到五环（2026-10-16 从四环扩出去；2026-11-08 南边沿 4 号线扩到枣园、清源路）、分块流式加载、交通、抢车、行人）；M4 进行中——警察、地图/GPS、任务已完成，剧情战役（`campaign/`）第一幕五章已完成（见 `docs/gta-plan.md` §5–9），近战在 `combat/`。默认 `?world=city`；其他值（如 `?world=yard`）进入 M0 沙盒，只有沙盒里注册了 `ui_hud` / `ui_menu` 两个 pose。
 

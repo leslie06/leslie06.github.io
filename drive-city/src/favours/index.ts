@@ -337,8 +337,8 @@ export function install(engine: Engine): void {
       if (a.arrived) a.face(car.pos.x, car.pos.z);
       if (pl.mode === 'driving' && d < 9 && car.speed < 2.5) {
         letGo(a, 'vanish'); j.who = null;
-        const len = nav()?.route(car.pos.x, car.pos.z, Math.atan2(car.fwd.x, car.fwd.z), j.x, j.z)?.len ?? j.len;
-        j.limit = len / 7 + 50; j.clock = 0; offCar = 0;   // 守规矩开、等一两个红灯也来得及
+        const r = nav()?.route(car.pos.x, car.pos.z, Math.atan2(car.fwd.x, car.fwd.z), j.x, j.z), len = r?.len ?? j.len;
+        j.limit = len / 7 + 50 + (r?.links ? tr.jamSlack?.(r.links, 7) ?? 0 : 0); j.clock = 0; offCar = 0;   // 守规矩开、等一两个红灯也来得及
         nav()?.setTarget({ x: j.x, z: j.z, kind: 'mission', label: j.label });
         marker.show(j.x, j.z, C.drop);
         setPhase('ride');

@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import type { BuildingRec, RoadPiece } from './Data';
-import { FLAG_SHOP, FLAG_STREET, ST, TYPE_COLOURS, WALL_COLOURS, type Style } from './visual/styles';
+import { FLAG_FAMOUS, FLAG_NEON, FLAG_SHOP, FLAG_STREET, ST, TYPE_COLOURS, WALL_COLOURS, type Style } from './visual/styles';
 import { hash3, hashU, h01, rng } from './visual/hash';
 import { signIndex } from './visual/ShopSigns';
 import { flavourAt } from './visual/Flavours';
+import { FAMOUS, famousAt, streetWall } from './Famous';
 import ROOF_PROPS from './visual/roofprops.json';
 
 /** Per-building facade parameters (see the facade shader in Materials.ts). */
@@ -89,7 +90,8 @@ export interface BuildingMeshes {
   /**
    * The shop units the facade shader draws, found the same way (its bays, unit width and hash), for the props in front
    * of them (visual/ShopFronts.ts): [x, z, nx, nz, width, ground-floor height, sign (-1 none), flags, hash, room] per
-   * unit at the middle of its wall; flags 1 a closed shutter, 2 a hutong house, 4 the building rises above the shop;
+   * unit at the middle of its wall; flags 1 a closed shutter, 2 a hutong house, 4 the building rises above the shop,
+   * 8 a famous street's frontage, 16 its neon style;
    * room: metres from the wall to the carriageway in front.
    */
   shops: number[];
@@ -144,10 +146,11 @@ const SHOPPY = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'unclassifi
 const MAIN_STREET = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'pedestrian']);
 
 /** Distance from a wall midpoint to the nearest road in front of it (Infinity if none within maxD). */
-function roadInFront(roads: RoadPiece[], mx: number, mz: number, nx: number, nz: number, maxD: number, shoppy: boolean, only?: Set<string>): number {
+function roadInFront(roads: RoadPiece[], mx: number, mz: number, nx: number, nz: number, maxD: number, shoppy: boolean, only?: Set<string>, names?: readonly string[], facing = 0.55, at?: { x: number; z: number }): number {
   let best = Infinity;
   for (const r of roads) {
     if (!(only ?? (shoppy ? SHOPPY : CAR)).has(r.c)) continue;
+    if (names && !(r.n && names.includes(r.n))) continue;
     const p = r.p;
     for (let i = 0; i + 3 < p.length; i += 2) {
       const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3];
@@ -156,11 +159,34 @@ function roadInFront(roads: RoadPiece[], mx: number, mz: number, nx: number, nz:
       const qx = ax + vx * t - mx, qz = az + vz * t - mz;
       const d = Math.hypot(qx, qz);
       if (d - r.w / 2 > maxD || d < 1e-3) continue;
-      if ((qx * nx + qz * nz) / d < 0.55) continue;
-      best = Math.min(best, d - r.w / 2);
+      if ((qx * nx + qz * nz) / d < facing) continue;
+      if (d - r.w / 2 < best) {
+        best = d - r.w / 2;
+        // 路面边上离墙最近的那一点（名片街的遮挡判断用）
+        if (at) { const k = Math.max(0, d - r.w / 2) / d; at.x = mx + qx * k; at.z = mz + qz * k; }
+      }
     }
   }
   return best;
+}
+
+const crosses = (ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number): boolean => {
+  const o1 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax), o2 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
+  const o3 = (dx - cx) * (az - cz) - (dz - cz) * (ax - cx), o4 = (dx - cx) * (bz - cz) - (dz - cz) * (bx - cx);
+  return o1 * o2 < 0 && o3 * o4 < 0;
+};
+/** 从墙前到路边这一段有没有被别的房子（瓦片里的）挡住：名片街的第二排房子不算门脸。 */
+function screened(list: BuildingRec[], self: BuildingRec, ax: number, az: number, bx: number, bz: number): boolean {
+  const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx), z0 = Math.min(az, bz), z1 = Math.max(az, bz);
+  for (const o of list) {
+    if (o === self || (o.k === 'wall' && streetWall(o.o))) continue;
+    const p = o.o;
+    let ox0 = Infinity, ox1 = -Infinity, oz0 = Infinity, oz1 = -Infinity;
+    for (let i = 0; i < p.length; i += 2) { ox0 = Math.min(ox0, p[i]); ox1 = Math.max(ox1, p[i]); oz0 = Math.min(oz0, p[i + 1]); oz1 = Math.max(oz1, p[i + 1]); }
+    if (ox1 < x0 || ox0 > x1 || oz1 < z0 || oz0 > z1) continue;
+    for (let i = 0; i < p.length; i += 2) { const j = (i + 2) % p.length; if (crosses(ax, az, bx, bz, p[i], p[i + 1], p[j], p[j + 1])) return true; }
+  }
+  return false;
 }
 
 /**
@@ -175,8 +201,18 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
   const cv: number[] = [], ci: number[] = [];
   const roofCol = new THREE.Color();
 
-  for (const b of list) {
+  const edge = { x: 0, z: 0 };
+  for (let b of list) {
     if (skip?.(b)) continue;
+    const src = b;
+    // 名片街贴街的院墙让位给铺面（city/Famous.ts）
+    if (b.k === 'wall' && streetWall(b.o)) continue;
+    // 名片街（city/Famous.ts）：走廊里的楼，朝着那条街的墙面一律是店（不看 sh），不拉卷帘、都挂招牌
+    let fam = 0;
+    if (b.m < 0.5 && b.k !== 'wall' && b.k !== 'glass') for (let i = 0; i < b.o.length && !fam; i += 2) fam = famousAt(b.o[i], b.o[i + 1]);
+    const famSt = fam ? FAMOUS[fam - 1] : null;
+    // OSM 的胡同房墙常常只有一米七（高度大多算在屋顶里），开不了店、挂不下招牌：名片街上把墙垫到 3.1 米，屋顶照旧
+    if (famSt && (b.r === 'g' || b.r === 'h' || b.r === 'p') && b.ob && b.rh > 0.3 && b.h - b.rh < 3.1) { const rh = Math.min(b.rh, 1.8); b = { ...b, h: 3.1 + rh, rh }; }
     const pitched = (b.r === 'g' || b.r === 'h' || b.r === 'p') && b.ob && b.rh > 0.3;
     const top = pitched ? b.h - b.rh : b.h;
     const base = b.m;
@@ -192,8 +228,15 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     const segRoom: number[][] = rings.map((r) => r.map(() => 0));
     const segFlags: number[][] = rings.map((r, ri) => r.map((a, i) => {
       const bq = r[(i + 1) % r.length], dx = bq[0] - a[0], dz = bq[1] - a[1], L = Math.hypot(dx, dz);
-      if (L < 3 || (!wantShops && b.k !== 'hutong')) return 0;
+      if (L < 3 || (!wantShops && b.k !== 'hutong' && !famSt)) return 0;
       const nx = dz / L, nz = -dx / L, mx = (a[0] + bq[0]) / 2 + nx, mz = (a[1] + bq[1]) / 2 + nz;
+      // （山墙朝街的胡同房那面只有四米来宽：名片街上 3.2 米就开一间）
+      if (famSt && L >= 3.2) {
+        // 斜着摆的胡同房（烟袋斜街两边很多）朝街那面也算：正对着路的要求从 0.55 放到 0.3
+        const df = roadInFront(roads, mx, mz, nx, nz, b.k === 'hutong' ? 16 : 26, true, undefined, famSt.roads, 0.3, edge);
+        if (Number.isFinite(df) && !screened(list, src, mx, mz, edge.x, edge.z)) { segRoom[ri][i] = df + 1; return FLAG_SHOP | FLAG_STREET | FLAG_FAMOUS | (famSt.style === 'neon' ? FLAG_NEON : 0); }
+      }
+      if (!wantShops && b.k !== 'hutong') return 0;
       // (a hutong house on a main street often stands back behind a wide pavement and a strip of green: 16 m)
       const dm = hutongShops && L >= 4.5 ? roadInFront(roads, mx, mz, nx, nz, 16, true, MAIN_STREET) : Infinity;
       if (Number.isFinite(dm)) { segRoom[ri][i] = dm + 1; return FLAG_SHOP | FLAG_STREET; }
@@ -205,7 +248,7 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
     const hasShops = segFlags.some((fl) => fl.some((f) => f & FLAG_SHOP));
     const F = facadeOf(b, top, base, hasShops);
     // what kind of district its shops are of (visual/Flavours.ts): in the segment flags from bit 5 up, for the shader's signs
-    const flavour = hasShops ? flavourAt(rings[0][0][0], rings[0][0][1], b.k, b.s) : 0;
+    const flavour = hasShops ? (famSt && segFlags.some((fl) => fl.some((f) => f & FLAG_FAMOUS)) ? famSt.flavour : flavourAt(rings[0][0][0], rings[0][0][1], b.k, b.s)) : 0;
     const flatStyle = F.style !== ST.HUTONG && F.style !== ST.TRAD && F.style !== ST.WALL;
     const ph = !pitched && flatStyle && top - base > 5 ? (F.style === ST.GLASS ? 1.4 : F.style === ST.LOW ? 0.5 : 0.9) : 0;
     const wallTop = top + ph;
@@ -229,9 +272,10 @@ export function buildBuildings(list: BuildingRec[], skip?: (b: BuildingRec) => b
         if (fl & FLAG_SHOP && F.gh > 0 && nb && style !== ST.GLASS) {
           const k = Math.max(1, Math.floor(4.8 / bayW + 0.5));
           for (let si = 0; (si + 1) * k <= nb + 1e-6; si++) {
-            const hs = hash3(F.seed, si + 4096, 555), t = 1 - (si + 0.5) * k / nb;
-            shops.push(ax + dx * t, az + dz * t, nx, nz, 0.9 * k * bayW, F.gh, hs % 10 !== 0 ? signIndex(hs, flavour) : -1,
-              ((hs >>> 9) % 8 === 5 ? 1 : 0) | (F.style === ST.HUTONG ? 2 : 0) | (top - F.gh > 2.5 ? 4 : 0), hs, segRoom[ri][i]);
+            const hs = hash3(F.seed, si + 4096, 555), t = 1 - (si + 0.5) * k / nb, famous = !!(fl & FLAG_FAMOUS);
+            // 名片街：都挂招牌、不拉卷帘（Materials.ts 同样的规则）；单位标志 8 名片街、16 霓虹
+            shops.push(ax + dx * t, az + dz * t, nx, nz, 0.9 * k * bayW, F.gh, hs % 10 !== 0 || famous ? signIndex(hs, flavour, famous) : -1,
+              (!famous && (hs >>> 9) % 8 === 5 ? 1 : 0) | (F.style === ST.HUTONG ? 2 : 0) | (top - F.gh > 2.5 ? 4 : 0) | (famous ? 8 : 0) | (fl & FLAG_NEON ? 16 : 0), hs, segRoom[ri][i]);
           }
         }
         const N = [nx, 0, nz];

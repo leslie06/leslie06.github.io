@@ -4,9 +4,10 @@ import type { Engine } from '../core/Engine';
 import type { EnvUniforms } from '../game/Contracts';
 import { loadCity, loadNetwork, type AreaKind, type Manifest, type Network } from './Data';
 import { facadeAtlas, signAtlas } from './visual/FacadeAtlas';
-import { FLAVOUR_SHARE, GENERIC, PER_FLAVOUR, SIGN_COLS, SIGN_ROWS } from './visual/ShopSigns';
+import { FAMOUS_GENERIC, FAMOUS_SKIP, FLAVOUR_SHARE, GENERIC, PER_FLAVOUR, SIGN_COLS, SIGN_ROWS } from './visual/ShopSigns';
 import { GLSL_HASH } from './visual/hash';
 import { ST, GLASS_TINTS } from './visual/styles';
+import { FAMOUS_SHARE } from './Famous';
 
 /**
  * Every material the city uses, created once and shared by all tiles.
@@ -174,7 +175,8 @@ vec3 facEmis = vec3(0.0);
   // Beijing housing type (Buildings.ts: flags + type * 4, in bits 2-4): 2 板楼, 3 塔楼, 4 new estate; the district's
   // flavour for the shop signs above it (from bit 5)
   float ty = floor(mod(flags, 32.0) / 4.0 + 0.01);
-  uint seed = uint(vSeed + 0.5);
+  // aSeed 是能被 float 精确表示的 24 位整数，且 flat 传入；加 0.5 会把大于 2^23 的奇数舍入到下一整数。
+  uint seed = uint(vSeed);
   float u = vWall.x, v = vWall.y;
   float bayC = vFac.x, bayW = max(vFac.y, 0.5);
   float fh = max(vFloor.x, 0.5), gh = vFloor.y, top = vFloor.z, base = vFloor.w;
@@ -285,17 +287,33 @@ vec3 facEmis = vec3(0.0);
     float k = max(1.0, floor(4.8 / bayW + 0.5));
     float sc = bayC / k, si = floor(sc), sf = fract(sc);
     uint hs = cityHash3(seed, uint(int(si) + 4096), 555u);
+    // 名片街（city/Famous.ts、Buildings.ts 的 FLAG_FAMOUS）：都挂招牌、不拉卷帘、九成是本街口味，夜里橱窗亮到后半夜
+    bool fam = ((uint(flags + 0.5) >> 9u) & 1u) == 1u;
     // the sign band: 0.95 m under a 4.3 m ground floor, smaller under a low one (a hutong house's eaves at 3 m)
     float sTop = gh - min(0.25, gh * 0.06), sBot = sTop - min(0.95, max(0.5, gh * 0.24));
     float qx = (sf - 0.05) / 0.9;
     vec2 sgx = vec2(dBay.x / k / 0.9, dY.x), sgy = vec2(dBay.y / k / 0.9, dY.y);
     if (qx > 0.0 && qx < 1.0) {
       if (y > sBot && y < sTop) {
-        if (hs % 10u != 0u) {
+        if (hs % 10u != 0u || fam) {
           // ShopSigns.ts: the worker picks the same sign for the unit's props
           // ShopSigns.ts signIndex: a flavoured building's shops mostly from its flavour's dozen, the rest from the generic ones
-          uint flav = uint(floor(flags / 32.0 + 0.01));
-          uint idx = flav > 0u && (hs >> 13) % 100u < ${FLAVOUR_SHARE}u ? ${GENERIC}u + (flav - 1u) * ${PER_FLAVOUR}u + (hs >> 4) % ${PER_FLAVOUR}u : (hs >> 4) % ${GENERIC}u;
+          uint flav = uint(floor(flags / 32.0 + 0.01)) & 15u;
+          uint idx = (hs >> 4) % ${GENERIC}u;
+          if (fam) {
+            const uint GENERIC_COUNTER[${GENERIC}] = uint[${GENERIC}](${FAMOUS_GENERIC.map((i) => `${i}u`).join(', ')});
+            idx = GENERIC_COUNTER[idx];
+          }
+          if (flav > 0u && (hs >> 13) % 100u < (fam ? ${FAMOUS_SHARE}u : ${FLAVOUR_SHARE}u)) {
+            uint c = (hs >> 4) % ${PER_FLAVOUR}u;
+            // 名片街：没有柜台的行当跳到下一块（ShopSigns.ts 的 FAMOUS_SKIP）
+            if (fam) {
+              const uint SKIP[${FAMOUS_SKIP.length}] = uint[${FAMOUS_SKIP.length}](${FAMOUS_SKIP.map((m) => `${m}u`).join(', ')});
+              uint m = SKIP[min(flav - 1u, ${FAMOUS_SKIP.length - 1}u)];
+              for (int k = 0; k < ${PER_FLAVOUR}; k++) { if (((m >> c) & 1u) == 0u) break; c = (c + 1u) % ${PER_FLAVOUR}u; }
+            }
+            idx = ${GENERIC}u + (flav - 1u) * ${PER_FLAVOUR}u + c;
+          }
           vec2 q = vec2(clamp(qx, 0.004, 0.996), (y - sBot) / (sTop - sBot));
           const float SC = ${SIGN_COLS}.0, SR = ${SIGN_ROWS}.0;
           vec2 suv = vec2((float(idx % ${SIGN_COLS}u) + q.x) / SC, 1.0 - (float(idx / ${SIGN_COLS}u) + 1.0 - q.y) / SR);
@@ -304,10 +322,12 @@ vec3 facEmis = vec3(0.0);
           facEmis += sgn.rgb * uNight * 0.55;
         }
       } else if (y <= sBot) {
-        facSample(float((hs >> 9) % 8u), 6.0, vec2(qx, y / sBot), vec2(sgx.x, sgx.y / sBot), vec2(sgy.x, sgy.y / sBot), mc, mm);
+        uint front = (hs >> 9) % 8u;
+        if (fam && front == 5u) front = 3u;   // 5 是卷帘门（Buildings.ts 的 flags 1）
+        facSample(float(front), 6.0, vec2(qx, y / sBot), vec2(sgx.x, sgx.y / sBot), vec2(sgy.x, sgy.y / sBot), mc, mm);
         cover = mm.r; glassM = mm.g;
         col = mix(wallC, mc.rgb, cover) * mm.b;
-        facEmis += mc.rgb * vec3(1.0, 0.86, 0.62) * glassM * uNight * step(mix(0.15, 0.7, uLate), cityH01(hs >> 2)) * 0.3;
+        facEmis += mc.rgb * vec3(1.0, 0.86, 0.62) * glassM * uNight * step(fam ? mix(0.0, 0.3, uLate) : mix(0.15, 0.7, uLate), cityH01(hs >> 2)) * 0.3;
       } else { col = wallC * 0.9; }
     } else { col = mix(wallC, vec3(0.62, 0.61, 0.58), 0.6); }
   } else if (ground && row >= 0.0 && sty != ${S.HUTONG} && sty != ${S.TRAD}) {

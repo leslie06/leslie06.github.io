@@ -86,9 +86,11 @@ export function install(engine: Engine): void {
       if (Math.abs(tx - ix) > 1 || Math.abs(tz - iz) > 1) continue;
       for (let i = 0; i < list.length; i += SHOP_STRIDE) {
         const sx = list[i], sz = list[i + 1];
-        if (list[i + 7] & 1 || list[i + 6] < 0 || list[i + 9] < 2.5 || Math.hypot(sx - x, sz - z) > FAR) continue;   // open, signed, room in front
+        // 名片街（city/Famous.ts，单位标志 8）：三成多的店门口有人站着；步行街（烟袋斜街）门前就是街面，不要求人行道宽
+        const famous = !!(list[i + 7] & 8);
+        if (list[i + 7] & 1 || list[i + 6] < 0 || list[i + 9] < (famous ? 1 : 2.5) || Math.hypot(sx - x, sz - z) > FAR) continue;   // open, signed, room in front
         const key = `h${Math.round(sx)},${Math.round(sz)}`;
-        if (hr(key, 3) > 0.12 * b) continue;
+        if (hr(key, 3) > (famous ? 0.35 : 0.12) * b) continue;
         const nx = list[i + 2], nz = list[i + 3], out1 = 1.1 + hr(key, 4) * 0.6, pair = hr(key, 5) < 0.6;
         const tx2 = -nz, tz2 = nx, people: Spot['people'] = [];
         if (pair) {

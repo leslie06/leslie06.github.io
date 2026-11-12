@@ -90,7 +90,7 @@ export interface MissionSystem extends MissionApi {
     tofu(): { shop: { x: number; z: number }; stage: string; level: number; dest: { x: number; z: number } | null; left: number; t: number; best: number } | null;
     startTofu(): boolean;
     ride(): { kind: PaxKind; smooth: number; viewers: number; heat: string; vomited: boolean; told: string[]; comfort: number | null; stars: number; atRed: boolean } | null;
-    state(): { stage: string; pickup: { x: number; z: number } | null; dest: { x: number; z: number; label: string } | null; limit: number; elapsed: number;
+    state(): { stage: string; pickup: { x: number; z: number } | null; dest: { x: number; z: number; label: string } | null; limit: number; jam: number; elapsed: number;
       shift: { on: boolean; clock: number; fares: number; earned: number }; hailers: { x: number; z: number; tier: number; urgent: boolean }[] };
   };
 }
@@ -173,6 +173,8 @@ export async function install(engine: Engine): Promise<void> {
   let fareMult = 1;
   /** Who is aboard (Passengers.ts) and how the ride is going for them. */
   let pax: PaxKind = 'normal', paxSeed = 0, ride: PaxRide | null = null, rideT = 0, lmT = 0;
+  /** 这一单因为路上堵多给的秒数（开头几秒在目标行里说一声）。 */
+  let jam = 0;
   /** A second toast after the fare's (how the passenger rated the ride), on the game clock. */
   let lateToast = '', lateT = 0;
   const laters: { t: number; fn: () => void }[] = [];
@@ -269,7 +271,10 @@ export async function install(engine: Engine): Promise<void> {
     const car = vehicle().car, T = TIERS[tr0], heading = Math.atan2(car.fwd.x, car.fwd.z);
     const set = (x: number, z: number, label: string, len: number) => {
       dest = { x, z, label }; tripLen = len;
-      limit = urgentRide ? tripLen / 12 + 6 : tripLen / 10.5 + 10; elapsed = 0; crashes = 0; tips = 0; tier = tr0;
+      // 路上缓行、拥堵的路段按开得动的速度补时（traffic/Flow.ts `jamSlack`；早晚高峰的环路全车道 17 km/h，不补就送不到）
+      const pace = urgentRide ? 12 : 10.5, links = nav()?.route(car.pos.x, car.pos.z, heading, x, z)?.links;
+      jam = links ? Math.round(tr?.jamSlack?.(links, pace) ?? 0) : 0;
+      limit = (urgentRide ? tripLen / 12 + 6 : tripLen / 10.5 + 10) + jam; elapsed = 0; crashes = 0; tips = 0; tier = tr0;
       nav()?.setTarget({ x, z, kind: 'mission', label });
       marker.show(x, z, TIERS[tr0].color);
       ride = new PaxRide(pax, client.look, paxSeed, (who, text) => dlg()?.say(who, text, { prio: 1 }), rnd);
@@ -401,7 +406,7 @@ export async function install(engine: Engine): Promise<void> {
         const car = vehicle().car;
         const near = hailers.reduce<Hailer | null>((b, h) => (!b || h.pos.distanceTo(car.pos) < b.pos.distanceTo(car.pos) ? h : b), null);
         const pickup = stage === 'boarding' ? { x: client.pos.x, z: client.pos.z } : stage === 'pickup' && near ? { x: near.pos.x, z: near.pos.z } : null;
-        return { stage, pickup, dest, limit, elapsed, shift: { ...shift }, hailers: hailers.map((h) => ({ x: h.pos.x, z: h.pos.z, tier: h.tier, urgent: h.urgent })) };
+        return { stage, pickup, dest, limit, jam, elapsed, shift: { ...shift }, hailers: hailers.map((h) => ({ x: h.pos.x, z: h.pos.z, tier: h.tier, urgent: h.urgent })) };
       },
     },
     fixedUpdate(dt) {
@@ -553,7 +558,8 @@ export async function install(engine: Engine): Promise<void> {
       if (stage === 'ride' && dest) {
         objective = t('taxi.rideLine', { place: dest.label, time: fmt(limit - elapsed) }) + (shift.on ? `  ·  ${t(clockKey, { t: clock })}` : '') + (tips > 0 && ride?.kind !== 'queasy' ? `  ·  ${t('taxi.tips', { n: tips })}` : '')
           + (ride?.kind === 'queasy' ? `  ·  ${t('pax.obj.smooth', { n: Math.round(ride.smooth) })}` : ride?.kind === 'streamer' ? `  ·  ${t('pax.obj.viewers', { n: ride.viewers })}`
-            : ride?.stars ? `  ·  ${t('pax.obj.stars', { stars: starText(ride.stars) })}` : '') + (atRed ? `  ·  ${t('taxi.redWait')}` : '');
+            : ride?.stars ? `  ·  ${t('pax.obj.stars', { stars: starText(ride.stars) })}` : '') + (atRed ? `  ·  ${t('taxi.redWait')}` : '')
+          + (jam >= 15 && rideT < 8 ? `  ·  ${t('taxi.hintJam', { t: fmt(jam) })}` : '');
       } else if (stage === 'boarding') objective = t('taxi.boarding');
       else if (summaryT > 0) objective = summary;
       else if ((stage === 'pickup' || stage === 'wait') && inTaxi() && !other) {

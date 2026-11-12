@@ -18,7 +18,28 @@ import { shopSigns, VERT_COLOURS, VERT_COLS, VERT_ROWS, VERT_TEXTS } from './Sho
  * (`room`, so nothing stands in the road or under the cars parked half up on it). Five instanced meshes, refilled
  * when the camera has moved 12 m or the tiles changed; no colliders (a car passes through a stool).
  */
-interface Kind { mesh: THREE.InstancedMesh; n: number; cap: number; cell?: THREE.InstancedBufferAttribute }
+interface Kind { mesh: THREE.InstancedMesh; n: number; cap: number; cell?: THREE.InstancedBufferAttribute; /** 同一套实例矩阵画的另一部分（灯笼的顶盖和穗子） */ twin?: THREE.InstancedMesh }
+
+/** 灯笼（名片街，city/Famous.ts）：红色的身子（夜里发光）和深色的顶盖、底托、金黄的穗子分两个网格，共用实例矩阵。原点在顶上挂钩处。 */
+function lanternGeos(): [THREE.BufferGeometry, THREE.BufferGeometry] {
+  const pts: THREE.Vector2[] = [];
+  for (let i = 0; i <= 8; i++) { const a = -Math.PI / 2 + Math.PI * i / 8; pts.push(new THREE.Vector2(0.06 + 0.2 * Math.cos(a), -0.24 + 0.2 * Math.sin(a))); }
+  const body = new THREE.LatheGeometry(pts, 10).scale(1, 1.05, 1);
+  const paint = (g: THREE.BufferGeometry, hex: string) => {
+    const c = new THREE.Color(hex), n = g.getAttribute('position').count, a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+    g.deleteAttribute('uv');
+    return g;
+  };
+  const top = paint(new THREE.CylinderGeometry(0.1, 0.12, 0.05, 8).translate(0, -0.025, 0), '#2a1810');
+  const bot = paint(new THREE.CylinderGeometry(0.12, 0.1, 0.05, 8).translate(0, -0.49, 0), '#2a1810');
+  const hook = paint(new THREE.CylinderGeometry(0.008, 0.008, 0.25, 4).translate(0, 0.12, 0), '#1a1a1a');
+  const tassel = paint(new THREE.CylinderGeometry(0.03, 0.05, 0.22, 6).translate(0, -0.62, 0), '#e8b020');
+  return [paint(body, '#d01c10'), mergeGeometries([top, bot, hook, tassel])!];
+}
+/** 霓虹灯管的颜色（三里屯）：粉、青、紫、琥珀、绿、红。 */
+const NEON = ['#ff2fa8', '#20e0ff', '#a040ff', '#ffb020', '#40ff70', '#ff3040'];
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 /** The bottom of a shop's sign band, as the facade shader draws it (Materials.ts). */
@@ -124,7 +145,11 @@ function vertAtlas(): THREE.CanvasTexture {
 
 export class ShopFronts implements System {
   name = 'shopFronts';
-  private kinds: Record<'awning' | 'sign' | 'food' | 'crates' | 'board', Kind>;
+  private kinds: Record<'awning' | 'sign' | 'food' | 'crates' | 'board' | 'lantern' | 'neon' | 'neonV', Kind>;
+  private lanternMat: THREE.MeshStandardMaterial;
+  private neonMat: THREE.MeshBasicMaterial;
+  /** 名片街的灯笼、霓虹放多远（比别的道具远：开车过来远远就看得见一串红）。 */
+  private famousR: number;
   private at = new THREE.Vector3(Infinity, 0, Infinity);
   private ver = -1;
   private signMat: THREE.MeshStandardMaterial;
@@ -161,15 +186,25 @@ export class ShopFronts implements System {
       food: make('shop-tables', foodGeo(), lit(), 120, false, true),
       crates: make('shop-crates', cratesGeo(), lit(), 80, false, false),
       board: make('shop-board', boardGeo(), lit(), 160, false, true),
+      lantern: make('famous-lanterns', lanternGeos()[0], this.lanternMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, emissive: '#ff2a12', emissiveIntensity: 0 }), 900, false, false),
+      neon: make('famous-neon', new THREE.BoxGeometry(1, 0.055, 0.055), this.neonMat = new THREE.MeshBasicMaterial({ color: 0xffffff }), 400, false, true),
+      neonV: make('famous-neon-v', new THREE.BoxGeometry(0.055, 1, 0.055), this.neonMat, 200, false, true),
     };
+    // 灯笼的顶盖和穗子：共用灯笼身子的实例矩阵
+    {
+      const k = this.kinds.lantern, twin = new THREE.InstancedMesh(lanternGeos()[1], lit(), k.cap);
+      twin.name = 'famous-lantern-caps'; twin.instanceMatrix = k.mesh.instanceMatrix; twin.count = 0; twin.frustumCulled = false;
+      scene.add(twin); k.twin = twin;
+    }
+    this.famousR = Math.max(radius, 130) * 1.7;
     const sk = this.kinds.sign;
     sk.cell = new THREE.InstancedBufferAttribute(new Float32Array(sk.cap), 1);
     sk.mesh.geometry.setAttribute('aCell', sk.cell);
   }
 
-  private put(k: Kind, x: number, y: number, z: number, yaw: number, sx = 1, colour?: THREE.Color): number {
+  private put(k: Kind, x: number, y: number, z: number, yaw: number, sx = 1, colour?: THREE.Color, sy = 1, sz = 1): number {
     if (k.n >= k.cap) return -1;
-    _m.compose(_p.set(x, y, z), _q.setFromAxisAngle(_up, yaw), _s.set(sx, 1, 1));
+    _m.compose(_p.set(x, y, z), _q.setFromAxisAngle(_up, yaw), _s.set(sx, sy, sz));
     k.mesh.setMatrixAt(k.n, _m);
     if (colour && k.mesh.instanceColor) k.mesh.setColorAt(k.n, colour);
     return k.n++;
@@ -177,25 +212,43 @@ export class ShopFronts implements System {
 
   private fill(cx: number, cz: number): void {
     for (const k of Object.values(this.kinds)) k.n = 0;
-    const r2 = this.radius * this.radius, g2 = Math.min(this.radius, 70) ** 2, c = new THREE.Color();
+    const r2 = this.radius * this.radius, g2 = Math.min(this.radius, 70) ** 2, c = new THREE.Color(), f2 = this.famousR ** 2;
     const [ix, iz] = tileOf(cx, cz);
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       const list = this.streamer.shops.get(`${ix + dx}_${iz + dz}`);
       if (!list) continue;
       for (let i = 0; i < list.length; i += SHOP_STRIDE) {
         const x = list[i], z = list[i + 1], d2 = (x - cx) ** 2 + (z - cz) ** 2;
-        if (d2 > r2) continue;
-        const nx = list[i + 2], nz = list[i + 3], w = list[i + 4], gh = list[i + 5], si = list[i + 6], fl = list[i + 7], hs = list[i + 8], room = list[i + 9];
+        const fl = list[i + 7], famous = !!(fl & 8);
+        if (d2 > (famous ? f2 : r2)) continue;
+        const nx = list[i + 2], nz = list[i + 3], w = list[i + 4], gh = list[i + 5], si = list[i + 6], hs = list[i + 8], room = list[i + 9];
         const open = !(fl & 1), hutong = !!(fl & 2), yaw = Math.atan2(nx, nz), tx = -nz, tz = nx;
         const r = (salt: number) => h01(hashU((hs ^ salt) >>> 0));
         const sign = si >= 0 ? this.signs[si] : null;
+        // 名片街（city/Famous.ts）：灯笼挂在两间店之间的柱子前面（不挡招牌），每间一个；霓虹是招牌上沿一根横管、四成多一根竖管
+        if (famous) {
+          const end = w / 2 + 0.25;
+          if (fl & 16) {
+            c.set(NEON[Math.floor(r(0x6e1) * NEON.length)]);
+            this.put(this.kinds.neon, x + nx * 0.08, gh - 0.16, z + nz * 0.08, yaw, w * 0.86, c);
+            if (r(0x6e2) < 0.45) {
+              const side = r(0x6e3) < 0.5 ? -1 : 1, h = Math.max(1, gh - 1.6);
+              c.set(NEON[Math.floor(r(0x6e4) * NEON.length)]);
+              this.put(this.kinds.neonV, x + nx * 0.08 + tx * side * (w / 2 - 0.15), 0.9 + h / 2, z + nz * 0.08 + tz * side * (w / 2 - 0.15), yaw, 1, c, h);
+            }
+          } else {
+            const big = gh > 3.6 ? 1.3 : 1, y = hutong ? gh - 0.12 : gh - 0.3;
+            this.put(this.kinds.lantern, x + nx * 0.42 + tx * end, y, z + nz * 0.42 + tz * end, yaw, big, undefined, big, big);
+          }
+          if (d2 > r2) continue;
+        }
         // an awning over an open shop with room under it (not over the road)
         if (open && !hutong && room > 1.6 && signBottom(gh) > 2.4 && r(0x51ed) < 0.45) {
           c.set(AWNING[Math.floor(r(0x7a3) * AWNING.length)]);
           this.put(this.kinds.awning, x + nx * 0.02, signBottom(gh) - 0.04, z + nz * 0.02, yaw, w * 0.97, c);
         }
         // a projecting lightbox at one end of the unit, over the pavement
-        if (sign && sign.vert >= 0 && room > 1.2 && r(0x9b1) < 0.38) {
+        if (sign && sign.vert >= 0 && room > 1.2 && r(0x9b1) < (famous ? 0.6 : 0.38)) {
           const side = r(0x33) < 0.5 ? -1 : 1, o = side * (w / 2 - 0.25);
           const y = fl & 4 ? gh + 1.0 : Math.max(2.7, gh - 0.55);
           const n = this.put(this.kinds.sign, x + tx * o, y, z + tz * o, yaw);
@@ -204,7 +257,7 @@ export class ShopFronts implements System {
         // the trade's things on the pavement, near only and where the pavement is wide
         if (!this.goods || !open || !sign || d2 > g2 || room < 3.5) continue;
         const along = (r(0x1f) - 0.5) * Math.max(0, w - 1.8);
-        if (sign.kind === 'food' && r(0x2c) < 0.4) {
+        if (sign.kind === 'food' && r(0x2c) < (famous ? 0.85 : 0.4)) {
           c.set(r(0x2d) < 0.6 ? '#c8261e' : '#2a5aa8');
           this.put(this.kinds.food, x + nx * 1.5 + tx * along, 0.06, z + nz * 1.5 + tz * along, yaw + (r(0x2e) - 0.5) * 0.4, 1, c);
         } else if (sign.kind === 'fruit' && r(0x3c) < 0.9) {
@@ -216,6 +269,7 @@ export class ShopFronts implements System {
     }
     for (const k of Object.values(this.kinds)) {
       k.mesh.count = k.n;
+      if (k.twin) k.twin.count = k.n;
       k.mesh.instanceMatrix.needsUpdate = true;
       if (k.mesh.instanceColor) k.mesh.instanceColor.needsUpdate = true;
       if (k.cell) k.cell.needsUpdate = true;
@@ -229,5 +283,9 @@ export class ShopFronts implements System {
       this.fill(f.x, f.z);
     }
     this.signMat.emissiveIntensity = this.env.uNight.value * 1.6;
+    // 灯笼白天是红布，天黑亮起来；霓虹白天是暗的管子，夜里 HDR 让辉光带上
+    const night = this.env.uNight.value;
+    this.lanternMat.emissiveIntensity = 0.08 + 1.7 * night;
+    this.neonMat.color.setScalar(0.45 + 2.6 * night);
   }
 }

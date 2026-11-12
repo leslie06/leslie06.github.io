@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shopSigns } from '../city/visual/ShopSigns';
+import { FLAVOURS, GENERIC, shopSigns, signIndex } from '../city/visual/ShopSigns';
 import { ALBUM_REWARDS, EAT_TRADES, GOODS, SERVICE, TICKET_PRICE, ate, emptySave, goodOf, repairPrice, scratch } from './Trades';
 import { STREET_EN, STREET_ZH } from '../core/i18n/street';
 
@@ -21,6 +21,17 @@ describe('street counters', () => {
     const n = shopSigns().filter((s) => SERVICE[s.trade]).length;
     expect(n / shopSigns().length).toBeGreaterThan(0.5);
   });
+  it('名片街的本地和通用招牌都有柜台，普通街的通用招牌编号不变', () => {
+    const signs = shopSigns();
+    for (let f = 1; f <= FLAVOURS.length; f++) {
+      // 穷举通用图集每一格：0% 走本地抽签，95% 走通用抽签。
+      for (const chance of [0, 95]) for (let i = 0; i < GENERIC; i++) {
+        const hs = (chance << 13) | (i << 4), idx = signIndex(hs, f, true);
+        expect(SERVICE[signs[idx].trade], `${f}/${chance}/${i}: ${signs[idx].text}`).toBeTruthy();
+        if (chance === 95) expect(signIndex(hs, f)).toBe((hs >>> 4) % GENERIC);
+      }
+    }
+  });
   it('the album pays each step once', () => {
     const save = emptySave();
     let cash = 0;
@@ -40,5 +51,12 @@ describe('street counters', () => {
     expect(goodOf(null)).toBeNull();
     expect(repairPrice(100)).toBe(0);
     expect(repairPrice(40)).toBe(300);
+  });
+  it('名片街跳过的行当（ShopSigns.ts 的 NO_COUNTER）都没有柜台，有柜台的一个都没跳', async () => {
+    const { NO_COUNTER, FAMOUS_SKIP } = await import('../city/visual/ShopSigns');
+    for (const t of NO_COUNTER) expect(SERVICE[t], t).toBeUndefined();
+    for (const t of new Set(shopSigns().map((g) => g.trade))) if (!SERVICE[t]) expect(NO_COUNTER.has(t), `${t} 没有柜台，名片街上该跳过`).toBe(true);
+    // 每种口味至少留下一块能开柜台的
+    for (const m of FAMOUS_SKIP) expect(m).toBeLessThan(0xfff);
   });
 });
