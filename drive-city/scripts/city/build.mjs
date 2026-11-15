@@ -307,6 +307,12 @@ function crossings(w, grid) {
 const carGrid = gridOf(carWays.map((w) => ({ w, id: w.id, p: w._pts })));
 const railGrid = gridOf(ways.filter((w) => w.tags?.railway && ['rail', 'light_rail', 'subway'].includes(w.tags.railway) && !(w.tags.tunnel && w.tags.tunnel !== 'no') && !isBridgeT(w.tags) && w.geometry).map((w) => ({ w, id: w.id, p: proj(w.geometry) })));
 const waterGrid = gridOf(ways.filter((w) => (w.tags?.waterway && ['river', 'canal', 'stream', 'drain', 'ditch'].includes(w.tags.waterway)) && w.geometry).map((w) => ({ w, id: w.id, p: proj(w.geometry) })));
+// 盖了板的暗渠不算水，但只在这里（2026-11-15，西直门桥）：西二环底下的「护城河（已盖板）」是 layer=-2 的涵洞，从西直门外
+// 大街高架底下穿过，下面“跨河的桥留在地面”那条规则把主桥西边两段高架（bridge=viaduct）留在了地面，高架在中间塌下去
+// 4 米多。全城放开的话（暗渠、covered=yes、layer<0 的水道都不算）还有 9 段桥会被抬起来：建国门桥 243053039、
+// 1150064781（高度不变），东南二环 1113130069、104129575，天宁寺桥一带 87339974、87339984、87341733、128489872、
+// 144927500（莲花池东路、宣武门西大街从贴地变成 6.5 米）——那几处没对照实景查过，先不动。
+const OVER_CULVERT = new Set([51768308, 139355452]);
 /** Whether ways a and b share a node within r m of (x, z): a T-junction whose lines overshoot by a few
  * metres "crosses" in plan, and treating that as a bridge over the road pinned the road under it and
  * dragged the bridge down to 1.2 m over it (建国门桥's side road onto 东二环). */
@@ -335,7 +341,7 @@ for (let changed = true; changed;) {
     if (lifted.has(w) || !isBridgeT(w.tags) || layerOf(w.tags) < 1) continue;
     let H = 0;
     for (const id of [w._ids[0], w._ids.at(-1)]) for (const o of byNode.get(id) ?? []) if (lifted.has(o)) H = Math.max(H, lifted.get(o).H);
-    if (!H || crossings(w, waterGrid).length) continue;
+    if (!H || (crossings(w, waterGrid).length && !OVER_CULVERT.has(w.id))) continue;
     lifted.set(w, { H, over: [] }); changed = true;
   }
 }
@@ -368,6 +374,30 @@ for (let iter = 0; iter < 8; iter++) {
   }
   if (!changed) break;
 }
+// 逐处修正：桥跨过的路不钉在地面（2026-11-15，「根据北京真实西直门桥的设计图和实景，修下西直门桥」）。
+// 西直门桥是三层：二环主路在底下，东西向主桥（西直门外大街—西直门内大街的两幅主路和两幅辅路桥，四条 layer=1
+// 的 72 米桥）跨在二环上面，西向北的定向匝道（layer=2）在最上面。南向西的环形匝道（29222996）在主桥东头 60 米处
+// 从西直门内大街的引桥上面跨过去；按通用规则，被跨的路在交叉点前后 PIN 米钉在地面，引桥只剩 43 米要从 5.3 米落到
+// 0（12.3%，超过 STEEP），四幅主桥都被判成“爬不到净空”打回地面，东西向和二环成了一个大平交路口。真桥的引桥在
+// 匝道下面还没落地，匝道在那里更高（实景照片里它比主桥高出半层）：这几处交叉不钉，引桥按 GRADE 往东落，
+// 后面“交叉处净空不够”那一步把匝道在交叉点附近抬到引桥上方 5.6 米。
+// 两侧的辅路桥（51391595 北、51391606 南，自行车和“盘桥”路线走的）同理：桥头外 10–50 米的引道被上面的匝道钉住——
+// 东头是环形匝道跨过从引道分出去的两条小匝道（51385456、51387858），西头是并入高架的匝道（219663113）跨过北辅路
+// 引道（51391845）、定向匝道跨过南辅路引道分出去的小匝道（51384750）。
+const NO_PIN = new Map([
+  [29222996, new Set([723613104, 51391600, 51391599, 51384215, 51385456, 51387858])],
+  [219663113, new Set([51391845])],
+  [51391965, new Set([51384750])],
+]);
+const pinsUnder = (W, o) => !NO_PIN.get(W.id)?.has(o.id);
+// 北辅路西头：桥头外 27 米从并入高架的匝道 219663113 底下穿过，匝道再往西 30 多米就和高架绑在一个面上，抬不了多高
+// （试过只靠抬匝道：辅路按 GRADE 落到 4.9 米，匝道要到 11.8 米，把西行高架也带起一个 4 米多的鼓包）。两头各让一点：
+// 辅路在桥头外 53 米处钉到地面（按 STEEP 落，穿过匝道底下时 2 米出头），匝道在交叉处只比 6.5 米高出 1 米多。
+// 钉的位置试出来的：桥头外 30–50 米是往西北角小环道分岔的路口，路口里两条路绑成一个平面，钉在里面（45 米）等于
+// 从 30 米处就落地，桥头只剩 3.8 米，跨不过桥头底下的西辅路；钉远了（65 米）辅路在匝道底下还有 3.8 米，匝道要到
+// 9.4 米，西行高架被带起 1.7 米的鼓包。 [way, x, z]：这条路上离这个点最近的地方钉在地面。
+const EXTRA_PIN = [[51391845, -4205, -3394.4]];
+let extraPinKeys = null;
 // Dense points on every car way (the OSM nodes keep their ids, so ways meet), and the graph.
 const LB = new Map(), pinned = new Set(), adj = new Map();
 const link = (a, b, d) => { (adj.get(a) ?? adj.set(a, []).get(a)).push([b, d]); (adj.get(b) ?? adj.set(b, []).get(b)).push([a, d]); };
@@ -386,7 +416,7 @@ for (const w of carWays) {
   const lf = lifted.get(w);
   if (lf) for (const d of D) LB.set(d.key, Math.max(LB.get(d.key) ?? 0, lf.H));
 }
-for (const [, lf] of lifted) for (const { o, x, z } of lf.over) if (!lifted.has(o)) for (const d of o._dense) if (Math.hypot(d.x - x, d.z - z) < PIN) pinned.add(d.key);
+for (const [W, lf] of lifted) for (const { o, x, z } of lf.over) if (!lifted.has(o) && pinsUnder(W, o)) for (const d of o._dense) if (Math.hypot(d.x - x, d.z - z) < PIN) pinned.add(d.key);
 // A road that ends with nothing on (a bridge cut off at the edge of the data) comes down to the ground
 // before it ends, rather than stopping 6.5 m up in the air.
 const deadEnds = new Set();
@@ -460,6 +490,8 @@ if (MERGE) {
     }
   }
 }
+extraPinKeys = EXTRA_PIN.map(([id, x, z]) => denseAt(carWays.find((w) => w.id === id), x, z).key);
+for (const k of extraPinKeys) pinned.add(k);
 let hugged = 0;
 function hug() {
 if (MERGE) return;
@@ -567,6 +599,7 @@ for (const [W, lf] of [...lifted]) {
   const len = W._dense.at(-1).s;
   const fail = lf.over.filter(({ o, x, z }) => !lifted.has(o) && heightNear(W, x, z) < DECK - 1.2);
   if (!fail.length) continue;
+  if (process.env.ELEV_WAY?.split(',').includes(String(W.id))) console.log('DEMOTE?', W.id, W.tags.name ?? W._road.cls, fail.map((c) => `${c.o.id}:${c.o.tags.name ?? c.o._road.cls}@${Math.round(c.x)},${Math.round(c.z)} h${heightNear(W, c.x, c.z).toFixed(2)}`).join(' '), 'dense', W._dense.map((d) => `${Math.round(d.s)}:${(HT.get(d.key) ?? 0).toFixed(1)}${pinned.has(d.key) ? 'P' : ''}`).join(' '));
   // only a lesser road at the abutment (a slip road under a main line's end), not two streets' worth
   const atEnd = (c) => { const s = arcNear(W, c.x, c.z); return (s < END_SLACK || len - s < END_SLACK) && CLASS_RANK.indexOf(c.o._road.cls) < CLASS_RANK.indexOf(W._road.cls); };
   // and only for a deck over another deck: flattening it is what puts the lower deck on top (elsewhere the
@@ -595,8 +628,9 @@ for (const D of demotedWays) {
 if (demoted) {
   LB.clear(); pinned.clear();
   for (const [W, lf] of lifted) for (const d of W._dense) LB.set(d.key, Math.max(LB.get(d.key) ?? 0, lf.H));
-  for (const [, lf] of lifted) for (const { o, x, z } of lf.over) if (!lifted.has(o)) for (const d of o._dense) if (Math.hypot(d.x - x, d.z - z) < PIN) pinned.add(d.key);
+  for (const [W, lf] of lifted) for (const { o, x, z } of lf.over) if (!lifted.has(o) && pinsUnder(W, o)) for (const d of o._dense) if (Math.hypot(d.x - x, d.z - z) < PIN) pinned.add(d.key);
   for (const k of deadEnds) pinned.add(k);
+  for (const k of extraPinKeys) pinned.add(k);
   hug();
   deckPts = new Set(LB.keys());
   HT = solve();
@@ -682,8 +716,19 @@ for (let iter = 0; iter < (process.env.NO_CROSSFIX ? 0 : 2); iter++) {
   for (const { a, b, x, z } of allX) {
     const ha = heightNear(a, x, z), hb = heightNear(b, x, z);
     const [hi, lo, H, L] = ha >= hb ? [ha, hb, a, b] : [hb, ha, b, a];
-    if (hi < 0.3 || hi - lo >= DECK - 1) continue;
     const near = (W, r) => W._dense.filter((d) => Math.hypot(d.x - x, d.z - z) < r);
+    // 不钉地面的交叉（NO_PIN）：净空不到 5.3 米时，上面那条在交叉点附近抬到够，不管两条现在差多少
+    // （差不到 2.5 米时通用规则会把两条拉平，在半空里平交）。
+    const U = pinsUnder(a, b) ? pinsUnder(b, a) ? null : b : a;
+    if (U) {
+      const hl = U === a ? hb : ha;
+      if ((U === a ? ha : hb) - hl >= DECK - 1.2) continue;
+      // 净空 5.6 米（桥面厚 1.1 米 + 4.5 米），只抬交叉点前后 12 米：抬多了、抬宽了，匝道来不及在并线前落回去
+      for (const d of near(U, 12)) if ((LB.get(d.key) ?? 0) < hl + DECK - 0.9) { LB.set(d.key, hl + DECK - 0.9); changed++; }
+      if (iter === 0) crossFix++;
+      continue;
+    }
+    if (hi < 0.3 || hi - lo >= DECK - 1) continue;
     if (hi - lo >= 2.5) {
       for (const d of near(H, 18)) if (!pinned.has(d.key) && (LB.get(d.key) ?? 0) < lo + DECK) { LB.set(d.key, lo + DECK); changed++; }
       if (lo < 0.3) for (const d of near(L, PIN)) if (!(LB.get(d.key) > 0)) { pinned.add(d.key); changed++; }
@@ -1079,8 +1124,6 @@ if (process.env.ELEV_CONFLICTS) {
   }
   console.log('kinks', kinks.length, kinks.slice(0, 40));
 }
-// ELEV_ONLY=1: stop here (with ELEV_CONFLICTS / CONF_AT to look at one place), nothing written.
-if (process.env.ELEV_ONLY) process.exit(0);
 if (process.env.ELEV_WAY) for (const wid of process.env.ELEV_WAY.split(',')) {
   const w = carWays.find((q) => String(q.id) === wid), lf = lifted.get(w);
   if (!w) { console.log('WAY', wid, 'not a car way'); continue; }
@@ -1099,6 +1142,8 @@ if (process.env.ELEV_AT) {
   const [ex, ez] = process.env.ELEV_AT.split(',').map(Number);
   for (const w of carWays) for (const d of w._dense) if (Math.hypot(d.x - ex, d.z - ez) < 9) console.log('AT', w.id, w.tags.name ?? w.tags.highway, 'w', w._road.w, d.key, d.x.toFixed(1), d.z.toFixed(1), 'HT', (HT.get(d.key) ?? 0).toFixed(2), 'LB', LB.get(d.key) ?? 0, 'pin', pinned.has(d.key), 'deck', deckPts.has(d.key), 'lifted', lifted.has(w));
 }
+// ELEV_ONLY=1: stop here (with ELEV_CONFLICTS / CONF_AT / ELEV_WAY / ELEV_AT to look at one place), nothing written.
+if (process.env.ELEV_ONLY) process.exit(0);
 /** Height at arc length s along way w. */
 function heightAlong(w, s) {
   const D = w._dense;
