@@ -6,7 +6,7 @@ export type Tier = 0 | 1 | 2;
 /** No two of a day's three from the same one. */
 export type Cat = 'drive' | 'money' | 'race' | 'deliver' | 'roam' | 'lane' | 'police';
 /** Where 带我去 leads: a 快速前往 spot (travel/), or the day's landmark. */
-export type Where = 'nanluo' | 'tofu' | 'landmark';
+export type Where = 'nanluo' | 'tofu' | 'landmark' | 'airport';
 
 /** What the player has open to them, for which tasks can be set. */
 export interface Ctx {
@@ -16,6 +16,8 @@ export interface Ctx {
   owns: boolean;
   /** There is a landmark to send them to today. */
   landmark: boolean;
+  /** 城里有首都机场（airport/ 装了）：机场的两个任务才派。 */
+  airport?: boolean;
 }
 
 export interface TaskDef {
@@ -63,6 +65,8 @@ export const TASKS: readonly TaskDef[] = [
   // counted by daily/ itself: `checkin:visit` of the day's landmark (CheckinApi.want)
   { id: 'landmark', tier: 1, cat: 'roam', n: 1, name: 'dly.t.landmark', where: 'landmark', open: (c) => c.landmark },
   def({ id: 'checkin', tier: 1, cat: 'roam', n: 1, name: 'dly.t.checkin', on: 'checkin', count: () => 1, open: (c) => c.checkinsLeft > 0 }),
+  // 首都机场（2026-11-16）：看一架飞机落地——daily/ 自己数（AirportApi.flights 里落地的那架接地时离玩家 LANDING_R 米内）
+  { id: 'landing', tier: 1, cat: 'roam', n: 1, name: 'dly.t.landing', where: 'airport', open: (c) => !!c.airport },
   // 难
   def({ id: 'trial', tier: 2, cat: 'race', n: 1, name: 'dly.t.trial', on: 'trial:finish', count: (e) => (e.medal >= 1 ? 1 : 0) }),
   def({ id: 'escape', tier: 2, cat: 'police', n: 1, name: 'dly.t.escape', on: 'wanted:escaped', count: (e) => (e.level >= 3 ? 1 : 0) }),
@@ -71,6 +75,8 @@ export const TASKS: readonly TaskDef[] = [
   def({ id: 'racket', tier: 2, cat: 'lane', n: 1, name: 'dly.t.racket', on: 'district:racket', count: (e) => (e.result === 'won' ? 1 : 0), where: 'nanluo' }),
   def({ id: 'shift', tier: 2, cat: 'money', n: 1500, name: 'dly.t.shift', on: 'taxi:shift', count: (e) => e.earned, best: true }),
   def({ id: 'rabbit', tier: 2, cat: 'roam', n: 1, name: 'dly.t.rabbit', on: 'collect:found', count: () => 1, open: (c) => c.rabbitsLeft > 0 }),
+  // 首都机场（2026-11-16）：送一位乘客去机场——出租车城里接的蓝圈长单，或者老张的赶飞机（这个任务在的时候去机场的客多三倍）
+  def({ id: 'airport', tier: 2, cat: 'money', n: 1, name: 'dly.t.airport', on: 'airjob:done', count: (e) => (e.toAirport ? 1 : 0), open: (c) => !!c.airport }),
 ];
 
 export const taskOf = (id: string): TaskDef | undefined => TASKS.find((d) => d.id === id);

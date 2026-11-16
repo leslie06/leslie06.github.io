@@ -356,6 +356,17 @@ ok('纪录史新的在前、带跑法和人数', rch.n === 2 && rch.hist[0].ms =
 let rcall = await recQ('g=bcity');
 ok('每条赛道现在的纪录', rcall.recs.trial_changan.ms === 190500 && rcall.recs.trial_e2.name === '阿飞' && !rcall.recs.trial_w2);
 ok('不是赛道的榜不收', (await rec({ g: 'bcity', b: 'combo', p: 'ra', v: 100000 })).status === 400 && (await rec({ g: 'bcity', b: 'trial_changan', p: 'ra', v: 5 })).status === 400);
+// 跑道极速（2026-11-16）：越大越好，km/h × 10
+let rw1 = await rec({ g: 'bcity', b: 'rwy_36r', p: 'ra', n: '阿飞', v: 2874 });
+ok('跑道极速：第一个就是纪录', rw1.record === true && rw1.best.ms === 2874);
+ok('跑道极速：慢的不记、快一点点不算', (await rec({ g: 'bcity', b: 'rwy_36r', p: 'rb', n: '小雨', v: 2800 })).record === false && (await rec({ g: 'bcity', b: 'rwy_36r', p: 'rb', n: '小雨', v: 2877 })).record === false);
+let rw2 = await rec({ g: 'bcity', b: 'rwy_36r', p: 'rb', n: '小雨', v: 3012 });
+ok('跑道极速：更快的破纪录', rw2.record === true && rw2.prev.ms === 2874 && rw2.best.ms === 3012);
+let rwall = await recQ('g=bcity');
+ok('每条赛道现在的纪录：时速的榜取最大、用时的榜还是最小', rwall.recs.rwy_36r.ms === 3012 && rwall.recs.trial_changan.ms === 190500);
+ok('跑道极速：范围外不收', (await rec({ g: 'bcity', b: 'rwy_01', p: 'ra', v: 9000 })).status === 400);
+let rwh = await recQ('g=bcity&b=rwy_36r&p=rb');
+ok('跑道极速的纪录史，新的在前', rwh.n === 2 && rwh.hist[0].ms === 3012 && rwh.hist[0].me === true, JSON.stringify(rwh).slice(0, 300));
 let recBusy = 0;
 for (let i = 0; i < 12; i++) if ((await rec({ g: 'bcity', b: 'trial_w2', p: 'spam', n: 'x', v: 400000 - i * 1000 }, '9.9.9.9')).status === 429) recBusy++;
 ok('一个人一天最多记 10 次', recBusy === 2, `(${recBusy} 次被挡)`);

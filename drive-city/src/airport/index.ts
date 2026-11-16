@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import type { Engine, System } from '../core/Engine';
 import { CG, groups } from '../core/Physics';
-import type { EnvUniforms, PlayerApi, RenderApi } from '../game/Contracts';
+import type { EnvUniforms, PlayerApi, RenderApi, VehicleApi } from '../game/Contracts';
+import type { TrafficApi } from '../traffic';
+import type { StuntApi } from '../stunts';
 import { t } from '../core/I18n';
 import type { TravelApi } from '../travel';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildBridges } from './Bridges';
+import { Airside } from './Airside';
 import { AIRPORT_BOX, loadAirfield, type AirfieldData } from './Data';
 import { Fleet } from './Fleet';
 import { Flights, type FlightPose, type Runway } from './Flights';
@@ -32,10 +36,16 @@ export interface AirportApi extends System {
   nearestJet(x: number, y: number, z: number): { d: number; thrust: number; closing: number } | null;
   /** 这一帧在飞的飞机（probe 用）。 */
   readonly flights: readonly FlightPose[];
-  /** 停着飞机的机位数。 */
+  /** 停着飞机的机位数（按钟点哈希的那些，不算滑进来的）。 */
   readonly parkedCount: number;
+  /** 归时刻表管的机位（`stands()` 的下标）：停着的飞机的哈希跳过它们，有没有飞机看 `flights` 里 `parked` 的。 */
+  readonly poolStands: ReadonlySet<number>;
   /** 把飞行时刻表的时钟拨到 t 秒（probe、截图用）。 */
   seek(t: number): void;
+  /** (x, z) 在空侧（围界里）。airfield.json 还没取到时是 false。 */
+  airside(x: number, z: number): boolean;
+  /** (x, z) 在哪条跑道上（两边各外扩 `pad` 米、两头 60 米）：跑道号（如 `18L/36R`）、从南头量起的米数、跑道长。 */
+  runwayAt(x: number, z: number, pad?: number): { ref: string; s: number; len: number } | null;
 }
 
 const LOAD_R = 3000;
@@ -43,6 +53,8 @@ const LOAD_R = 3000;
 const NEAR_PARKED = 420, NEAR_FLIGHT = 700;
 /** 停着的飞机多远以内给碰撞体、最多几架。 */
 const COLLIDE_R = 220, COLLIDE_MAX = 14;
+/** 玩家离机场范围多远以外，滑行的飞机不再等人（被挡住耽误的时间清零）。 */
+const FAR_R = 6000;
 
 type Body = ReturnType<Engine['physics']['world']['createRigidBody']>;
 
@@ -65,6 +77,8 @@ export function install(engine: Engine): void {
   let parkedFleet: Fleet | null = null, flightFleet: Fleet | null = null, flights: Flights | null = null;
   let fieldMat: THREE.ShaderMaterial | null = null, planeMat: THREE.ShaderMaterial | null = null, planeLights: PlaneLights | null = null;
   let st: Stand[] = [];
+  let tugs: THREE.InstancedMesh | null = null;
+  let airsideMap: Airside | null = null;
   let poses: FlightPose[] = [];
   let parkedCount = 0, parkedT = 0, parkedHour = -1;
   const parkedAt = new THREE.Vector3(1e9, 0, 0);
@@ -114,7 +128,8 @@ export function install(engine: Engine): void {
       cells.push(marks);
     }
     st = stands(d);
-    flights = new Flights(d);
+    flights = new Flights(d, st);
+    airsideMap = new Airside(d, flights.rws);
     // 廊桥
     const br = buildBridges(d);
     if (br.geo) {
@@ -134,10 +149,21 @@ export function install(engine: Engine): void {
     group.add(field);
     if (planesOn) {
       parkedFleet = new Fleet([lite() ? 24 : 70, 640], engine.quality.tier !== 'low', 'parked-planes');
-      flightFleet = new Fleet([8, 16], engine.quality.tier !== 'low', 'flights');
+      // 起降的、滑行的、停在时刻表机位上的：同时最多五十来架
+      flightFleet = new Fleet([28, 64], engine.quality.tier !== 'low', 'flights');
       group.add(parkedFleet.group, flightFleet.group);
       planeMat = lightMaterial(uNight, 0.75);
-      planeLights = new PlaneLights(16 * 10);
+      planeLights = new PlaneLights(64 * 10);
+      // 推出用的推车：矮矮的一个车身加一个小驾驶室（程序拼的，最多同时 8 辆）
+      const tugGeo = (() => {
+        const parts = [new THREE.BoxGeometry(2.6, 1.1, 5.6).translate(0, 0.75, 0), new THREE.BoxGeometry(1.2, 1.0, 1.4).translate(-0.6, 1.8, -1.9)];
+        const cols = [new THREE.Color('#d9a21b'), new THREE.Color('#2b3036')];
+        const ps = parts.map((g, k) => { const n = g.toNonIndexed(); const c = new Float32Array(n.getAttribute('position').count * 3); for (let i = 0; i < c.length; i += 3) c.set([cols[k].r, cols[k].g, cols[k].b], i); n.setAttribute('color', new THREE.BufferAttribute(c, 3)); n.deleteAttribute('uv'); return n; });
+        return mergeGeometries(ps)!;
+      })();
+      tugs = new THREE.InstancedMesh(tugGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }), 8);
+      tugs.name = 'airport-tugs'; tugs.count = 0; tugs.castShadow = true; tugs.frustumCulled = false;
+      group.add(tugs);
       const pl = new THREE.Points(planeLights.geo, planeMat);
       pl.name = 'plane-lights'; pl.frustumCulled = false;
       group.add(pl);
@@ -160,6 +186,77 @@ export function install(engine: Engine): void {
   });
 
   const playerPos = () => engine.get<PlayerApi>('player')?.position ?? engine.camera.position;
+  const blocker = { x: 0, z: 0, r: 1 };
+
+  /**
+   * 尾流（第三批）：大推力的发动机（起飞滑跑、对正后加油门、停下以后重新起步）后面一个锥形区域，车被往后吹、打转，人被吹倒。
+   * 推力 1 时锥长 90 米、口子 3 米、每边张开约 10°；风力按离喷口的距离线性减弱、按推力平方。车停在起飞滑跑的飞机后面 50 米，
+   * 会被吹出七八十米、最快六十来公里每小时（2026-11-16 探针 `.scratch/airport/blast.mjs`）。
+   */
+  const BLAST_FWD = new THREE.Vector3();
+  const blast = (dt: number) => {
+    if (!poses.length) return;
+    const veh = engine.get<VehicleApi>('vehicle'), pl = engine.get<PlayerApi>('player');
+    const targets: { body: { mass(): number; applyImpulseAtPoint(i: { x: number; y: number; z: number }, p: { x: number; y: number; z: number }, w: boolean): void; translation(): { x: number; y: number; z: number } } }[] = [];
+    const p0 = playerPos();
+    let near = false;
+    for (const f of poses) if (f.ground && !f.parked && f.thrust >= 0.55 && Math.hypot(f.x - p0.x, f.z - p0.z) < 160) { near = true; break; }
+    if (!near) return;
+    if (pl?.mode === 'driving' && veh) targets.push({ body: veh.car.body as never });
+    const tr = engine.get<TrafficApi>('traffic');
+    if (tr) for (const c of tr.cars()) if (c !== veh?.car && Math.hypot(c.pos.x - p0.x, c.pos.z - p0.z) < 200) targets.push({ body: c.body as never });
+    for (const f of poses) {
+      if (!f.ground || f.parked || f.thrust < 0.55) continue;
+      const D = dims(f.kind), L = 90 * Math.min(1, (f.thrust - 0.4) / 0.6);
+      const fx = Math.sin(f.yaw), fz = Math.cos(f.yaw);
+      BLAST_FWD.set(fx, 0, fz);
+      for (const side of [1, -1]) {
+        // 喷口：发动机后缘（机头朝 +Z 时左手是 +X）
+        const ex = f.x + fz * side * D.eng[0] + fx * (D.eng[2] - D.eng[3] * 2.2), ez = f.z - fx * side * D.eng[0] + fz * (D.eng[2] - D.eng[3] * 2.2);
+        const hit = (x: number, z: number): [number, number, number] | null => {
+          const dx = x - ex, dz = z - ez, a = -(dx * fx + dz * fz), l = dx * fz - dz * fx;
+          if (a <= 0 || a > L || Math.abs(l) > 3 + a * 0.18) return null;
+          return [a, l, (1 - a / L) * f.thrust * f.thrust];
+        };
+        for (const t of targets) {
+          const pos = t.body.translation(), h = hit(pos.x, pos.z);
+          if (!h) continue;
+          // 往后吹、往上掀一点；作用点偏到靠喷口中线的那一侧上方，车会打转、侧翻
+          const acc = 18 * h[2], m = t.body.mass(), J = m * acc * dt;
+          t.body.applyImpulseAtPoint({ x: -fx * J, y: J * 0.18, z: -fz * J }, { x: pos.x - Math.sign(h[1] || 1) * fz * 0.9, y: pos.y + 0.6, z: pos.z + Math.sign(h[1] || 1) * fx * 0.9 }, true);
+        }
+        if (pl?.mode === 'onfoot' && !pl.riding && hit(p0.x, p0.z)) {
+          const h = hit(p0.x, p0.z)!;
+          if (h[2] > 0.25) pl.struck?.(ex, ez, true);
+        }
+      }
+    }
+  };
+
+  /** 钻飞机（第三批）：开车从飞机机身底下穿过去（在地上的，滑行的分高、停着的分低），算一次特技进连击。 */
+  const under = new Map<number, number>();
+  const underPlane = (dt: number) => {
+    for (const [k, v] of under) { if (v - dt <= 0) under.delete(k); else under.set(k, v - dt); }
+    const pl = engine.get<PlayerApi>('player'), veh = engine.get<VehicleApi>('vehicle');
+    if (pl?.mode !== 'driving' || !veh || veh.car.speed < 6) return;
+    const p = veh.car.pos;
+    const check = (id: number, x: number, z: number, yaw: number, kind: PlaneKind, moving: boolean) => {
+      if (under.has(id)) return;
+      const D = dims(kind), fx = Math.sin(yaw), fz = Math.cos(yaw), dx = p.x - x, dz = p.z - z;
+      const a = dx * fx + dz * fz, l = dx * fz - dz * fx;
+      if (Math.abs(a) < D.len * 0.38 && Math.abs(l) < D.r * 0.9 && p.y < D.h - D.r) {
+        under.set(id, 8);
+        engine.get<StuntApi>('stunts')?.score('underplane', moving ? 300 : 120);
+      }
+    };
+    for (const f of poses) if (f.ground && Math.abs(f.x - p.x) < 60 && Math.abs(f.z - p.z) < 60) check(f.id, f.x, f.z, f.yaw, f.kind, !f.parked);
+    const hour = engine.get<RenderApi>('render')?.timeOfDay ?? 12, pool = flights?.poolSet;
+    for (let i = 0; i < st.length; i++) {
+      const s = st[i];
+      if (Math.abs(s.x - p.x) > 40 || Math.abs(s.z - p.z) > 40 || pool?.has(i) || !occupied(i, hour)) continue;
+      check(-1 - i, s.x, s.z, s.yaw, s.kind, false);
+    }
+  };
   const onRunway = (rw: Runway) => {
     const p = playerPos();
     const s = (p.x - rw.sx) * rw.ux + (p.z - rw.sz) * rw.uz, o = Math.abs((p.x - rw.sx) * -rw.uz + (p.z - rw.sz) * rw.ux);
@@ -172,8 +269,9 @@ export function install(engine: Engine): void {
     const c = engine.camera.position;
     parkedFleet.begin();
     let n = 0;
+    const pool = flights?.poolSet;
     st.forEach((s, i) => {
-      if (!occupied(i, hour)) return;
+      if (pool?.has(i) || !occupied(i, hour)) return;
       n++;
       const d = Math.hypot(s.x - c.x, s.z - c.z);
       if (d > 11000) return;
@@ -187,6 +285,7 @@ export function install(engine: Engine): void {
   const tmp = new THREE.Vector3(), m4 = new THREE.Matrix4();
   /** 一架飞机的灯（机体坐标 → 世界）。 */
   const lightsOf = (f: FlightPose) => {
+    if (f.parked) return;
     const D = dims(f.kind);
     eul.set(-f.pitch, f.yaw, 0, 'YXZ'); q.setFromEuler(eul);
     m4.compose(tmp.set(f.x, f.y, f.z), q, ONE);
@@ -209,11 +308,15 @@ export function install(engine: Engine): void {
     get data() { return data; },
     get flights() { return poses; },
     get parkedCount() { return parkedCount; },
+    get poolStands() { return flights?.poolSet ?? new Set<number>(); },
     load,
     seek(t) { clock = t; },
+    airside(x, z) { return !!airsideMap?.inside(x, z); },
+    runwayAt(x, z, pad = 0) { const r = airsideMap?.runwayAt(x, z, pad); return r ? { ref: r.rw.ref, s: r.s, len: r.rw.len } : null; },
     nearestJet(x, y, z) {
       let best: { d: number; thrust: number; closing: number } | null = null;
       for (const f of poses) {
+        if (f.parked) continue;
         const dx = f.x - x, dy = f.y + dims(f.kind).h - y, dz = f.z - z, d = Math.hypot(dx, dy, dz);
         if (best && d >= best.d) continue;
         best = { d, thrust: f.thrust, closing: -(dx * f.vx + dy * f.vy + dz * f.vz) / Math.max(1, d) };
@@ -227,7 +330,8 @@ export function install(engine: Engine): void {
       // 停着的飞机：玩家附近最近的几架给碰撞体
       const hour = engine.get<RenderApi>('render')?.timeOfDay ?? 12;
       const near: [number, number][] = [];
-      for (let i = 0; i < st.length; i++) { const s = st[i], d = Math.abs(s.x - p.x) + Math.abs(s.z - p.z); if (d < COLLIDE_R * 1.4 && Math.hypot(s.x - p.x, s.z - p.z) < COLLIDE_R && occupied(i, hour)) near.push([d, i]); }
+      const pool = flights?.poolSet;
+      for (let i = 0; i < st.length; i++) { const s = st[i], d = Math.abs(s.x - p.x) + Math.abs(s.z - p.z); if (d < COLLIDE_R * 1.4 && Math.hypot(s.x - p.x, s.z - p.z) < COLLIDE_R && !pool?.has(i) && occupied(i, hour)) near.push([d, i]); }
       near.sort((a, b) => a[0] - b[0]);
       const want = new Set(near.slice(0, COLLIDE_MAX).map(([, i]) => i));
       for (const [i, b] of parkedBodies) if (!want.has(i)) { dropBody(b); parkedBodies.delete(i); }
@@ -253,6 +357,8 @@ export function install(engine: Engine): void {
         fb.b.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
       }
       for (let i = k; i < flightBodies.length; i++) flightBodies[i].b.setNextKinematicTranslation({ x: 0, y: -600 - i * 50, z: 0 });
+      blast(dt);
+      underPlane(dt);
     },
     update(dt) {
       const c = engine.camera.position;
@@ -274,9 +380,15 @@ export function install(engine: Engine): void {
       const hour = engine.get<RenderApi>('render')?.timeOfDay ?? 12;
       parkedT -= dt;
       if (Math.floor(hour) !== parkedHour || (parkedT <= 0 && c.distanceTo(parkedAt) > 20)) { parkedHour = Math.floor(hour); parkedT = 0.5; parkedAt.copy(c); placeParked(hour); }
-      poses = flights.poses(clock, hour, c.x, c.z, onRunway);
-      // 省电档：只画离镜头最近的两架
-      const shown = lite() ? [...poses].sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z)).slice(0, 2) : poses;
+      // 挡滑行的飞机：玩家（开车是车、走路是人）
+      const pl = engine.get<PlayerApi>('player');
+      const pp = playerPos();
+      blocker.x = pp.x; blocker.z = pp.z; blocker.r = pl?.mode === 'driving' ? 2.4 : 0.6;
+      const bx = Math.max(AIRPORT_BOX.x0 - pp.x, 0, pp.x - AIRPORT_BOX.x1), bz = Math.max(AIRPORT_BOX.z0 - pp.z, 0, pp.z - AIRPORT_BOX.z1);
+      flights.far = Math.hypot(bx, bz) > FAR_R;
+      poses = flights.poses(clock, hour, c.x, c.z, onRunway, pp.y < 8 && !flights.far ? blocker : null);
+      // 省电档：停在机位上的都画（不动，便宜），动着的只画离镜头最近的四架
+      const shown = lite() ? [...poses.filter((f) => f.parked), ...poses.filter((f) => !f.parked).sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z)).slice(0, 4)] : poses;
       flightFleet.begin(); planeLights.begin();
       for (const f of shown) {
         const d = Math.hypot(f.x - c.x, f.y - c.y, f.z - c.z);
@@ -285,6 +397,19 @@ export function install(engine: Engine): void {
         lightsOf(f);
       }
       flightFleet.end(); planeLights.end();
+      // 推车：推出时拖杆连着前轮，车在机头底下
+      if (tugs) {
+        let n = 0;
+        for (const f of shown) {
+          if (!f.push || n >= 8 || Math.hypot(f.x - c.x, f.z - c.z) > 900) continue;
+          const D = dims(f.kind), fx = Math.sin(f.yaw), fz = Math.cos(f.yaw), k = 14.6 * D.len / 38 + 5.5;
+          q.setFromAxisAngle(UP, f.yaw + Math.PI);
+          m4.compose(tmp.set(f.x + fx * k, 0, f.z + fz * k), q, ONE);
+          tugs.setMatrixAt(n++, m4);
+        }
+        tugs.count = n; tugs.visible = n > 0;
+        if (n) tugs.instanceMatrix.needsUpdate = true;
+      }
     },
   };
   engine.add(api);

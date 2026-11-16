@@ -3,7 +3,7 @@ import { lang, t } from '../core/I18n';
 import { shotMode } from '../debug/ShotMode';
 import type { HudApi } from '../game/Contracts';
 import { STARTS } from '../races';
-import { COURSES } from '../trials/Courses';
+import { COURSES, RUNWAYS } from '../trials/Courses';
 
 /**
  * The online leaderboards: the street races' times (each start line's course is fixed by its seed),
@@ -16,14 +16,18 @@ import { COURSES } from '../trials/Courses';
  * Off in shot mode and on a dev server (so probes and local play never write the real boards),
  * unless `?lb=<base url>` points it somewhere; `?lb=0` turns it off anywhere.
  */
-export type BoardId = 'race0' | 'race1' | 'race2' | 'race3' | 'combo' | 'taxi' | 'heist' | `trial_${string}`;
+export type BoardId = 'race0' | 'race1' | 'race2' | 'race3' | 'combo' | 'taxi' | 'heist' | `trial_${string}` | `rwy_${string}`;
 export interface BoardDef { id: BoardId; asc: boolean }
 export const BOARDS: BoardDef[] = [
   ...STARTS.map((_, i) => ({ id: `race${i}` as BoardId, asc: true })),
   { id: 'combo', asc: false }, { id: 'taxi', asc: false }, { id: 'heist', asc: true },
   // the time trials (trials/), one board a course, the fastest time
   ...COURSES.map((c) => ({ id: `trial_${c.id}` as BoardId, asc: true })),
+  // 跑道极速（trials/Runway.ts，2026-11-16）：一条跑道一个榜，最高时速，存 km/h × 10（整数），越大越好
+  ...RUNWAYS.map((r) => ({ id: `rwy_${r.id}` as BoardId, asc: false })),
 ];
+/** 有纪录史的榜：计时赛（用时）和跑道极速（最高时速）。 */
+export const hasRecords = (b: string): boolean => b.startsWith('trial_') || b.startsWith('rwy_');
 export interface BoardRow { name: string; score: number; me: boolean }
 export interface BoardData { board: BoardId; asc: boolean; total: number; top: BoardRow[]; me: { rank: number; score: number } | null }
 
@@ -32,7 +36,12 @@ export interface BoardData { board: BoardId; asc: boolean; total: number; top: B
  * record falls - the nickname, the time from the start gate to the finish (ms), how it was run (a time trial alone, or a
  * room's race and how many were in it), when. `stats/worker.js` `POST /rec` / `GET /rec`.
  */
-export interface CourseRec { name: string; ms: number; mode: 'solo' | 'room'; racers: number; ts: number; me?: boolean }
+export interface CourseRec {
+  name: string;
+  /** 计时赛：用时（毫秒）；跑道极速（`rwy_`）：最高时速 km/h × 10。字段名沿用服务器的 `ms` 列。 */
+  ms: number;
+  mode: 'solo' | 'room'; racers: number; ts: number; me?: boolean;
+}
 export interface RecResult { record: boolean; prev: CourseRec | null; best: CourseRec }
 
 export interface LeaderboardApi extends System {
@@ -111,6 +120,8 @@ export function install(engine: Engine): void {
   let records: Record<string, CourseRec> = {}, heard = false, pollT = REC_POLL - 8;
   const said = new Set<string>();
   const timeOf = (ms: number) => { const v = ms / 1000; return `${Math.floor(v / 60)}:${(v % 60).toFixed(2).padStart(5, '0')}`; };
+  /** 一条纪录怎么读：计时赛是用时，跑道极速是时速。 */
+  const recText = (b: string, v: number) => (b.startsWith('rwy_') ? `${(v / 10).toFixed(1)} km/h` : timeOf(v));
   const pollRecords = async () => {
     const r = await call('GET', undefined, `?g=${GAME}&p=${pid}`, '/rec') as { recs?: Record<string, CourseRec> } | null;
     if (!r?.recs) return;
@@ -118,8 +129,9 @@ export function install(engine: Engine): void {
     for (const [b, rec] of Object.entries(r.recs)) {
       const was = records[b], key = `${b}:${rec.ms}`;
       // somebody else's new record since we last looked: everyone in the city hears of it
-      if (heard && playing && !rec.me && (!was || rec.ms < was.ms) && !said.has(key)) {
-        engine.get<HudApi>('hud')?.toast(t('rec.news', { name: rec.name, course: api.label(b as BoardId), time: timeOf(rec.ms) }), 6);
+      const def0 = BOARDS.find((d) => d.id === b);
+      if (heard && playing && def0 && !rec.me && better(def0.id, rec.ms, was?.ms) && !said.has(key)) {
+        engine.get<HudApi>('hud')?.toast(t('rec.news', { name: rec.name, course: api.label(b as BoardId), time: recText(b, rec.ms) }), 6);
       }
       said.add(key);
     }
@@ -165,11 +177,13 @@ export function install(engine: Engine): void {
     },
     fetch: async (board) => enabled ? await call('GET', undefined, `?g=${GAME}&b=${board}&p=${pid}`) as BoardData | null : null,
     label(board) {
+      if (board.startsWith('rwy_')) { const r = RUNWAYS.find((q) => `rwy_${q.id}` === board); return t('lb.runway', { rwy: r ? r.ref : board }); }
       if (board.startsWith('trial_')) { const c = COURSES.find((q) => `trial_${q.id}` === board); return t('lb.trial', { road: c ? (lang() === 'zh' ? c.zh : c.en) : board }); }
       if (board.startsWith('race')) { const s = STARTS[+board.slice(4)]; return t('lb.race', { road: s ? (lang() === 'zh' ? s.zh : s.en) : board }); }
       return t(`lb.${board as 'combo' | 'taxi' | 'heist'}`);
     },
     format(board, score) {
+      if (board.startsWith('rwy_')) return recText(board, score);
       if (def(board).asc) { const s = score / 1000; return `${Math.floor(s / 60)}:${(s % 60).toFixed(2).padStart(5, '0')}`; }
       return board === 'taxi' ? `¥${score.toLocaleString('en-US')}` : score.toLocaleString('en-US');
     },
@@ -185,9 +199,15 @@ export function install(engine: Engine): void {
     // the record (a time trial runs from its gate: a rolling start)
     void api.record(board, time * 1000, 'solo', 1).then((r) => { if (r?.record) recordToast(board, r); });
   });
+  // 跑道极速（trials/Runway.ts）：最高时速交榜和纪录史（km/h × 10 的整数）
+  engine.events.on('runway:finish', ({ id, kmh }) => {
+    const board = `rwy_${id}` as BoardId, v = Math.round(kmh * 10);
+    api.submit(board, v);
+    void api.record(board, v, 'solo', 1).then((r) => { if (r?.record) recordToast(board, r); });
+  });
   const recordToast = (board: BoardId, r: RecResult) => {
-    const course = api.label(board), time = timeOf(r.best.ms);
-    engine.get<HudApi>('hud')?.toast(r.prev ? t('rec.mine', { course, time, name: r.prev.name, prev: timeOf(r.prev.ms) }) : t('rec.first', { course, time }), 7);
+    const course = api.label(board), time = recText(board, r.best.ms);
+    engine.get<HudApi>('hud')?.toast(r.prev ? t('rec.mine', { course, time, name: r.prev.name, prev: recText(board, r.prev.ms) }) : t('rec.first', { course, time }), 7);
     engine.events.emit('rec:broken', { board, ms: r.best.ms });
   };
   api.recordToast = recordToast;

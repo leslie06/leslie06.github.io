@@ -1,6 +1,6 @@
 import type { Engine } from '../core/Engine';
 import { onLangChange, t } from '../core/I18n';
-import { BOARDS, type BoardId, type LeaderboardApi } from '../online/Leaderboard';
+import { BOARDS, hasRecords, type BoardId, type LeaderboardApi } from '../online/Leaderboard';
 import { C, F, css, el } from './theme';
 import { L } from './lang';
 
@@ -115,7 +115,7 @@ export class Boards {
     });
     if (data.me) { this.foot.className = 'foot me'; this.foot.textContent = t('lb.mine', { rank: data.me.rank, total: data.total, score: lb.format(board, data.me.score) }); }
     else this.foot.textContent = data.top.length ? t('lb.none', { total: data.total }) : t('lb.empty');
-    if (board.startsWith('trial_')) await this.history(lb, board, n);
+    if (hasRecords(board)) await this.history(lb, board, n);
   }
 
   private async history(lb: LeaderboardApi, board: BoardId, n: number): Promise<void> {
@@ -126,15 +126,17 @@ export class Boards {
     const h = await lb.history(board);
     if (n !== this.seq) return;
     if (!h) { line.textContent = t('lb.error'); return; }
-    if (!h.hist.length) { line.textContent = t('rec.none'); return; }
-    line.textContent = t('rec.count', { n: h.n });
+    // 跑道极速（2026-11-16）：纪录是最高时速，没有「用时」和「联机赛」
+    const rwy = board.startsWith('rwy_');
+    if (!h.hist.length) { line.textContent = t(rwy ? 'rec.rwyNone' : 'rec.none'); return; }
+    line.textContent = t(rwy ? 'rec.rwyCount' : 'rec.count', { n: h.n });
     const ol = el('ol', '', this.hist);
     for (const r of h.hist) {
       const li = el('li', r.me ? 'me' : '', ol);
       el('span', '', li).textContent = r.name;
       el('span', 'v', li).textContent = lb.format(board, r.ms);
       const d = new Date(r.ts);
-      el('span', 'w', li).textContent = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${r.mode === 'room' ? t('rec.room', { n: r.racers }) : t('rec.solo')}`;
+      el('span', 'w', li).textContent = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${rwy ? t('rec.rwySolo') : r.mode === 'room' ? t('rec.room', { n: r.racers }) : t('rec.solo')}`;
     }
   }
 }

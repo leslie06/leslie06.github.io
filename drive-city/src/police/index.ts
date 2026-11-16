@@ -5,6 +5,7 @@ import { CG, groups } from '../core/Physics';
 import { Rng } from '../core/Rng';
 import type { Blip, Crime, HudApi, NavApi, PlayerApi, RenderApi, VehicleApi, WantedApi, WorldApi, PeopleApi } from '../game/Contracts';
 import type { TrafficApi } from '../traffic';
+import type { AirportApi } from '../airport';
 import type { FxApi } from '../fx';
 import { readyBodies } from '../vehicle/Bodies';
 import { CarKit } from '../traffic/CarKit';
@@ -15,6 +16,7 @@ import { Vehicle } from '../vehicle/Vehicle';
 import { HELI_SIGHT, PoliceHeli } from './Heli';
 import { Pursuit, type Goal, type Router } from './Pursuit';
 import { WantedHud } from './WantedHud';
+import { trespassing } from './Zone';
 
 const stronger = (s: VehicleSpec, k: number, kmh: number): VehicleSpec =>
   ({ ...s, engine: { ...s.engine, torque: s.engine.torque.map(([r, n]) => [r, n * k] as [number, number]), limiterKmh: kmh } });
@@ -34,7 +36,18 @@ const SWAT_COUNT = [0, 0, 0, 0, 2, 4];
 const SPAWN_GAP = [0, 1.6, 1.1, 0.8, 0.6, 0.45];
 const WHITE = new THREE.Color('#f4f5f3'), BLUE = new THREE.Color('#1c47a8'), BLACK = new THREE.Color('#17191c');
 /** Heat per crime, in stars (half as much once already wanted). */
-const HEAT: Record<Crime, number> = { hit_person: 1, carjack: 1, hit_police: 1, ram: 0.35, speeding: 1, report: 1 };
+const HEAT: Record<Crime, number> = { hit_person: 1, carjack: 1, hit_police: 1, ram: 0.35, speeding: 1, report: 1, trespass: 2 };
+/**
+ * 闯空侧（2026-11-16，首都机场第三批）：进了围界至少两星，上了跑道至少三星。空侧里一直算被看见（甩不掉），出了围界才按正常规则甩。
+ * 空侧里追来的是「机场公安」：同一辆警车换了车门上的字和车牌（`AIR_LIVERY`），在空侧的滑行道、勤务道上刷出来，在空侧里直冲玩家开
+ * （空侧的路不在路网里，导航带不进去）。
+ */
+const AIR_STARS = 2, RUNWAY_STARS = 3;
+const AIR_LIVERY: Livery = { ...POLICE_LIVERY, plate: { ...POLICE_LIVERY.plate, text: '京A·0920警' }, doorText: '机场公安' };
+/** 空侧判断：进去要连着 AIR_IN 秒都在里面，出来要连着 AIR_OUT 秒都在外面（围界道口那几米不来回跳）。每 ZONE_DT 秒看一次。 */
+const AIR_IN = 0.35, AIR_OUT = 1.0, ZONE_DT = 0.1;
+/** 机场公安刷在离玩家多远（米）的滑行道上（250 米外看不见玩家的警车会被收回去重刷）；刷点之间隔多远。 */
+const AIR_SPAWN_MIN = 120, AIR_SPAWN_MAX = 240, AIR_STEP = 25;
 const STOP: DriveInput = { forward: 0, back: 0, steer: 0, analog: true, handbrake: true };
 /** Where they look once they have lost sight of the player: 175 m at one star, 395 at five. */
 const searchRadius = (lv: number) => 120 + 55 * lv;
@@ -63,11 +76,13 @@ interface Cop {
   role: Role;
   /** 0..hp; a wrecked car (`wreck` >= 0, seconds since) stops, smokes and is left behind. */
   hp: number; wreck: number; hitT: number; smokeT: number;
+  /** 机场公安（在空侧刷出来的）：画成 `AIR_LIVERY`。 */
+  air: boolean;
 }
 
 export interface PoliceSystem extends WantedApi {
   /** Shots and testing: force a wanted level; `noBust` keeps the player free. */
-  debug: { setLevel(n: number): void; noBust: boolean; cops(): { x: number; z: number; speed: number; role: string; sees: boolean; swat: boolean; hp: number; wreck: number; block: number; boost: number; forward: number }[] };
+  debug: { setLevel(n: number): void; noBust: boolean; cops(): { x: number; z: number; speed: number; role: string; sees: boolean; swat: boolean; hp: number; wreck: number; block: number; boost: number; forward: number; air: boolean }[]; zone(): { air: boolean; runway: boolean; points: number } };
 }
 
 /**
@@ -94,12 +109,14 @@ export async function install(engine: Engine): Promise<void> {
   // procedural stand-in. Four stars come long after.
   let swatKit: CarKit | null = null;
   void readyBodies(['suv']).then(() => { swatKit = new CarKit(engine.scene, MAX_SWAT, SWAT_LIVERY, 'suv'); });
+  // 机场公安：第一次在空侧刷车时才建
+  let airKit: CarKit | null = null;
   const makeCop = (i: number, swat: boolean): Cop => {
     const spec = swat ? SWAT : POLICE;
     const car = new Vehicle(engine.physics, spec, { x: 0, y: -400 - i * 6, z: 0 }, 0);
     car.body.setEnabled(false);
     return { car, driver: new Pursuit(), filter: new ControlFilter(), active: false, swat, prevPos: new THREE.Vector3(), curPos: new THREE.Vector3(), prevQuat: new THREE.Quaternion(), curQuat: new THREE.Quaternion(),
-      sees: false, flipped: 0, goal: { x: 0, z: 0, vx: 0, vz: 0 }, search: { x: 0, z: 0, t: 0 }, block: 0, role: 'chase', hp: 100, wreck: -1, hitT: 0, smokeT: 0 };
+      sees: false, flipped: 0, goal: { x: 0, z: 0, vx: 0, vz: 0 }, search: { x: 0, z: 0, t: 0 }, block: 0, role: 'chase', hp: 100, wreck: -1, hitT: 0, smokeT: 0, air: false };
   };
   const cops: Cop[] = [...Array.from({ length: MAX_CAR }, (_, i) => makeCop(i, false)), ...Array.from({ length: MAX_SWAT }, (_, i) => makeCop(MAX_CAR + i, true))];
   const onStreet: Vehicle[] = [];
@@ -198,7 +215,7 @@ export async function install(engine: Engine): Promise<void> {
   };
   const activate = (c: Cop) => {
     c.active = true; c.flipped = 0; c.sees = false; c.search.t = 0; c.block = 0; c.role = 'chase';
-    c.hp = c.swat ? 240 : 150; c.wreck = -1; c.hitT = 0; c.smokeT = 0; c.car.boost = 0;
+    c.hp = c.swat ? 240 : 150; c.wreck = -1; c.hitT = 0; c.smokeT = 0; c.car.boost = 0; c.air = false;
   };
 
   /** Where the player will be in a few seconds along their road: the interceptors' meeting point. */
@@ -257,6 +274,107 @@ export async function install(engine: Engine): Promise<void> {
     return true;
   };
 
+  // --- 闯空侧 ------------------------------------------------------------------------------------------------
+  let inAir = false, onRwy = false, airT = 0, zoneT = 0;
+  /** 空侧里能刷机场公安的点 [x, z, ...]：滑行道和空侧勤务道上每 AIR_STEP 米一个，不在跑道上、离机位 45 米以外。airfield.json 到了才算。 */
+  let airPts: Float32Array | null = null;
+  const airCand: number[] = [];
+  const airport = () => engine.get<AirportApi>('airport');
+  const airPoints = (): Float32Array | null => {
+    if (airPts) return airPts;
+    const ap = airport(), d = ap?.data;
+    if (!ap || !d) return null;
+    const out: number[] = [];
+    const stands = d.stands;
+    const lines = [...d.taxiways.map((w) => w.p), ...d.roads.map((r) => r.p)];
+    for (const p of lines) {
+      for (let k = 0; k + 3 < p.length; k += 2) {
+        const L = Math.hypot(p[k + 2] - p[k], p[k + 3] - p[k + 1]);
+        for (let s = 0; s < L; s += AIR_STEP) {
+          const x = p[k] + (p[k + 2] - p[k]) * s / L, z = p[k + 1] + (p[k + 3] - p[k + 1]) * s / L;
+          if (!ap.airside(x, z) || ap.runwayAt(x, z, 30)) continue;
+          let ok = true;
+          for (const st of stands) if (Math.abs(st.x - x) < 45 && Math.abs(st.z - z) < 45) { ok = false; break; }
+          if (ok) out.push(x, z);
+        }
+      }
+    }
+    airPts = Float32Array.from(out);
+    return airPts;
+  };
+  /** 玩家现在算不算在空侧（police/Zone.ts）；坐在公交、出租车里不算。 */
+  const inAirside = (): boolean => {
+    const ap = airport();
+    return !!ap && !pl.riding && trespassing((x, z) => ap.airside(x, z), g, P.x, P.y, P.z);
+  };
+  /** 至少 n 星：提示 `key`（前面带上现在的星），新的星照常让 HUD、警笛响一下。 */
+  const raiseTo = (n: number, key: 'wanted.airside' | 'wanted.runway') => {
+    if (busted >= 0) return;
+    const before = level();
+    heat = Math.min(5.99, Math.max(heat, n));
+    lastX = P.x; lastZ = P.z; seen = true; evade = 0;
+    known = Math.max(known, KNOWN_ON_STAR(level()));
+    engine.get<HudApi>('hud')?.toast(`${'★'.repeat(level())} ${t(key)}`, 4);
+    if (level() > before) engine.events.emit('wanted:level', { level: level(), up: true });
+  };
+  /** 每 ZONE_DT 秒：进出空侧、上没上跑道。 */
+  const zoneStep = (dt: number) => {
+    if ((zoneT -= dt) > 0) return;
+    zoneT = ZONE_DT;
+    const now = busted < 0 && inAirside();
+    if (now !== inAir) {
+      airT += ZONE_DT;
+      if (airT >= (now ? AIR_IN : AIR_OUT)) {
+        inAir = now; airT = 0;
+        if (inAir) { raiseTo(AIR_STARS, 'wanted.airside'); engine.events.emit('wanted:airside', { runway: false }); }
+        else onRwy = false;
+      }
+    } else airT = 0;
+    if (!inAir) return;
+    // 上跑道：两边外扩 4 米；下跑道要出了外扩 15 米（压着跑道边开不会一会儿上一会儿下、一遍遍提示）
+    const rw = !!airport()?.runwayAt(P.x, P.z, onRwy ? 15 : 4);
+    if (rw && !onRwy) { raiseTo(RUNWAY_STARS, 'wanted.runway'); engine.events.emit('wanted:airside', { runway: true }); }
+    onRwy = rw;
+  };
+  /** 在空侧里刷一辆机场公安：滑行道上离玩家 120–240 米、镜头看不见、到玩家之间没有楼挡着、脚下有地面。 */
+  const spawnAirCop = (swat: boolean): Cop | null => {
+    const pts = airPoints();
+    if (!pts) return null;
+    const c = cops.find((k) => !k.active && k.swat === swat);
+    if (!c) return null;
+    const cam = engine.camera.position;
+    engine.camera.getWorldDirection(camDir);
+    airCand.length = 0;
+    for (let i = 0; i < pts.length; i += 2) {
+      const d = Math.hypot(pts[i] - P.x, pts[i + 1] - P.z);
+      if (d >= AIR_SPAWN_MIN && d <= AIR_SPAWN_MAX) airCand.push(i);
+    }
+    for (let attempt = 0; attempt < 16 && airCand.length; attempt++) {
+      const i = airCand[Math.floor(rnd() * airCand.length)], x = pts[i], z = pts[i + 1];
+      const dc = Math.hypot(x - cam.x, z - cam.z);
+      if (dc < 200 && ((x - cam.x) * camDir.x + (z - cam.z) * camDir.z) / dc > 0.3) continue;
+      if (onStreet.some((o) => Math.hypot(o.pos.x - x, o.pos.z - z) < 15)) continue;
+      // 脚下有地面（地块加载了），上面没有机翼、廊桥
+      const g0 = engine.physics.raycast({ x, y: 9, z }, down, 12, roofGroups, true);
+      if (!g0 || Math.abs(g0.point[1]) > 0.6) continue;
+      // 直着开过去不撞楼
+      const dx = P.x - x, dz = P.z - z, d = Math.hypot(dx, dz);
+      dir.x = dx / d; dir.y = 0; dir.z = dz / d;
+      if (engine.physics.raycast({ x, y: 1.3, z }, dir, d - 4, losGroups, true)) continue;
+      c.car.body.setEnabled(true);
+      c.car.reset({ x, y: 0.03 + c.car.spec.wheelRadius + 0.04, z }, Math.atan2(dx, dz));
+      c.car.setMoving(14);
+      c.driver.reset(); c.filter.reset();
+      c.prevPos.copy(c.car.pos); c.curPos.copy(c.car.pos); c.prevQuat.copy(c.car.quat); c.curQuat.copy(c.car.quat);
+      activate(c);
+      c.air = !swat;
+      if (c.air) airKit ??= new CarKit(engine.scene, MAX_CAR, AIR_LIVERY);
+      onStreet.push(c.car);
+      return c;
+    }
+    return null;
+  };
+
   /** A new star: tell the player what it means, and let the HUD and the siren stinger react. */
   const levelUp = (lv: number) => {
     known = Math.max(known, KNOWN_ON_STAR(lv));
@@ -266,6 +384,7 @@ export async function install(engine: Engine): Promise<void> {
 
   const crime = (kind: Crime, x: number, z: number) => {
     if (busted >= 0) return;
+    if (kind === 'trespass') { readPlayer(); raiseTo(AIR_STARS, 'wanted.airside'); lastX = x; lastZ = z; return; }
     let witnessed = kind === 'hit_police' || kind === 'report';
     for (const c of cops) if (!witnessed && c.active && canSee(c.car, x, 1, z, 90)) witnessed = true;
     // Otherwise it only counts if someone on the pavement phones it in (people/: they stop and
@@ -280,6 +399,8 @@ export async function install(engine: Engine): Promise<void> {
 
   const clear = () => {
     heat = 0; seen = false; evade = 0; bust = 0; busted = -1; known = 0;
+    // 还在空侧里的话下一次判断重新算闯入（任务清掉通缉、联机开局）
+    inAir = false; onRwy = false; airT = 0;
     api.debug.noBust = false;
     for (const c of cops) if (c.active) despawn(c);
     onStreet.length = 0;
@@ -330,6 +451,8 @@ export async function install(engine: Engine): Promise<void> {
     get sirenDistance() { return level() > 0 || busted >= 0 ? sirenD : Infinity; },
     get evade() { const lv = level(); return lv > 0 && !seen ? Math.min(1, evade / evadeTime(lv)) : 0; },
     get heliDistance() { return heliD; },
+    get airside() { return inAir; },
+    get onRunway() { return onRwy; },
     policeCars: () => onStreet,
     crime, clear,
     debug: {
@@ -338,7 +461,8 @@ export async function install(engine: Engine): Promise<void> {
         readPlayer(); lastX = P.x; lastZ = P.z; seen = n > 0; evade = 0; known = n > 0 ? KNOWN_ON_STAR(Math.floor(heat)) : 0;
       },
       noBust: false,
-      cops: () => cops.filter((c) => c.active).map((c) => ({ x: c.car.pos.x, z: c.car.pos.z, speed: c.car.speed, role: c.role, sees: c.sees, swat: c.swat, hp: c.hp, wreck: c.wreck, block: c.block, boost: c.car.boost, forward: c.driver.input.forward })),
+      cops: () => cops.filter((c) => c.active).map((c) => ({ x: c.car.pos.x, z: c.car.pos.z, speed: c.car.speed, role: c.role, sees: c.sees, swat: c.swat, hp: c.hp, wreck: c.wreck, block: c.block, boost: c.car.boost, forward: c.driver.input.forward, air: c.air })),
+      zone: () => ({ air: inAir, runway: onRwy, points: (airPoints()?.length ?? 0) / 2 }),
     },
     fixedUpdate(dt) {
       evadeScale = engine.get<{ name: string; evadeScale: number }>('contacts')?.evadeScale ?? 1;
@@ -353,6 +477,7 @@ export async function install(engine: Engine): Promise<void> {
         if (busted > 3.4) respawn();
         return;
       }
+      zoneStep(dt);
       let lv = level();
       const hidden = engine.get<{ name: string; contains(x: number, y: number, z: number): boolean }>('underground')?.contains(P.x, P.y, P.z) ?? false;
       // Who can see the player: a few rays per second.
@@ -367,7 +492,8 @@ export async function install(engine: Engine): Promise<void> {
       const nav = engine.get<NavApi>('nav');
       if (lv > 0) {
         const spotted = heli.sees || cops.some((c) => c.active && c.sees);
-        if (spotted) known = Math.max(known, KNOWN_AFTER_SIGHT);
+        // 空侧里一直算被看见：塔台、监控、满场的机场公安
+        if (spotted || inAir) known = Math.max(known, KNOWN_AFTER_SIGHT);
         known = hidden ? 0 : Math.max(0, known - dt);
         if (spotted || known > 0) {
           seen = true; lastX = P.x; lastZ = P.z; evade = 0;
@@ -399,7 +525,8 @@ export async function install(engine: Engine): Promise<void> {
         const swat = swats < SWAT_COUNT[lv];
         // While they can see the player, every other new car is sent ahead to cut them off.
         const sendAhead = seen && lv >= 2 && P.speed > 8 && ahead < Math.ceil(chasing / 2);
-        const c = seen ? spawnCop(P.x, P.z, swat, sendAhead) ?? spawnCop(P.x, P.z, swat) : spawnCop(lastX, lastZ, swat, false, searchRadius(lv));
+        // 空侧里：机场公安从滑行道上来；刷不出来（数据没到、附近没点）再按老办法在外面路上刷
+        const c = (inAir ? spawnAirCop(swat) : null) ?? (seen ? spawnCop(P.x, P.z, swat, sendAhead) ?? spawnCop(P.x, P.z, swat) : spawnCop(lastX, lastZ, swat, false, searchRadius(lv)));
         if (!c && swat) spawnCop(seen ? P.x : lastX, seen ? P.z : lastZ, false);
       }
       blockT -= dt;
@@ -439,6 +566,8 @@ export async function install(engine: Engine): Promise<void> {
           gl.x = P.x; gl.z = P.z; gl.vx = P.vx; gl.vz = P.vz;
           // Straight at them only up close: further out a straight line cuts the corners through the trees and lamp posts.
           direct = c.sees && dp < 45;
+          // 空侧没有路网：车在空侧里、玩家也在（或者刚从它跟前出了道口），直冲过去（空侧大多是平地）
+          if (!direct && (inAir || dp < 120) && airport()?.airside(c.car.pos.x, c.car.pos.z)) direct = true;
           c.driver.topSpeed = 28 + 3 * lv + (c.swat ? 2 : 0);
         } else {
           const s = c.search;
@@ -515,24 +644,26 @@ export async function install(engine: Engine): Promise<void> {
     },
     update(dt, alpha) {
       const cam = engine.camera.position;
-      let k = 0, ks = 0, nd = Infinity;
+      let k = 0, ks = 0, ka = 0, nd = Infinity;
       for (const c of cops) {
         if (!c.active) continue;
         renderPos.lerpVectors(c.prevPos, c.curPos, alpha);
         renderQuat.slerpQuaternions(c.prevQuat, c.curQuat, alpha);
         if (c.swat && swatKit) swatKit.set(ks++, renderPos, renderQuat, c.car, BLACK, BLACK, true);
+        else if (c.air && airKit) airKit.set(ka++, renderPos, renderQuat, c.car, WHITE, BLUE, true);
         else kit.set(k++, renderPos, renderQuat, c.car, WHITE, BLUE, true);
         const d = renderPos.distanceTo(cam);
         if (d < nd && c.wreck < 0) { nd = d; nearPos.copy(renderPos); nearLeft.copy(c.car.left); }
       }
-      kit.commit(k); swatKit?.commit(ks);
+      kit.commit(k); swatKit?.commit(ks); airKit?.commit(ka);
       const night = engine.get<RenderApi>('render')?.night ?? 0;
-      kit.setHeadlights(night > 0.35); swatKit?.setHeadlights(night > 0.35);
+      kit.setHeadlights(night > 0.35); swatKit?.setHeadlights(night > 0.35); airKit?.setHeadlights(night > 0.35);
       // Light bar: red then blue, a double flash each.
       const lit = level() > 0 || busted >= 0;
       const ph = (clock * 2.4) % 2, u = ph % 1, flash = u < 0.16 || (u > 0.28 && u < 0.44) ? 1 : 0;
       const red = lit && ph < 1 ? flash : 0, blue = lit && ph >= 1 ? flash : 0;
       kit.setBeacons(0.25 + red * 9, 0.25 + blue * 9);
+      airKit?.setBeacons(0.25 + red * 9, 0.25 + blue * 9);
       swatKit?.setBeacons(0.25 + blue * 9, 0.25 + red * 9);
       const glow = lit && nd < 70 ? 18 + 70 * night : 0;
       glowR.intensity = glow * red; glowB.intensity = glow * blue;

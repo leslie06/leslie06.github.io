@@ -71,3 +71,13 @@ export function walkCourse(g: LaneGraph, def: CourseDef, log?: string[]): Course
   }
   return null;
 }
+
+/**
+ * 跑道极速（2026-11-16，首都机场第三批，trials/Runway.ts）：三条跑道各一个榜 `rwy_<id>`，记开上跑道到离开跑道之间的最高时速。
+ * `ref` 是 airfield.json 里的跑道号（`AirportApi.runwayAt` 返回的就是它）；顺序和 id 定了就不能改（排行榜和纪录史按 id 存）。
+ */
+export const RUNWAYS: readonly { id: string; ref: string; km: number }[] = [
+  { id: '36l', ref: '18R/36L', km: 3.2 },
+  { id: '36r', ref: '18L/36R', km: 3.8 },
+  { id: '01', ref: '01/19', km: 3.8 },
+];

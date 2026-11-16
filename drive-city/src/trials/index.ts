@@ -4,6 +4,7 @@ import type { Blip, HudApi, MissionApi, NavApi, PlayerApi, VehicleApi } from '..
 import type { TrafficApi } from '../traffic';
 import { Marker } from '../missions/Marker';
 import { COURSES, walkCourse, type Course } from './Courses';
+import { installRunway } from './Runway';
 
 /** A checkpoint every CP metres; the course must be driven through each in turn. */
 const CP = 500;
@@ -64,6 +65,8 @@ export async function install(engine: Engine): Promise<void> {
   const tr = engine.get<TrafficApi>('traffic');
   const pl = engine.get<PlayerApi>('player');
   if (!tr || !pl) return;
+  // 跑道极速（首都机场的三条跑道，2026-11-16）：自己一个系统 `runwaySpeed`
+  installRunway(engine);
   const g = tr.graph;
   const at = { x: 0, z: 0, dx: 0, dz: 0 };
   const lines: Line[] = [];

@@ -6,6 +6,7 @@ import type { CheckinApi } from '../checkin';
 import type { DistrictApi } from '../district';
 import type { EstateApi } from '../estate';
 import type { TravelApi } from '../travel';
+import type { AirportApi } from '../airport';
 import { stat } from '../online/Funnel';
 import { readPlaytime } from '../ui/PlayTime';
 import { C, F, css, el } from '../ui/theme';
@@ -46,7 +47,11 @@ export interface DailyApi extends System {
   readonly untilTurn: number;
   /** The panel (ui/Daily.ts sets it): the 附近 panel opens it. */
   show?: () => void;
-  debug: { set(ids: string[]): void; days(n: number): void; open(): void; finish(i: number): void; save(): DailySave; landmark(): string | null };
+  /** 今天的这一个（任务 id）还没做完：别的系统按它多给机会（missions/：「送一位乘客去机场」时去机场的客多）。 */
+  wants(id: string): boolean;
+  debug: { set(ids: string[]): void; days(n: number): void; open(): void; finish(i: number): void; save(): DailySave; landmark(): string | null;
+    /** 「看一架飞机落地」：最近一次判到的接地（离玩家多远）。 */
+    landing(): { id: number; d: number } | null };
 }
 
 const KEY = 'drivecity.daily.v1';
@@ -55,7 +60,9 @@ const OPEN_AFTER = 600;
 /** The nudge, this long into a game (s), once. */
 const NUDGE_AFTER = 40;
 /** Where 带我去's 快速前往 spots are (travel/'s ids). */
-const SPOT: Partial<Record<Where, string>> = { nanluo: 'nanluo', tofu: 'tofu' };
+const SPOT: Partial<Record<Where, string>> = { nanluo: 'nanluo', tofu: 'tofu', airport: 'airport' };
+/** 「看一架飞机落地」：落地的飞机接地那一刻离玩家多远以内算看到了（米）。T3 车道边到东跑道的接地点约 1.1 公里，T2 前的机场高速到西跑道约 750 米。 */
+const LANDING_R = 1500;
 
 css(`
 .dly-card{position:fixed;left:50%;top:16%;z-index:42;pointer-events:none;transform:translateX(-50%) scale(1.08);opacity:0;transition:transform .35s cubic-bezier(.2,1.4,.4,1),opacity .3s;
@@ -108,6 +115,7 @@ export function install(engine: Engine): void {
     return {
       rabbitsLeft: r ? r.total - r.found : 0, checkinsLeft: c ? c.total - c.found : 0,
       owns: Object.keys(engine.get<EstateApi>('estate')?.saved.owned ?? {}).length > 0, landmark: sites().length > 0,
+      airport: !!engine.get<AirportApi>('airport'),
     };
   };
   /** Today's set, if the day has turned (or it has just opened): true when it is new. */
@@ -192,6 +200,30 @@ export function install(engine: Engine): void {
     engine.events.on(d.on, (e) => { if (save.tasks.some((s) => s.id === d.id && !s.done)) bump(d.id, count(e)); });
   }
   engine.events.on('checkin:visit', ({ id }) => { if (id === landmark()?.id) bump('landmark', 1); });
+  const wants = (id: string) => save.day === today() && save.tasks.some((q) => q.id === id && !q.done);
+  /**
+   * 「看一架飞机落地」（2026-11-16）：每帧看 AirportApi.flights 里落地的那几架（`arr`），从天上到地上（`ground` 由假变真）的那一刻
+   * 离玩家 LANDING_R 米内、玩家不在天上（高架上也算），就算看到了。只在任务还没做完时看。
+   */
+  const air = new Map<number, boolean>();
+  let lastLanding: { id: number; d: number } | null = null;
+  const watchLandings = () => {
+    const ap = engine.get<AirportApi>('airport'), p = engine.get<{ name: string; position: { x: number; y: number; z: number } }>('player')?.position;
+    if (!ap || !p) return;
+    const seen = new Set<number>();
+    for (const f of ap.flights) {
+      if (!f.arr) continue;
+      seen.add(f.id);
+      const was = air.get(f.id);
+      air.set(f.id, f.ground);
+      if (was !== false || !f.ground) continue;
+      const d = Math.hypot(f.x - p.x, f.z - p.z);
+      if (d > LANDING_R || p.y > 40) continue;
+      lastLanding = { id: f.id, d: Math.round(d) };
+      bump('landing', 1);
+    }
+    for (const id of air.keys()) if (!seen.has(id)) air.delete(id);
+  };
 
   // --- the once-a-game nudge, and the save following the account (online/Cloud.ts swaps it in before a game) ---
   let since = -1, nudged = false, called = false;
@@ -231,6 +263,7 @@ export function install(engine: Engine): void {
       });
     },
     get untilTurn() { return untilTurn(now()); },
+    wants,
     swap(i) {
       const ok = swap(save, i, ctx());
       if (ok) { store(); roll(); }
@@ -257,11 +290,13 @@ export function install(engine: Engine): void {
       finish(i) { const s = save.tasks[i]; if (s) bump(s.id, taskOf(s.id)!.n); },
       save: () => save,
       landmark: () => landmark()?.id ?? null,
+      landing: () => lastLanding,
     },
 
     update(dt) {
       // the day can turn while playing (5 a.m.); a second is often enough to look
       if ((poll += dt) > 1) { poll = 0; roll(); }
+      if (wants('landing')) watchLandings(); else if (air.size) air.clear();
       if (since < 0) return;
       const ui = engine.get<{ name: string; state: string }>('ui');
       if (ui?.state !== 'playing') return;

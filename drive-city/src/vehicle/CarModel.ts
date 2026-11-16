@@ -15,6 +15,10 @@ export interface Livery {
   doorColor?: string;
   /** Red and blue police light bar on the roof (flashed with setBeacons). */
   beacons?: boolean;
+  /** 灯条两半都是琥珀色（机场引导车，2026-11-16，airport/Ground.ts）；默认一红一蓝。 */
+  beaconAmber?: boolean;
+  /** 公交车身的线路牌：[线路号, 终点]，四格都写这一条（机场摆渡车，2026-11-16）；默认四条北京公交线路。 */
+  dest?: readonly [string, string];
 }
 
 /** 北京出租车: golden-yellow top, dark-green bottom, TAXI roof light, blue 京B plate. */

@@ -259,7 +259,7 @@ const atlases = new Map<string, THREE.DataTexture>();
 
 /** The atlas for a livery (cached: every kit and model wearing the same livery shares one texture). */
 export function liveryAtlas(l: Livery): THREE.DataTexture {
-  const key = JSON.stringify([l.roofSign, l.plate, l.doorText, l.doorColor, l.beacons]);
+  const key = JSON.stringify([l.roofSign, l.plate, l.doorText, l.doorColor, l.beacons, l.beaconAmber ?? false, l.dest ?? null]);
   let t = atlases.get(key);
   if (t) return t;
   const col = document.createElement('canvas'), msk = document.createElement('canvas');
@@ -287,10 +287,10 @@ export function liveryAtlas(l: Livery): THREE.DataTexture {
   drawPlate(g, PX.plateF, l.plate); drawPlate(g, PX.plateR, l.plate); opaque.push(PX.plateF, PX.plateR);
   drawSign(g, m, PX.sign, l.roofSign);
   drawText(g, m, PX.door, l.doorText ?? '', l.doorColor ?? '#ffffff', 700);
-  drawDest(g, m, PX.dest);
+  drawDest(g, m, PX.dest, l.dest);
   drawPlateVariants(g, l.plate); opaque.push(PX.plates);
-  drawDestVariants(g, m);
-  drawBeacon(g, m, PX.beacon);
+  drawDestVariants(g, m, l.dest);
+  drawBeacon(g, m, PX.beacon, !!l.beaconAmber);
   drawText(g, m, PX.side, l.doorText ?? '', l.doorColor ?? '#ffffff', 800);
   drawBadge(g, PX.badge); opaque.push(PX.badge);
   drawBusHead(g, m, PX.busHead);
@@ -655,11 +655,12 @@ function drawPlateJ(g: G, r: PxRect): void {
   });
 }
 
-function drawDest(g: G, m: G, r: PxRect): void {
+function drawDest(g: G, m: G, r: PxRect, dest?: readonly [string, string]): void {
+  const [no, to] = dest ?? ['1', '四惠枢纽站'];
   const text = (c: G, color: string) => {
     c.fillStyle = color; c.textBaseline = 'middle';
-    c.textAlign = 'left'; c.font = `800 ${r.h * 0.78}px ${CJK}`; c.fillText('1', r.w * 0.04, r.h * 0.54);
-    c.textAlign = 'center'; fit(c, '四惠枢纽站', r.w * 0.72, r.h * 0.58, 700); c.fillText('四惠枢纽站', r.w * 0.6, r.h * 0.54);
+    c.textAlign = 'left'; c.font = `800 ${r.h * 0.78}px ${CJK}`; fit(c, no, r.w * 0.26, r.h * 0.78, 800); c.fillText(no, r.w * 0.04, r.h * 0.54);
+    c.textAlign = 'center'; fit(c, to, r.w * 0.72, r.h * 0.58, 700); c.fillText(to, r.w * 0.6, r.h * 0.54);
   };
   clip(g, r, () => {
     g.fillStyle = '#0b0b0b'; g.fillRect(0, 0, r.w, r.h);
@@ -717,9 +718,10 @@ function drawPlateVariants(g: G, base: Livery['plate']): void {
 
 /** 公交线路牌的四种（线路号、终点站），画法同 `drawDest`。 */
 const BUS_ROUTES: readonly [string, string][] = [['1', '四惠枢纽站'], ['52', '北京西站'], ['特2', '前门'], ['300', '内环 快车']];
-function drawDestVariants(g: G, m: G): void {
+function drawDestVariants(g: G, m: G, dest?: readonly [string, string]): void {
   for (let k = 0; k < DEST_VARIANTS; k++) {
-    const r = destCell(k), [no, to] = BUS_ROUTES[k];
+    // 涂装自己写了线路牌（机场摆渡车）：四格都是它
+    const r = destCell(k), [no, to] = dest ?? BUS_ROUTES[k];
     const text = (c: G, color: string) => {
       c.fillStyle = color; c.textBaseline = 'middle';
       c.textAlign = 'left'; fit(c, no, r.w * 0.26, r.h * 0.78, 800); c.fillText(no, r.w * 0.04, r.h * 0.54);
@@ -736,9 +738,11 @@ function drawDestVariants(g: G, m: G): void {
   }
 }
 
-function drawBeacon(g: G, m: G, r: PxRect): void {
+function drawBeacon(g: G, m: G, r: PxRect, amber = false): void {
+  // 机场引导车（2026-11-16）的灯条两半都是琥珀色；警车一红一蓝
+  const halves = amber ? [[0, '#6e3c06', '#ffae1a'], [r.w / 2, '#6e3c06', '#ffae1a']] as const : [[0, '#6e0c0c', '#ff3030'], [r.w / 2, '#0c1f6e', '#3a6bff']] as const;
   for (const [c, mask] of [[g, false], [m, true]] as const) clip(c, r, () => {
-    for (const [ox, base, hot] of [[0, '#6e0c0c', '#ff3030'], [r.w / 2, '#0c1f6e', '#3a6bff']] as const) {
+    for (const [ox, base, hot] of halves) {
       const gr = c.createLinearGradient(0, 0, 0, r.h);
       gr.addColorStop(0, mask ? '#ffffff' : hot); gr.addColorStop(1, mask ? '#bdbdbd' : base);
       c.fillStyle = gr; c.fillRect(ox, 0, r.w / 2, r.h);

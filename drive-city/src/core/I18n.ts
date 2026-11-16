@@ -28,6 +28,8 @@ import { ESTATE_EN, ESTATE_ZH } from './i18n/estate';
 import { DAILY_EN, DAILY_ZH } from './i18n/daily';
 import { REC_EN, REC_ZH } from './i18n/records';
 import { STREET_EN, STREET_ZH } from './i18n/street';
+import { RUNWAY_EN, RUNWAY_ZH } from './i18n/runway';
+import { AIRJOBS_EN, AIRJOBS_ZH } from './i18n/airjobs';
 
 const STORE_KEY = 'drivecity.lang.v1';
 
@@ -40,6 +42,8 @@ const EN = {
   ...DAILY_EN,
   ...REC_EN,
   ...STREET_EN,
+  ...RUNWAY_EN,
+  ...AIRJOBS_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
@@ -526,6 +530,7 @@ const EN = {
   'map.shortcut': "Hutong shortcut",
   'stunt.shortcut': "HUTONG",
   'stunt.takedown': "COP TAKEDOWN",
+  'stunt.underplane': "UNDER THE JET",
   'shortcut.found': "Hutong shortcut found · {i}/{of} · +¥{n} (saves {km} km)",
   'ctl.phone': "Phone: nearby adventures / messages",
   'ctl.dealer': "Car dealer: buy a car, delivered to you",
@@ -788,6 +793,7 @@ const EN = {
   'story.t.jack': "Take a car off the street (F by a car)",
   'story.t.hide': "Park it in the underground car park (P)",
   'story.t.go': "Pull up at Jinghua Jewellers, {place}",
+  'airport.stairJump': 'AIRSTAIR LAUNCH · {m} m',
 };
 
 export type TKey = keyof typeof EN;
@@ -802,6 +808,8 @@ const ZH: Record<TKey, string> = {
   ...DAILY_ZH,
   ...REC_ZH,
   ...STREET_ZH,
+  ...RUNWAY_ZH,
+  ...AIRJOBS_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',
@@ -1288,6 +1296,7 @@ const ZH: Record<TKey, string> = {
   'map.shortcut': "胡同捷径",
   'stunt.shortcut': "穿胡同",
   'stunt.takedown': "撞毁警车",
+  'stunt.underplane': "钻飞机",
   'shortcut.found': "发现胡同捷径 · {i}/{of} · +¥{n}（省了 {km} 公里）",
   'ctl.phone': "手机：附近冒险 / 短信",
   'ctl.dealer': "车行：买车，送到身边",
@@ -1550,6 +1559,7 @@ const ZH: Record<TKey, string> = {
   'story.t.jack': "街上抢一辆车（靠近车按 F）",
   'story.t.hide': "开进地下车库停好（P）",
   'story.t.go': "开到京华珠宝行门口停下：{place}",
+  'airport.stairJump': '登机梯飞跃 · 飞了 {m} 米',
 };
 
 /** Both tables, for the placeholder-parity test. */

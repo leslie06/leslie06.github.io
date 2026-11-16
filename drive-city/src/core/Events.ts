@@ -71,7 +71,7 @@ export interface GameEvents {
   /** A counter: the player caught one winding up. */
   'combat:counter': { x: number; z: number };
   /** A move that scores in the street combo (stunts/): a near miss, a drift, a jump... `points` before the multiplier. */
-  'stunt:event': { kind: 'near' | 'drift' | 'air' | 'oncoming' | 'redlight' | 'smash' | 'evade' | 'shortcut' | 'takedown'; points: number };
+  'stunt:event': { kind: 'near' | 'drift' | 'air' | 'oncoming' | 'redlight' | 'smash' | 'evade' | 'shortcut' | 'takedown' | 'underplane'; points: number };
   /** A stunt ramp or overpass flown (stunts/Jumps.ts): which (`ramp`), from where, how far (m). */
   'stunt:jump': { ramp: number; x: number; z: number; dist: number; over: boolean };
   /** The combo ended: banked as `cash`, or `lost` in a crash (cash 0). */
@@ -113,6 +113,11 @@ export interface GameEvents {
   'wanted:level': { level: number; up: boolean };
   /** The police lost the player (not a bust): the stars they had. */
   'wanted:escaped': { level: number };
+  /** 闯空侧（police/，2026-11-16）：玩家进了机场空侧（`runway`：上了跑道）。每次进去发一次。 */
+  'wanted:airside': { runway: boolean };
+  /** 跑道极速（trials/Runway.ts，2026-11-16）：开上跑道开始；离开跑道结束：这一趟的最高时速（km/h）、是不是个人最好。 */
+  'runway:start': { id: string };
+  'runway:finish': { id: string; kmh: number; best: boolean };
   /** 送豆腐 (missions/Tofu.ts): the tofu up at the top, with the water left in the cup (0..1). */
   'tofu:delivered': { water: number };
   /** 在柜台上接了一单活（errands/）：takeout、parcels、daijia。 */
@@ -121,6 +126,13 @@ export interface GameEvents {
   'errand:done': { kind: string; pay: number };
   /** A short job (missions/Jobs.ts) finished, paid; errands/ 的外卖和派件送完也发。 */
   'job:done': { kind: string };
+  /**
+   * 机场的乘客活送到了、给了钱（2026-11-16）：`fare` 城里接的去机场的长单、`rank` 蓄车池接的进城大单（missions/）、
+   * `flight` 熟人的赶飞机、`meet` 接机（contacts/AirRuns.ts）。`toAirport`：这一单是把人送到机场的。
+   */
+  'airjob:done': { kind: 'fare' | 'rank' | 'flight' | 'meet'; toAirport: boolean; pay: number };
+  /** 接下了熟人的赶飞机、接机（contacts/AirRuns.ts）。 */
+  'airjob:taken': { kind: 'flight' | 'meet' };
   /** This player set a course's record (online/Leaderboard.ts): the board, the time (ms). */
   'rec:broken': { board: string; ms: number };
   /** 每日任务 (daily/): one done (its tier), and all three (the stamp it put on the card). */

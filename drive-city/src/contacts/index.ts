@@ -16,6 +16,7 @@ import { CAST_ON, castModel, hasModel } from '../character/Cast';
 import { journalOf } from '../npc/Journal';
 import { clearOfWorld, LifeProps, PropBodies, type PropKind } from '../life/Props';
 import { setPoliceOnEdge } from '../ui/Minimap';
+import { AIR_OPT, AirRuns, type AirKind } from './AirRuns';
 
 export type ContactId = 'laok' | 'xiaoyu' | 'daliu' | 'wang' | 'laozhang' | 'liujie' | 'feilong';
 const IDS: ContactId[] = ['laok', 'xiaoyu', 'daliu', 'wang', 'laozhang', 'liujie', 'feilong'];
@@ -44,7 +45,11 @@ export interface ContactsApi extends System {
   spot(id: ContactId): { x: number; z: number; yaw: number } | null;
   /** `id` in person while the camera is near (a cutscene turns them to face someone), or null. */
   actor(id: ContactId): Actor | null;
-  debug: { add(id: ContactId, pts: number): void; where(): { id: ContactId; x: number; z: number; here: boolean }[]; reset(): void };
+  /** 熟人的机场活（AirRuns.ts：老张的赶飞机、小雨的接机）在办着：哪一样，没有是 null（missions/ 这时不拉别的客）。 */
+  readonly airActive: AirKind | null;
+  debug: { add(id: ContactId, pts: number): void; where(): { id: ContactId; x: number; z: number; here: boolean }[]; reset(): void;
+    /** 机场活：状态、不打电话直接接一单、来电（对话框问接不接）、跳过晚点。 */
+    air: { state(): Record<string, unknown>; start(kind: AirKind): boolean; call(kind: AirKind): boolean; skipWait(): void; expire(secs: number): void } };
 }
 
 interface Def {
@@ -153,6 +158,13 @@ export async function install(engine: Engine): Promise<void> {
   // Their voice carries who they are: their lines are recorded in their own voice (audio/VoiceClips.ts).
   const speakerOf = (h: Here): Speaker => ({ name: `${t(h.d.name)} ${heartText(heartsOf(h.d.id))}`, color: h.d.color, look: h.looks, voice: h.actor ? { ...h.actor.voice, character: h.d.id } : undefined, at: h.actor?.pos ?? null });
 
+  // 首都机场的两样活（AirRuns.ts，2026-11-16）：老张来电「赶飞机」、小雨来电「接机」；不在 shot mode 里打电话
+  const air = new AirRuns(engine, {
+    speaker: (id) => { const h = here.find((q) => q.d.id === id)!; return { name: t(h.d.name), color: h.d.color, look: h.looks, at: null }; },
+    addFriendship: (id, n) => add(id, n),
+    rnd,
+  });
+
   // 小飞龙's race: agreed on foot, it starts once the player is driving off near him.
   let duel = 0;
   engine.events.on('challenge:result', ({ won }) => {
@@ -197,6 +209,14 @@ export async function install(engine: Engine): Promise<void> {
       if (heartsOf(id) >= 3) opts.push({ label: t('con.liujie.optNews'), go: () => { engine.get<{ name: string; gossip(s: Speaker): boolean }>('life')?.gossip(sp); } });
     }
     if (id === 'feilong') opts.push({ label: t('con.feilong.optDuel'), go: () => { duel = 60; dlg()?.say(sp, t('con.feilong.duelOn'), { prio: 2 }); } });
+    // 老张是开出租的老司机：当面问他「有机场的活吗？」，有就是赶飞机或接机（和来电一样，接了才开始）
+    if (id === 'laozhang') opts.push({ label: t(AIR_OPT), go: () => {
+      const m = missions();
+      const busy = !!air.job || !!m?.busy || !!m?.story || (engine.get<WantedApi>('wanted')?.level ?? 0) > 0;
+      // 对话框这一句答完了再问下一句
+      if (busy) dlg()?.say(sp, t('con.air.none'), { prio: 2 });
+      else setTimeout(() => { if (!air.offer('flight', true)) dlg()?.say(sp, t('con.air.none'), { prio: 2 }); }, 300);
+    } });
     // a gift in hand from a shop in the street (street/): theirs for the asking
     const street = engine.get<StreetApi>('street'), gift = street?.gift;
     if (gift) opts.unshift({ label: t('st.gift.give', { item: t(gift.name) }), go: () => { const n = street!.giveGift(); if (n) add(id, n); dlg()?.say(sp, t('st.gift.thanks'), { prio: 2 }); } });
@@ -234,8 +254,11 @@ export async function install(engine: Engine): Promise<void> {
       add: (id, n) => add(id, n),
       where: () => here.map((h) => ({ id: h.d.id, x: h.x, z: h.z, here: !!h.actor?.alive })),
       reset: () => { pts = {}; wins = 0; save(); },
+      air: { state: () => air.state(), start: (k) => air.start(k), call: (k) => air.offer(k), skipWait: () => air.skipWait(), expire: (n) => air.expire(n) },
     },
+    get airActive() { return air.active; },
     fixedUpdate(dt) {
+      if (show) air.fixedUpdate(dt);
       const cam = engine.camera.position;
       for (const h of here) {
         if (reserved.has(h.d.id)) continue;
@@ -299,7 +322,8 @@ export async function install(engine: Engine): Promise<void> {
         if (comply > 3) { comply = 0; w.clear(); toast(t('con.warning')); }
       } else comply = 0;
     },
-    update() {
+    update(dt) {
+      air.update(dt);
       props.begin();
       const f = pl.foot;
       for (const h of here) {

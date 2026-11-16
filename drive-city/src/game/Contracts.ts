@@ -290,7 +290,8 @@ export interface NavApi extends System {
 
 // --- Wanted level (police/) -----------------------------------------------------------------------
 
-export type Crime = 'hit_person' | 'carjack' | 'hit_police' | 'ram' | 'speeding' | 'report';
+/** `trespass`（2026-11-16）：闯进机场空侧（围界里），至少两星，不用人看见（police/ 自己按区域判断，也可以由别处直接报）。 */
+export type Crime = 'hit_person' | 'carjack' | 'hit_police' | 'ram' | 'speeding' | 'report' | 'trespass';
 /**
  * Fist fights (combat/, 2026-10-12, 「徒步近战」): gang members who fight back, a combo of strikes, counters when one
  * of them winds up. The player's attack and counter keys come here first while on foot.
@@ -331,6 +332,9 @@ export interface WantedApi extends System {
   readonly heliDistance: number;
   /** How far along losing them the player is while out of sight, 0..1 (0 when seen or not wanted). */
   readonly evade: number;
+  /** 玩家在机场空侧（围界里）、在跑道上（2026-11-16，闯空侧）。可选：老实现没有。 */
+  readonly airside?: boolean;
+  readonly onRunway?: boolean;
   /** Police cars on the streets (collisions with people, traffic keeping its distance). */
   policeCars(): readonly Vehicle[];
 }

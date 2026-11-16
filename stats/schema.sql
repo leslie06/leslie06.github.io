@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS rec (
   board   TEXT    NOT NULL,             -- 赛道，和排行榜同名（trial_changan ...）
   pid     TEXT    NOT NULL,
   name    TEXT    NOT NULL,             -- 当时的昵称
-  ms      INTEGER NOT NULL,             -- 用时，毫秒，从起点门到终点
+  ms      INTEGER NOT NULL,             -- 用时，毫秒，从起点门到终点；跑道极速（rwy_）是最高时速 km/h × 10
   mode    TEXT    NOT NULL,             -- solo 单人计时赛 / room 房间里的联机赛跑
   racers  INTEGER NOT NULL DEFAULT 1,   -- 几个人一起跑的
   ts      INTEGER NOT NULL,

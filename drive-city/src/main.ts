@@ -11,6 +11,7 @@ import * as world from './world';
 import * as city from './city';
 import * as mountain from './mountain';
 import * as airport from './airport';
+import { installGround as airportGround } from './airport/Ground';
 import { registerCityPoses } from './city/Poses';
 import { registerTrafficPoses } from './traffic/Poses';
 import * as vehicle from './vehicle';
@@ -161,6 +162,8 @@ async function boot() {
   await player.install(engine);
   await damage.install(engine);
   if (worldName === 'city') { await traffic.install(engine); roadFeel.install(engine); tollPlazas.install(engine); bridgeNames.install(engine); steam.install(engine); roofSigns.install(engine); infoBoards.install(engine); busLanes.install(engine); antiGlare.install(engine); hutongWires.install(engine); ledScreens.install(engine); soundWalls.install(engine); junctionGrid.install(engine); await parking.install(engine); await people.install(engine); standers.install(engine); await dialogue.install(engine); await combat.install(engine); }
+  // 首都机场空侧的勤务车、登机梯车跳台（要 traffic 的 addExternalCars）
+  if (worldName === 'city') airportGround(engine);
   if (worldName === 'city') await nav.install(engine);
   if (worldName === 'city') await travel.install(engine);
   if (worldName === 'city') lightup.install(engine);

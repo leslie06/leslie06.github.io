@@ -17,6 +17,9 @@ export interface AirfieldData {
   roads: { w: number; p: number[] }[];
   /** 围界折线（建城时沿空侧的边，贴着航站楼的几段去掉了）。 */
   fence: number[][];
+  /** 空侧多边形的外环和洞（第三批加的；老的 airfield.json 没有）。 */
+  air?: number[][];
+  airHoles?: number[][];
 }
 
 /** 机场多边形的范围（游戏米），数据下载之前就要知道：开近了才下载。 */

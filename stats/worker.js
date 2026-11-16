@@ -216,6 +216,10 @@ export const BOARDS = {
     trial_e3: { asc: true, min: 40e3, max: 30 * 60e3 }, trial_w2: { asc: true, min: 40e3, max: 30 * 60e3 },
     trial_e4: { asc: true, min: 40e3, max: 30 * 60e3 }, trial_n4: { asc: true, min: 40e3, max: 30 * 60e3 },
     trial_jingtong: { asc: true, min: 40e3, max: 30 * 60e3 },
+    // 跑道极速（drive-city/src/trials/Runway.ts，2026-11-16）：首都机场三条跑道上的最高时速，km/h × 10，越大越好；
+    // step：纪录史里比现纪录快不到这么多不算（0.5 km/h）
+    rwy_36l: { asc: false, min: 400, max: 6000, step: 5 }, rwy_36r: { asc: false, min: 400, max: 6000, step: 5 },
+    rwy_01: { asc: false, min: 400, max: 6000, step: 5 },
   },
 };
 const LB_TOP = 10;
@@ -306,20 +310,25 @@ async function submit(request, env) {
 // 不管单人计时赛还是房间里的联机赛跑，谁跑出比全服纪录还快的时间就记一行：昵称、用时（毫秒，从起点门算）、
 // 哪种跑法、几个人一起跑、时间。只记破纪录的，所以一条赛道一行一行往下就是纪录被刷新的历史。
 // 一个玩家号一天最多记 REC_PER_DAY 次；比现纪录快不到 REC_STEP 毫秒的不算（连着交差一点点的成绩刷屏）。
+// 2026-11-16：跑道极速（BOARDS 里 rwy_ 开头的，asc: false）也记纪录史，`ms` 列放最高时速 km/h × 10，越大越好，步长看 BOARDS 的 step。
 const REC_PER_DAY = 10, REC_STEP = 50, REC_HIST = 30;
 const REC_MODES = new Set(['solo', 'room']);
 const RECSQL = {
   best: 'SELECT name, ms, mode, racers, ts FROM rec WHERE game = ? AND board = ? ORDER BY ms ASC, ts ASC LIMIT 1',
+  // 越大越好的榜（跑道极速：`ms` 列放的是 km/h × 10）
+  bestDesc: 'SELECT name, ms, mode, racers, ts FROM rec WHERE game = ? AND board = ? ORDER BY ms DESC, ts ASC LIMIT 1',
   put: 'INSERT INTO rec (game, board, pid, name, ms, mode, racers, ts, day, ip_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   today: 'SELECT COUNT(*) AS c FROM rec WHERE game = ? AND day = ? AND (pid = ? OR ip_hash = ?)',
-  hist: `SELECT name, ms, mode, racers, ts, pid FROM rec WHERE game = ? AND board = ? ORDER BY ts DESC LIMIT ${REC_HIST}`,
+  hist: `SELECT name, ms, mode, racers, ts, pid FROM rec WHERE game = ? AND board = ? ORDER BY ts DESC, id DESC LIMIT ${REC_HIST}`,
   count: 'SELECT COUNT(*) AS c FROM rec WHERE game = ? AND board = ?',
   // 每条赛道现在的纪录（最快的那行）
   all: `SELECT board, name, ms, mode, racers, ts, pid FROM rec r WHERE game = ? AND ms = (SELECT MIN(ms) FROM rec q WHERE q.game = r.game AND q.board = r.board)
         GROUP BY board`,
+  allDesc: `SELECT board, name, ms, mode, racers, ts, pid FROM rec r WHERE game = ? AND ms = (SELECT MAX(ms) FROM rec q WHERE q.game = r.game AND q.board = r.board)
+        GROUP BY board`,
 };
 const recOut = (r, pid) => r && ({ name: r.name, ms: r.ms, mode: r.mode, racers: r.racers, ts: r.ts, ...(pid !== undefined ? { me: !!pid && r.pid === pid } : {}) });
-const recBoard = (g, b) => !!BOARDS[g]?.[b] && b.startsWith('trial_');
+const recBoard = (g, b) => !!BOARDS[g]?.[b] && (b.startsWith('trial_') || b.startsWith('rwy_'));
 
 async function recSubmit(request, env) {
   const b = await body(request);
@@ -328,8 +337,9 @@ async function recSubmit(request, env) {
   if (!pid) return json({ error: 'pid' }, 400);
   if (!Number.isFinite(ms) || ms < spec.min || ms > spec.max) return json({ error: 'range' }, 400);
   const mode = REC_MODES.has(b.m) ? b.m : 'solo', racers = Math.min(8, Math.max(1, Math.round(+b.r) || 1));
-  const best = await env.DB.prepare(RECSQL.best).bind(b.g, b.b).first();
-  if (best && ms > best.ms - REC_STEP) return json({ ok: true, record: false, best: recOut(best) });
+  const best = await env.DB.prepare(spec.asc ? RECSQL.best : RECSQL.bestDesc).bind(b.g, b.b).first();
+  const step = spec.step ?? REC_STEP;
+  if (best && (spec.asc ? ms > best.ms - step : ms < best.ms + step)) return json({ ok: true, record: false, best: recOut(best) });
   const now = Date.now(), day = cnDay(now);
   const ip = request.headers.get('cf-connecting-ip') ?? '', ua = request.headers.get('user-agent') ?? '';
   const ipHash = await hash(ip, ua, day, env.SALT ?? 'salt');
@@ -349,8 +359,12 @@ async function recGet(env, url) {
     const h = await env.DB.prepare(RECSQL.hist).bind(g, b).all(), c = await env.DB.prepare(RECSQL.count).bind(g, b).first();
     return json({ board: b, n: c?.c ?? 0, hist: h.results.map((r) => recOut(r, pid)) });
   }
-  const all = await env.DB.prepare(RECSQL.all).bind(g).all();
-  return json({ recs: Object.fromEntries(all.results.map((r) => [r.board, recOut(r, pid)])) });
+  // 用时的榜取最小，时速的榜取最大
+  const asc = await env.DB.prepare(RECSQL.all).bind(g).all(), desc = await env.DB.prepare(RECSQL.allDesc).bind(g).all();
+  const recs = {};
+  for (const r of asc.results) if (BOARDS[g][r.board]?.asc) recs[r.board] = recOut(r, pid);
+  for (const r of desc.results) if (BOARDS[g][r.board] && !BOARDS[g][r.board].asc) recs[r.board] = recOut(r, pid);
+  return json({ recs });
 }
 
 // ---------------------------------------------------------------- 反馈

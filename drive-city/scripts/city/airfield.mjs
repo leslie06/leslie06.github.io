@@ -398,6 +398,9 @@ export function airfield(env) {
     terminals: terminals.filter((T) => T.rings.length).map((T) => { const bb = bboxOf(T.rings[0]); return { name: T.t.name ?? '', ref: T.t.ref ?? '', kind: T.t.aeroway, c: [q((bb[0] + bb[2]) / 2), q((bb[1] + bb[3]) / 2)], h: parseFloat(T.t.height) }; }),
     roads: airRoads.map((r) => ({ w: q(r.hw * 2), p: fl(r.P) })),
     fence: fence.map(fl),
+    // 空侧多边形（第三批，2026-11-16：闯空侧的通缉、尾流只在空侧）：外环和洞，和围界同一套化简过的环
+    air: outers.map(fl),
+    airHoles: holes.map(fl),
   };
   json.nodes = NODES;
 
