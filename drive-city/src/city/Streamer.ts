@@ -13,6 +13,7 @@ import { loadBlenderTrees, TREE_VARIANTS, useTreeMap, variantGeometry } from './
 import { furnitureGeometries, furnitureMaterials } from './visual/FurnitureGeo';
 import type { Furniture } from './visual/StreetFurniture';
 import { StreetKnocks } from './Knock';
+import { freeAfterUpload, glbTextureCap } from './landmarks/glb/Glb';
 
 const RAIL_COLOURS = [[1, 1, 1], [0.86, 0.93, 1]];
 const BIKE_COLOURS = [[0.98, 0.74, 0.08], [0.16, 0.5, 0.92], [0.28, 0.72, 0.36]];
@@ -428,6 +429,9 @@ export class CityStreamer implements System {
       group.add(mesh);
     }
     group.matrixAutoUpdate = false;
+    // 手机上地块几何体上传显卡后丢掉页面里那份（2026-11-16，iPhone 17 低画质「车开着开着就重新加载了」：低画质同时约 16 个
+    // 地块、约 40 MB）。碰撞体用的是 colVerts/colIdx，不读网格；可见性切换不碰顶点。
+    if (glbTextureCap.freeGeometry) freeAfterUpload(group);
     // Patch the materials for shadow cascades / wetness now, not up to 30 frames later.
     this.engine.get<RenderSystem>('render')?.prepare?.(group);
     this.engine.scene.add(group);

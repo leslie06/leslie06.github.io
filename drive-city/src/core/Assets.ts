@@ -171,6 +171,19 @@ export class Assets {
   private compactOne(renderer: THREE.WebGLRenderer, t: THREE.Texture): void {
     if (this.released.has(t.source)) return;
     const flags = t as unknown as Record<string, boolean | undefined>;
+    // 只画一次、永远不会再上传的数据贴图（车身涂装图集、指路牌和地铁站牌图集）可以标 `userData.dropData`：上传后丢掉页面里的像素
+    // （2026-11-16，iPhone 17 低画质被系统杀：十几张涂装图集各 3.7 MB、指路牌 12.6 MB、站牌 7.4 MB 一直留着）。
+    // 这种贴图不能 dispose 后再用、也不能再设 needsUpdate（会传一张空图上去）。
+    if (flags.isDataTexture && t.userData.dropData && !t.userData.keepImage) {
+      const im = t.image as { data: ArrayBufferView | null; width: number; height: number } | null;
+      if (!im?.data) return;
+      renderer.initTexture(t);
+      this.stats.releasedPixels += im.width * im.height;
+      (t as unknown as { image: { data: null; width: number; height: number } }).image = { data: null, width: im.width, height: im.height };
+      this.released.add(t.source);
+      this.stats.released++;
+      return;
+    }
     if (t.userData.keepImage || flags.isCubeTexture || flags.isDataTexture || flags.isRenderTargetTexture || flags.isVideoTexture || flags.isCompressedTexture || flags.isDepthTexture) return;
     const img = t.image as ImageSource | null;
     const isBitmap = typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap;

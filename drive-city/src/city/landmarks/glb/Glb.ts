@@ -401,7 +401,7 @@ export const glbTextureCap = { max: Infinity, night: Infinity, freeGeometry: fal
  * for the city's landmarks (2026-10-19). Its bounds are worked out first (culling and the box queries read those); nothing
  * reads a landmark's vertices after it is built (no three.js raycasts; a lost context asks for a reload).
  */
-function freeAfterUpload(root: THREE.Object3D): void {
+export function freeAfterUpload(root: THREE.Object3D): void {
   const drop = function (this: THREE.BufferAttribute) { (this as unknown as { array: ArrayLike<number> }).array = new (this.array.constructor as Float32ArrayConstructor)(0); };
   const seen = new Set<THREE.BufferGeometry>();
   root.traverse((o) => {

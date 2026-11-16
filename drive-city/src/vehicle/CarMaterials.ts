@@ -319,6 +319,8 @@ export function liveryAtlas(l: Livery): THREE.DataTexture {
   t.magFilter = THREE.LinearFilter;
   t.anisotropy = 8;
   t.needsUpdate = true;
+  // 画完就不再改：上传显卡后 Assets.compact 丢掉这 3.7 MB（缓存在 atlases 里，从不 dispose、不 clone）
+  t.userData.dropData = true;
   col.width = col.height = msk.width = msk.height = 0;
   atlases.set(key, t);
   return t;

@@ -21,6 +21,8 @@ import { ALIVE_KEY, steppedDownFrom } from '../core/Quality';
  *   died                        上一次会话是玩着玩着没了（页面被系统杀掉，多半是内存不够）：当时玩了多少秒（2026-10-19，iPhone
  *                               「玩了一分钟就退到这个页面了」）。玩的时候每 5 秒在本地记一笔，正常离开或切到后台就擦掉；下次打开还在，
  *                               就是没来得及擦——被杀了
+ *   died_km died_m died_z       被杀那次开了多少公里、当时开车（car）还是走路（foot）、在机场一带（ap）还是城里（city）
+ *                               （2026-11-16，iPhone 17 低画质「车开着开着就重新加载了」）
  *   qdown                       这次开局因为上次被杀把画质自动降了一档：降之前的档（'high' / 'medium'；2026-10-25，iPhone 高画质
  *                               「开着车就重新加载了」）
  *   foot_s drive_s exits use km hood_s    徒步和开车各多少秒、下了几次车、徒步按 F 用了几次东西、开了多少公里、引擎盖/车内视角用了多少秒
@@ -110,7 +112,14 @@ export function install(engine: Engine): void {
   const ALIVE = ALIVE_KEY;
   try {
     const prev = localStorage.getItem(ALIVE);
-    if (prev) { const p = Number(JSON.parse(prev).p); if (Number.isFinite(p)) stat.set('died', p); localStorage.removeItem(ALIVE); }
+    if (prev) {
+      const o = JSON.parse(prev) as { p?: number; k?: number; m?: string; z?: string };
+      const p = Number(o.p); if (Number.isFinite(p)) stat.set('died', p);
+      if (Number.isFinite(Number(o.k))) stat.set('died_km', Number(o.k));
+      if (o.m) stat.set('died_m', String(o.m).slice(0, 4));
+      if (o.z) stat.set('died_z', String(o.z).slice(0, 4));
+      localStorage.removeItem(ALIVE);
+    }
     if (steppedDownFrom) stat.set('qdown', steppedDownFrom);
   } catch { /* private mode */ }
   const wipe = () => { try { localStorage.removeItem(ALIVE); } catch { /* private mode */ } };
@@ -155,7 +164,12 @@ export function install(engine: Engine): void {
       }
       if (pl?.mode === 'onfoot') lastP = null;
       aliveT -= dt;
-      if (aliveT <= 0) { aliveT = 5; try { localStorage.setItem(ALIVE, JSON.stringify({ p: Math.round(played), q: engine.quality.tier })); } catch { /* private mode */ } }
+      if (aliveT <= 0) {
+        aliveT = 5;
+        // 被杀时在干什么（2026-11-16）：开了多少公里、开车还是走路、是不是在机场一带——不记坐标
+        const pp = pl?.position, z = pp && pp.x > 16000 && pp.z < -13000 ? 'ap' : 'city';
+        try { localStorage.setItem(ALIVE, JSON.stringify({ p: Math.round(played), q: engine.quality.tier, k: Math.round(metres / 100) / 10, m: pl?.mode === 'onfoot' ? 'foot' : 'car', z })); } catch { /* private mode */ }
+      }
       if (played >= 180) stat.mark('p3m');
       if (played >= 600) stat.mark('p10m');
       if (played >= 1800) stat.mark('p30m');
