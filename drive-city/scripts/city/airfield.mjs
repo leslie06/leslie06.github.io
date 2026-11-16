@@ -307,11 +307,14 @@ export function airfield(env) {
     }
     return polys;
   };
+  // 并出来的多边形：一串长方形加八边形并起来，边上有很多共线的碎点，里面贴着边留下几平方米的小洞——三角化的时候小洞把外环拉出
+  // 尖刺（滑行道边上一片锯齿状的暗块，2026-11-16）。小洞（< 80 m²）不要，环按 0.3 米化简。
   const pushMP = (k, mp) => {
     for (const poly of mp) {
-      const outer = poly[0].slice(0, -1);
-      if (outer.length < 3) continue;
-      areas.push({ k, outer, holes: poly.slice(1).map((h) => h.slice(0, -1)), id: aid++ });
+      const outer = simplifyLoop(poly[0].slice(0, -1), 0.3);
+      if (outer.length < 3 || Math.abs(signedArea(outer)) < 4) continue;
+      const hs = poly.slice(1).map((h) => h.slice(0, -1)).filter((h) => Math.abs(signedArea(h)) >= 80).map((h) => simplifyLoop(h, 0.3)).filter((h) => h.length >= 3);
+      areas.push({ k, outer, holes: hs, id: aid++ });
     }
   };
   // 跑道（和停止道）
@@ -320,8 +323,6 @@ export function airfield(env) {
   for (const t of taxiways) pushMP('runway', union(strip(t.P, t.w / 2)));
   // 机坪
   for (const a of aprons) areas.push({ k: 'apron', outer: a.rings[0], holes: a.rings.slice(1), id: aid++ });
-  // 场内的草：空侧整块
-  for (const o of outers) areas.push({ k: 'field', outer: o, holes: holes.filter((h) => pip(h[0][0], h[0][1], o)), id: aid++ });
 
   // ---------------------------------------------------------------- 空侧的路
   const airRoads = [];
@@ -352,6 +353,30 @@ export function airfield(env) {
   }
   // 勤务道画成水泥带（和机坪一个材质）；只画不在机坪上的部分没必要，重叠看不出来
   for (const r of airRoads) pushMP('apron', union(strip(r.P, r.hw)));
+  // 机坪（和空侧勤务道）里挖掉跑道、滑行道：两层大片重叠的话，几百米外深度精度只有几厘米，1 毫米高差加一格偏移分不开，
+  // 滑行道边上一片三角形的锯齿（2026-11-16）。不重叠就不打架。
+  {
+    const rw = areas.filter((a) => a.k === 'runway').map((a) => ({ poly: [close(a.outer), ...a.holes.map(close)], bb: bboxOf(a.outer) }));
+    for (let i = areas.length - 1; i >= 0; i--) {
+      const a = areas[i];
+      if (a.k !== 'apron') continue;
+      const bb = bboxOf(a.outer);
+      const hit = rw.filter((r) => !(r.bb[0] > bb[2] || r.bb[2] < bb[0] || r.bb[1] > bb[3] || r.bb[3] < bb[1]));
+      if (!hit.length) continue;
+      let res;
+      try { res = polygonClipping.difference([close(a.outer), ...a.holes.map(close)], ...hit.map((r) => r.poly)); } catch { continue; }
+      const parts = [];
+      for (const poly of res) {
+        const outer = simplifyLoop(poly[0].slice(0, -1), 0.3);
+        if (outer.length < 3 || Math.abs(signedArea(outer)) < 4) continue;
+        parts.push({ k: 'apron', outer, holes: poly.slice(1).map((h) => h.slice(0, -1)).filter((h) => Math.abs(signedArea(h)) >= 4), id: a.id });
+      }
+      areas.splice(i, 1, ...parts);
+    }
+  }
+
+  // 场内的草：空侧整块（不挖铺装：和机坪的偏移差 2.7 格、高差 1 厘米，没打架；一次减一千多个多边形 polygon-clipping 会抛异常）
+  for (const o of outers) areas.push({ k: 'field', outer: o, holes: holes.filter((h) => pip(h[0][0], h[0][1], o)), id: aid++ });
 
   // ---------------------------------------------------------------- airfield.json
   const q = (v) => Math.round(v * 10) / 10;

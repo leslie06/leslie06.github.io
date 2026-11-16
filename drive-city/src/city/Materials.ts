@@ -473,8 +473,9 @@ export async function createCityMaterials(engine: Engine, env: EnvUniforms, defe
     plaza: skin(std({ roughness: 0.7, color: '#c4c1b9' }, undefined, 0.55, 0.12, 4, 'ground'), 'granite_tile', 3, { map: true, normal: true }),
     water: std({ color: '#2a3c40', roughness: 0.05, metalness: 0.1, envMapIntensity: 1.3 }, undefined, 0, 0.1, 4.5, false),
     // 首都机场（2026-11-16）：跑道和滑行道是深色沥青，机坪是浅色水泥板，空侧的草修得比路边齐整
-    runway: skin(std({ roughness: 0.85, color: '#4c4d4f' }, undefined, 0.45, 0.25, 4.2, 'ground'), 'asphalt_02', 8, { map: true }),
-    apron: skin(std({ roughness: 0.8, color: '#b4b2ab' }, undefined, 0.5, 0.15, 3.8, 'ground'), 'brushed_concrete', 6, { map: true }),
+    // （机坪和滑行道大片重叠：两层的偏移拉开一整格，差 0.4 的时候几百米外深度打架，滑行道边上一片锯齿）
+    runway: skin(std({ roughness: 0.85, color: '#4c4d4f' }, undefined, 0.45, 0.25, 4.4, 'ground'), 'asphalt_02', 8, { map: true }),
+    apron: skin(std({ roughness: 0.8, color: '#b4b2ab' }, undefined, 0.5, 0.15, 3.3, 'ground'), 'brushed_concrete', 6, { map: true }),
     field: skin(std({ roughness: 1, color: '#7f9160' }, undefined, 0.7, 0.4, 0.6, true), 'leafy_grass', 5, { map: true }),
   };
   // 季节（render/Season.ts，2026-11-09）：北京的草地 11 月下旬到 3 月是枯黄的

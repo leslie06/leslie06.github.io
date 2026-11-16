@@ -50,6 +50,7 @@ export async function install(engine: Engine): Promise<void> {
   let nitroWas = false;
   let sirenGain: GainNode, sirenLfo: OscillatorNode, siren2Gain: GainNode, siren2Lfo: OscillatorNode, rotorGain: GainNode, rotorLfo: OscillatorNode;
   let trainGain: GainNode, clackLfo: OscillatorNode, hornT = 0;
+  let jetGain: GainNode, jetLp: BiquadFilterNode, jetWhine: OscillatorNode, jetWhineGain: GainNode;
   let cityGain: GainNode, passGain: GainNode, humGain: GainNode;
   let radio: Radio | null = null;
   let navVoice: NavVoice | null = null;
@@ -164,6 +165,17 @@ export async function install(engine: Engine): Promise<void> {
     whine.connect(wg).connect(rotorGain);
     rotorGain.connect(master);
     rotorLfo.start(); whine.start();
+    // 喷气发动机（2026-11-16，airport/）：低通噪声是轰鸣（越远截止频率越低、越闷），加一个压气机的啸叫（随推力，带多普勒）。
+    jetGain = c.createGain(); jetGain.gain.value = 0;
+    jetLp = c.createBiquadFilter(); jetLp.type = 'lowpass'; jetLp.frequency.value = 400; jetLp.Q.value = 0.5;
+    const jetLp2 = c.createBiquadFilter(); jetLp2.type = 'lowpass'; jetLp2.frequency.value = 2600;
+    noise(c).connect(jetLp).connect(jetLp2).connect(jetGain);
+    jetWhine = c.createOscillator(); jetWhine.type = 'sawtooth'; jetWhine.frequency.value = 3100;
+    const jwb = c.createBiquadFilter(); jwb.type = 'bandpass'; jwb.frequency.value = 3200; jwb.Q.value = 4;
+    jetWhineGain = c.createGain(); jetWhineGain.gain.value = 0;
+    jetWhine.connect(jwb).connect(jetWhineGain).connect(jetGain);
+    jetGain.connect(master);
+    jetWhine.start();
     // Trains (city/visual/Trains.ts): a low rumble, and the wheels' clack over the rail joints - noise
     // gated by a pulse whose rate follows the train's speed (two bogies a 25 m car).
     trainGain = c.createGain(); trainGain.gain.value = 0;
@@ -651,6 +663,16 @@ export async function install(engine: Engine): Promise<void> {
         clackLfo.frequency.setTargetAtTime(Math.max(0.5, nt.speed / 12.5), t, 0.5);
         hornT -= dt;
         if (!paused && nt.d < 90 && nt.kind === 0 && hornT <= 0) { hornT = 25 + Math.random() * 20; trainHorn(Math.max(0.25, 1 - nt.d / 90)); }
+      }
+      // 最近的一架飞机：1.8 公里内听得见，越近越响、越亮；朝这边飞的啸叫高一些（多普勒）
+      const jet = engine.get<System & { nearestJet?(x: number, y: number, z: number): { d: number; thrust: number; closing: number } | null }>('airport')?.nearestJet?.(engine.camera.position.x, engine.camera.position.y, engine.camera.position.z);
+      {
+        const d = jet?.d ?? Infinity, k = Number.isFinite(d) ? Math.pow(Math.max(0, 1 - d / 1800), 2) : 0;
+        const thr = jet?.thrust ?? 0;
+        jetGain.gain.setTargetAtTime(paused ? 0 : 0.5 * k * (0.35 + 0.65 * thr), t, 0.15);
+        jetLp.frequency.setTargetAtTime(160 + 1500 * k * k, t, 0.2);
+        jetWhineGain.gain.setTargetAtTime(0.05 * k * k * thr, t, 0.2);
+        jetWhine.frequency.setTargetAtTime(Math.min(6000, 2600 * (0.8 + 0.3 * thr) * 340 / Math.max(200, 340 - (jet?.closing ?? 0))), t, 0.1);
       }
       const hd = wanted?.heliDistance ?? Infinity;
       rotorGain.gain.setTargetAtTime(paused || !Number.isFinite(hd) ? 0 : 0.22 * Math.pow(Math.max(0, 1 - hd / 420), 1.4), t, 0.2);

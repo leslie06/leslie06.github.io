@@ -55,6 +55,9 @@ export const CLEARANCE = 5.5;
  */
 export const PLATE = { cross: [5.5, 3.1], exit: [6.0, 2.75], ahead: [6.0, 3.4] } as const;
 
+/** 机场（2026-11-16）：T2 车道边（「前方」牌子上机场的公里数算到这里），和出口牌上换掉的路名。 */
+const AIRPORT_T2: [number, number] = [16020, -18620];
+const AIRPORT_DEST: Record<string, { name: string; en: string }> = { 航站楼联络线: { name: 'T3航站楼', en: 'Terminal 3' } };
 const COMPASS = (dx: number, dz: number) => (Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? '东' : '西') : dz > 0 ? '南' : '北');
 /** 东四环中路 -> 东四环: a ring road is signed by its ring, not its section; OSM's 京通快速 / 京通快速道路 are 京通快速路. */
 export const shortName = (n: string) => n.replace(/^([东西南北][二三四五]环)[东西南北中]?路?$/, '$1').replace(/快速(道路)?$/, '快速路');
@@ -265,7 +268,9 @@ export function placeSigns(g: LaneGraph, net: Network, regions?: number[][]): { 
     if (!dest && !br) continue;
     const lines: SignLine[] = [];
     if (br) lines.push({ name: br.name, en: pin(br.name) });
-    if (dest && dest.name !== br?.name) lines.push({ ...dest, dir: (l.d1x * r.d0z - l.d1z * r.d0x) < 0 ? 'L' : 'R' });
+    // 机场（2026-11-16）：去 T3 的那条路叫「航站楼联络线」，牌子上写去哪
+    const dd = dest && AIRPORT_DEST[dest.name] ? { ...dest, ...AIRPORT_DEST[dest.name] } : dest;
+    if (dd && dd.name !== br?.name) lines.push({ ...dd, dir: (l.d1x * r.d0z - l.d1z * r.d0x) < 0 ? 'L' : 'R' });
     else if (lines.length) lines[0].dir = (l.d1x * r.d0z - l.d1z * r.d0x) < 0 ? 'L' : 'R';
     for (const d of mainline(l) ? [260, 200, 150, 110] : [120, 90, 60]) {
       const at = walkBack(l, l.len, d);
@@ -315,6 +320,12 @@ export function placeSigns(g: LaneGraph, net: Network, regions?: number[][]): { 
       if (!sp.road) continue;
       const lines: SignLine[] = [{ name: sp.road, en: (pin(sp.road) || pin(sp.l.name)).replace(/ [NSEWM]$/, '') },
         ...next.map((q) => ({ name: q.name, en: pin(q.name), km: Math.max(0.1, Math.round(((q.a + q.b) / 2 - at) / 100) / 10) }))];
+      // 机场高速往机场去的那一侧（这一串一直开到 T2 前）：最后一行是「首都机场」和剩下的路
+      const end = samples[samples.length - 1];
+      if (/首都机场高速/.test(sp.road) && Math.hypot(end.x - AIRPORT_T2[0], end.z - AIRPORT_T2[1]) < 1500 && run - at > 1500) {
+        if (lines.length > 3) lines.length = 3;
+        lines.push({ name: '首都机场', en: 'Capital Airport', km: Math.round((run - at) / 100) / 10 });
+      }
       for (const dd of [0, 40, -40, 80, 130, 180]) {
         const p = sampleAt(at + dd);
         if (put('ahead', p.l, p.s, lines, 150, COMPASS(far.x - sp.x, far.z - sp.z))) break;

@@ -29,6 +29,9 @@ for (const f of fs.readdirSync(OSM).filter((f) => /^chunk.*\.json$/.test(f))) {
     if (e.type === 'node' && e.tags?.railway === 'subway_entrance' && inRegion(e.lat, e.lon)) ents.set(e.id, e);
   }
 }
+// 首都机场线 T3 站（2026-11-16）：站在交通中心（GTC）里面，OSM 没有地铁口节点，坐不了。在 T3C 楼前到达层车道和 GTC 之间的地面补一个口（编号放在
+// 最大，排在所有 OSM 的口后面，站名的编号不挪）。
+for (const [i, lat, lon] of [[1, 40.052965, 116.609575]]) ents.set(9e15 + i, { type: 'node', id: 9e15 + i, lat, lon, tags: { railway: 'subway_entrance' } });
 const stations = [];
 const SRC = path.join(OSM, 'places.geojsonseq');
 if (fs.existsSync(SRC)) {
