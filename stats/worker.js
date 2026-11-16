@@ -226,11 +226,24 @@ const LB_TOP = 10;
 /** 一台设备（ip_hash，每天换盐）一天在一个榜上最多开几个新号，防刷屏。 */
 const LB_NEW_PER_DAY = 5;
 
-/** 昵称：去掉控制字符和尖括号引号，压空格，最多 12 个字；像网址的不要。 */
+/**
+ * 不能当名字用的（2026-11-16，有人注册了「习近平」，「不能起领导人的名字」）：国家领导人的名字和拼写。
+ * 账号名（`cleanUser`）、排行榜昵称（`cleanName`）里含这些就不收；比较前去掉空格、符号，拉丁字母转小写。
+ */
+const NAME_BLOCK = ['习近平', '李强', '赵乐际', '王沪宁', '蔡奇', '丁薛祥', '李希', '韩正', '胡锦涛', '江泽民', '温家宝', '李克强', '毛泽东', '邓小平', '周恩来',
+  '习大大', 'xijinping', 'xjp', 'maozedong', 'hujintao', 'jiangzemin'];
+export function blockedName(n) {
+  const s = String(n ?? '').normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}_]/gu, '');
+  // 「习近平三个字，连着，分开都不行」（又注册了「习近平8964」）：三个字都在就不收，不管中间隔了什么、什么顺序
+  if (/[习習]/.test(s) && s.includes('近') && s.includes('平')) return true;
+  return NAME_BLOCK.some((w) => s.includes(w));
+}
+
+/** 昵称：去掉控制字符和尖括号引号，压空格，最多 12 个字；像网址的、领导人名字不要。 */
 export function cleanName(raw) {
   let n = String(raw ?? '').normalize('NFKC').replace(/[\u0000-\u001f\u007f-\u009f<>&"'`\\]/g, '').replace(/\s+/g, ' ').trim();
   n = [...n].slice(0, 12).join('').trim();
-  if (!n || /https?:|www\.|\.(com|cn|net|org|top|xyz|cc)\b/i.test(n)) return '';
+  if (!n || /https?:|www\.|\.(com|cn|net|org|top|xyz|cc)\b/i.test(n) || blockedName(n)) return '';
   return n;
 }
 const cleanPid = (p) => String(p ?? '').replace(/[^a-z0-9]/gi, '').slice(0, 32);
@@ -663,7 +676,7 @@ export function cleanUser(raw) {
   const len = [...n].length;
   if (len < 2 || len > 16) return '';
   if (!/^[\p{L}\p{N}_-]+$/u.test(n)) return '';
-  if (/https?|www|\.(com|cn|net)/i.test(n)) return '';
+  if (/https?|www|\.(com|cn|net)/i.test(n) || blockedName(n)) return '';
   return n;
 }
 const goodPw = (pw) => typeof pw === 'string' && pw.length >= 6 && pw.length <= 64;

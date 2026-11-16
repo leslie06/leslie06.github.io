@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import worker, { cnDay } from './worker.js';
+import worker, { cnDay, cleanName } from './worker.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const db = new DatabaseSync(':memory:');
@@ -211,6 +211,9 @@ const reg = await ac('/acct/register', { g: 'bcity', name: '陈野Fan', pw: 'sec
 ok('注册成功：给令牌和恢复码', reg.status === 200 && reg.body.token?.length === 64 && /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(reg.body.recovery), JSON.stringify(reg.body).slice(0, 80));
 ok('同名（不分大小写）不能再注册', (await ac('/acct/register', { g: 'bcity', name: '陈野fan', pw: 'secret2' })).status === 409);
 ok('名字太短、带空格、像网址的不行', (await ac('/acct/register', { g: 'bcity', name: 'a', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: 'a b', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: 'www.x.com', pw: 'secret1' })).status === 400);
+ok('领导人的名字不能注册', (await ac('/acct/register', { g: 'bcity', name: '习近平', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: '我是习近平2', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: 'XiJinPing', pw: 'secret1' })).status === 400);
+ok('习近平三个字分开、打乱、繁体也不能注册', (await ac('/acct/register', { g: 'bcity', name: '习近平8964', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: '习1近2平', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: '平近习', pw: 'secret1' })).status === 400 && (await ac('/acct/register', { g: 'bcity', name: '習近平', pw: 'secret1' })).status === 400);
+ok('领导人的名字不能当昵称，排行榜昵称和普通名字不受影响', !cleanName('习 近 平') && !cleanName('习a近b平c') && !cleanName('xi-jin-ping') && cleanName('李小龙') === '李小龙' && cleanName('包子铺') === '包子铺' && cleanName('平安') === '平安' && cleanName('学习') === '学习');
 ok('密码太短不行', (await ac('/acct/register', { g: 'bcity', name: 'short', pw: '123' })).status === 400);
 ok('不认识的游戏不行', (await ac('/acct/register', { g: 'nope', name: 'abc', pw: 'secret1' })).status === 400);
 const row = db.prepare('SELECT * FROM acct').get();
