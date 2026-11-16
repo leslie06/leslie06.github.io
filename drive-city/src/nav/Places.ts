@@ -8,7 +8,7 @@ import { tierOf } from './MapData';
  * (public/city/places.json, scripts/city/places.mjs), the named interchanges, and the roads as
  * whole chains so a name can be set along any straight stretch of them.
  */
-export const PLACE_CATS = ['metro', 'rail', 'park', 'hospital', 'school', 'mall', 'hotel', 'sight', 'gov', 'office', 'resid', 'area'] as const;
+export const PLACE_CATS = ['metro', 'rail', 'park', 'hospital', 'school', 'mall', 'hotel', 'sight', 'gov', 'office', 'resid', 'area', 'airport'] as const;
 export type PlaceCat = typeof PLACE_CATS[number];
 export interface Name { zh: string; en: string }
 export interface Place {

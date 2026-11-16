@@ -4,7 +4,8 @@ import { unpackNetwork, type NetworkPack } from './NetPack';
  * Outer rings have positive signed area in (x, z), holes negative.
  */
 export type BuildingKind = 'glass' | 'office' | 'resid' | 'hutong' | 'trad' | 'wall' | 'low' | 'station';
-export type AreaKind = 'water' | 'plaza' | 'pitch' | 'wood' | 'park' | 'grass' | 'parking' | 'rail' | 'site' | 'lawn';
+/** runway（跑道和滑行道）、apron（机坪和空侧勤务道）、field（空侧的草）：首都机场，2026-11-16（scripts/city/airfield.mjs）。 */
+export type AreaKind = 'water' | 'plaza' | 'pitch' | 'wood' | 'park' | 'grass' | 'parking' | 'rail' | 'site' | 'lawn' | 'runway' | 'apron' | 'field';
 
 export interface RoadPiece {
   /** OSM highway class. */

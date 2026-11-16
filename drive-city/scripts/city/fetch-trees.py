@@ -25,6 +25,14 @@ if '--south' in args:
     OLD_S = float(args[i + 1])
     del args[i:i + 2]
     N = OLD_S
+# --box w,s,e,n（2026-11-16 机场）：只读这个框，丢掉落在上面老框里的树冠，再像 --south 那样沿接缝去重后追加。
+BOX = OLD = None
+if '--box' in args:
+    i = args.index('--box')
+    BOX = [float(v) for v in args[i + 1].split(',')]
+    del args[i:i + 2]
+    OLD = (W, S, E, N)
+    W, S, E, N = BOX
 SPACING = float(args[0]) if args else 7.0
 TILES = ['data/chm-132100121.tif', 'data/chm-132100103.tif']
 CHM_URL = 'https://dataforgood-fb-data.s3.amazonaws.com/forests/v1/alsgedi_global_v6_float/chm/'
@@ -58,6 +66,9 @@ for path in TILES:
         my_ = tr.f + (ys + 0.5) * tr.e
         lon = mx_ / R * 180 / math.pi
         lat = np.degrees(2 * np.arctan(np.exp(my_ / R)) - math.pi / 2)
+        if OLD is not None:
+            keep_ = ~((lon > OLD[0]) & (lon < OLD[2]) & (lat > OLD[1]) & (lat < OLD[3]))
+            lon, lat, h = lon[keep_], lat[keep_], h[keep_]
         gx = (lon - LON0) * KX
         gz = -(lat - LAT0) * KZ
         pts.append(np.stack([gx, gz, h.astype(np.float64)], axis=1))
@@ -88,21 +99,21 @@ for i in range(len(P)):
 K = P[keep]
 os.makedirs('.cache/buildings', exist_ok=True)
 flat = [round(float(v), 1) for row in K for v in row]
-if OLD_S is not None:
+if OLD_S is not None or BOX is not None:
     with open('.cache/buildings/trees.json') as f:
         old = json.load(f)['p']
     # the old file's crowns along the seam: a new crown closer than SPACING to one of them goes
-    zs = -(OLD_S - LAT0) * KZ
+    zs = -(OLD_S - LAT0) * KZ if OLD_S is not None else None
     seam = {}
     for i in range(0, len(old), 3):
-        if old[i + 1] > zs - 2 * SPACING:
+        if (old[i + 1] > zs - 2 * SPACING) if zs is not None else True:
             seam.setdefault((int(math.floor(old[i] / cell)), int(math.floor(old[i + 1] / cell))), []).append((old[i], old[i + 1]))
     def near(x, z):
         cx, cz = int(math.floor(x / cell)), int(math.floor(z / cell))
         return any((ox - x) ** 2 + (oz - z) ** 2 < SPACING * SPACING
                    for dx in (-1, 0, 1) for dz in (-1, 0, 1) for ox, oz in seam.get((cx + dx, cz + dz), ()))
     K = np.array([row for row in K if not near(row[0], row[1])]).reshape(-1, 3)
-    print('new crowns south of', OLD_S, len(K))
+    print('new crowns', f'south of {OLD_S}' if OLD_S is not None else f'in {BOX}', len(K))
     flat = old + [round(float(v), 1) for row in K for v in row]
 with open('.cache/buildings/trees.json', 'w') as f:
     json.dump({'src': 'Meta/WRI canopy height v1 (CC BY 4.0), crowns at least %g m apart' % SPACING,

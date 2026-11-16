@@ -10,6 +10,7 @@ import * as weather from './weather';
 import * as world from './world';
 import * as city from './city';
 import * as mountain from './mountain';
+import * as airport from './airport';
 import { registerCityPoses } from './city/Poses';
 import { registerTrafficPoses } from './traffic/Poses';
 import * as vehicle from './vehicle';
@@ -143,6 +144,8 @@ async function boot() {
   if (worldName === 'city') await city.install(engine); else { await readyBodies(); await world.install(engine); }
   // the roads and hills west of the city (mountain/): fetched when the camera comes near them
   if (worldName === 'city') mountain.install(engine);
+  // 首都机场（airport/）：跑道上的漆等，开近了才取 airfield.json
+  if (worldName === 'city') airport.install(engine);
   // a logged-in player's newer cloud save, before any system reads its save (the vehicle on); started alongside the
   // city, so it has usually answered by now
   await cloudReady;

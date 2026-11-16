@@ -10,8 +10,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pinyinOf } from './pinyin.mjs';
-import { available as extraAvailable, clsmFootprints, grid, heightRasters, sample, scan } from './extra-buildings.mjs';
+import { available as extraAvailable, clsmFootprints, grid, heightRasters, RES, sample, scan } from './extra-buildings.mjs';
 import { EXTRA as EXTRA_BOXES, REGIONS, TILE, project } from './region.mjs';
+import { airfield } from './airfield.mjs';
 
 const RAW = path.resolve('.cache/osm');
 const OUT = path.resolve('public/city');
@@ -25,7 +26,8 @@ const els = new Map();
 // 按顺序编号的大院围墙等跟着变（2026-11-08）。
 const chunkEra = (f) => { const tag = f.match(/^chunk-([a-z]{0,2})\d/)[1]; return tag ? EXTRA_BOXES.find((b) => b.tag === tag)?.since ?? '' : ''; };
 for (const f of fs.readdirSync(RAW).filter((f) => /^chunk-[a-z]{0,2}\d+-\d+\.json$/.test(f)).sort().sort((a, b) => chunkEra(a).localeCompare(chunkEra(b)))) {
-  for (const e of JSON.parse(fs.readFileSync(path.join(RAW, f), 'utf8')).elements) if (!els.has(e.type[0] + e.id)) els.set(e.type[0] + e.id, e);
+  const since = chunkEra(f);
+  for (const e of JSON.parse(fs.readFileSync(path.join(RAW, f), 'utf8')).elements) if (!els.has(e.type[0] + e.id)) { e._since = since; els.set(e.type[0] + e.id, e); }
 }
 const ways = [], rels = [], nodes = [];
 for (const e of els.values()) (e.type === 'way' ? ways : e.type === 'relation' ? rels : nodes).push(e);
@@ -213,6 +215,12 @@ function zone(x, z) {
   return 'city';
 }
 
+// ---------------------------------------------------------------------------------- 首都机场（2026-11-16）
+// 跑道、滑行道、机坪、场内草地、空侧范围、围界和 airfield.json（scripts/city/airfield.mjs）。空侧里的勤务道（service）
+// 不进路网也不进地块的路，画成水泥带；航站楼按站房画、给高度。
+const AIR = airfield({ ways, rels, nodes, proj, project, openRing, assemble, signedArea, pip, bboxOf });
+if (AIR.found) console.log('airfield', AIR.stats);
+
 // ---------------------------------------------------------------------------------- roads
 const ROAD = {
   motorway: [12, 24], motorway_link: [7, 9], trunk: [12, 22], trunk_link: [7, 9], primary: [13, 22], primary_link: [7, 9],
@@ -245,6 +253,7 @@ const degAll = new Map(), degCar = new Map();
 for (const w of ways) {
   const info = w.tags && roadInfo(w.tags);
   if (!info || !w.geometry || w.geometry.length < 2) continue;
+  if (AIR.dropRoad(w)) continue;
   w._road = info;
   w._pts = proj(w.geometry);
   w._ids = w.nodes.slice();
@@ -1753,7 +1762,13 @@ for (const o of outlines) {
 // Overture's), and none go in the palace or the temple (mapped to the last hall), on a carriageway or in
 // water. NO_EXTRA=1 builds without any of it.
 const EXTRA = extraAvailable() && !process.env.NO_EXTRA;
-const HG = grid(RX0, RZ0, RX1, RZ1);
+// 栅格的原点钉在 2026-11-08 那次的地图左上角（往外扩图时只往外加整格）：原点跟着 bounds 走的话，往北扩图（机场，2026-11-16）
+// 整张栅格错开，全城的楼重新采样高度，3500 多个老地块跟着变。
+const HG_ORIGIN = project(40.027, 116.196);   // 当时最北的框边（p、pa、pb）和最西的（f）
+const HG = (() => {
+  const x0 = HG_ORIGIN[0] - Math.max(0, Math.ceil((HG_ORIGIN[0] - RX0) / RES)) * RES, z0 = HG_ORIGIN[1] - Math.max(0, Math.ceil((HG_ORIGIN[1] - RZ0) / RES)) * RES;
+  return grid(x0, z0, RX1, RZ1);
+})();
 const HR = EXTRA ? heightRasters(HG) : null;
 const learnt = [];
 if (EXTRA) {
@@ -1767,7 +1782,7 @@ if (EXTRA) {
     for (const r of rs) if (r.length >= 3) water.push({ r, bb: bboxOf(r) });
   }
   const inWater = (x, z) => water.some((w) => x >= w.bb[0] && x <= w.bb[2] && z >= w.bb[1] && z <= w.bb[3] && pip(x, z, w.r));
-  const drop = { osm: 0, zone: 0, road: 0, water: 0 };
+  const drop = { osm: 0, zone: 0, road: 0, water: 0, airport: 0 };
   let id = 8e12;
   const ringCentre = (ring) => { let sx = 0, sz = 0; for (const [x, z] of ring) { sx += x; sz += z; } return [sx / ring.length, sz / ring.length]; };
   for (const ring of byEra(clsmFootprints(inRegion), (r) => eraAt(...ringCentre(r)))) {
@@ -1783,7 +1798,8 @@ if (EXTRA) {
       const [ax, az] = b.ring[k], [bx, bz] = b.ring[(k + 1) % b.ring.length];
       onRoad = inCarriageway(ax, az, -0.5) || inCarriageway((ax + bx) / 2, (az + bz) / 2, -0.5);
     }
-    const why = z === 'palace' || z === 'temple' ? 'zone' : n && o / n > 0.12 ? 'osm' : onRoad ? 'road' : inWater(cx, cz) ? 'water' : '';
+    // 机场多边形里一个都不要：机器学习的轮廓会把停着的飞机、廊桥当成楼
+    const why = z === 'palace' || z === 'temple' ? 'zone' : AIR.inAero(cx, cz) ? 'airport' : n && o / n > 0.12 ? 'osm' : onRoad ? 'road' : inWater(cx, cz) ? 'water' : '';
     if (why) { drop[why]++; learnt.pop(); }
   }
   console.log(`learnt footprints: ${learnt.length} added (${(learnt.reduce((a, b) => a + b.area, 0) / 1e6).toFixed(2)} km²), dropped`, drop);
@@ -1796,6 +1812,8 @@ if (EXTRA) {
 // a polygon - and a few office blocks on commercial land. Only in the corridors: the main box is drawn,
 // and everything placed there (the stunts' spots) was placed round what is drawn.
 const filled = [];
+// 「11-16 以前」算一组，之后每批一组（见下面的编号）
+const SPLIT = ERAS.indexOf('2026-11-16'), group = (era) => (SPLIT < 0 || era < SPLIT ? 0 : era);
 {
   const corridor = (x, z) => !inMain(x, z) && inRegion(x, z);
   const exIndex = new Map();
@@ -1816,19 +1834,30 @@ const filled = [];
     for (const r of ringsOf(e)) {
       if (r.length < 3) continue;
       const bb = bboxOf(r);
-      if (![[bb[0], bb[1]], [bb[2], bb[3]], [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2]].some(([x, z]) => corridor(x, z))) continue;
-      (lk ? lands : open).push({ id: e.id, kind: lk ?? ak, ring: r, bb });
+      const era = ERAS.indexOf(e._since ?? '');
+      // （只看自己那批的框：跨在边上的老多边形，角落进了新框就被收进来，老框那半边多填了楼——2026-11-16 观唐、民航管制中心）
+      if (![[bb[0], bb[1]], [bb[2], bb[3]], [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2]].some(([x, z]) => corridor(x, z) && group(eraAt(x, z)) === group(era))) continue;
+      (lk ? lands : open).push({ id: e.id, kind: lk ?? ak, ring: r, bb, era });
     }
   }
-  const inOpen = (x, z) => open.some((o) => x >= o.bb[0] && x <= o.bb[2] && z >= o.bb[1] && z <= o.bb[3] && pip(x, z, o.ring));
-  const free = (x, z) => corridor(x, z) && !nearRoad(x, z, 5) && !inExisting(x, z, 0) && !inOpen(x, z);
+  // 楼和围挡按顺序编号（fid）。扩图不挪老编号（2026-11-16）：按元素读进来的那批框排（新框的 way 原来排在老框的 relation
+  // 前面），而且一个多边形只在它那批的框里填楼、围围挡（跨在新旧框边上的老多边形，在新框那半边多出来的楼会把后面的编号挪位）
+  // 11-16 之前的几批保持原来的顺序和填法（枣园那批的 way 本来就排在老框的 relation 前面，改了反倒挪编号）：`group`。
+  // 编号：老的一组照旧一个计数器（楼在前、围挡在后）；之后每批各用一段（9.05e12 + 批次 · 1e9 起），不插进老的序列
+  const later = new Map();
+  const nextId = (era) => { const g = group(era); if (!g) return fid++; const n = later.get(g) ?? 0; later.set(g, n + 1); return 9.05e12 + g * 1e9 + n; };
+  { const L2 = byEra(lands, (l) => group(l.era)), O2 = byEra(open, (o) => group(o.era)); lands.length = 0; lands.push(...L2); open.length = 0; open.push(...O2); }
+  // 只看这个点那一组的空地（新框的公园跨进老框也不挡老框的楼）
+  const inOpen = (x, z) => { const g = group(eraAt(x, z)); return open.some((o) => group(o.era) === g && x >= o.bb[0] && x <= o.bb[2] && z >= o.bb[1] && z <= o.bb[3] && pip(x, z, o.ring)); };
+  const free = (x, z) => corridor(x, z) && !AIR.inAero(x, z) && !nearRoad(x, z, 5) && !inExisting(x, z, 0) && !inOpen(x, z);
   let fid = 9e12;
   for (const L of lands) {
     const a = Math.abs(signedArea(L.ring));
     if (a < 6000) continue;
     // Coverage by what OSM has, on an 8 m grid.
     let n = 0, hit = 0;
-    for (let x = L.bb[0]; x < L.bb[2]; x += 8) for (let z = L.bb[1]; z < L.bb[3]; z += 8) { if (!pip(x, z, L.ring)) continue; n++; if (inExisting(x, z, 0)) hit++; }
+    const mine = (x, z) => group(eraAt(x, z)) === group(L.era);
+    for (let x = L.bb[0]; x < L.bb[2]; x += 8) for (let z = L.bb[1]; z < L.bb[3]; z += 8) { if (!pip(x, z, L.ring)) continue; n++; if (mine(x, z) && inExisting(x, z, 0)) hit++; }
     if (!n || hit / n > 0.06) continue;
     const r = rnd(L.id, 31);
     const res = L.kind === 'residential';
@@ -1842,7 +1871,7 @@ const filled = [];
       for (let x = x0 + shift; x + 10 < L.bb[2] - 6; ) {
         // The longest block up to `len` that fits: every point of it on a 5 m grid inside the polygon and free.
         const fits = (w) => {
-          for (let u = 0; u <= w; u += 5) for (let v = 0; v <= dep; v += 4) { const px = x + Math.min(u, w), pz = z + Math.min(v, dep); if (!pip(px, pz, L.ring) || !free(px, pz)) return false; }
+          for (let u = 0; u <= w; u += 5) for (let v = 0; v <= dep; v += 4) { const px = x + Math.min(u, w), pz = z + Math.min(v, dep); if (!pip(px, pz, L.ring) || !free(px, pz) || !mine(px, pz)) return false; }
           // ... and a margin round it clear of what is drawn.
           for (const [px, pz] of [[x - 4, z - 4], [x + w + 4, z - 4], [x - 4, z + dep + 4], [x + w + 4, z + dep + 4]]) if (inExisting(px, pz, 0)) return false;
           return true;
@@ -1850,7 +1879,7 @@ const filled = [];
         let w = len;
         while (w >= 18 && !fits(w)) w -= 8;
         if (w < 18) { x += 10; continue; }
-        const id = fid++;
+        const id = nextId(L.era);
         const h = h0 + (h1 - h0) * rnd(id, 5);
         const ring = [[x, z], [x + w, z], [x + w, z + dep], [x, z + dep]];
         const levels = Math.max(2, Math.round(h / 3.1));
@@ -1879,14 +1908,14 @@ const filled = [];
         if (run0 < 0 || s1 - run0 < 6) { run0 = -1; return; }
         const p0 = [ax + dx * run0 + nx, az + dz * run0 + nz], p1 = [ax + dx * s1 + nx, az + dz * s1 + nz], t = 0.12;
         const ring = [[p0[0] - dz * t, p0[1] + dx * t], [p1[0] - dz * t, p1[1] + dx * t], [p1[0] + dz * t, p1[1] - dx * t], [p0[0] + dz * t, p0[1] - dx * t]];
-        const id = fid++;
+        const id = nextId(o.era);
         filled.push({ id, tags: { building: 'wall', height: '2.5', 'building:colour': '#35679f' }, ring, holes: [], area: (s1 - run0) * 2 * t, c: [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2], bb: bboxOf(ring) });
         hoard++;
         run0 = -1;
       };
       for (let sd = 0; sd <= L; sd += 2) {
         const x = ax + dx * sd + nx, z = az + dz * sd + nz;
-        const ok = corridor(x, z) && !nearRoad(x, z, 2) && !inExisting(x, z, 0);
+        const ok = corridor(x, z) && group(eraAt(x, z)) === group(o.era) && !nearRoad(x, z, 2) && !inExisting(x, z, 0);
         if (ok && run0 < 0) run0 = sd;
         if (!ok) flush(sd - 2);
       }
@@ -1896,6 +1925,32 @@ const filled = [];
   console.log(`filled: ${filled.length - hoard} blocks in ${lands.length} residential/commercial polygons of the corridors, ${hoard} lengths of hoarding round the building sites`);
 }
 const buildings = kept.concat(parts, learnt, filled);
+// 航站楼不能被桥面「穿过就删掉」（下面那条规则）：OSM 的 T3 轮廓把出发层车道边的挑檐也画进去了，出发层高架伸进轮廓，整座
+// T3C 主楼被删掉（2026-11-16）。航站楼改成把桥面经过的那一条（路宽加 2 米）从轮廓里挖掉，留最大的一块。
+{
+  let cut = 0;
+  const close = (r) => [...r, r[0]];
+  for (const b of buildings) {
+    if (b.tags.aeroway !== 'terminal' || deckThrough(b) === Infinity) continue;
+    const rects = [];
+    eachTile(b.bb, (ix, iz) => {
+      for (const [ax, az, bx, bz, hw] of elevSegs.get(`${ix}_${iz}`) ?? []) {
+        if (segToRing(ax, az, bx, bz, b.ring) >= hw) continue;
+        const L = Math.hypot(bx - ax, bz - az) || 1, ux = (bx - ax) / L, uz = (bz - az) / L, w = hw + 1, e = 1.5;
+        rects.push([close([[ax - ux * e - uz * w, az - uz * e + ux * w], [bx + ux * e - uz * w, bz + uz * e + ux * w], [bx + ux * e + uz * w, bz + uz * e - ux * w], [ax - ux * e + uz * w, az - uz * e - ux * w]])]);
+      }
+    });
+    let res;
+    try { res = polygonClipping.difference([[close(b.ring), ...b.holes.map(close)]], ...rects); } catch { continue; }
+    const pieces = res.map((poly) => ({ ring: poly[0].slice(0, -1), holes: poly.slice(1).map((h) => h.slice(0, -1)) })).map((p) => ({ ...p, a: Math.abs(signedArea(p.ring)) })).sort((x, y) => y.a - x.a);
+    if (!pieces.length) continue;
+    const big = pieces[0];
+    if (signedArea(big.ring) < 0) big.ring.reverse();
+    b.ring = big.ring; b.holes = big.holes.map((h) => (signedArea(h) > 0 ? h.reverse() : h)); b.area = big.a; b.c = centroid(big.ring); b.bb = bboxOf(big.ring);
+    cut++;
+  }
+  if (cut) console.log(`terminals cut round the decks: ${cut}`);
+}
 // Roads through a building (OSM tunnel=building_passage: a gate, an arch under a block): the building
 // gets a passage - [ax, az, bx, bz, half width, clearance] per segment, the segment carried 4 m past
 // the road's ends so it cuts both walls - and the tile mesher opens its walls there, lines the
@@ -2329,6 +2384,8 @@ for (const r of rels) {
   const inner = assemble(r.members.filter((m) => m.type === 'way' && m.geometry && m.role === 'inner').map((m) => proj(m.geometry)));
   for (const outer of assemble(r.members.filter((m) => m.type === 'way' && m.geometry && m.role !== 'inner').map((m) => proj(m.geometry)))) areaPolys.push({ k, outer, holes: inner.filter((h) => pip(h[0][0], h[0][1], outer)), id: r.id });
 }
+// 机场的地面：跑道和滑行道（runway）、机坪和空侧勤务道（apron）、空侧的草（field）
+for (const a of AIR.areas) areaPolys.push(a);
 // Rivers drawn as a line only (2026-10-02, step 4 of the plan): OSM gives most of 通惠河, 亮马河 and the
 // moats as water areas, but ~86 km of rivers, canals, streams and drains in the play area as centre lines
 // alone (凉水河's upper reaches, 坝河, the drains), and nothing drew them. Each one's stretches that no water
@@ -2557,6 +2614,9 @@ for (const w of ways) {
       if (STREET_TREES.has(info.cls)) for (const sd of info.oneway ? [1] : [1, -1]) {
         addTree(x + nx * sd * (info.w / 2 + 2.2), z + nz * sd * (info.w / 2 + 2.2), species, up);
       }
+      // 机场高速两边的钻天杨（2026-11-16，「国门第一路」）：每幅主路外侧两排，只在地面上；不在四环里的老框（主框）里，
+      // 那里的树按顺序取种子，多种一棵后面全挪
+      if (info.name === '首都机场高速公路' && info.cls === 'motorway' && !up && !inMain(x, z)) for (const off of [5, 11]) addTree(x + nx * (info.w / 2 + off), z + nz * (info.w / 2 + off), 1);
     }
     const gap = LAMPS[info.cls];
     if (gap) for (let s = (gap - lampAcc % gap) % gap; s < L; s += gap) {
@@ -2683,7 +2743,7 @@ const COMPOUND_SW = { trunk: 4.5, primary: 4.5, secondary: 4, tertiary: 3.5, unc
   };
   const ringArea = (P) => { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; };
   /** Walls along a polyline, `inward` the side to set them on (+1 left of the direction, -1 right, 0 on it). */
-  const line = (P, inward, colour) => {
+  const line = (P, inward, colour, h = 2.4) => {
     for (let i = 0; i + 1 < P.length; i++) {
       const [ax, az] = P[i], [bx, bz] = P[i + 1], L = Math.hypot(bx - ax, bz - az);
       if (L < 2) continue;
@@ -2696,7 +2756,7 @@ const COMPOUND_SW = { trunk: 4.5, primary: 4.5, secondary: 4, tertiary: 3.5, unc
         const a = s0, e = Math.min(L, s1 + 1);
         if (e - a >= 4) {
           const th = 0.3, p0 = [ax + ux * a + nx * (off - th / 2), az + uz * a + nz * (off - th / 2)], p1 = [ax + ux * e + nx * (off - th / 2), az + uz * e + nz * (off - th / 2)];
-          emit([p0, p1, [p1[0] + nx * th, p1[1] + nz * th], [p0[0] + nx * th, p0[1] + nz * th]], { k: 'wall', h: 2.4, m: 0, r: 'f', rh: 0, c: colour });
+          emit([p0, p1, [p1[0] + nx * th, p1[1] + nz * th], [p0[0] + nx * th, p0[1] + nz * th]], { k: 'wall', h, m: 0, r: 'f', rh: 0, c: colour });
           for (let d = a; d < e; d += 1) taken.add(`${Math.floor(ax + ux * d + nx * off)}_${Math.floor(az + uz * d + nz * off)}`);
           walls++; metres += e - a;
         }
@@ -2733,8 +2793,13 @@ const COMPOUND_SW = { trunk: 4.5, primary: 4.5, secondary: 4, tertiary: 3.5, unc
     if (any) compounds++;
   }
   console.log(`compound walls: ${compounds} compounds and the OSM walls, ${walls} lengths of wall (${(metres / 1000).toFixed(0)} km)`);
+  // 机场围界（2026-11-16）：沿空侧的边，2.8 米，浅灰；路穿过的地方照样留口子（道口）。第一版是实墙，以后换成能看穿的铁丝网
+  const w0 = walls, m0 = metres;
+  AIR.fence.forEach((P, k) => { cid = 1.2e13 + k * 65536; line(P, 0, '#a9adab', 2.8); });
+  if (AIR.found) console.log(`airport fence: ${walls - w0} lengths (${((metres - m0) / 1000).toFixed(1)} km)`);
 }
-addCanopyTrees(onOpen);
+// 空侧不种树（树冠图在跑道边上也有几棵）
+addCanopyTrees((x, z) => onOpen(x, z) || AIR.airside(x, z));
 console.log(`canopy trees: ${nCanopy}`);
 // Signalised network nodes (for traffic lights): nearest graph node within 30 m of a signal.
 const sig = new Uint8Array(netXZ.length / 2);
@@ -2821,7 +2886,7 @@ for (const [k, t] of tiles) {
   const MAPDIR = path.join(OUT, 'map');
   fs.rmSync(MAPDIR, { recursive: true, force: true });
   fs.mkdirSync(MAPDIR, { recursive: true });
-  const GREEN = new Set(['park', 'wood', 'grass', 'pitch']);
+  const GREEN = new Set(['park', 'wood', 'grass', 'pitch', 'field']);
   const blocks = new Map();
   const ints = (r) => r.map((v) => Math.round(v));
   for (const [k, t] of tiles) {
@@ -2832,7 +2897,8 @@ for (const [k, t] of tiles) {
     if (!t.buildings.length && !t.areas.length) continue;
     const e = { k, w: [], g: [], p: [], b: [] };
     for (const a of t.areas) {
-      const dst = a.k === 'water' ? e.w : GREEN.has(a.k) ? e.g : a.k === 'plaza' ? e.p : null;
+      // 机场的跑道、滑行道、机坪按广场的颜色画（2026-11-16）
+      const dst = a.k === 'water' ? e.w : GREEN.has(a.k) ? e.g : a.k === 'plaza' || a.k === 'runway' || a.k === 'apron' ? e.p : null;
       if (!dst) continue;
       dst.push(ints(a.o));
       for (const h of a.hs ?? []) dst.push(ints(h));
@@ -2847,6 +2913,32 @@ for (const [k, t] of tiles) {
 }
 const net = JSON.stringify({ nodes: netXZ, sig: Array.from(sig), edges, br: bridgeNames, en: roadEn });
 fs.writeFileSync(path.join(OUT, 'network.json'), net);
+// 首都机场（src/airport/）：跑道、滑行道图、机位、廊桥、围界
+if (AIR.json) {
+  // 收费站（OSM barrier=toll_booth，只读了机场框里的）：顶棚、亭子、站名牌由 city/visual/TollPlazas.ts 按 manifest.named 里
+  // 以「收费站」结尾的名字搭（白鹿收费站那套）。60 米内的收费亭算一个站；OSM 名字以收费站结尾就用它，落在机场高速主路上的
+  // 叫「机场高速收费站」（OSM 只写了「北京」），别的（匝道上的）不搭。
+  let groups = [];
+  for (const n of nodes) if (n.tags?.barrier === 'toll_booth') {
+    const [x, z] = project(n.lat, n.lon);
+    const g = groups.find((g) => Math.hypot(g.x - x, g.z - z) < 60);
+    if (g) { g.pts.push([x, z]); if (/收费站$/.test(n.tags.name ?? '')) g.name = n.tags.name; }
+    else groups.push({ x, z, pts: [[x, z]], name: /收费站$/.test(n.tags.name ?? '') ? n.tags.name : '' });
+  }
+  // 收费亭多的先（机场高速主线上的站两个方向各一排）
+  groups = groups.sort((a, b) => b.pts.length - a.pts.length);
+  for (const g of groups) {
+    const cx = g.pts.reduce((a, p) => a + p[0], 0) / g.pts.length, cz = g.pts.reduce((a, p) => a + p[1], 0) / g.pts.length;
+    let name = g.name;
+    if (!name) {
+      let onS12 = false;
+      for (const w of ways) if (w._road?.name === '首都机场高速公路' && w._road.cls === 'motorway') for (let i = 1; i < w._pts.length && !onS12; i++) onS12 = segDist(cx, cz, w._pts[i - 1][0], w._pts[i - 1][1], w._pts[i][0], w._pts[i][1]) < 25;
+      if (onS12) name = '机场高速收费站';
+    }
+    if (name && !named[name]) { named[name] = [q1(cx), q1(cz)]; console.log(`toll station ${name} at ${Math.round(cx)},${Math.round(cz)} (${g.pts.length} booths)`); }
+  }
+  fs.writeFileSync(path.join(OUT, 'airfield.json'), JSON.stringify(AIR.json));
+}
 // The underpasses (city/visual/Tunnels.ts): per sunk way its dense centre line, heights, half widths and
 // covered flags per segment; and the open trenches as rings (holes in the ground plane and collider).
 fs.writeFileSync(path.join(OUT, 'tunnels.json'), JSON.stringify({

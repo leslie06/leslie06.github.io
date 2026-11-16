@@ -20,6 +20,12 @@ W, S, E, N = 116.19, 39.735, 116.615, 40.03  # 五环以内（2026-10-16），�
 OLD_S = float(sys.argv[sys.argv.index('--south') + 1]) if '--south' in sys.argv else None
 if OLD_S is not None:
     N = OLD_S
+# --box w,s,e,n（2026-11-16 机场）：只读这个框，落在上面老框里的像素先抹掉再转多边形，追加到 green.json。
+BOX = OLD = None
+if '--box' in sys.argv:
+    BOX = [float(v) for v in sys.argv[sys.argv.index('--box') + 1].split(',')]
+    OLD = (W, S, E, N)
+    W, S, E, N = BOX
 URL = 'https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N39E114_Map.tif'
 LAT0, LON0, R = 39.90883, 116.39757, 6378137.0
 KX = math.pi / 180 * R * math.cos(math.radians(LAT0))
@@ -33,6 +39,11 @@ with rasterio.open(URL) as r:
 green = np.isin(a, (10, 30, 40))
 # drop single pixels and close one-pixel gaps (a street tree's crown is not a lawn)
 green = binary_closing(binary_opening(green, iterations=1), iterations=1)
+if OLD is not None:
+    cols = tr.c + (np.arange(green.shape[1]) + 0.5) * tr.a
+    rows = tr.f + (np.arange(green.shape[0]) + 0.5) * tr.e
+    inside = ((rows > OLD[1]) & (rows < OLD[3]))[:, None] & ((cols > OLD[0]) & (cols < OLD[2]))[None, :]
+    green[inside] = False
 print('green share', round(float(green.mean()) * 100, 1), '%', f'{time.time() - t0:.0f} s')
 to_game = lambda lon, lat: ((np.asarray(lon) - LON0) * KX, -(np.asarray(lat) - LAT0) * KZ)
 out, n = [], 0
@@ -53,10 +64,10 @@ for geom, v in features.shapes(green.astype(np.uint8), mask=green, transform=tr)
         out.append(None)
         n += 1
 os.makedirs('.cache/buildings', exist_ok=True)
-if OLD_S is not None:
+if OLD_S is not None or BOX is not None:
     with open('.cache/buildings/green.json') as f:
         out = json.load(f)['p'] + out
-    print('new polygons south of', OLD_S, n)
+    print('new polygons', f'south of {OLD_S}' if OLD_S is not None else f'in {BOX}', n)
 with open('.cache/buildings/green.json', 'w') as f:
     json.dump({'src': 'ESA WorldCover 10m 2021 v200 (CC BY 4.0): tree cover, grassland, cropland', 'p': out}, f, separators=(',', ':'))
 print('polygons', n, f'{os.path.getsize(".cache/buildings/green.json") / 1e6:.1f} MB', f'{time.time() - t0:.0f} s')

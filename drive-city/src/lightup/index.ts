@@ -26,6 +26,7 @@ export const REWARDS: readonly LightReward[] = [
   { id: 'r4', paint: '#2f5d9e', name: 'lit.paint.r4', cash: 5000 },
   { id: 'r5', paint: '#3f8f5a', name: 'lit.paint.r5', cash: 6000 },
   { id: 'changan', paint: '#b3262d', name: 'lit.paint.changan', cash: 3000 },
+  { id: 'airport', paint: '#c7ced6', name: 'lit.paint.airport', cash: 3000 },
   { id: 'km100', paint: '#e3b53a', name: 'lit.paint.km100', cash: 5000 },
 ];
 

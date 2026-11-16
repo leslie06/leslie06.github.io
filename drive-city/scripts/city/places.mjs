@@ -11,7 +11,8 @@ import { REGIONS, project } from './region.mjs';
 const SRC = path.resolve('.cache/osm/places.geojsonseq');
 const OUT = path.resolve('public/city/places.json');
 /** Category order is the game's (nav/Places.ts `PLACE_CATS`). */
-export const CATS = ['metro', 'rail', 'park', 'hospital', 'school', 'mall', 'hotel', 'sight', 'gov', 'office', 'resid', 'area'];
+// airport（2026-11-16）：首都机场的航站楼。只往后加，前面的编号不动（places.json 里存的是编号）。
+export const CATS = ['metro', 'rail', 'park', 'hospital', 'school', 'mall', 'hotel', 'sight', 'gov', 'office', 'resid', 'area', 'airport'];
 const C = Object.fromEntries(CATS.map((c, i) => [c, i]));
 
 if (!fs.existsSync(SRC)) { console.log('places: no .cache/osm/places.geojsonseq (run extract-pbf.mjs), skipped'); process.exit(0); }
@@ -35,6 +36,8 @@ function classify(t, ha) {
     if (train) return [C.rail, 0];
     return null;
   }
+  // 航站楼（远机位登机厅、卫星厅这种不要，只要「X号航站楼」）
+  if (t.aeroway === 'terminal') return /航站楼$/.test(t.name) ? [C.airport, 0] : null;
   if (t.place) return ['suburb', 'quarter', 'neighbourhood'].includes(t.place) && !/(社区|居委会|村)$/.test(t.name) ? [C.area, t.place === 'neighbourhood' ? 2 : 1] : null;
   if (t.amenity === 'hospital') return [C.hospital, ha > 2 ? 1 : 2];
   if (['university', 'college'].includes(t.amenity)) return [C.school, ha > 10 ? 1 : 2];

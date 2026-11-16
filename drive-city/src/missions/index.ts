@@ -62,6 +62,9 @@ export const fare = (km: number) => Math.round(13 + Math.max(0, km - 3) * 2.3);
  */
 export const PLACES: { zh: string; en: string; road: string; lat: number; lon: number }[] = [
   { zh: '王府井', en: 'Wangfujing', road: '王府井大街', lat: 39.9149, lon: 116.4108 },
+  // 首都机场（2026-11-16）：航站楼前车道边的路 OSM 没名字，按点找最近的路边；城里打车单最长 2.6 公里，只有在机场附近才会去
+  { zh: '首都机场T3航站楼', en: 'Capital Airport Terminal 3', road: '', lat: 40.05418, lon: 116.6079 },
+  { zh: '首都机场T2航站楼', en: 'Capital Airport Terminal 2', road: '', lat: 40.0761, lon: 116.58518 },
   { zh: '东单', en: 'Dongdan', road: '东单北大街', lat: 39.9083, lon: 116.418 },
   { zh: '建国门', en: 'Jianguomen', road: '建国门内大街', lat: 39.9079, lon: 116.4344 },
   { zh: '前门大街', en: 'Qianmen Street', road: '前门大街', lat: 39.896, lon: 116.3975 },

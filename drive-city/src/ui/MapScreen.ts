@@ -488,7 +488,7 @@ export class MapScreen implements System {
       const b = el('span', ok ? 'v ok' : 'v', this.litRows);
       b.textContent = ok ? '✓' : v > 0 && v < 0.01 ? '<1%' : `${Math.floor(v * 100)}%`;
     };
-    for (const id of ['r2', 'r3', 'r4', 'r5', 'changan'] as const) row(t(`lit.route.${id}` as TKey), st.routes[id], st.routes[id] >= ROUTE_DONE);
+    for (const id of ['r2', 'r3', 'r4', 'r5', 'changan', 'airport'] as const) row(t(`lit.route.${id}` as TKey), st.routes[id], st.routes[id] >= ROUTE_DONE);
     const roads = lit.roads();
     if (!roads) return;
     const ds = lit.districts.map((d, i) => ({ name: lang() === 'zh' ? d.zh : d.en.replace(/ District$/, ''), total: roads.perDistrict[i], lit: st.perDistrict[i] }))

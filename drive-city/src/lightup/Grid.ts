@@ -60,6 +60,8 @@ export const ROUTES = [
   { id: 'r4', match: (n: string) => /^[东西南北]四环$/.test(shortName(n)) },
   { id: 'r5', match: (n: string) => /^[东西南北]五环$/.test(shortName(n)) },
   { id: 'changan', match: (n: string) => RADIO_ROADS.find((r) => r.id === 'changan')!.match.test(n) },
+  // 机场高速全程（2026-11-16）：三元桥到 T2
+  { id: 'airport', match: (n: string) => n === '首都机场高速公路' },
 ] as const;
 export type RouteId = (typeof ROUTES)[number]['id'];
 

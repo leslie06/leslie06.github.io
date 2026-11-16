@@ -51,11 +51,18 @@ describe('guide signs', () => {
   });
   it('have no deck over the pole or the plate (every segment scanned, not just nearby points)', () => {
     const bad: string[] = [];
+    // 每条高架先按外框筛一遍（扫全城所有段：机场那次地图大了，60 秒跑不完，2026-11-16）
+    const decks = g.links.filter((o) => o.h).map((o) => {
+      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+      for (let i = 0; i < o.pts.length; i += 2) { x0 = Math.min(x0, o.pts[i]); x1 = Math.max(x1, o.pts[i]); z0 = Math.min(z0, o.pts[i + 1]); z1 = Math.max(z1, o.pts[i + 1]); }
+      const m = o.hw + 1.2;
+      return { o, x0: x0 - m, z0: z0 - m, x1: x1 + m, z1: z1 + m };
+    });
     for (const s of signs) {
       const c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
       const spots = [0, s.reach - s.w / 2, s.reach, s.reach + s.w / 2].map((r) => [s.x - r * c, s.z + r * sn]);
-      for (const o of g.links) {
-        if (!o.h || o.hmax < s.y + 1.5) continue;
+      for (const { o, x0, z0, x1, z1 } of decks) {
+        if (o.hmax < s.y + 1.5 || !spots.some(([x, z]) => x >= x0 && x <= x1 && z >= z0 && z <= z1)) continue;
         for (let k = 1; k < o.cum.length; k++) {
           const ax = o.pts[k * 2 - 2], az = o.pts[k * 2 - 1], vx = o.pts[k * 2] - ax, vz = o.pts[k * 2 + 1] - az, L2 = vx * vx + vz * vz || 1;
           for (const [x, z] of spots) {

@@ -25,13 +25,17 @@ const FILTER = [
   'nwr/building', 'w/building:part', 'w/highway', 'wr/landuse', 'wr/leisure', 'nwr/natural', 'w/waterway', 'w/amenity',
   'nwr/tourism', 'nw/attraction', 'w/railway', 'w/barrier=wall', 'w/man_made', 'w/area:highway', 'wr/place=square',
   'n/highway=traffic_signals,crossing,bus_stop,street_lamp', 'n/railway=subway_entrance',
+  // 机场（2026-11-16）：跑道、滑行道、机坪、航站楼、机位、廊桥，和收费站。只在 AIR_SINCE 以后的框里输出（见 wanted），
+  // 老框的元素一个不多，地块不变。
+  'nwr/aeroway', 'n/barrier=toll_booth',
 ];
+const AIR_SINCE = '2026-11-16';
 const WAY_KEYS = ['building', 'building:part', 'highway', 'landuse', 'leisure', 'natural', 'waterway', 'amenity', 'tourism', 'attraction', 'railway', 'man_made', 'area:highway'];
 const REL_KEYS = ['building', 'landuse', 'leisure', 'natural', 'tourism'];
 const wanted = {
-  n: (t) => t.tourism != null || t.attraction != null || t.natural === 'tree' || /traffic_signals|crossing|bus_stop|street_lamp/.test(t.highway ?? '') || t.railway === 'subway_entrance',
-  w: (t) => WAY_KEYS.some((k) => t[k] != null) || t.barrier === 'wall' || t.place === 'square',
-  r: (t) => REL_KEYS.some((k) => t[k] != null) || t.place === 'square',
+  n: (t, air) => (air && (t.aeroway != null || t.barrier === 'toll_booth')) || t.tourism != null || t.attraction != null || t.natural === 'tree' || /traffic_signals|crossing|bus_stop|street_lamp/.test(t.highway ?? '') || t.railway === 'subway_entrance',
+  w: (t, air) => (air && t.aeroway != null) || WAY_KEYS.some((k) => t[k] != null) || t.barrier === 'wall' || t.place === 'square',
+  r: (t, air) => (air && t.aeroway != null) || REL_KEYS.some((k) => t[k] != null) || t.place === 'square',
 };
 
 const osmium = (...args) => execFileSync('osmium', args, { stdio: ['ignore', 'pipe', 'inherit'] }).toString();
@@ -54,6 +58,7 @@ function tagsOf(s) {
 const round7 = (v) => Math.round(v * 1e7) / 1e7;
 
 async function convert(tag, box) {
+  const air = (box.since ?? '') >= AIR_SINCE;
   const cut = path.join(TMP, `${tag || 'main'}.osm.pbf`);
   // smart: ways whole, and multipolygon / building relations with all their members.
   osmium('extract', '-b', `${box.w},${box.s},${box.e},${box.n}`, '-s', 'smart', '-S', 'types=multipolygon,building', filtered, '-o', cut, '-O');
@@ -70,13 +75,13 @@ async function convert(tag, box) {
     if (kind === 'n') {
       const lat = round7(+f.y), lon = round7(+f.x);
       coords.set(id, { lat, lon });
-      if (has && wanted.n(tags)) elements.push({ type: 'node', id, lat, lon, tags });
+      if (has && wanted.n(tags, air)) elements.push({ type: 'node', id, lat, lon, tags });
     } else if (kind === 'w') {
       const refs = f.N ? f.N.split(',').map((r) => Number(r.slice(1))) : [];
       wayNodes.set(id, refs);
-      if (has && wanted.w(tags)) elements.push({ type: 'way', id, nodes: refs, tags });
+      if (has && wanted.w(tags, air)) elements.push({ type: 'way', id, nodes: refs, tags });
     } else if (kind === 'r') {
-      if (has && wanted.r(tags)) relsRaw.push({ id, tags, members: f.M ? f.M.split(',') : [] });
+      if (has && wanted.r(tags, air)) relsRaw.push({ id, tags, members: f.M ? f.M.split(',') : [] });
     }
   }
   const geom = (refs) => refs.map((r) => coords.get(r)).filter(Boolean);
@@ -122,6 +127,7 @@ const POI = [
   'nwr/shop=mall,department_store', 'nwr/tourism=hotel,attraction,museum,theme_park,zoo,gallery',
   'wr/leisure=park,stadium,sports_centre,garden', 'nwr/historic', 'n/place=suburb,quarter,neighbourhood',
   'wr/landuse=residential', 'nwr/office', 'wr/building=office,commercial,hotel,retail',
+  'wr/aeroway=terminal',
 ];
 const box = [Math.min(...REGIONS.map((r) => r.w)), Math.min(...REGIONS.map((r) => r.s)), Math.max(...REGIONS.map((r) => r.e)), Math.max(...REGIONS.map((r) => r.n))];
 const poi = path.join(TMP, 'poi.osm.pbf'), poiBox = path.join(TMP, 'poi-box.osm.pbf');

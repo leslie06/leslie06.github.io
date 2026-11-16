@@ -6,9 +6,9 @@ import { F } from './theme';
 const PLACE_ICON: Record<PlaceCat, [string, string]> = {
   metro: ['#2f6fe4', '铁'], rail: ['#1f4fa8', '站'], park: ['#2f9459', '园'], hospital: ['#e0463c', '+'], school: ['#8a5ad0', '学'],
   mall: ['#e0802a', '购'], hotel: ['#c24f9a', '宿'], sight: ['#1b9a96', '景'], gov: ['#55698f', '政'], office: ['#66737e', '楼'],
-  resid: ['#6a7b6c', '区'], area: ['', ''],
+  resid: ['#6a7b6c', '区'], area: ['', ''], airport: ['#1f4fa8', '机'],
 };
-const PLACE_TEXT: Partial<Record<PlaceCat, string>> = { metro: '#a9c6ff', rail: '#a9c6ff', park: '#98d8ad', hospital: '#ffa39b', sight: '#8fd8d2', mall: '#f5c08e' };
+const PLACE_TEXT: Partial<Record<PlaceCat, string>> = { metro: '#a9c6ff', rail: '#a9c6ff', airport: '#a9c6ff', park: '#98d8ad', hospital: '#ffa39b', sight: '#8fd8d2', mall: '#f5c08e' };
 
 /** How a map sizes and thins its labels. */
 export interface LabelStyle {
