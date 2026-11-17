@@ -1682,6 +1682,52 @@ function nearRoad(x, z, margin) {
   return false;
 }
 
+/**
+ * 一条边的折线和每个点的路面高度（2026-11-16，「开着开着，周围的车都飞起来了」）：原来只在 OSM 的点上取高度，两个点之间
+ * 路面下到地面再爬上去（首都机场高速四元桥以北：一条 500 米的边两头都在 6.5 米的桥上，中间画的是地面），车道却一直是 6.5 米，
+ * 轻量车按车道走就悬在半空。地块画的是加密后的起伏（`w._dense`），这里把它按 0.25 米的容差化简（Douglas–Peucker，OSM 的点都留着），
+ * 多出来的点按里程插在原折线上——走向不变；起伏和两头直线插值对得上的边一点不动。
+ */
+const PROFILE_TOL = 0.25;
+function edgeProfile(w, vs, i0, i1) {
+  const P = w._pts, D = w._dense;
+  const base = [];
+  for (let k = i0; k <= i1; k++) base.push(k);
+  const out = { pts: base.map((k) => P[k]), h: base.map((k) => q1(heightAlong(w, vs[k]))) };
+  if (!D || D.length < 3) return out;
+  // 两个 OSM 点之间的加密点（里程、高度）
+  const extra = [];
+  for (let k = i0; k < i1; k++) {
+    const s0 = vs[k], s1 = vs[k + 1];
+    const mids = D.filter((d) => d.s > s0 + 1 && d.s < s1 - 1).map((d) => ({ s: d.s, h: HT.get(d.key) ?? 0 }));
+    if (!mids.length) continue;
+    const pts = [{ s: s0, h: heightAlong(w, s0) }, ...mids, { s: s1, h: heightAlong(w, s1) }];
+    const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+    const dp = (a, b) => {
+      let worst = 0, wi = -1;
+      for (let j = a + 1; j < b; j++) {
+        const t = (pts[j].s - pts[a].s) / (pts[b].s - pts[a].s || 1), lin = pts[a].h + (pts[b].h - pts[a].h) * t, d = Math.abs(pts[j].h - lin);
+        if (d > worst) { worst = d; wi = j; }
+      }
+      if (worst > PROFILE_TOL) { keep[wi] = 1; dp(a, wi); dp(wi, b); }
+    };
+    dp(0, pts.length - 1);
+    for (let j = 1; j < pts.length - 1; j++) if (keep[j]) extra.push({ k, s: pts[j].s, h: pts[j].h });
+  }
+  if (!extra.length) return out;
+  const pts = [], h = [];
+  let e = 0;
+  for (let k = i0; k <= i1; k++) {
+    pts.push(P[k]); h.push(q1(heightAlong(w, vs[k])));
+    for (; e < extra.length && extra[e].k === k; e++) {
+      const t = (extra[e].s - vs[k]) / (vs[k + 1] - vs[k]);
+      pts.push([P[k][0] + (P[k + 1][0] - P[k][0]) * t, P[k][1] + (P[k + 1][1] - P[k][1]) * t]);
+      h.push(q1(extra[e].h));
+    }
+  }
+  return { pts, h };
+}
+
 // Drivable graph for traffic / GPS / minimap: edges run between junctions.
 const netIndex = new Map(), netXZ = [], edges = [];
 const netIds = [];
@@ -1703,8 +1749,8 @@ for (const w of ways) {
     let start = r0;
     for (let i = r0 + 1; i <= r1; i++) {
       if (i === r1 || (degCar.get(w._ids[i]) || 0) >= 3) {
-        const h = vs.slice(start, i + 1).map((s) => q1(heightAlong(w, s)));
-        edges.push({ a: nodeIdx(w._ids[start], w._pts[start]), b: nodeIdx(w._ids[i], w._pts[i]), p: flat(w._pts.slice(start, i + 1)), c: info.cls, o: info.oneway, l: info.lanes, w: q1(info.w), n: info.name || undefined, br: info.bridge || undefined, ...(h.some((v) => Math.abs(v) > 0.05) ? { h } : {}) });
+        const { pts, h } = edgeProfile(w, vs, start, i);
+        edges.push({ a: nodeIdx(w._ids[start], w._pts[start]), b: nodeIdx(w._ids[i], w._pts[i]), p: flat(pts), c: info.cls, o: info.oneway, l: info.lanes, w: q1(info.w), n: info.name || undefined, br: info.bridge || undefined, ...(h.some((v) => Math.abs(v) > 0.05) ? { h } : {}) });
         start = i;
       }
     }
