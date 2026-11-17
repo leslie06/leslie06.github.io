@@ -112,6 +112,11 @@ export interface WorldApi extends System {
   placeName?(x: number, z: number): string;
   /** Streaming worlds: resolves once everything around (x, z) is loaded, colliders included. */
   preload?(x: number, z: number): Promise<void>;
+  /**
+   * Streaming worlds: whether the colliders round (x, z) (`r` m either way) are in. They are only kept near the camera, and
+   * a car left parked on a deck is woken as its deck goes and falls through (2026-11-17): parked cars hold still while false.
+   */
+  solidAt?(x: number, z: number, r?: number): boolean;
   /** The nearest shared bike standing within `r` of (x, z), if the world has any. */
   sharedBike?(x: number, z: number, r: number): SharedBike | null;
   /** That bike leaves its rack (the player is riding it). */

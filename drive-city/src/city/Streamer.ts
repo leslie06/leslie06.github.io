@@ -730,6 +730,19 @@ export class CityStreamer implements System {
    * Load everything around (x, z) now (spawn, shots): keeps pumping worker results until every
    * wanted tile is built, then adds colliders around the point.
    */
+  /**
+   * 以 (x, z) 为中心、`r` 米见方以内的地块碰撞体（地面上的楼、桥面、匝道）都在不在（2026-11-17）。碰撞体只建在镜头周围
+   * 3×3 块地块上，再远就拆；停在桥上的车拆的时候会被 Rapier 叫醒、掉到桥下去，停着的车要先问这个。
+   * 数据里没有的地块（城外、山路那边）算在：那里本来就没有地块的碰撞体可拆。
+   */
+  solidAt(x: number, z: number, r = 6): boolean {
+    for (const [dx, dz] of [[-r, -r], [r, -r], [-r, r], [r, r]]) {
+      const [ix, iz] = tileOf(x + dx, z + dz), k = `${ix}_${iz}`;
+      if (this.manifest.tiles[k] && !this.tiles.get(k)?.body) return false;
+    }
+    return true;
+  }
+
   /** `progress` hears the fraction of the tiles in (the loading bar). */
   async preload(x: number, z: number, progress?: (f: number) => void): Promise<void> {
     this.pin = { x, z };

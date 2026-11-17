@@ -303,6 +303,9 @@ export async function install(engine: Engine): Promise<void> {
   const nap = (n: Npc, dt: number): boolean => {
     const b = n.car.body;
     if (b.isSleeping()) return true;
+    // 脚下的地块碰撞体拆了（离镜头远了）：Rapier 拆的时候把它叫醒了，接着睡，不然从桥上掉下去（2026-11-17「我在高架桥开车，
+    // 然后抢了别人的车 我的车就陷进去了」：抢车后原来那辆停在东三环这种桥上，开出去两三百米再回来，车在桥下）
+    if (world?.solidAt && !world.solidAt(n.car.pos.x, n.car.pos.z)) { n.rest = 0; b.sleep(); return true; }
     // 水平速度：靠冲量托着的车静止时竖直速度报 -0.375·g·dt（约 0.06），`speed` 永远到不了 0
     if (Math.hypot(n.car.vel.x, n.car.vel.z) < 0.05 && n.car.grounded === 4) {
       n.rest = (n.rest ?? 0) + dt;

@@ -182,6 +182,8 @@ export async function install(engine: Engine): Promise<void> {
       if (nitroOn) car.nitroFill = Math.max(0, car.nitroFill - dt / car.tune.nitro);
       car.boost = nitroOn ? NITRO_ACCEL * api.power : 0;
       prevPos.copy(curPos); prevQuat.copy(curQuat);
+      // 没人开、脚下的地块碰撞体拆了（人坐公交、坐地铁、走远了）：车睡着等着，不然停在桥上的车被拆碰撞体叫醒、掉到桥下（2026-11-17）
+      if (!api.occupied && !api.autopilot && world.solidAt && !world.solidAt(car.pos.x, car.pos.z)) { car.body.sleep(); return; }
       car.step(c, dt);
     },
     postStep(dt) {
