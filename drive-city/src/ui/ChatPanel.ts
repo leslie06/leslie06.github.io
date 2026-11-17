@@ -50,7 +50,7 @@ body.dc-touch .chat-feed{top:auto;left:calc(140px + env(safe-area-inset-left,0px
 .chat-panel .who{padding:0 12px 8px;font:500 11px/1.4 ${F.ui};color:${C.muted}}
 `);
 
-const ERR: Record<string, TKey> = { fast: 'chat.err.fast', dup: 'chat.err.dup', ad: 'chat.err.ad', empty: 'chat.err.empty', network: 'chat.err.network' };
+const ERR: Record<string, TKey> = { fast: 'chat.err.fast', dup: 'chat.err.dup', ad: 'chat.err.ad', word: 'chat.err.word', empty: 'chat.err.empty', network: 'chat.err.network' };
 const FEED = 6, FEED_SECS = 10;
 
 /**

@@ -796,12 +796,24 @@ const CHAT_WORDS = ['傻逼', '傻b', '煞笔', '沙比', '傻屌', '操你', '�
 const CHAT_AD = [/https?:|www\.|\.(com|cn|net|org|top|xyz|cc|vip)\b/i, /(qq|q群|vx|v信|微信|wx|加我|加群|代练|外挂|私聊)/i, /\d{7,}/];
 /** 游客编号：随机玩家号算出的 4 位数（同一台设备固定）。 */
 export async function guestNo(pid) { const h = await sha(`guest|${pid}`); return 1000 + (parseInt(h.slice(0, 8), 16) % 9000); }
+/**
+ * 聊天里不能出现「习近平」（2026-11-17，「评论区也不能出现习近平三个字」）：去掉空格、标点、符号、数字、拉丁字母后，
+ * 「习（習）」「近」「平」按这个顺序出现、相邻两个字之间隔不超过 2 个汉字就不收（「习8964近平」「习 大 近 x 平」都算）；
+ * 拼音 xijinping / xjp 也不收。名字是三个字都在就不收，聊天一句话长、要按顺序和距离，不然「最近练习，平时……」也会误伤。
+ */
+export function blockedChat(raw) {
+  const t = String(raw ?? '').normalize('NFKC').toLowerCase();
+  if (/x\W*i\W*j\W*i\W*n\W*p\W*i\W*n\W*g|(^|[^a-z])xjp([^a-z]|$)/.test(t)) return true;
+  const s = t.replace(/[\s\p{P}\p{S}\p{N}a-z_]/gu, '');
+  return /[习習]\p{Script=Han}{0,2}近\p{Script=Han}{0,2}平/u.test(s);
+}
 export function cleanChat(raw, extra = []) {
   // NFC, not NFKC: NFKC turns Chinese full-width punctuation (，？！) into ASCII
   let s = String(raw ?? '').normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e]/g, '').replace(/\s+/g, ' ').trim();
   s = [...s].slice(0, CHAT_MAX).join('');
   if (!s) return { error: 'empty' };
   if (CHAT_AD.some((r) => r.test(s))) return { error: 'ad' };
+  if (blockedChat(s)) return { error: 'word' };
   for (const w of [...CHAT_WORDS, ...extra]) {
     if (!w) continue;
     const re = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');

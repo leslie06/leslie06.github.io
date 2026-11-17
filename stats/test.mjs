@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import worker, { cnDay, cleanName } from './worker.js';
+import worker, { cnDay, cleanName, blockedChat } from './worker.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const db = new DatabaseSync(':memory:');
@@ -272,6 +272,9 @@ const c2 = await chat({ p: 'acctpid', t: regC.body.token, text: '你这傻逼车
 ok('登录的用账号名，脏话打星号', c2.body.msg?.name === '老司机' && c2.body.msg.guest === false && c2.body.msg.text === '你这**车开得真烂', JSON.stringify(c2.body));
 db.prepare('UPDATE chat SET ts = ts - 5000').run();
 ok('广告（网址、微信、QQ 号）不收', (await chat({ p: 'adpid', text: '加微信领福利' }, '6.6.6.1')).body.error === 'ad' && (await chat({ p: 'adpid2', text: 'www.xx.com' }, '6.6.6.2')).body.error === 'ad' && (await chat({ p: 'adpid3', text: '扣扣1234567890' }, '6.6.6.3')).body.error === 'ad');
+ok('聊天里不能出现习近平（连着、隔开、繁体、拼音）', (await chat({ p: 'xpid', text: '习近平好' }, '6.6.6.7')).body.error === 'word'
+  && ['习 近 平', '习8964近平', '習近平', '习-大-近-a-平', '习大大近平', 'xi jin ping', 'XJP来了'].every(blockedChat)
+  && !['最近练习，平时开得少', '近平', '习惯了，平安就好', '最近平安', '练习了很久才开到附近，平谷'].some(blockedChat));
 ok('空的、没玩家号的不收', (await chat({ p: 'x1', text: '   ' }, '6.6.6.4')).status === 400 && (await chat({ text: 'hi' }, '6.6.6.5')).status === 400);
 const long = await chat({ p: 'longpid', text: '长'.repeat(300) }, '6.6.6.6');
 ok('超过 120 字截断', [...long.body.msg.text].length === 120);
