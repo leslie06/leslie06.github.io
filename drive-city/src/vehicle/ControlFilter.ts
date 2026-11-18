@@ -50,6 +50,11 @@ export const emptyControls = (): VehicleControls => ({ throttle: 0, brake: 0, st
 export class ControlFilter {
   readonly out: VehicleControls = emptyControls();
   private reversing = false;
+  /**
+   * 方向灵敏度（vehicle/SteerPref.ts），1 是调好的默认，只有玩家的车会改。按键：滞后时间 ÷ sense，
+   * 高速时少给的舵 ÷ sense（最多少给 75%）；摇杆：中间那段的弧度 1.3 / sense，满舵照样推得到。
+   */
+  sense = 1;
 
   reset(): void { Object.assign(this.out, emptyControls()); this.reversing = false; }
 
@@ -57,8 +62,8 @@ export class ControlFilter {
     const o = this.out;
     if (i.analog) {
       // A small expo keeps the centre of the stick precise without giving up full lock.
-      const target = Math.sign(i.steer) * Math.pow(Math.abs(i.steer), 1.3);
-      o.steer += (target - o.steer) * Math.min(1, dt * 22);
+      const target = Math.sign(i.steer) * Math.pow(Math.abs(i.steer), 1.3 / this.sense);
+      o.steer += (target - o.steer) * Math.min(1, dt * 22 * this.sense);
     } else {
       // First-order lag on the key: the wheel's average position is exactly the share of time the
       // key is held, so tapping gives partial lock at any duty (a rate limiter clamps at centre and
@@ -67,10 +72,11 @@ export class ControlFilter {
       // A held key asks for less lock at motorway speed (65% at 130 km/h): full lock there is the
       // tyre's whole 1 g, and every short correction tap was a lurch (0.25 m -> 1.25 m of weave once
       // taps started to count). A stick still reaches full lock.
-      const K = KEYBOARD;
-      const target = i.steer * (1 - K.highSpeedCut * smoothstep(K.cutFrom, K.cutTo, Math.abs(forwardSpeed)));
+      const K = KEYBOARD, sense = this.sense;
+      const cut = sense === 1 ? K.highSpeedCut : Math.min(0.75, K.highSpeedCut / sense);
+      const target = i.steer * (1 - cut * smoothstep(K.cutFrom, K.cutTo, Math.abs(forwardSpeed)));
       const fast = Math.min(1, Math.abs(forwardSpeed) / 30);
-      const tau = o.steer * target < 0 ? K.tauSwap : K.tauParked + K.tauFast * fast;
+      const tau = (o.steer * target < 0 ? K.tauSwap : K.tauParked + K.tauFast * fast) / sense;
       o.steer += (target - o.steer) * (1 - Math.exp(-dt / tau));
       if (Math.abs(o.steer) < 1e-4) o.steer = 0;
     }

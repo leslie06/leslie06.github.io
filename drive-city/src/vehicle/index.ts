@@ -11,6 +11,7 @@ import { bodyOfSpec, BODY_TYPES, readyBodies, type BodySource, type BodyType } f
 import type { RenderSystem } from '../render';
 import type { PathPilot } from './Autopilot';
 import { shotMode } from '../debug/ShotMode';
+import { steerPref } from './SteerPref';
 
 /** Nitro's push, m/s² (about 0.7 g: a taxi's own launch is ~5). */
 export const NITRO_ACCEL = 7;
@@ -174,6 +175,8 @@ export async function install(engine: Engine): Promise<void> {
         // Nobody at the wheel: parked, handbrake on.
         drive.forward = 0; drive.back = 0; drive.steer = 0; drive.analog = false; drive.handbrake = !api.occupied; drive.drift = false;
       }
+      // 方向灵敏度只管玩家握着方向盘的时候（vehicle/SteerPref.ts）
+      filter.sense = api.autopilot ? 1 : steerPref.sense;
       const c = filter.update(drive, car.forwardSpeed, dt);
       // Nitro: while held with the throttle down, the bottle empties over `tune.nitro` seconds and
       // pushes the car on at NITRO_ACCEL, past the limiter (Vehicle caps it at 1.3x).

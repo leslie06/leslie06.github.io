@@ -6,6 +6,7 @@ import { L } from './lang';
 import { TOUCH, touchPrefs } from './Touch';
 import { HUD_MODES, hudMode } from './HudMode';
 import { NAV_VOICE_PREFS, navVoicePref } from '../audio/NavVoice';
+import { STEER_LEVELS, steerPref, type SteerLevel } from '../vehicle/SteerPref';
 
 css(`
 .menu{position:fixed;inset:0;z-index:20;font-family:${F.ui};color:${C.paper};display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:32px;
@@ -190,6 +191,18 @@ export class Menu {
         const u = new URL(location.href); u.searchParams.set('quality', tier); location.href = u.toString();
       });
     }
+    // 方向灵敏度（vehicle/SteerPref.ts）
+    const sGrp = el('span', 'grp', opts);
+    const sLabel = el('span', 'seglabel', sGrp); sLabel.appendChild(L('settings.steer'));
+    const sSeg = el('div', 'seg', sGrp);
+    STEER_LEVELS.forEach((_, i) => {
+      const lv = i as SteerLevel;
+      const b = el('button', lv === steerPref.level ? 'on' : '', sSeg);
+      b.id = `steer-${lv + 1}`;
+      b.appendChild(L(`settings.steer.${lv + 1}` as 'settings.steer.1'));
+      b.addEventListener('click', () => steerPref.set(lv));
+    });
+    steerPref.onChange((v) => [...sSeg.children].forEach((x, i) => x.classList.toggle('on', i === v)));
     // 界面三档（ui/HudMode.ts）：只在有小地图的城里
     if (engine.get('nav')) {
       const hGrp = el('span', 'grp', opts);
