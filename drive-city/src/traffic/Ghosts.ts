@@ -68,10 +68,15 @@ export interface Handover {
   next?: number; x?: number; z?: number; yaw?: number;
 }
 
-/** Cars per lane-kilometre by road class (the density the budget is shared out by; scaled down to fit it). */
+/**
+ * Cars per lane-kilometre by road class (the density the budget is shared out by; scaled down to fit it).
+ * 2026-11-18 减车（「京通快速和机场线上车太多，老是撞车」）：高速、快速路 30 → 14，环路和主干道 30 / 26 → 18，次干道 18 → 13。
+ * 量下来高速上的车并不比城里多（高画质 10 点：京通 29、东三环 28、东长安街 37 辆每车道公里），撞得多是因为玩家在高速上开得快、
+ * 车流四五十公里每小时，追上去的机会多；所以高速减得最多。
+ */
 const DENSITY: Record<string, number> = {
-  motorway: 30, trunk: 30, primary: 26, secondary: 18, tertiary: 8, busway: 4, unclassified: 2.5, residential: 2,
-  motorway_link: 10, trunk_link: 10, primary_link: 8, secondary_link: 6, tertiary_link: 4,
+  motorway: 14, trunk: 18, primary: 18, secondary: 13, tertiary: 7, busway: 4, unclassified: 2.5, residential: 2,
+  motorway_link: 5, trunk_link: 6, primary_link: 6, secondary_link: 5, tertiary_link: 4,
 };
 /** How much of its share a link out of view gets (the budget goes where the camera looks; turning round, new ones come). */
 const BEHIND = 0.25;
