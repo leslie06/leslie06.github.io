@@ -32,9 +32,13 @@ export interface Link {
   lane0?: number;
 }
 
+/**
+ * 车流的目标车速，m/s（司机还要乘自己的脾气 0.85–1.05、路况、弯道）。高速 2026-11-19 从 22（79 km/h）提到 30（108 km/h），匝道
+ * 13 → 15（「把高速上的车速提上去」：玩家在高速上开一百多，车流只有四五十，一路追尾）。导航选路还按原来的算（`ROUTE_SPEED`）。
+ */
 const SPEED: Record<string, number> = {
-  motorway: 22, trunk: 16.7, primary: 13.9, secondary: 12.5, tertiary: 11.1, unclassified: 8.3, residential: 8.3,
-  living_street: 5.5, service: 5.5, busway: 12, motorway_link: 13, trunk_link: 11, primary_link: 10, secondary_link: 9, tertiary_link: 8,
+  motorway: 30, trunk: 16.7, primary: 13.9, secondary: 12.5, tertiary: 11.1, unclassified: 8.3, residential: 8.3,
+  living_street: 5.5, service: 5.5, busway: 12, motorway_link: 15, trunk_link: 11, primary_link: 10, secondary_link: 9, tertiary_link: 8,
 };
 const RANK: Record<string, number> = { motorway: 5, trunk: 5, primary: 4, secondary: 3, tertiary: 2, unclassified: 1, residential: 1, busway: 2 };
 

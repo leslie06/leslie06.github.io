@@ -21,6 +21,8 @@ interface Source { link: number; s: number; g0: number }
 const TURN = 3, LEFT = 2.5, UTURN = 30;
 /** On top of length / speed: keep the GPS out of car parks, alleys and bus lanes. Must stay >= 1 (the heuristic assumes it). */
 const FACTOR: Record<string, number> = { service: 1.6, living_street: 1.6, busway: 4 };
+/** 导航按这个车速选路的路（2026-11-19 高速车流提速，路线不跟着变）：没列的按 `Link.speed`。 */
+const ROUTE_SPEED: Record<string, number> = { motorway: 22, motorway_link: 13 };
 /** Metres of snap distance that one unit of (1 - cos) between a road and the heading is worth. */
 const HEADING_M = 18;
 const CELL = 48;
@@ -84,9 +86,10 @@ export class Router {
     let vmax = 1;
     const deg = new Uint16Array(graph.nodeX.length);
     for (const l of links) {
-      this.rate[l.id] = (FACTOR[l.cls] ?? 1) / l.speed;
+      const sp = ROUTE_SPEED[l.cls] ?? l.speed;
+      this.rate[l.id] = (FACTOR[l.cls] ?? 1) / sp;
       this.cost[l.id] = l.len * this.rate[l.id];
-      vmax = Math.max(vmax, l.speed);
+      vmax = Math.max(vmax, sp);
       if (l.rev < 0 || l.id < l.rev) { deg[l.from]++; deg[l.to]++; this.index(l); }
     }
     this.vmax = vmax;
