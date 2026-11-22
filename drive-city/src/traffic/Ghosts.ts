@@ -73,10 +73,14 @@ export interface Handover {
  * 2026-11-18 减车（「京通快速和机场线上车太多，老是撞车」）：高速、快速路 30 → 14，环路和主干道 30 / 26 → 18，次干道 18 → 13。
  * 量下来高速上的车并不比城里多（高画质 10 点：京通 29、东三环 28、东长安街 37 辆每车道公里），撞得多是因为玩家在高速上开得快、
  * 车流四五十公里每小时，追上去的机会多；所以高速减得最多。
+ * 2026-11-22 再减（「我开跑车速度很快，马路上车很多，一直在撞车，减少马路上的车」）：高速 14 → 8，环路和主干道 18 → 11，
+ * 次干道 13 → 8，支路 7 → 5，匝道 5 / 6 / 6 / 5 / 4 → 4 / 4 / 4 / 3 / 3。
+ * 同一天第三次（「马路上的车降到我开跑车可以自由穿梭，偶尔有几辆车只需要左右躲一下就行」）：主路每车道公里 3–4 辆，
+ * 高速 8 → 3，环路和主干道 11 → 4，次干道 8 → 3，支路 5 → 2，小路和匝道也跟着降。
  */
 const DENSITY: Record<string, number> = {
-  motorway: 14, trunk: 18, primary: 18, secondary: 13, tertiary: 7, busway: 4, unclassified: 2.5, residential: 2,
-  motorway_link: 5, trunk_link: 6, primary_link: 6, secondary_link: 5, tertiary_link: 4,
+  motorway: 3, trunk: 4, primary: 4, secondary: 3, tertiary: 2, busway: 2, unclassified: 1.5, residential: 1.2,
+  motorway_link: 1.5, trunk_link: 1.5, primary_link: 1.5, secondary_link: 1.2, tertiary_link: 1,
 };
 /** How much of its share a link out of view gets (the budget goes where the camera looks; turning round, new ones come). */
 const BEHIND = 0.25;

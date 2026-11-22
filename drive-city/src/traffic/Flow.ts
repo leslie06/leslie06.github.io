@@ -12,7 +12,7 @@ export const SLOT_MS = 180000, CELL = 2000;
 export const slotNow = (): number => Math.floor(Date.now() / SLOT_MS);
 
 /** 畅通、缓行、拥堵时路上的车是平时的几倍、开到限速的几成（车的倍数 2026-11-18 从 1.5 / 2 降到 1.3 / 1.6，减车）。 */
-export const DENS: readonly number[] = [1, 1.3, 1.6], SPEED: readonly number[] = [1, 0.6, 0.32];
+export const DENS: readonly number[] = [1, 1.15, 1.35], SPEED: readonly number[] = [1, 0.6, 0.32];
 /**
  * 往哪边开：东、南、西、北四个方向里最接近的一个（世界坐标 x 朝东、z 朝南）。路况分方向——一边堵成一串尾灯、对面畅通，
  * 是北京环路最常见的样子；也省一半的车（名额有限，两个方向都按拥堵放，别的路就空了）。
@@ -72,7 +72,7 @@ export function worstAt(key: string, along: 'x' | 'z', x: number, z: number, hou
 export function hourDensity(hour: number): number {
   if (hour < 5) return 0.55;
   if (hour < 6.5) return 0.75;
-  if (rushHour(hour)) return 1.2;
+  if (rushHour(hour)) return 1.1;
   if (hour >= 22) return 0.8;
   return 1;
 }

@@ -420,7 +420,8 @@ export async function install(engine: Engine): Promise<void> {
     return true;
   };
   const ghosts = ghostOn ? new GhostTraffic(engine.scene, g, sig, rnd,
-    tier === 'low' ? 140 : tier === 'medium' ? 260 : 420, tier === 'low' ? 450 : tier === 'medium' ? 600 : 750,
+    // 名额：2026-11-22 减车（「马路上车很多，一直在撞车」）420 / 260 / 140 → 300 / 190 / 110，同一天再降到 160 / 110 / 70（「可以自由穿梭」）；只降密度表的话名额照样用满，省下的车挪到玩家附近的小路上
+    tier === 'low' ? 70 : tier === 'medium' ? 110 : 160, tier === 'low' ? 450 : tier === 'medium' ? 600 : 750,
     new Set<BodyType>(tier === 'low' ? ['sedan', 'suv', 'bus'] : ['sedan', 'suv', 'hatch', 'mpv', 'bus', 'truck']), ghostPaint, adoptGhost) : null;
   if (ghosts && light) {
     ghosts.light = true;
