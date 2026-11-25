@@ -164,16 +164,18 @@ export async function install(engine: Engine): Promise<void> {
       if (api.autopilot) {
         const c = car;
         Object.assign(drive, api.autopilot.update({ x: c.pos.x, z: c.pos.z, yaw: Math.atan2(c.fwd.x, c.fwd.z), vx: c.vel.x, vz: c.vel.z, forwardSpeed: c.forwardSpeed, bodySlip: c.bodySlip, maxSteer: c.maxSteerAngle(Math.abs(c.forwardSpeed)), wheelbase: c.wheelbase }, dt));
-        drive.drift = false;
+        drive.drift = false; drive.trail = false;
       } else if (api.inputEnabled && api.occupied) {
         drive.forward = inp.forward; drive.back = inp.back; drive.steer = inp.steer; drive.analog = inp.analog;
         // the handbrake key is the drift key (Vehicle.ts `ARCADE`; still the handbrake when slow)
         drive.handbrake = false; drive.drift = inp.handbrake;
+        // braking with the wheel turned still turns (Vehicle.ts `TRAIL`)
+        drive.trail = true;
         // A failing engine pulls less; a dead one only lets the brakes work.
         if (api.power < 1) { drive.forward *= api.power; if (api.power <= 0 && car.speed < 0.6) drive.back = 0; }
       } else {
         // Nobody at the wheel: parked, handbrake on.
-        drive.forward = 0; drive.back = 0; drive.steer = 0; drive.analog = false; drive.handbrake = !api.occupied; drive.drift = false;
+        drive.forward = 0; drive.back = 0; drive.steer = 0; drive.analog = false; drive.handbrake = !api.occupied; drive.drift = false; drive.trail = false;
       }
       // 方向灵敏度只管玩家握着方向盘的时候（vehicle/SteerPref.ts）
       filter.sense = api.autopilot ? 1 : steerPref.sense;

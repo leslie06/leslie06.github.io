@@ -93,6 +93,16 @@ export const ARCADE = {
 };
 
 /**
+ * The player's brakes with the wheel turned (2026-11-25, 「我开车离前面的车很近，想变向，半天头转不过去，就撞在前面的车上了」).
+ * The ABS gives the front tyres 0.95 of their grip for braking, which leaves 0.31 of it sideways: brake and steer
+ * behind a car, as anyone does, and the nose turned 1-5° in half a second (15° off the brake) and never cleared it.
+ * With `VehicleControls.trail` the fronts brake with `front` of their grip at `steerHi` of the wheel and more
+ * (0.95 still below `steerLo`), so they keep sqrt(1 - front²) of it to turn with; the rears are left as they were.
+ * Only the player's car asks for it: traffic, police and the handling suite brake as before.
+ */
+export const TRAIL = { front: 0.5, rear: 0.3, steerLo: 0.05, steerHi: 0.4, slipLo: 0.06, slipHi: 0.14 };
+
+/**
  * A ray-cast car on a Rapier rigid body.
  *
  * Why not Rapier's DynamicRayCastVehicleController: it is Bullet's btRaycastVehicle, whose tyres are
@@ -397,6 +407,10 @@ export class Vehicle {
     if (donut) tc *= smoothstep(dn.speedLo, dn.speedHi, this.speed);
     // Reversing with lock is geometric body slip, not a slide: keep traction control on.
     if (c.reverse) tc = this.speed > 3 ? 1 : 0;
+    // the player's brakes with the wheel turned (`TRAIL`): 0..1, how far the ABS lets go to leave the tyres grip to steer with
+    // (the fronts take their braking back as the tail steps out, which pulls it in again; the rears do not)
+    const trailRear = c.trail && c.brake > 0 ? smoothstep(TRAIL.steerLo, TRAIL.steerHi, Math.abs(c.steer)) : 0;
+    const trailFront = trailRear * (1 - smoothstep(TRAIL.slipLo, TRAIL.slipHi, Math.abs(this.bodySlip)));
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i], m = s.wheels[i];
       w.steer = m.front ? this.steerAngle : 0;
@@ -461,7 +475,7 @@ export class Vehicle {
         } else {
           // ABS: fronts may use nearly all their grip, rears stop well short so they keep enough
           // sideways grip to hold the car straight under hard braking.
-          const bf = Math.min(brakeCap, fxMax * (m.front ? 0.95 : 0.62), mc * Math.abs(vx) / dt);
+          const bf = Math.min(brakeCap, fxMax * (m.front ? 0.95 - (0.95 - TRAIL.front) * trailFront : 0.62 - (0.62 - TRAIL.rear) * trailRear), mc * Math.abs(vx) / dt);
           fx -= Math.sign(vx) * bf;
           fx -= Math.sign(vx) * Math.min(tire.rolling * load, mc * Math.abs(vx) / dt);
         }

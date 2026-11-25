@@ -307,8 +307,10 @@ describe('taxi handling', () => {
     expect(rig.car.up.y).toBeGreaterThan(0.9);
   });
 
-  it('keyboard taps steer in proportion to how long the key is down', () => {
-    for (const [duty, lo, hi] of [[2, 0.1, 0.4], [4, 0.35, 0.65], [6, 0.6, 0.9]] as const) {
+  it('keyboard taps steer in proportion to how long the key is down', async () => {
+    // What the wheel does (critic round 1, issue 3: taps under 63% duty gave 0.14 of lock or less, over 75% all of it).
+    // The key comes back to centre faster than it goes in (KEYBOARD.tauRelease), so the mean sits under the duty.
+    for (const [duty, lo, hi] of [[2, 0.06, 0.3], [4, 0.2, 0.55], [6, 0.45, 0.85]] as const) {
       const f = new ControlFilter();
       let sum = 0, n = 0;
       for (let fr = 0; fr < 900; fr++) {
@@ -319,6 +321,103 @@ describe('taxi handling', () => {
       expect(sum / n).toBeGreaterThan(lo);
       expect(sum / n).toBeLessThan(hi);
     }
+    // What the car does with it, which is what the player feels: the turn rate at 50 km/h as a share of a held key's.
+    // The front tyres are at their limit from ~0.4 of the key, so with one lag both ways 2/8 taps already turned the
+    // car 0.7 as fast as a held key and 4/8 as fast as it goes (2026-11-25). A held key is a little past the tyres' peak
+    // (steer.overdrive), which is how 6/8 can out-turn it.
+    const yawAt = async (duty: number) => {
+      const rig = await Rig.create(); rig.settle(0.5); rig.launch(50 / KMH);
+      let sum = 0, n = 0;
+      for (let fr = 0; fr < 240; fr++) {
+        rig.stepInput(input({ steer: fr % 8 < duty ? -1 : 0, forward: rig.car.forwardSpeed * KMH < 50 ? 1 : 0 }));
+        if (fr >= 120) { sum += Math.abs(rig.car.yawRate); n++; }
+      }
+      return sum / n;
+    };
+    const held = await yawAt(8);
+    let last = 0;
+    for (const [duty, lo, hi] of [[2, 0.15, 0.5], [4, 0.4, 0.85], [6, 0.65, 1.15]] as const) {
+      const share = await yawAt(duty) / held;
+      report[`keytaps.${duty}/8 duty turn rate / held`] = share;
+      expect(share).toBeGreaterThan(lo);
+      expect(share).toBeLessThan(hi);
+      expect(share).toBeGreaterThan(last);
+      last = share;
+    }
+  });
+
+  it('a let-go key stops the turn', async () => {
+    // 2026-11-25, 「开车的手感不好」: the wheel came back through the same lag it went in by, and most of that was above
+    // what the front tyres can use, so the car turned on for 0.5-1 s after the key came up (19° more at 60 km/h after a
+    // 0.6 s press) and a 0.1 s tap turned it 9.5°.
+    for (const [kmh, moreMax, tapMax] of [[40, 12, 7.5], [60, 8.5, 5.5], [120, 3, 2]] as const) {
+      const rig = await Rig.create(); rig.settle(0.5);
+      const hold = () => (rig.car.forwardSpeed * KMH < kmh ? 1 : 0);
+      const start = () => { rig.car.reset({ x: 0, y: 0.36, z: 0 }, 0); rig.filter.reset(); rig.launch(kmh / KMH); for (let i = 0; i < 30; i++) rig.stepInput(input({ forward: hold() })); };
+      start();
+      for (let i = 0; i < 36; i++) rig.stepInput(input({ steer: 1, forward: hold() }));
+      const h1 = headingOf(rig), y1 = Math.abs(rig.car.yawRate);
+      let calm = NaN, slip = 0;
+      for (let i = 0; i < 150; i++) {
+        rig.stepInput(input({ forward: hold() }));
+        if (isNaN(calm) && Math.abs(rig.car.yawRate) < 0.15 * y1) calm = (i + 1) * DT;
+        slip = Math.max(slip, Math.abs(rig.car.bodySlip));
+      }
+      const more = Math.abs(deg(headingOf(rig) - h1));
+      start();
+      const h0 = headingOf(rig);
+      for (let i = 0; i < 66; i++) rig.stepInput(input({ steer: i < 6 ? 1 : 0, forward: hold() }));
+      const tap = Math.abs(deg(headingOf(rig) - h0));
+      Object.assign(report, { [`release.${kmh} km/h s to 15% turn rate`]: calm, [`release.${kmh} km/h turned on deg`]: more, [`release.${kmh} km/h 0.1 s tap deg`]: tap });
+      expect(calm).toBeLessThan(0.4);
+      expect(more).toBeLessThan(moreMax);
+      expect(tap).toBeLessThan(tapMax);
+      expect(deg(slip)).toBeLessThan(8);
+    }
+  });
+
+  it('the player can brake and steer round the car in front', async () => {
+    // 2026-11-25, 「我开车离前面的车很近，想变向，半天头转不过去，就撞在前面的车上了」: on the brake the front tyres had 0.31 of
+    // their grip left to turn with, and the nose never got a car's width across. `trail` (the player's car only) has
+    // the ABS let go with the wheel turned. Held to a stop, it must not spin or tip.
+    for (const [kmh, clearMax] of [[60, 0.8], [90, 0.8], [130, 0.85]] as const) {
+      const run = async (trail: boolean) => {
+        const rig = await Rig.create(); rig.settle(0.5); rig.launch(kmh / KMH);
+        for (let i = 0; i < 30; i++) rig.stepInput(input({ forward: rig.car.forwardSpeed * KMH < kmh ? 1 : 0 }));
+        const x0 = rig.car.pos.x, h0 = headingOf(rig), p0 = rig.car.pos.clone();
+        let clear = NaN, turned = 0, slip = 0, up = 1, stop = NaN;
+        for (let i = 0; i < 600 && isNaN(stop); i++) {
+          rig.stepInput(input({ steer: 1, back: 1, trail }));
+          const c = rig.car;
+          if (i === 29) turned = Math.abs(deg(headingOf(rig) - h0));
+          // the middle of the nose, a car's width to the side
+          if (isNaN(clear) && Math.abs(c.pos.x + c.fwd.x * 2.2 - x0) >= 1.9) clear = (i + 1) * DT;
+          if (c.speed > 5) slip = Math.max(slip, Math.abs(c.bodySlip));
+          up = Math.min(up, c.up.y);
+          if (c.speed < 1) stop = c.pos.distanceTo(p0);
+        }
+        return { clear, turned, slip: deg(slip), up, stop };
+      };
+      const off = await run(false), on = await run(true);
+      Object.assign(report, {
+        [`brakesteer.${kmh} km/h nose clear s`]: on.clear, [`brakesteer.${kmh} km/h turned in 0.5 s deg`]: on.turned,
+        [`brakesteer.${kmh} km/h turned in 0.5 s deg (traffic)`]: off.turned, [`brakesteer.${kmh} km/h max slip deg`]: on.slip,
+        [`brakesteer.${kmh} km/h stops in m`]: on.stop, [`brakesteer.${kmh} km/h stops in m (traffic)`]: off.stop,
+      });
+      expect(on.clear).toBeLessThan(clearMax);
+      expect(on.turned).toBeGreaterThan(off.turned * 2);
+      expect(on.slip).toBeLessThan(9);
+      expect(on.up).toBeGreaterThan(0.98);
+      expect(on.stop).toBeLessThan(off.stop * 1.45);
+    }
+    // straight, the brakes are what they were
+    const straight = async (trail: boolean) => {
+      const rig = await Rig.create(); rig.settle(0.5); rig.launch(100 / KMH);
+      const p0 = rig.car.pos.clone();
+      for (let i = 0; i < 600 && rig.car.speed > 0.3; i++) rig.stepInput(input({ back: 1, trail }));
+      return rig.car.pos.distanceTo(p0);
+    };
+    expect(Math.abs(await straight(true) - await straight(false))).toBeLessThan(0.01);
   });
 
   it('nervous key taps at 120 km/h keep the car on its line', async () => {

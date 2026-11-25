@@ -67,7 +67,7 @@
 - `npx vitest run` — `vehicle/Handling.test.ts` 在 Node 里无头运行（Rapier，<1 秒），用真实的 Vehicle 和真实的 ControlFilter 开车，结果写到 `.scratch/handling-report.txt`。Vitest 会隐藏通过用例的控制台输出：看报告文件。
 - `TRACE=fig8|fig8key|powerdrift|park|slope|accel|brake|handbrake npx vitest run src/vehicle/Trace.test.ts` 把时间轨迹写到 `.scratch/trace-<name>.txt`。
 - 评审循环：一个严格的操控评审子代理按 GTA-V 街机手感打分，必须 >= 7/10（第一轮报告和 probe 在 `.scratch/critic/`）。它发现的每个问题在 `Handling.test.ts` 里都有回归测试。
-- 键盘转向（`ControlFilter` 的 `KEYBOARD`）是一阶滞后，不是速率限制器（速率限制器会让点按的平均效果约等于占空比的平方）；按住键时高速下转角会减小，这只有配合较慢的高速滞后（`tauFast` 0.3）才安全。`.scratch/sweep/keys.test.ts` 会扫这些参数。
+- 键盘转向（`ControlFilter` 的 `KEYBOARD`）是一阶滞后，不是速率限制器（速率限制器会让点按的平均效果约等于占空比的平方）；按住键时高速下转角会减小，这只有配合较慢的高速滞后（`tauFast` 0.2，2026-11-25 从 0.3 调快；0.15 以下高速按住键开始滑）才安全；松键回中另有一个更快的滞后（`tauRelease` 0.08）。`.scratch/sweep/keys.test.ts` 会扫这些参数。
 - 一次只改一处，改完跑全套：修一个问题常常会让别的 probe 结果变化。
 
 ## 截图

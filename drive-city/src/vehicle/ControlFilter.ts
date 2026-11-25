@@ -11,29 +11,43 @@ export interface VehicleControls {
   burnout: boolean;
   /** The player's drift key (QQ飞车-style arcade drift, Vehicle.ts `ARCADE`); a handbrake below its speed. */
   drift?: boolean;
+  /** The player's brakes let go of the front tyres to steer (Vehicle.ts `TRAIL`). */
+  trail?: boolean;
 }
 
 /** Driver intent from a device or the autopilot. */
-export interface DriveInput { forward: number; back: number; steer: number; analog: boolean; handbrake: boolean; drift?: boolean }
+export interface DriveInput { forward: number; back: number; steer: number; analog: boolean; handbrake: boolean; drift?: boolean; trail?: boolean }
 
 /**
  * Keyboard steering shape (see ControlFilter). Exported so tuning sweeps can vary it; the game
  * never writes to it.
  */
 export const KEYBOARD = {
-  /** Lag time constant parked, plus the extra at 30 m/s and above, s. */
-  tauParked: 0.09, tauFast: 0.3,
+  /**
+   * Lag time constant parked, plus the extra at 30 m/s and above, s. `tauFast` was 0.3 until 2026-11-25 (「转向慢了一点…
+   * 半天头转不过去」): 0.2 gets the nose a car's width across 0.03-0.04 s sooner above 100 km/h, and a held key coasting
+   * at 100 km/h slides 9° for 7°. At 0.15 and under the fig8 and held-key numbers start to go (.scratch/feel).
+   */
+  tauParked: 0.09, tauFast: 0.2,
   /** Lag while swapping direction, s. */
   tauSwap: 0.05,
   /**
+   * Lag back to centre once the key is up, s; never slower than the lag going in (0 = one lag both ways, as it was).
+   * 2026-11-25, 「开车的手感不好」: the front tyres are at their limit from ~0.4 of the key, so on the way back the wheel
+   * spent most of the lag above anything the car could feel, and the car turned on for 0.5-1 s after the key came up
+   * (60 km/h, 0.6 s press: 19° more; a 0.1 s tap: 9.5°). With 0.08: 6° and 4°, calm in 0.27 s. Taps now average under
+   * their duty at the wheel (4/8 -> 0.26) and nearer it in turn rate (2/8, 4/8, 6/8 -> 0.32, 0.72, 1.07 of a held key).
+   */
+  tauRelease: 0.08,
+  /**
    * Share of lock a held key gives up at speed, fading in between `cutFrom` and `cutTo` m/s.
-   * Only safe with the slow high-speed lag above: with tauFast 0.11 the lock came back as the car
+   * Only safe with a slow high-speed lag above: with tauFast 0.11 the lock came back as the car
    * slowed in a long turn and a held key at 120 km/h ended in a 32-38° slide (.scratch/sweep).
    */
   highSpeedCut: 0.5, cutFrom: 18, cutTo: 36,
 };
 
-export const emptyControls = (): VehicleControls => ({ throttle: 0, brake: 0, steer: 0, handbrake: false, reverse: false, burnout: false, drift: false });
+export const emptyControls = (): VehicleControls => ({ throttle: 0, brake: 0, steer: 0, handbrake: false, reverse: false, burnout: false, drift: false, trail: false });
 
 /**
  * Turns driver intent into pedal and steering positions.
@@ -42,7 +56,8 @@ export const emptyControls = (): VehicleControls => ({ throttle: 0, brake: 0, st
  * in one frame is what makes keyboard driving feel like a shopping trolley: every tap is a jolt,
  * and there is no way to hold a partial angle through a long corner. So the wheel follows the key
  * through a first-order lag (slower at speed, where the same angle means far more yaw): ~0.2 s to
- * 90% of lock when parked, ~0.45 s at motorway speed, and taps average to partial lock.
+ * 90% of lock when parked, ~0.65 s at motorway speed, and taps average to partial lock. It comes back
+ * to centre faster than that (`tauRelease`), so the car stops turning when the key comes up.
  *
  * Pedals follow GTA's one-key-per-direction model: S brakes while rolling forward and reverses once
  * stopped, W brakes while rolling backwards. W+S at a standstill is a burnout.
@@ -65,10 +80,10 @@ export class ControlFilter {
       const target = Math.sign(i.steer) * Math.pow(Math.abs(i.steer), 1.3 / this.sense);
       o.steer += (target - o.steer) * Math.min(1, dt * 22 * this.sense);
     } else {
-      // First-order lag on the key: the wheel's average position is exactly the share of time the
-      // key is held, so tapping gives partial lock at any duty (a rate limiter clamps at centre and
+      // First-order lag on the key: the wheel's average position follows the share of time the key
+      // is held, so tapping gives partial lock at any duty (a rate limiter clamps at centre and
       // loses every tap shorter than the return). Slower at speed, where the same angle means far
-      // more yaw; swapping direction passes centre quickly.
+      // more yaw; swapping direction passes centre quickly, and so does letting go (`tauRelease`).
       // A held key asks for less lock at motorway speed (65% at 130 km/h): full lock there is the
       // tyre's whole 1 g, and every short correction tap was a lurch (0.25 m -> 1.25 m of weave once
       // taps started to count). A stick still reaches full lock.
@@ -76,7 +91,8 @@ export class ControlFilter {
       const cut = sense === 1 ? K.highSpeedCut : Math.min(0.75, K.highSpeedCut / sense);
       const target = i.steer * (1 - cut * smoothstep(K.cutFrom, K.cutTo, Math.abs(forwardSpeed)));
       const fast = Math.min(1, Math.abs(forwardSpeed) / 30);
-      const tau = (o.steer * target < 0 ? K.tauSwap : K.tauParked + K.tauFast * fast) / sense;
+      const tauIn = K.tauParked + K.tauFast * fast;
+      const tau = (o.steer * target < 0 ? K.tauSwap : i.steer === 0 && K.tauRelease > 0 ? Math.min(tauIn, K.tauRelease) : tauIn) / sense;
       o.steer += (target - o.steer) * (1 - Math.exp(-dt / tau));
       if (Math.abs(o.steer) < 1e-4) o.steer = 0;
     }
@@ -104,6 +120,7 @@ export class ControlFilter {
     o.reverse = this.reversing;
     o.handbrake = i.handbrake;
     o.drift = !!i.drift;
+    o.trail = !!i.trail;
     return o;
   }
 }
