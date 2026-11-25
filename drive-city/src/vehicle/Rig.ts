@@ -14,7 +14,7 @@ export interface Ramp { x: number; z: number; yaw: number; length: number; width
 export class Rig {
   readonly filter = new ControlFilter();
   time = 0;
-  constructor(readonly physics: Physics, readonly car: Vehicle) {}
+  constructor(readonly physics: Physics, readonly car: Vehicle) { this.filter.two = !!car.spec.single; }
 
   static async create(opts: { spec?: VehicleSpec; ramps?: Ramp[]; slope?: number; at?: THREE.Vector3Like; yaw?: number } = {}): Promise<Rig> {
     const physics = new Physics();

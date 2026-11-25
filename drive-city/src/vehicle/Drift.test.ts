@@ -54,7 +54,7 @@ describe('arcade drift', () => {
     expect(deg(d.slipEnd)).toBeGreaterThan(30);
     expect(deg(d.maxSlip)).toBeLessThan(50);               // never spins
     expect(deg(d.went)).toBeGreaterThan(110);              // the travel itself carves a real corner (left is +)
-    expect(d.vEnd / d.v0).toBeGreaterThan(0.85);           // keeps its speed
+    expect(d.vEnd / d.v0).toBeGreaterThan(0.82);           // keeps its speed (0.856 -> 0.841 on 2026-11-25: the key is in sooner, so it drifts in deeper)
     expect(d.minUp).toBeGreaterThan(0.95);
   });
 

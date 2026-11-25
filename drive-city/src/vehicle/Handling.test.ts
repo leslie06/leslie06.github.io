@@ -336,13 +336,66 @@ describe('taxi handling', () => {
     };
     const held = await yawAt(8);
     let last = 0;
-    for (const [duty, lo, hi] of [[2, 0.15, 0.5], [4, 0.4, 0.85], [6, 0.65, 1.15]] as const) {
+    for (const [duty, lo, hi] of [[2, 0.1, 0.45], [4, 0.28, 0.75], [6, 0.5, 1.1]] as const) {
       const share = await yawAt(duty) / held;
       report[`keytaps.${duty}/8 duty turn rate / held`] = share;
       expect(share).toBeGreaterThan(lo);
       expect(share).toBeLessThan(hi);
       expect(share).toBeGreaterThan(last);
       last = share;
+    }
+  });
+
+  it('a gentle bend can be driven on keys', async () => {
+    // 2026-11-25: the tyre's force was all there by 0.4 of the key, so a driver on keys (sees 0.18 s late, decides ten
+    // times a second, can only press or not) swung ±0.76 g round a 0.35 g bend at 90 km/h. The turn now follows the key.
+    for (const [kmh, sdMax] of [[60, 0.36], [90, 0.5], [130, 0.55]] as const) {
+      const rig = await Rig.create(); rig.settle(0.5); rig.launch(kmh / KMH);
+      const v0 = kmh / KMH, keep = () => (rig.car.forwardSpeed < v0 ? 1 : 0);
+      for (let i = 0; i < 30; i++) rig.stepInput(input({ forward: keep() }));
+      const R = v0 * v0 / (0.35 * 9.81), cx = rig.car.pos.x - R, cz = rig.car.pos.z;
+      const hist: { off: number; herr: number; yr: number }[] = [];
+      let key = 0, n = 0, sum = 0, sum2 = 0;
+      for (let i = 0; i < 480; i++) {
+        const c = rig.car, dx = c.pos.x - cx, dz = c.pos.z - cz, off = Math.hypot(dx, dz) - R;
+        const e0 = Math.atan2(c.vel.x, c.vel.z) - Math.atan2(-dz, dx);
+        hist.push({ off, herr: Math.atan2(Math.sin(e0), Math.cos(e0)), yr: -c.yawRate });
+        if (i % 6 === 0) {
+          const s = hist[Math.max(0, i - 11)], vv = Math.max(5, c.speed), dead = 0.12 * vv / R + 0.015;
+          const e = vv / R + (s.herr + s.off / (vv * 1.2)) / 0.7 - s.yr;
+          key = key === 1 ? (e > -dead * 0.3 ? 1 : 0) : e > dead ? 1 : e < -3 * dead ? -1 : 0;
+        }
+        rig.stepInput(input({ steer: key, forward: keep() }));
+        if (i > 120) { const a = Math.abs(c.yawRate * c.forwardSpeed) / 9.81; n++; sum += a; sum2 += a * a; }
+      }
+      const sd = Math.sqrt(Math.max(0, sum2 / n - (sum / n) ** 2));
+      report[`bend.${kmh} km/h 0.35 g bend on keys, +-g`] = sd;
+      expect(sd).toBeLessThan(sdMax);
+    }
+  });
+
+  it('a held key with the throttle down does not spin a slow car', async () => {
+    // The yaw aid asking for all of the grip at 25-40 km/h did (56°).
+    for (const kmh of [25, 40, 60]) for (const gas of [0, 1]) {
+      const rig = await Rig.create(); rig.settle(0.5); rig.launch(kmh / KMH);
+      for (let i = 0; i < 20; i++) rig.stepInput(input({ forward: gas }));
+      let slip = 0;
+      for (let i = 0; i < 240; i++) { rig.stepInput(input({ steer: 1, forward: gas })); if (rig.car.speed > 5) slip = Math.max(slip, Math.abs(rig.car.bodySlip)); }
+      expect(deg(slip)).toBeLessThan(22);                  // coasting down to 18 km/h on full lock is 19° by geometry
+    }
+  });
+
+  it('a key dodges a car ahead at once', async () => {
+    // 「转向慢了一点…半天头转不过去」: the middle of the nose 1.9 m across, off the brakes.
+    for (const [kmh, most] of [[40, 0.61], [60, 0.61], [90, 0.66], [130, 0.7]] as const) {
+      const rig = await Rig.create(); rig.settle(0.5); rig.launch(kmh / KMH);
+      const keep = () => (rig.car.forwardSpeed * KMH < kmh ? 1 : 0);
+      for (let i = 0; i < 30; i++) rig.stepInput(input({ forward: keep() }));
+      const x0 = rig.car.pos.x;
+      let t = NaN;
+      for (let i = 0; i < 120 && isNaN(t); i++) { rig.stepInput(input({ steer: 1, forward: keep() })); if (Math.abs(rig.car.pos.x + rig.car.fwd.x * 2.2 - x0) >= 1.9) t = (i + 1) * DT; }
+      report[`dodge.${kmh} km/h s`] = t;
+      expect(t).toBeLessThan(most);
     }
   });
 
@@ -418,6 +471,97 @@ describe('taxi handling', () => {
       return rig.car.pos.distanceTo(p0);
     };
     expect(Math.abs(await straight(true) - await straight(false))).toBeLessThan(0.01);
+  });
+
+  it('the player can brake in a slide without coming round', async () => {
+    // Handling critic round 3: at 25° of slip the brake alone took the car to 62-89°; off it the car caught itself.
+    for (const kmh of [60, 100, 140]) {
+      const rig = await Rig.create(); rig.settle(0.5); rig.launch(kmh / KMH);
+      const v = kmh / KMH, th = 25 / 57.3;
+      rig.car.body.setLinvel({ x: -Math.sin(th) * v, y: 0, z: Math.cos(th) * v }, true);
+      rig.car.body.setAngvel({ x: 0, y: 0.6, z: 0 }, true);
+      let slip = 0;
+      for (let t = 0; t < 4; t += DT) { rig.stepInput(input({ back: t > 0.2 && rig.car.forwardSpeed > 1 ? 1 : 0, trail: true })); if (rig.car.speed > 4) slip = Math.max(slip, Math.abs(rig.car.bodySlip)); }
+      report[`slidebrake.${kmh} km/h max slip deg`] = deg(slip);
+      expect(deg(slip)).toBeLessThan(36);
+    }
+  });
+
+  it('small corrections on the brakes cost little', async () => {
+    // Round 3: a 0.1 s tap each half second made the stop from 100 km/h 16% longer (TRAIL let go from 0.05 of the wheel).
+    const stop = async (tap: boolean) => {
+      const rig = await Rig.create(); rig.settle(0.5); rig.launch(100 / KMH);
+      let d = 0;
+      for (let t = 0; t < 10 && rig.car.forwardSpeed > 1; t += DT) { rig.stepInput(input({ back: 1, trail: true, steer: tap && t % 0.5 < 0.1 ? (Math.floor(t / 0.5) % 2 ? 1 : -1) : 0 })); d += rig.car.speed * DT; }
+      return d;
+    };
+    const a = await stop(false), b = await stop(true);
+    report['brake.100-0 tapping / straight'] = b / a;
+    expect(b / a).toBeLessThan(1.1);
+  });
+
+  it('backing with the wheel turned does not wind up into a spin', async () => {
+    const rig = await Rig.create(); rig.settle(0.5);
+    let turned = 0, last = headingOf(rig), early = 0;
+    for (let i = 0; i < 240; i++) {
+      rig.stepInput(input({ back: 1, steer: 1, trail: true }));
+      const h = headingOf(rig); turned += Math.abs(Math.atan2(Math.sin(h - last), Math.cos(h - last))); last = h;
+      if (i === 143) early = turned;
+    }
+    Object.assign(report, { 'backing.turned in 2.4 s deg': deg(early), 'backing.turned in 4 s deg': deg(turned) });
+    expect(deg(early)).toBeGreaterThan(70);                // still comes round
+    expect(deg(turned)).toBeLessThan(230);                 // was 304
+  });
+
+  it('the tyres say how near their limit they are', async () => {
+    // 2026-11-25, item 3: the sound and the camera read `strainFront` / `strainRear`.
+    const at = async (duty: number) => {
+      const rig = await Rig.create(); rig.settle(0.5); rig.launch(60 / KMH);
+      let f = 0, n = 0;
+      for (let i = 0; i < 180; i++) { rig.stepInput(input({ steer: i % 8 < duty ? 1 : 0, forward: rig.car.forwardSpeed * KMH < 60 ? 1 : 0 })); if (i > 60) { f += rig.car.strainFront; n++; } }
+      return f / n;
+    };
+    const [straight, third, half, most, full] = [await at(0), await at(2), await at(4), await at(6), await at(8)];
+    Object.assign(report, { 'strain.2/8': third, 'strain.4/8': half, 'strain.6/8': most, 'strain.8/8': full });
+    expect(straight).toBe(0);
+    expect(third).toBeLessThan(0.15);
+    expect(half).toBeGreaterThan(third);
+    expect(most).toBeGreaterThan(0.7);
+    expect(full).toBeGreaterThan(0.95);
+  });
+
+  it('the handbrake slides by how long it is held, the steering sets the angle, letting go straightens', async () => {
+    // 2026-11-25, 「改GTA」: Space is a real handbrake on keys; `CATCH` straightens the car once everything is let go.
+    const slide = async (kmh: number, hb: number, duty: number, gas: number, letGo = Infinity) => {
+      const rig = await Rig.create(); rig.settle(0.6); rig.launch(kmh / KMH);
+      let max = 0, sum = 0, n = 0, straight = NaN, up = 1;
+      for (let i = 0; i < 240; i++) {
+        const off = i >= letGo;
+        rig.stepInput(input({ steer: off ? 0 : i < 12 + hb || i % 8 < duty ? 1 : 0, handbrake: i >= 6 && i < 6 + hb, forward: !off && i > 6 + hb ? gas : 0, trail: true }));
+        const s = Math.abs(rig.car.bodySlip);
+        max = Math.max(max, s); up = Math.min(up, rig.car.up.y);
+        if (i >= 72 && i < 180) { sum += s; n++; }
+        if (off) { if (s < 5 / 57.3) { if (isNaN(straight)) straight = (i - letGo) * DT; } else straight = NaN; }
+      }
+      expect(rig.car.driftPhase).toBe(0);
+      expect(up).toBeGreaterThan(0.95);
+      return { max: deg(max), mean: deg(sum / n), straight };
+    };
+    const short = await slide(60, 9, 0, 1), mid = await slide(60, 24, 0, 1);
+    expect(short.max).toBeLessThan(18);
+    expect(mid.max).toBeGreaterThan(25);
+    const held = await slide(60, 24, 8, 1), half = await slide(60, 24, 4, 1), none = await slide(60, 24, 0, 1);
+    expect(held.mean).toBeGreaterThan(38);
+    expect(held.max).toBeLessThan(75);
+    expect(half.mean).toBeGreaterThan(25);
+    expect(half.mean).toBeLessThan(held.mean - 5);
+    expect(none.mean).toBeLessThan(12);
+    for (const kmh of [60, 80, 110]) {
+      const r = await slide(kmh, 30, 8, 1, 72);
+      report[`gtahb.${kmh} km/h s to straight`] = r.straight;
+      expect(r.straight).toBeLessThan(1.6);
+    }
+    Object.assign(report, { 'gtahb.0.15 s tap max deg': short.max, 'gtahb.0.4 s max deg': mid.max, 'gtahb.held W mean deg': held.mean, 'gtahb.4/8 taps mean deg': half.mean, 'gtahb.no steer mean deg': none.mean });
   });
 
   it('nervous key taps at 120 km/h keep the car on its line', async () => {

@@ -22,6 +22,8 @@ export class WheelState {
   vLong = 0; vLat = 0;
   /** 0..1: how hard the tyre is sliding, for marks, smoke and squeal. */
   skid = 0;
+  /** 0..1: how near the tyre is to its sideways limit (0 under 0.55 of its grip, 1 at the peak), for the sound and the camera. */
+  strain = 0;
   locked = false;
   spinning = false;
   /** Rolling angle for the model, rad, and its rate. */
@@ -48,6 +50,7 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /**
+ * Since 2026-11-25 (「改GTA」) only the phone's 漂移 button and `?drift=qq`: Space and the pad are a real handbrake (vehicle/index.ts).
  * The player's drift key (2026-10-23, 「现在开车几乎不能漂移，开车手感很差，做成qq飞车这样的操作」): QQ飞车's drift, not the
  * tyres'. Held with a direction above `minSpeed`, the car swings its tail out to `angle` and carves a steady arc while
  * the tyre forces are set aside: the path and the body's angle are steered straight (an impulse on the velocity, a
@@ -100,7 +103,39 @@ export const ARCADE = {
  * (0.95 still below `steerLo`), so they keep sqrt(1 - front²) of it to turn with; the rears are left as they were.
  * Only the player's car asks for it: traffic, police and the handling suite brake as before.
  */
-export const TRAIL = { front: 0.5, rear: 0.3, steerLo: 0.05, steerHi: 0.4, slipLo: 0.06, slipHi: 0.14 };
+export const TRAIL = {
+  front: 0.5, rear: 0.3, steerLo: 0.25, steerHi: 0.6, slipLo: 0.06, slipHi: 0.14,
+  /**
+   * Handling critic round 3: braking in a slide with the wheel straight. At 25° of slip the brakes took the tyres'
+   * sideways grip and the car came round to 62-89°; off the brakes it caught itself. From `slideLo` to `slideHi` rad
+   * the fronts go down to `slideFront` and the rears to `rear`, wheel turned or not.
+   */
+  slideLo: 0.2, slideHi: 0.35, slideFront: 0.35,
+};
+/**
+ * The player's car reversing with the wheel turned (handling critic round 3: S + D for 4 s went round 300-450°, faster
+ * and faster). Past `vLo`..`vHi` m/s and with the lock on, the drive gives up `cut` of itself and is no more than
+ * `accel` m/s²; turning faster than the wheels point (or than `grip` of the tyres allow) is damped at `damp` 1/s.
+ */
+export const BACKING = { cut: 0.7, vLo: 1.5, vHi: 4, accel: 2, grip: 0.7, damp: 8 };
+
+/**
+ * Letting a slide go (2026-11-25, 「改GTA」: Space is a real handbrake again on keys and pads). Slid out by it at 80-110 km/h the car
+ * took 1.4-2 s to straighten with everything let go. The player's car, wheel near centre, handbrake off: the nose is turned
+ * to the travel at `k` rad/s² per rad of slip, `gasCut` of it given up with the throttle down, and its turning damped at
+ * `damp` 1/s; from `lo` to `hi` rad of slip, all of it from `vLo` to `vHi` m/s.
+ */
+export const CATCH = { k: 6, damp: 2.5, gasCut: 0.5, lo: 0.1, hi: 0.25, vLo: 5, vHi: 10 };
+
+/**
+ * Keys only (2026-11-25, 「从第 1 项开始」: a gentle bend could only be held by tapping, and at 90 km/h the taps swung the
+ * car ±0.76 g): a yaw torque towards the turn rate the key asks for, its share of what the tyres' grip allows, so the
+ * nose goes in with the key and does not swing past. `gain` 1/s of the error, at most `max` rad/s². `over`: the reference
+ * over the grip's turn rate from `fastFrom` m/s; `overSlow` below `slowTo`, where the taxi really turns at ~0.85 of it
+ * and a full reference with the throttle held spun it (3° -> 56° at 40 km/h; .scratch/feel/stab.test.ts). Fades out as
+ * the tail steps out (`slipLo`..`slipHi`, rad): a slide is the tyres' and the driver's.
+ */
+export const KEYAID = { gain: 10, max: 15, over: 1.06, overSlow: 0.75, slowTo: 9, fastFrom: 18, vLo: 5, vHi: 9, slipLo: 0.1, slipHi: 0.2 };
 
 /**
  * A ray-cast car on a Rapier rigid body.
@@ -139,6 +174,8 @@ export class Vehicle {
   yawRate = 0;
   /** Road-wheel angle after limiter + counter-steer, rad (left positive). */
   steerAngle = 0;
+  /** The axles' `strain`, by load: the front's is a car about to push wide, the rear's one about to step out. */
+  strainFront = 0; strainRear = 0;
   rpm: number;
   /** -1 reverse, 1..n forward. */
   gear = 1;
@@ -246,6 +283,26 @@ export class Vehicle {
     return clamp(a, s.steer.minAngle, s.steer.lock);
   }
 
+  /**
+   * Road-wheel angle for a key-driven wheel at `u` (0..1 of what a held key gives, which is `full` of the limiter's
+   * angle): the part that follows the corner's radius goes with `u`, and the slip angle on top is the one whose tyre
+   * force is `u` of the held key's. The tyre's force is nearly all there by 0.4 of the wheel, so with the angle itself
+   * following the key a 0.15 s press was already 0.5-0.9 g, and nothing gentler could be held (2026-11-25).
+   */
+  keyAngle(u: number, speed: number, full: number): number {
+    const s = this.spec, t = s.tire;
+    const end = this.maxSteerAngle(speed) * full;
+    const geo = Math.min(end, this.wheelbase * t.muLat * G / Math.max(speed * speed, 1) * full);
+    const aEnd = end - geo;
+    if (aEnd < 1e-3) return end * u;
+    const fEnd = lateralCurve(Math.min(aEnd, this.aPeak), t.B, t.C);
+    const slipOf = (f: number) => Math.tan(Math.asin(Math.min(1, f)) / t.C) / t.B;
+    // past the peak there is no force left to follow: the rest of the angle comes in at the end of the key
+    const aIn = Math.min(aEnd, this.aPeak);
+    const u2 = u * u, u4 = u2 * u2;
+    return geo * u + Math.min(aIn, slipOf(u * fEnd)) + (aEnd - aIn) * u4 * u4;
+  }
+
   get wheelbase(): number { return this.spec.wheels[0].z - this.spec.wheels[2].z; }
 
   /** Put the car back on its wheels at `position` facing `yaw`, or where it is now. */
@@ -323,7 +380,8 @@ export class Vehicle {
     // Only steering *into* the slide is cut (c.steer < 0 is left; a left drift has bodySlip > 0):
     // counter-steer keeps full authority, so a slide can always be steered out of.
     const into = c.steer * this.bodySlip < 0 ? 1 : 0;
-    let target = -c.steer * this.maxSteerAngle(vAbs) * (1 - s.steer.driftCut * sliding * into);
+    const wheel = c.keys ? Math.sign(c.steer) * this.keyAngle(Math.min(1, Math.abs(c.steer) / c.keys), vAbs, c.keys) : c.steer * this.maxSteerAngle(vAbs);
+    let target = -wheel * (1 - s.steer.driftCut * sliding * into);
     if (this.forwardSpeed > 2 && this.grounded > 1) target -= s.steer.counterSteer * this.bodySlip * smoothstep(3, 8, this.speed);
     target = clamp(target, -s.steer.lock, s.steer.lock);
     const maxStep = s.steer.rate * dt;
@@ -396,7 +454,8 @@ export class Vehicle {
     const rearSlip = Math.max(Math.abs(this.wheels[2].slipAngle), Math.abs(this.wheels[3].slipAngle));
     // A loose traction control (`assists.tcMax`) lets go only as the wheel turns: a launch in a straight line still hooks up.
     const tcHold = 1 - (1 - (s.assists.tcMax ?? 1)) * smoothstep(0.3, 0.8, Math.abs(c.steer));
-    let tc = this.tcOff <= 0 ? tcHold * (1 - smoothstep(0.1, 0.22, rearSlip)) : 0;
+    // how much the rear is gripping; `tc` is that, less what a loose traction control lets go
+    let gripping = this.tcOff <= 0 ? 1 - smoothstep(0.1, 0.22, rearSlip) : 0;
     // Full lock + full throttle from a standstill is asking for a donut: let the rear go. Only
     // armed when the request starts below walking pace, or every slow full-lock corner (the yard's
     // right-angle turn at 15 km/h) would spin.
@@ -404,19 +463,30 @@ export class Vehicle {
     const donutWant = Math.abs(c.steer) > dn.steer && c.throttle > dn.throttle && !c.reverse;
     if (!donutWant) this.donutArmed = false; else if (this.speed < 0.8) this.donutArmed = true;
     const donut = donutWant && this.donutArmed;
-    if (donut) tc *= smoothstep(dn.speedLo, dn.speedHi, this.speed);
+    if (donut) gripping *= smoothstep(dn.speedLo, dn.speedHi, this.speed);
     // Reversing with lock is geometric body slip, not a slide: keep traction control on.
-    if (c.reverse) tc = this.speed > 3 ? 1 : 0;
+    if (c.reverse) gripping = this.speed > 3 ? 1 : 0;
+    const tc = c.reverse ? gripping : gripping * tcHold;
     // the player's brakes with the wheel turned (`TRAIL`): 0..1, how far the ABS lets go to leave the tyres grip to steer with
     // (the fronts take their braking back as the tail steps out, which pulls it in again; the rears do not)
-    const trailRear = c.trail && c.brake > 0 ? smoothstep(TRAIL.steerLo, TRAIL.steerHi, Math.abs(c.steer)) : 0;
+    const trailRear = c.trail && c.brake > 0 ? smoothstep(s.single ? 0.05 : TRAIL.steerLo, s.single ? 0.4 : TRAIL.steerHi, Math.abs(c.steer)) : 0;   // a two-wheeler: from the first of the bars, or it slides
     const trailFront = trailRear * (1 - smoothstep(TRAIL.slipLo, TRAIL.slipHi, Math.abs(this.bodySlip)));
+    const slideBrake = c.trail && c.brake > 0 && !c.reverse && !s.single ? smoothstep(TRAIL.slideLo, TRAIL.slideHi, Math.abs(this.bodySlip)) : 0;
+    const absFront = 0.95 - Math.max((0.95 - TRAIL.front) * trailFront, (0.95 - TRAIL.slideFront) * slideBrake);
+    const absRear = 0.62 - (0.62 - TRAIL.rear) * Math.max(trailRear, slideBrake);
+    // the player backing with the wheel turned (`BACKING`)
+    let driveF = drive;
+    if (c.trail && c.reverse && !s.single) {
+      const k = smoothstep(0.3, 1, Math.abs(this.steerAngle) / s.steer.lock) * smoothstep(BACKING.vLo, BACKING.vHi, this.speed);
+      const most = s.mass * BACKING.accel, cut = drive * (1 - BACKING.cut);
+      driveF += (clamp(cut, -most, most) - drive) * k;
+    }
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i], m = s.wheels[i];
       w.steer = m.front ? this.steerAngle : 0;
       this.fSusp[i] = 0; this.fTyre[i].set(0, 0, 0);
       if (!w.contact) {
-        w.skid = 0; w.slipAngle = 0; w.locked = false; w.spinning = false;
+        w.skid = 0; w.strain = 0; w.slipAngle = 0; w.locked = false; w.spinning = false;
         const drivenAir = m.front ? s.engine.frontShare > 0 : s.engine.frontShare < 1;
         w.spinRate = drivenAir && c.throttle > 0 ? w.spinRate + (60 * c.throttle - w.spinRate) * dt * 3 : w.spinRate * (1 - dt * 0.6);
         if (handbrake && !m.front) w.spinRate = 0;
@@ -475,12 +545,12 @@ export class Vehicle {
         } else {
           // ABS: fronts may use nearly all their grip, rears stop well short so they keep enough
           // sideways grip to hold the car straight under hard braking.
-          const bf = Math.min(brakeCap, fxMax * (m.front ? 0.95 - (0.95 - TRAIL.front) * trailFront : 0.62 - (0.62 - TRAIL.rear) * trailRear), mc * Math.abs(vx) / dt);
+          const bf = Math.min(brakeCap, fxMax * (m.front ? absFront : absRear), mc * Math.abs(vx) / dt);
           fx -= Math.sign(vx) * bf;
           fx -= Math.sign(vx) * Math.min(tire.rolling * load, mc * Math.abs(vx) / dt);
         }
         if (share > 0 && !(c.burnout && !m.front)) {
-          let want = drive * share;
+          let want = driveF * share;
           if (want !== 0) {
             // Gripping: only the grip cornering leaves over. Sliding: most, never all of it, and
             // how much depends on intent. Steering into the slide keeps it going; straight or
@@ -496,7 +566,8 @@ export class Vehicle {
             want = clamp(want, -cap, cap);
             // Spinning only when the drive actually reaching the tyre is at the slide limit. Flagging
             // it from the *requested* drive put smoke and squeal on every launch and gripping corner.
-            w.spinning = c.throttle > 0.3 && tc < 0.5 && Math.abs(drive * share) > cap * 1.05;
+            // `gripping`, not `tc`: a loose traction control (`tcMax`) read as wheelspin in a corner that gripped (critic round 3).
+            w.spinning = c.throttle > 0.3 && gripping < 0.5 && Math.abs(drive * share) > cap * 1.05;
           }
           fx += want;
         }
@@ -521,11 +592,17 @@ export class Vehicle {
       else w.spinRate = vx / s.wheelRadius;
       w.spin += w.spinRate * dt;
       const latSkid = clamp01((Math.abs(w.slipAngle) / this.aPeak - 1.15) / 1.6) * clamp01((Math.abs(vy) - 0.8) / 2.5);
+      w.strain = arcade || w.locked ? 0 : (Math.abs(w.slipAngle) >= this.aPeak ? 1 : smoothstep(0.55, 0.98, lateralCurve(Math.abs(w.slipAngle), tire.B, tire.C))) * smoothstep(3, 8, this.speed);
       const lockSkid = w.locked ? clamp01(Math.hypot(vx, vy) / 6) : 0;
       const spinSkid = w.spinning ? 0.85 : 0;
       w.skid = arcade ? (this.driftPhase === 1 ? (m.front ? 0.25 : 0.95) : 0.4) * smoothstep(4, 9, this.speed) : Math.max(latSkid, lockSkid, spinSkid);
     }
 
+    for (let a = 0; a < 4; a += 2) {
+      const l = this.wheels[a], r = this.wheels[a + 1], n = l.load + r.load;
+      const st = n > 1 ? (l.strain * l.load + r.strain * r.load) / n : 0;
+      if (a === 0) this.strainFront = st; else this.strainRear = st;
+    }
     for (let i = 0; i < 4; i++) {
       if (!this.wheels[i].contact) continue;
       _f.copy(this.up).multiplyScalar(this.fSusp[i]);
@@ -606,6 +683,35 @@ export class Vehicle {
       if (excess > 0 && this.tcOff < 0.5 && this.speed > 5 && grounded >= 3 && !arcade) {
         const k = Math.min(0.25, s.assists.spinGuard * excess * dt * 6);
         _t.copy(this.up).multiplyScalar(-this.yawRate * k * I[1]);
+        b.applyTorqueImpulse(_t, true);
+      }
+    }
+    if (c.keys && !s.single && grounded >= 3 && !handbrake && !arcade && this.tcOff <= 0 && this.forwardSpeed > KEYAID.vLo && !donut) {
+      const K = KEYAID, v = this.forwardSpeed, u = Math.min(1, Math.abs(c.steer) / c.keys);
+      const most = Math.min(s.tire.muLat * G * this.tune.grip / v, v * Math.tan(this.maxSteerAngle(v)) / this.wheelbase);
+      const want = -Math.sign(c.steer) * u * most * (K.overSlow + (K.over - K.overSlow) * smoothstep(K.slowTo, K.fastFrom, v));
+      let acc = (want - this.yawRate) * K.gain * smoothstep(K.vLo, K.vHi, v) * (1 - smoothstep(K.slipLo, K.slipHi, Math.abs(this.bodySlip)));
+      // into the turn: not on the brakes, where the light rear would come round; holding it back: not in the throttle's
+      // way on a car whose traction control lets the rear step out (`tcMax`)
+      const push = acc * want > 0 && Math.abs(want) > Math.abs(this.yawRate);
+      acc *= push ? 1 - c.brake : 1 - (tcHold < 1 ? smoothstep(0.3, 0.8, Math.abs(c.steer)) * c.throttle : 0);
+      _t.copy(this.up).multiplyScalar(clamp(acc, -K.max, K.max) * dt * I[1]);
+      b.applyTorqueImpulse(_t, true);
+    }
+    if (c.trail && c.reverse && !s.single && grounded >= 3 && !handbrake && this.forwardSpeed < -1) {
+      const lim = s.tire.muLat * G * BACKING.grip / Math.max(1, this.speed);
+      const geo = clamp(this.forwardSpeed * Math.tan(this.steerAngle) / this.wheelbase, -lim, lim);
+      if (Math.abs(this.yawRate) > Math.abs(geo)) {
+        _t.copy(this.up).multiplyScalar(clamp((geo - this.yawRate) * BACKING.damp, -10, 10) * dt * I[1]);
+        b.applyTorqueImpulse(_t, true);
+      }
+    }
+    if (c.trail && !s.single && !c.reverse && grounded >= 3 && !handbrake && !arcade && this.forwardSpeed > CATCH.vLo) {
+      const K = CATCH, sl = Math.abs(this.bodySlip);
+      const w = (1 - clamp01(Math.abs(c.steer) / 0.3)) * smoothstep(K.lo, K.hi, sl) * smoothstep(K.vLo, K.vHi, this.speed) * (1 - K.gasCut * c.throttle);
+      if (w > 0) {
+        // bodySlip is + with the travel to the right of the nose: the nose goes right (yaw -)
+        _t.copy(this.up).multiplyScalar((-this.bodySlip * K.k - this.yawRate * K.damp) * w * dt * I[1]);
         b.applyTorqueImpulse(_t, true);
       }
     }

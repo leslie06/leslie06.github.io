@@ -291,6 +291,8 @@ export const SUV: VehicleSpec = {
  * launch at 4500 all through first gear): 0-100 3.6 -> 2.3 s, 0-200 6.4 s; it still slides on the throttle (~35 deg),
  * a handbrake turn rotates it a little less (103 -> 81 deg, the taxi 92). More air damping:
  * the quicker car flew further off the 80 km/h ramp and landed nose-high (min up 0.78, the test wants 0.8; now 0.83).
+ * `tcMax` 0.55 -> 0.9 on 2026-11-25 (「收」): W held through a street corner stepped it out 24 deg by itself; now 10, and full
+ * throttle held on full lock at 45 km/h still reaches 41.
  */
 export const COUPE: VehicleSpec = {
   name: 'coupe',
@@ -327,7 +329,7 @@ export const COUPE: VehicleSpec = {
   },
   brakes: { force: 27000, frontBias: 0.62 },
   aero: { drag: 0.31, downforce: 2.0 },
-  assists: { ...TAXI.assists, tcMax: 0.55, airDamping: 2.4, donut: { ...TAXI.assists.donut } },
+  assists: { ...TAXI.assists, tcMax: 0.9, airDamping: 2.4, donut: { ...TAXI.assists.donut } },
 };
 
 /**
@@ -380,8 +382,9 @@ export const SUPER: VehicleSpec = {
  * AE86 (2026-10-22, 「头文字的AE86长这样，尽量还原」): the Sprinter Trueno GT-APEX of 藤原豆腐店 - light (940 kg and a
  * driver), short (2.40 m wheelbase, the model's 1.44 m track), rear drive through the 4A-GE: 1.6 litres to 7600 rpm, its
  * real five-speed and 4.3 final drive, a little more torque than the brochure's 149 N m so it is not the slowest car in
- * town. Soft, a tail that comes round under power and on a lift (rear grip under the front's, traction control mostly
- * off): the drifting car, not a fast one (0-100 ~8 s, 200 km/h).
+ * town. Soft, a tail that comes round under power (traction control mostly off): the drifting car, not a fast one
+ * (0-100 ~8 s, 200 km/h). Rear grip 0.97 -> 1.06 on 2026-11-25 (「收」): a key held at a steady 60-80 km/h slid it 56 deg; now
+ * 9, and full throttle on full lock still 53.
  */
 export const AE86: VehicleSpec = {
   name: 'ae86',
@@ -406,7 +409,7 @@ export const AE86: VehicleSpec = {
     bump: 1700, rebound: 2900, travel: 0.2,
     antiRollFront: 14000, antiRollRear: 9000,
   },
-  tire: { ...TAXI.tire, muLat: 1.08, muLong: 1.1, forceHeight: 0.2, rearGrip: 0.97 },
+  tire: { ...TAXI.tire, muLat: 1.08, muLong: 1.1, forceHeight: 0.2, rearGrip: 1.06 },
   steer: { ...TAXI.steer, lock: 0.75, rate: 3.8 },
   engine: {
     idle: 900, redline: 7600,

@@ -33,6 +33,13 @@ export interface AudioApi extends System {
 }
 
 /**
+ * The tyres' levels: near the limit (`noise`, `tone` at full strain) and sliding (`skid`, `squeal`). Measured on the driving bus
+ * (.scratch/feel/livesound.mjs): at 0.2 / 0.014 the cue was 1 dB over the rest of 400-1200 Hz, and a drift's 0.22 / 0.05 was
+ * under the engine altogether.
+ */
+export const SCRUB = { noise: 0.9, tone: 0.045, skid: 0.5, squeal: 0.1 };
+
+/**
  * All sound is synthesised with Web Audio; there are no audio files.
  *
  * Engine: a four-cylinder fires twice per revolution, so the fundamental is rpm/30 Hz (28 Hz at
@@ -45,6 +52,7 @@ export async function install(engine: Engine): Promise<void> {
   let master: GainNode;
   let engineGain: GainNode, engineFilter: BiquadFilterNode, o1: OscillatorNode, o2: OscillatorNode, o3: OscillatorNode, intakeFilter: BiquadFilterNode, intakeGain: GainNode;
   let tyreGain: GainNode, tyreFilter: BiquadFilterNode, squealGain: GainNode, s1: OscillatorNode, s2: OscillatorNode;
+  let scrubF: GainNode, scrubR: GainNode, scrubToneF: GainNode, scrubToneR: GainNode;
   let windGain: GainNode, hornGain: GainNode, nitroGain: GainNode;
   let rollGain: GainNode, rollFilter: BiquadFilterNode, rainGain: GainNode, rainFilter: BiquadFilterNode;
   let nitroWas = false;
@@ -107,6 +115,19 @@ export async function install(engine: Engine): Promise<void> {
     lfo.connect(lfoG); lfoG.connect(s1.frequency); lfoG.connect(s2.frequency);
     s1.connect(squealGain); s2.connect(squealGain); squealGain.connect(drivingGain);
     for (const o of [s1, s2, lfo]) o.start();
+
+    // The tyres near their limit, before they slide (2026-11-25, handling item 3): the squeal only came well past it, so
+    // nothing said how much grip was left. The front (about to push wide) is a low scrub, the rear (about to step out) a
+    // higher one, each with a thin tone near the top. Kept well under the skid.
+    const scrub = (hz: number, tone: number): [GainNode, GainNode] => {
+      const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = hz; f.Q.value = 2.2;
+      const g = c.createGain(); g.gain.value = 0; noise(c).connect(f).connect(g).connect(drivingGain);
+      const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = tone; lfoG.connect(o.frequency);
+      const tg = c.createGain(); tg.gain.value = 0; o.connect(tg).connect(drivingGain); o.start();
+      return [g, tg];
+    };
+    [scrubF, scrubToneF] = scrub(480, 590);
+    [scrubR, scrubToneR] = scrub(950, 880);
 
     // Wind.
     const wf = c.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 520;
@@ -605,9 +626,15 @@ export async function install(engine: Engine): Promise<void> {
       let skid = 0;
       for (const w of car.wheels) skid = Math.max(skid, w.skid);
       const sf = Math.min(1, car.speed / 8);
-      tyreGain.gain.setTargetAtTime(paused ? 0 : skid * 0.22 * sf, t, 0.05);
-      squealGain.gain.setTargetAtTime(paused ? 0 : skid * skid * 0.05 * sf, t, 0.06);
+      tyreGain.gain.setTargetAtTime(paused ? 0 : skid * SCRUB.skid * sf, t, 0.05);
+      squealGain.gain.setTargetAtTime(paused ? 0 : skid * skid * SCRUB.squeal * sf, t, 0.06);
       tyreFilter.frequency.setTargetAtTime(700 + car.speed * 25, t, 0.1);
+      const quiet = paused || !v.occupied || !!car.spec.single;
+      for (const [st, g, tg] of [[car.strainFront, scrubF, scrubToneF], [car.strainRear, scrubR, scrubToneR]] as const) {
+        const k = quiet ? 0 : Math.max(0, st * (1 - 0.7 * skid));
+        g.gain.setTargetAtTime(k * SCRUB.noise, t, 0.07);
+        tg.gain.setTargetAtTime(k * k * k * SCRUB.tone, t, 0.08);
+      }
       // wind from town speeds on (it was v²/9000: 0.03 at 60 km/h, nothing to hear), the tyres' roll under it
       windGain.gain.setTargetAtTime(paused ? 0 : Math.min(0.2, car.speed * car.speed / 5200), t, 0.2);
       const rolling = off && car.spec.name !== 'bike' && car.spec.name !== 'ebike' ? 0 : Math.min(1, car.speed / 30);

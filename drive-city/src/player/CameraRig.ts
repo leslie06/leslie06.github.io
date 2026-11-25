@@ -5,6 +5,7 @@ import type { CameraApi, CameraMode, PlayerApi, VehicleApi } from '../game/Contr
 import { smoothstep, wrapAngle } from '../vehicle/Tire';
 import { Cockpit, eyeOf } from './Cockpit';
 
+const UP = new THREE.Vector3(0, 1, 0);
 const _head = new THREE.Euler(), _hq = new THREE.Quaternion();
 
 /** `wide`: degrees the lens opens with speed, from `v0` to `v1` m/s. */
@@ -19,6 +20,22 @@ const MODES: Record<Exclude<CameraMode, 'hood'>, ModeCfg> = {
   far: { dist: 8.4, height: 2.6, look: 1.2, fov: 58, wide: 16, v0: 8, v1: 48 },
   near: { dist: 4.3, height: 1.4, look: 0.95, fov: 66, wide: 16, v0: 8, v1: 48 },
 };
+/**
+ * What the chase cameras do with the driving (2026-11-25, 「接着做」: item 2, 镜头). Measured: following the nose with a lag, the view
+ * pointed 10-13 degrees out of a turn at 40 km/h and 5 at 60; a launch pulled the camera back 0.2 m; and the lens stopped opening
+ * at 144 km/h, so 300 looked like 144.
+ *  - `lead`: seconds of the turn (the path's, so a slide does not count) the view turns ahead by, at most `leadMax` rad, through a lag of
+ *    `leadTau` s (taps must not shake it). In the other direction it goes in
+ *    `swapTau` s, a bend counts from `bend0` to `bend1` s of it, and `leadFast` of it goes by 32 m/s (handling critic round 3: the view
+ *    still looked into the old bend after a change of direction). Only the view turns, not the camera's place: the car slides a little to the outside of the frame.
+ *  - `back`: metres the camera is left behind per m/s² (`backMax`, and `frontMax` towards the car on the brakes).
+ *  - `roll`: rad of lean into the turn per g. - `fast`: more degrees of lens from `cfg.v1` to `fastV` m/s. - `drop`: metres lower by `cfg.v1`.
+ *  - `limit`: metres of tremble as the tyres come to their sideways limit (Vehicle.ts `strainFront` / `strainRear`).
+ * `?camfeel=0` is the old camera.
+ */
+export const CAMFEEL = { lead: 0.32, leadMax: 0.18, leadTau: 0.2, swapTau: 0.07, leadFast: 0.4, bend0: 0.1, bend1: 0.6, back: 0.11, backMax: 1.1, frontMax: 0.6, roll: 0.016, rollMax: 0.02, fast: 9, fastV: 85, drop: 0.18, limit: 0.011 };
+if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('camfeel') === '0') Object.assign(CAMFEEL, { lead: 0, back: 0.05, backMax: 0.5, frontMax: 0.3, roll: 0, fast: 0, drop: 0, limit: 0 });
+
 const ORDER: CameraMode[] = ['chase', 'high', 'far', 'near', 'hood'];
 
 /**
@@ -55,11 +72,17 @@ export class CameraRig implements CameraApi {
   private readonly cockpit: Cockpit;
   private headYaw = 0;
   private headPitch = 0;
+  /** The turn the view leads by: rad/s of the path, and g sideways, both smoothed (`CAMFEEL`). */
+  private turn = 0;
+  private side = 0;
+  private calm = 0;
+  private bendT = 0;
 
   constructor(private engine: Engine) {
     this.cockpit = new Cockpit(engine);
     engine.events.on('vehicle:impact', ({ strength }) => {
       this.shake(Math.min(1.2, strength / 7));
+      this.calm = 0.4;
       if (strength > 3) engine.input.rumble(Math.min(1, strength / 10), Math.min(1, strength / 6), 90 + Math.min(260, strength * 22));
     });
     // Knocking a bin or a railing flying: a little jolt, not a crash.
@@ -126,7 +149,7 @@ export class CameraRig implements CameraApi {
       return;
     }
 
-    const cfg = MODES[this.mode];
+    const cfg = MODES[this.mode], C = CAMFEEL;
     // Big vehicles need a bigger box: a 12 m bus would otherwise swallow the camera.
     const size = v.model.size;
     const grow = Math.max(0, size.length - 4.6) * 0.55;
@@ -157,14 +180,29 @@ export class CameraRig implements CameraApi {
     this.yaw += wrapAngle(target - this.yaw) * follow;
     // Height follows with more lag than yaw: jumps and dips read as motion instead of being cancelled.
     this.y += (p.y - this.y) * (1 - Math.exp(-dt * 5));
-    const wantDist = cfg.dist + grow + speed * 0.022 + THREE.MathUtils.clamp(car.accel.z * 0.05, -0.3, 0.5);
+    const wantDist = cfg.dist + grow + speed * 0.022 + THREE.MathUtils.clamp(car.accel.z * C.back, -C.frontMax, C.backMax);
     this.dist += (wantDist - this.dist) * (1 - Math.exp(-dt * 3));
+
+    // the turn the car is in: its sideways acceleration over its speed (left +). A crash's jolt is not a turn.
+    this.calm = Math.max(0, this.calm - dt);
+    const turning = this.calm <= 0 && car.grounded >= 2 && car.forwardSpeed > 3;
+    // straightening out of a drift the travel swings to the nose, which is not a bend to look into either
+    const latA = turning && car.driftPhase !== 2 ? THREE.MathUtils.clamp(car.accel.x, -20, 20) : 0;
+    // the other way: let the old bend go at once
+    const kTurn = this.snapNext ? 1 : 1 - Math.exp(-dt / (latA * this.turn < 0 ? C.swapTau : C.leadTau));
+    // a lane change or a tap is not a bend: it counts once it has gone on for a moment
+    const bend = Math.abs(this.turn) > 0.05 && latA * this.turn > 0;
+    this.bendT = bend ? Math.min(1, this.bendT + dt) : Math.max(0, this.bendT - dt * 3);
+    this.turn += ((this.snapNext ? 0 : latA / Math.max(car.speed, 5)) - this.turn) * kTurn;
+    this.side += ((this.snapNext ? 0 : latA / 9.81) - this.side) * kTurn;
+    // the player is looking somewhere else
+    const free = lookBack ? 0 : Math.max(0, 1 - Math.abs(this.orbitYaw) / 0.6);
 
     const yaw = this.yaw + this.orbitYaw + lookBack;
     const pitch = 0.1 + this.orbitPitch;
     this.look.set(p.x, this.y + cfg.look, p.z);
     const horiz = this.dist * Math.cos(pitch);
-    this.pos.set(this.look.x - Math.sin(yaw) * horiz, this.look.y + cfg.height + rise - cfg.look + this.dist * Math.sin(pitch), this.look.z - Math.cos(yaw) * horiz);
+    this.pos.set(this.look.x - Math.sin(yaw) * horiz, this.look.y + cfg.height + rise - C.drop * smoothstep(cfg.v0, cfg.v1, speed) - cfg.look + this.dist * Math.sin(pitch), this.look.z - Math.cos(yaw) * horiz);
 
     // Keep the camera out of walls: pull it in to just short of whatever is between it and the car.
     this.tmp.subVectors(this.pos, this.look);
@@ -178,7 +216,7 @@ export class CameraRig implements CameraApi {
     // Shake: impacts, landings and a little road rumble at speed.
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.4);
     // The nitro kicks: a wider lens (below) and a harder rumble while it burns.
-    const rumble = 0.012 * smoothstep(15, 50, speed) + (v.nitroActive ? 0.03 : 0);
+    const rumble = 0.012 * smoothstep(15, 50, speed) + (v.nitroActive ? 0.03 : 0) + C.limit * smoothstep(0.55, 1, Math.max(car.strainFront, car.strainRear)) * smoothstep(6, 14, speed);
     const a = this.shakeAmt * this.shakeAmt * 0.35 + rumble;
     const n = (f: number, o: number) => Math.sin(this.t * f + o) * 0.6 + Math.sin(this.t * f * 2.3 + o * 1.7) * 0.4;
     this.pos.x += n(31, 0) * a; this.pos.y += n(37, 2) * a; this.pos.z += n(29, 4) * a;
@@ -195,8 +233,11 @@ export class CameraRig implements CameraApi {
     lead.multiplyScalar(1.6);
     if (lookBack) lead.negate();
     cam.lookAt(this.look.x + lead.x, this.look.y + 0.15, this.look.z + lead.z);
-    cam.rotateZ(n(23, 5) * a * 0.4);
-    const wantFov = cfg.fov + cfg.wide * smoothstep(cfg.v0, cfg.v1, speed) + this.shakeAmt * 3 + (v.nitroActive ? 10 : 0);
+    // into the turn: the view, about the world's up, and a little lean
+    const into = THREE.MathUtils.clamp(this.turn * C.lead * smoothstep(3, 8, speed) * (1 - C.leadFast * smoothstep(15, 32, speed)), -C.leadMax, C.leadMax) * smoothstep(C.bend0, C.bend1, this.bendT) * free;
+    if (into !== 0) cam.rotateOnWorldAxis(UP, into);
+    cam.rotateZ(n(23, 5) * a * 0.4 + THREE.MathUtils.clamp(this.side * C.roll, -C.rollMax, C.rollMax) * free);
+    const wantFov = cfg.fov + cfg.wide * smoothstep(cfg.v0, cfg.v1, speed) + C.fast * smoothstep(cfg.v1, C.fastV, speed) + this.shakeAmt * 3 + (v.nitroActive ? 10 : 0);
     this.fov += (wantFov - this.fov) * (1 - Math.exp(-dt * 4));
     cam.fov = this.fov;
     cam.updateProjectionMatrix();

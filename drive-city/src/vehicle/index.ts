@@ -3,7 +3,7 @@ import type { LaneGraph } from '../traffic/LaneGraph';
 import type { Engine } from '../core/Engine';
 import type { CarLook, DeadEndApi, DriftState, VehicleApi, WorldApi } from '../game/Contracts';
 import type { RenderApi } from '../render';
-import { Vehicle } from './Vehicle';
+import { ARCADE, Vehicle } from './Vehicle';
 import { SPEC_OF, TAXI } from './Spec';
 import { ControlFilter, type DriveInput } from './ControlFilter';
 import { buildCar, defaultLivery, TAXI_LIVERY } from './CarModel';
@@ -44,6 +44,7 @@ export async function install(engine: Engine): Promise<void> {
   attachBeams();
   engine.scene.add(model.root);
   const filter = new ControlFilter();
+  const QQ_KEYS = new URLSearchParams(location.search).get('drift') === 'qq';
 
   const prevPos = car.pos.clone(), curPos = car.pos.clone();
   const prevQuat = car.quat.clone(), curQuat = car.quat.clone();
@@ -167,8 +168,9 @@ export async function install(engine: Engine): Promise<void> {
         drive.drift = false; drive.trail = false;
       } else if (api.inputEnabled && api.occupied) {
         drive.forward = inp.forward; drive.back = inp.back; drive.steer = inp.steer; drive.analog = inp.analog;
-        // the handbrake key is the drift key (Vehicle.ts `ARCADE`; still the handbrake when slow)
-        drive.handbrake = false; drive.drift = inp.handbrake;
+        // Space and the pad's button are a real handbrake (2026-11-25, 「改GTA」); the phone's 漂移 button is the arcade drift
+        // (Vehicle.ts `ARCADE`, the handbrake when slow), with its push and its automatic throttle. `?drift=qq`: that on keys too.
+        drive.drift = inp.handbrake && (inp.driftButton || QQ_KEYS); drive.handbrake = inp.handbrake && !drive.drift;
         // braking with the wheel turned still turns (Vehicle.ts `TRAIL`)
         drive.trail = true;
         // A failing engine pulls less; a dead one only lets the brakes work.
@@ -179,6 +181,7 @@ export async function install(engine: Engine): Promise<void> {
       }
       // 方向灵敏度只管玩家握着方向盘的时候（vehicle/SteerPref.ts）
       filter.sense = api.autopilot ? 1 : steerPref.sense;
+      filter.two = !!car.spec.single;
       const c = filter.update(drive, car.forwardSpeed, dt);
       // Nitro: while held with the throttle down, the bottle empties over `tune.nitro` seconds and
       // pushes the car on at NITRO_ACCEL, past the limiter (Vehicle caps it at 1.3x).
@@ -204,6 +207,8 @@ export async function install(engine: Engine): Promise<void> {
       const ang = Math.abs(car.bodySlip);
       drift.angle = ang * 180 / Math.PI;
       const sliding = api.occupied && ang > 0.26 && car.speed > 5 && car.grounded >= 3 && car.forwardSpeed > 0;
+      // a slide fills a fitted bottle (the arcade drift does it itself)
+      if (sliding && car.tune.nitro > 0 && car.driftPhase === 0 && !nitroOn && !api.autopilot) car.nitroFill = Math.min(1, car.nitroFill + ARCADE.charge * dt);
       if (sliding) {
         drift.active = true; calmTime = 0; driftTime += dt;
         drift.multiplier = Math.min(5, 1 + Math.floor(driftTime / 2));

@@ -31,6 +31,8 @@ export interface InputState {
   /** True when `steer`/`forward`/`back` came from an analogue device this frame. */
   analog: boolean;
   handbrake: boolean;
+  /** The handbrake is (also) the on-screen 漂移 button: the arcade drift there, a real handbrake on keys and pads. */
+  driftButton: boolean;
   /** On foot: sprint (Shift) and jump (Space, the handbrake key). */
   sprint: boolean;
   jumpPressed: boolean;
@@ -154,6 +156,7 @@ export class Input {
     s.steer = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
     s.analog = false;
     s.handbrake = k('Space');
+    s.driftButton = false;
     s.sprint = k('ShiftLeft') || k('ShiftRight');
     s.nitro = s.sprint;
     s.jumpPressed = p('Space');
@@ -190,6 +193,7 @@ export class Input {
     if (c.analog) s.analog = true;
     s.forward = Math.max(s.forward, c.forward);
     s.back = Math.max(s.back, c.back);
+    s.driftButton = c.handbrake;
     s.handbrake ||= c.handbrake;
     s.sprint ||= c.sprint;
     s.nitro ||= c.nitro;
@@ -247,7 +251,7 @@ export class Input {
   }
 
   static empty(): InputState {
-    return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, counterPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
+    return { forward: 0, back: 0, steer: 0, analog: false, handbrake: false, driftButton: false, sprint: false, jumpPressed: false, enterPressed: false, mapPressed: false, punchPressed: false, counterPressed: false, horn: false, lookBack: false, lookDX: 0, lookDY: 0,
       cameraPressed: false, resetPressed: false, pausePressed: false, helpPressed: false, mutePressed: false, radioPressed: false, phonePressed: false, dealerPressed: false, diagPressed: false, nitro: false, choice: 0 };
   }
 }
