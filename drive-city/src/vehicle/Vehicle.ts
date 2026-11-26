@@ -60,29 +60,34 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
  * a fitted nitro bottle. Below `minSpeed`, and on two-wheelers, the key is the handbrake it was.
  */
 export const ARCADE = {
+  // 2026-11-26 (phone, 「漂移没有拉扯感，车头转的幅度太大」, then 「车要更有分量」): the tail swung out at 155°/s to 40° with a key
+  // held, and 2.5 s of drift turned the travel 157°. Heavier now: out at 84°/s (`yawMax*`, `yawK`), 31° held, the turn building
+  // over `turnTau` and the keys pulling through a longer lag (`steerTau` 0.4 -> 0.6): 116° in 2.5 s. .scratch/feel/qq.test.ts
   minSpeed: 8, steerIn: 0.25,
   /**
    * The direction's hold on the drift follows the key through this lag, s (2026-10-23, 「方向键太过灵敏，导致漂移不好操作…
    * qq飞车…它的方向键有拉拽感，很好漂移」): a tap is a nudge, a held key tightens the arc over half a second. Taken at
    * once, swapping into the drift for against it swung the angle 42° -> 16° and the arc 14 -> 3.5 m/s² in a frame.
    */
-  steerTau: 0.4,
+  steerTau: 0.6,
   /** Body angle to the travel, rad: neutral, steering into the drift, steering against it. */
-  angle: 0.52, angleIn: 0.7, angleOut: 0.34,
+  angle: 0.44, angleIn: 0.56, angleOut: 0.28,
   /**
    * How fast the travel turns, rad/s (the same three), at most `latMax` m/s² sideways (fast, the arc opens). As a turn
    * rate (2026-10-23, 「漂移成功不了，比如我右转，车子一直向左偏」): the first version set a sideways pull of 9 m/s², and
    * with half of it reaching the path each step a drift at 60 km/h turned the travel 15°/s - the nose swung right at
    * once and the car slid on nearly straight, off the road on the left.
    */
-  turn: 0.8, turnIn: 1.2, turnOut: 0.35, latMax: 24,
+  turn: 0.8, turnIn: 1.0, turnOut: 0.35, latMax: 24,
+  /** Lag of the turn behind its target, s (0 = at once). */
+  turnTau: 0.3,
   /** Speed lost per second: coasting, extra when steering in, extra on the brake; the throttle gives back `gas`. */
   loss: 1.2, lossIn: 1.5, brakeLoss: 9, gas: 1,
   /**
    * Yaw: rad/s per rad of angle error, the cap (`yawMaxIn` for the first `entryT` s: the swing out stays quick), and the
    * share of the yaw-rate error fixed each step.
    */
-  yawK: 4.5, yawMax: 2.2, yawMaxIn: 3.5, entryT: 0.35, yawGain: 0.35,
+  yawK: 3.5, yawMax: 1.5, yawMaxIn: 2, entryT: 0.35, yawGain: 0.35,
   /** Share of the velocity error fixed each step (all of it: the turn comes out as set). */
   velGain: 1,
   /** After the key: the travel swings to the nose at `align` rad/s, for `recover` s at most. */
@@ -118,6 +123,15 @@ export const TRAIL = {
  * `accel` m/s²; turning faster than the wheels point (or than `grip` of the tyres allow) is damped at `damp` 1/s.
  */
 export const BACKING = { cut: 0.7, vLo: 1.5, vHi: 4, accel: 2, grip: 0.7, damp: 8 };
+
+/**
+ * The player's slides (2026-11-26, 「漂移没有拉扯感，车头转的幅度太大」): a handbrake slide held on full lock stood at 56-60 deg, the
+ * arcade drift at 39, and letting the key go swung it 55 -> 45 deg in 0.3 s where the arcade drift (「有拉拽感」) moved 1.
+ *  - the steering reaches a slide through a lag of `tau` s (from `lo` to `hi` rad of slip): a tap nudges, a held key pulls;
+ *  - past `angle` rad (`angleIn` steering into it) the nose is turned back to the travel at `k` rad/s² per rad over, and its
+ *    swing outwards damped at `damp` 1/s. Not while the handbrake is held: held on, it still spins the car round.
+ */
+export const SLIDE = { tau: 0.35, lo: 0.12, hi: 0.25, angle: 0.52, angleIn: 0.68, k: 14, damp: 7 };
 
 /**
  * Letting a slide go (2026-11-25, 「改GTA」: Space is a real handbrake again on keys and pads). Slid out by it at 80-110 km/h the car
@@ -216,6 +230,10 @@ export class Vehicle {
   private recoverT = 0;
   /** The direction's hold on the drift, -1 (against) .. 1 (into), lagging the steering by `ARCADE.steerTau`. */
   private driftSteer = 0;
+  /** The arcade drift's turn of the travel, rad/s, lagging its target by `ARCADE.turnTau`. */
+  private driftTurn = 0;
+  /** The steering a slide feels (`SLIDE.tau`). */
+  private slideSteer = 0;
   private readonly velBefore = new THREE.Vector3();
   private readonly impulse = new THREE.Vector3();
   private readonly staticLoad: number[];
@@ -368,7 +386,7 @@ export class Vehicle {
       if (Math.abs(this.bodySlip) < 0.05 || this.recoverT > A.recover || this.impact > A.crash || this.speed < 3) this.driftPhase = 0;
     }
     if (this.driftPhase !== 1 && c.drift && canDrift && Math.abs(c.steer) > A.steerIn) {
-      this.driftPhase = 1; this.driftDir = c.steer < 0 ? 1 : -1; this.driftT = 0; this.driftSteer = 0;
+      this.driftPhase = 1; this.driftDir = c.steer < 0 ? 1 : -1; this.driftT = 0; this.driftSteer = 0; this.driftTurn = 0;
     }
     const arcade = this.driftPhase > 0;
     const handbrake = c.handbrake || (!!c.drift && !arcade && (!!s.single || this.forwardSpeed < A.minSpeed));
@@ -377,10 +395,16 @@ export class Vehicle {
     // --- steering: speed-sensitive limiter + counter-steer --------------------------------------
     const vAbs = Math.abs(this.forwardSpeed);
     const sliding = this.forwardSpeed > 2 ? smoothstep(0.1, 0.4, Math.abs(this.bodySlip)) * smoothstep(3, 8, this.speed) : 0;
+    // the player's slides: the steering pulls through a lag (`SLIDE`)
+    const mine = !!c.trail && !s.single && !arcade;
+    const inSlide = mine ? smoothstep(SLIDE.lo, SLIDE.hi, Math.abs(this.bodySlip)) * smoothstep(5, 10, this.speed) : 0;
+    const kSteer = 1 - Math.exp(-dt / SLIDE.tau);
+    this.slideSteer += (c.steer - this.slideSteer) * (1 - inSlide * (1 - kSteer));
+    const st = mine ? this.slideSteer : c.steer;
     // Only steering *into* the slide is cut (c.steer < 0 is left; a left drift has bodySlip > 0):
     // counter-steer keeps full authority, so a slide can always be steered out of.
-    const into = c.steer * this.bodySlip < 0 ? 1 : 0;
-    const wheel = c.keys ? Math.sign(c.steer) * this.keyAngle(Math.min(1, Math.abs(c.steer) / c.keys), vAbs, c.keys) : c.steer * this.maxSteerAngle(vAbs);
+    const into = st * this.bodySlip < 0 ? 1 : 0;
+    const wheel = c.keys ? Math.sign(st) * this.keyAngle(Math.min(1, Math.abs(st) / c.keys), vAbs, c.keys) : st * this.maxSteerAngle(vAbs);
     let target = -wheel * (1 - s.steer.driftCut * sliding * into);
     if (this.forwardSpeed > 2 && this.grounded > 1) target -= s.steer.counterSteer * this.bodySlip * smoothstep(3, 8, this.speed);
     target = clamp(target, -s.steer.lock, s.steer.lock);
@@ -644,7 +668,9 @@ export class Vehicle {
         const u = this.driftSteer;
         const ang = u >= 0 ? A.angle + (A.angleIn - A.angle) * u : A.angle + (A.angle - A.angleOut) * u;
         const turn = u >= 0 ? A.turn + (A.turnIn - A.turn) * u : A.turn + (A.turn - A.turnOut) * u;
-        const omega = dir * Math.min(turn, A.latMax / Math.max(v, 1));
+        // the turn builds through a lag (`turnTau`): the car carries its line a moment before the drift bends it
+        this.driftTurn += (Math.min(turn, A.latMax / Math.max(v, 1)) - this.driftTurn) * (1 - Math.exp(-dt / A.turnTau));
+        const omega = dir * this.driftTurn;
         psiNew = psiV + omega * dt;
         vNew = Math.max(0, v - Math.max(0, A.loss + A.lossIn * Math.max(0, u) + A.brakeLoss * c.brake - A.gas * c.throttle) * dt);
         const yawMax = this.driftT < A.entryT ? A.yawMaxIn : A.yawMax;
@@ -677,7 +703,7 @@ export class Vehicle {
       if (wasAir && this.airTime > 0.35) this.landed = this.airTime;
       this.airTime = 0;
       // Spin guard: bleed yaw rate once the slide is past ~32°, unless the handbrake asks for it.
-      const intoG = clamp01(-c.steer * Math.sign(this.bodySlip));
+      const intoG = clamp01(-st * Math.sign(this.bodySlip));
       const excess = Math.abs(this.bodySlip) - (s.assists.spinAngleNeutral + (s.assists.spinAngle - s.assists.spinAngleNeutral) * intoG);
       // Held off for half a second after the handbrake, so a handbrake turn can finish rotating.
       if (excess > 0 && this.tcOff < 0.5 && this.speed > 5 && grounded >= 3 && !arcade) {
@@ -708,10 +734,21 @@ export class Vehicle {
     }
     if (c.trail && !s.single && !c.reverse && grounded >= 3 && !handbrake && !arcade && this.forwardSpeed > CATCH.vLo) {
       const K = CATCH, sl = Math.abs(this.bodySlip);
-      const w = (1 - clamp01(Math.abs(c.steer) / 0.3)) * smoothstep(K.lo, K.hi, sl) * smoothstep(K.vLo, K.vHi, this.speed) * (1 - K.gasCut * c.throttle);
+      const w = (1 - clamp01(Math.abs(st) / 0.3)) * smoothstep(K.lo, K.hi, sl) * smoothstep(K.vLo, K.vHi, this.speed) * (1 - K.gasCut * c.throttle);
       if (w > 0) {
         // bodySlip is + with the travel to the right of the nose: the nose goes right (yaw -)
         _t.copy(this.up).multiplyScalar((-this.bodySlip * K.k - this.yawRate * K.damp) * w * dt * I[1]);
+        b.applyTorqueImpulse(_t, true);
+      }
+    }
+    if (mine && grounded >= 3 && !handbrake && this.speed > 5) {
+      const b0 = this.bodySlip, limit = SLIDE.angle + (SLIDE.angleIn - SLIDE.angle) * clamp01(-st * Math.sign(b0));
+      const over = Math.abs(b0) - limit;
+      if (over > -0.05) {
+        const w = smoothstep(-0.05, 0.05, over) * smoothstep(5, 10, this.speed);
+        // b0 > 0: the travel is right of the nose, the nose goes right (yaw -) to close it; yaw + opens it
+        const acc = -Math.sign(b0) * Math.max(0, over) * SLIDE.k - (b0 * this.yawRate > 0 ? this.yawRate * SLIDE.damp : 0);
+        _t.copy(this.up).multiplyScalar(acc * w * dt * I[1]);
         b.applyTorqueImpulse(_t, true);
       }
     }

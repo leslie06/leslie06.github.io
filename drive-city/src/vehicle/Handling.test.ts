@@ -551,10 +551,12 @@ describe('taxi handling', () => {
     expect(short.max).toBeLessThan(18);
     expect(mid.max).toBeGreaterThan(25);
     const held = await slide(60, 24, 8, 1), half = await slide(60, 24, 4, 1), none = await slide(60, 24, 0, 1);
-    expect(held.mean).toBeGreaterThan(38);
-    expect(held.max).toBeLessThan(75);
+    // 2026-11-26 (「漂移没有拉扯感，车头转的幅度太大」, Vehicle.ts `SLIDE`): held it stood at 56°, now about the arcade drift's
+    expect(held.mean).toBeGreaterThan(30);
+    expect(held.mean).toBeLessThan(42);
+    expect(held.max).toBeLessThan(48);
     expect(half.mean).toBeGreaterThan(25);
-    expect(half.mean).toBeLessThan(held.mean - 5);
+    expect(half.mean).toBeLessThan(held.mean - 2);
     expect(none.mean).toBeLessThan(12);
     for (const kmh of [60, 80, 110]) {
       const r = await slide(kmh, 30, 8, 1, 72);
@@ -562,6 +564,22 @@ describe('taxi handling', () => {
       expect(r.straight).toBeLessThan(1.6);
     }
     Object.assign(report, { 'gtahb.0.15 s tap max deg': short.max, 'gtahb.0.4 s max deg': mid.max, 'gtahb.held W mean deg': held.mean, 'gtahb.4/8 taps mean deg': half.mean, 'gtahb.no steer mean deg': none.mean });
+  });
+
+  it('a slide answers the steering with a pull, not a jump', async () => {
+    // Letting the key go in a held handbrake slide swung it 55 -> 45° in 0.3 s; the arcade drift (「有拉拽感」) moved 1°.
+    for (const kmh of [60, 80]) {
+      const rig = await Rig.create(); rig.settle(0.6); rig.launch(kmh / KMH);
+      let at = 0, after = 0, max = 0;
+      for (let i = 0; i < 180; i++) {
+        rig.stepInput(input({ steer: i < 90 ? 1 : 0, handbrake: i >= 6 && i < 30, forward: i >= 30 ? 1 : 0, trail: true }));
+        const sl = deg(Math.abs(rig.car.bodySlip)); max = Math.max(max, sl);
+        if (i === 89) at = sl; if (i === 107) after = sl;
+      }
+      report[`pull.${kmh} km/h let go: 0.3 s change deg`] = at - after;
+      expect(at - after).toBeLessThan(6);
+      expect(max).toBeLessThan(48);
+    }
   });
 
   it('nervous key taps at 120 km/h keep the car on its line', async () => {
