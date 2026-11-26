@@ -82,6 +82,8 @@ export class Lighting {
         lightNear: 1, lightFar: q.shadowDistance * 2.5 + 250, lightMargin: 150,
       });
       this.csm.fade = true;
+      // the last cascade's shadow map leaves the camera's pools out (core/Engine.ts `farShadowCams`)
+      engine.farShadowCams.add(this.csm.lights[this.csm.lights.length - 1].shadow.camera);
       this.lastAspect = cam.aspect;
       this.csm.updateFrustums();
       Lighting.guardUnpatched();

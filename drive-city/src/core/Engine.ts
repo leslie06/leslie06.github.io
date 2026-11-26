@@ -8,6 +8,8 @@ import { newGovernor, step as governorStep, type GovernorConfig, type GovernorSt
 
 /** Frames the resolution governor ignores at boot (shader compiles, first uploads). */
 const WARMUP_FRAMES = 180;
+/** `?farshadow=1`: the far cascade draws the camera's pools too, as before (to compare). */
+const NO_FAR_SKIP = typeof location !== 'undefined' && new URLSearchParams(location.search).get('farshadow') === '1';
 const LITE_KEY = 'drivecity.lite.v1';
 
 /** A system gets a fixed-step tick (60Hz, physics/gameplay) and a per-frame update (render/visuals). */
@@ -63,6 +65,8 @@ export class Engine {
   contextLost = false;
   /** Mean frame interval (ms) over the last half second, for the diagnostics panel. */
   frameMs = 16.7;
+  /** Shadow cameras of the far cascades (render/Lighting.ts): see renderBufferDirect above. */
+  readonly farShadowCams = new Set<THREE.Camera>();
   /**
    * JS time of the last frame (ms): input, fixed steps, updates and the render's draw submission, but not the GPU's
    * own work, which runs after. Close to the frame interval = the CPU is the limit; far under it = the GPU (or vsync).
@@ -86,8 +90,16 @@ export class Engine {
     const shot = new URLSearchParams(location.search).has('shot');
     // No canvas MSAA: the post chain (render/PostFx) anti-aliases with SMAA, MSAA would only cost bandwidth.
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, powerPreference: 'high-performance', stencil: false, depth: true, alpha: false, preserveDrawingBuffer: shot });
+    // three reads back every program's compile log to look for errors, which makes each first draw wait for the driver: a
+    // development aid. The live build skips it (2026-11-26).
+    this.renderer.debug.checkShaderErrors = !!import.meta.env.DEV;
     this.gpu = detectGpu(this.renderer.getContext());
     this.quality = settingsFor(pickTier(this.gpu));
+    // A computer's low may shed pixels when it falls behind (2026-11-26, 「电脑版一直很卡」): the floor of 1 is for phones, where
+    // a frame is mostly fixed cost and fewer pixels bought little for a softer picture. A big screen on a weak GPU is the
+    // other way round: at 2560x1305 low cost 12.4 ms on an M2 Pro, a quarter of the pixels 7.5 ms.
+    const touchFirst = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    if (this.quality.tier === 'low' && !touchFirst && !new URLSearchParams(location.search).has('qset')) this.quality.minRenderScale = 0.7;
     this.governor = newGovernor(1, WARMUP_FRAMES, this.quality.maxRenderScale);
     this.governorCfg = { targetFps: this.quality.targetFps, minScale: this.quality.minRenderScale, maxScale: this.quality.maxRenderScale, window: 30, cooldown: 20 };
     this.frameCapMs = Engine.frameCapMs(this.quality.frameCap);
@@ -114,6 +126,10 @@ export class Engine {
     const direct = this.renderer.renderBufferDirect.bind(this.renderer);
     this.renderer.renderBufferDirect = (camera, scene, geometry, material, object, group) => {
       if ((object as THREE.InstancedMesh).isInstancedMesh && (object as THREE.InstancedMesh).count === 0) return;
+      // The farthest shadow cascade (`farShadowCams`, render/Lighting.ts) leaves out the pools that follow the camera (cars,
+      // the near trees, the street's furniture: instanced, never frustum-culled), drawn whole in every cascade (2026-11-26,
+      // 「电脑版一直很卡」: high drew 325 of its 676 calls into shadow maps). A shadow pass is the one with no scene.
+      if (scene === null && !object.frustumCulled && (object as THREE.InstancedMesh).isInstancedMesh && this.farShadowCams.has(camera) && !object.userData.farShadow && !NO_FAR_SKIP) return;
       direct(camera, scene, geometry, material, object, group);
     };
     this.assets.anisotropy = Math.min(this.quality.anisotropy, this.renderer.capabilities.getMaxAnisotropy());

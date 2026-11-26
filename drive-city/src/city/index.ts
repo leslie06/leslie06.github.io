@@ -57,6 +57,11 @@ async function loadLandmarks(): Promise<LandmarkDef[]> {
  * the tiles, textures and scripts the boot needs, and the live game took 166 s to become playable
  * instead of 48 (`.scratch/boottime.mjs`).
  */
+/** Landmarks drawn: all within `near` m, and past that those whose height over distance is above `tall` (see placeLandmarks). */
+export const LANDMARK_SIGHT: Record<'low' | 'medium' | 'high', { near: number; tall: number }> = {
+  low: { near: 1200, tall: 0.03 }, medium: { near: 1800, tall: 0.022 }, high: { near: 2600, tall: 0.016 },
+};
+
 function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], gate: Promise<void>, from: [number, number]): { footprints: number[][]; areas: { id: string; rings: number[][]; height: number }[]; clear: number[][]; trees: number[]; loaded: Promise<void> } {
   // The glb landmarks' pictures (glb/Glb.ts): a phone keeps them small (512, the night windows 256), a computer as its tier
   const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -78,6 +83,8 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
   const gWalk = groups(CG.WORLD, CG.ALL & ~CG.CAR);
   /** Only vehicles meet it: see ColliderSpec.carOnly and CarStops.ts. */
   const gCar = groups(CG.WORLD, CG.CAR);
+  /** What is in the scene, for `LANDMARK_SIGHT`: each landmark's group, where, how tall. */
+  const shown = new Map<string, { group: THREE.Object3D; x: number; z: number; h: number }>();
   const place = (def: LandmarkDef, model: LandmarkModel, colliders = true) => {
     const [x, z] = project(def.lat, def.lon);
     const rot = -def.headingDeg * Math.PI / 180;
@@ -88,6 +95,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
     model.group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     model.group.name = `landmark ${def.id}`;
     engine.scene.add(model.group);
+    shown.set(def.id, { group: model.group, x, z, h: Math.max(1, model.height) });
     if (!colliders) return;
     // Stone you can stand on. Terraces, steps and bridges are geometry only, so the player used to
     // stand on the ground *under* them and looked buried. Build trimesh colliders from the stone
@@ -165,6 +173,7 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
           group = null; job.live = false;
           // its stand-in back (a tower's prism: the skyline keeps it while the model is away)
           engine.scene.add(placeholder);
+          shown.set(def.id, { group: placeholder, x, z, h: Math.max(1, model.height) });
         },
       };
       jobs.push(job);
@@ -206,6 +215,22 @@ function placeLandmarks(engine: Engine, env: EnvUniforms, defs: LandmarkDef[], g
     }
     settle();
   };
+  // Out of sight, out of the frame (2026-11-26, 「电脑版一直很卡」): a computer keeps all 69 in the scene, each drawn in full
+  // whatever the distance, and from 建国门 low drew 567 draw calls a frame, 304 of them landmarks, most of them 5-12 km off
+  // (白塔, 白云观, 景山 ... at 6-10 km: a few pixels in the haze, when the city lets them be seen at all). Kept: anything within
+  // `near` m, and past it what stands tall enough to be on the skyline (`tall` rad of height over distance).
+  // `?sight=0`: all of them, as before (to compare)
+  const S = params.get('sight') === '0' ? { near: Infinity, tall: 0 } : LANDMARK_SIGHT[engine.quality.tier];
+  const sight = { name: 'landmarkSight', t: 0, update(dt: number) {
+    if ((this.t -= dt) > 0) return;
+    this.t = 0.25;
+    const cx = engine.camera.position.x, cz = engine.camera.position.z;
+    for (const v of shown.values()) {
+      const d = Math.hypot(v.x - cx, v.z - cz);
+      v.group.visible = d < S.near || v.h / d > S.tall;
+    }
+  } };
+  engine.add(sight);
   // two at a time on a computer; one on a phone, where two files' parsing at once was the page's tallest spike
   const loaded = gate.then(() => { void worker(); if (!touch) void worker(); return settled; });
   return { footprints, areas, clear, trees, loaded };
