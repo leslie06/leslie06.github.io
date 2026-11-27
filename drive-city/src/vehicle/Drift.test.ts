@@ -50,7 +50,7 @@ describe('arcade drift', () => {
     Object.assign(report, { 'left80.slip at 0.4 s deg': deg(d.slipAt04), 'left80.slip end deg': deg(d.slipEnd), 'left80.max slip deg': deg(d.maxSlip),
       'left80.turned deg': deg(d.turned), 'left80.travel turned deg': deg(d.went), 'left80.speed kept %': 100 * d.vEnd / d.v0, 'left80.drifting s': d.tIn });
     expect(d.rig.car.driftPhase).toBe(1);
-    expect(deg(d.slipAt04)).toBeGreaterThan(20);           // out quickly
+    expect(deg(d.slipAt04)).toBeGreaterThan(18);           // out quickly (20 -> 18 on 2026-11-27: the travel turns in sooner, so the angle to it builds a touch later)
     expect(deg(d.slipEnd)).toBeGreaterThan(30);
     expect(deg(d.maxSlip)).toBeLessThan(50);               // never spins
     expect(deg(d.went)).toBeGreaterThan(110);              // the travel itself carves a real corner (left is +)
@@ -66,6 +66,23 @@ describe('arcade drift', () => {
     report['corner60.nose turned deg'] = deg(d.turned);
     expect(deg(d.went)).toBeLessThan(-50);                 // most of a 90° corner in 1.5 s
     expect(deg(d.turned - d.went)).toBeLessThan(-15);      // the nose ahead of the travel (a drift, right is -)
+  });
+
+  it('a fast right turn: the drift bends the line instead of carrying it on', async () => {
+    // 2026-11-27, 「车速起来的时候，前面要右拐弯…根据惯性往前面甩」: the key held right with the drift button, how far the
+    // car ran on along its old line before the travel had turned 90° (26 / 45 m at 60 / 100 km/h on 11-26).
+    for (const [kmh, most] of [[60, 21], [100, 38]] as const) {
+      const rig = await Rig.create({ at: { x: 0, y: 0.36, z: -300 } }); rig.settle(); rig.launch(kmh / KMH);
+      for (let i = 0; i < 20; i++) rig.stepInput(input());
+      const z0 = rig.car.pos.z, tv0 = travel(rig); let tv = tv0, ahead = Infinity;
+      for (let i = 0; i < 240 && ahead === Infinity; i++) {
+        rig.stepInput(input({ steer: 1, drift: true }));
+        tv = unwrap(travel(rig), tv);
+        if (tv0 - tv >= Math.PI / 2) ahead = rig.car.pos.z - z0;
+      }
+      report[`fast right ${kmh}.ran on m`] = ahead;
+      expect(ahead).toBeLessThan(most);
+    }
   });
 
   it('drifts right the same way', async () => {

@@ -78,9 +78,14 @@ export const ARCADE = {
    * with half of it reaching the path each step a drift at 60 km/h turned the travel 15°/s - the nose swung right at
    * once and the car slid on nearly straight, off the road on the left.
    */
-  turn: 0.8, turnIn: 1.0, turnOut: 0.35, latMax: 24,
-  /** Lag of the turn behind its target, s (0 = at once). */
-  turnTau: 0.3,
+  turn: 1.0, turnIn: 1.3, turnOut: 0.35, latMax: 28,
+  /**
+   * Lag of the turn behind its target, s (0 = at once). 2026-11-27 (「车速起来的时候，前面要右拐弯…根据惯性往前面甩，不能
+   * 稳定的转向」): 0.3 with turn 0.8 / turnIn 1.0 / latMax 24 carried the car on its line - a 90° right turn needed 26 / 35 /
+   * 45 m at 60 / 80 / 100 km/h (37 m at 100 before 11-26); now 19 / 25 / 35, and the turn starts from what the car was
+   * already turning. The body's angle and its swing (`yawK`, `yawMax*`) are as 11-26 left them. .scratch/feel/corner.test.ts
+   */
+  turnTau: 0.1,
   /** Speed lost per second: coasting, extra when steering in, extra on the brake; the throttle gives back `gas`. */
   loss: 1.2, lossIn: 1.5, brakeLoss: 9, gas: 1,
   /**
@@ -140,6 +145,25 @@ export const SLIDE = { tau: 0.35, lo: 0.12, hi: 0.25, angle: 0.52, angleIn: 0.68
  * `damp` 1/s; from `lo` to `hi` rad of slip, all of it from `vLo` to `vHi` m/s.
  */
 export const CATCH = { k: 6, damp: 2.5, gasCut: 0.5, lo: 0.1, hi: 0.25, vLo: 5, vHi: 10 };
+
+/**
+ * Space with the throttle (2026-11-27, 「电脑同时按方向键和空格键，车就不动了」): the handbrake locked the rears whatever the
+ * throttle, so W + D + Space on a rear-driven car slid to a stop in 2-3 s and sat there turning 20° in 3 s (1 km/h). As in
+ * GTA: the player's car, throttle past `gas`, the rears are not locked but spun by the engine (drive up to `cap` of their
+ * grip, sideways `grip` of it): W + Space + a direction is a power slide, or a donut from rest. Space alone still locks them.
+ * From `fastFrom`..`fastTo` m/s the drive goes down to `capFast` and the handbrake drags `drag` of the grip: unlocked and
+ * driven, a coupe with Space held went on to 150 km/h.
+ */
+/**
+ * The handbrake turns the travel too (2026-11-27, 「车速起来的时候，前面要右拐弯，我电脑版…飘移都会根据惯性往前面甩」): locked
+ * rears give up their sideways grip, so the nose came round but the car slid on along its line - a 90° right turn at 60 km/h
+ * took 35 m with a 0.5 s handbrake and 36 m without (24 m on the brakes). The player's car, Space held, a direction: the
+ * travel is turned towards it at `acc` m/s² (at most `rate` rad/s), from `vLo` to `vHi` m/s, its speed kept. Space held with
+ * W and the key at 60 / 80 / 100 km/h: 90° in 20 / 37 / 65 m (the phone's drift 19 / 25 / 35). .scratch/feel/corner.test.ts
+ */
+export const HBTURN = { acc: 9, rate: 0.8, vLo: 5, vHi: 9 };
+
+export const HBGAS = { gas: 0.3, cap: 0.95, capFast: 0.5, drag: 0.45, fastFrom: 8, fastTo: 16, grip: 0.55 };
 
 /**
  * Keys only (2026-11-25, 「从第 1 项开始」: a gentle bend could only be held by tapping, and at 90 km/h the taps swung the
@@ -386,7 +410,9 @@ export class Vehicle {
       if (Math.abs(this.bodySlip) < 0.05 || this.recoverT > A.recover || this.impact > A.crash || this.speed < 3) this.driftPhase = 0;
     }
     if (this.driftPhase !== 1 && c.drift && canDrift && Math.abs(c.steer) > A.steerIn) {
-      this.driftPhase = 1; this.driftDir = c.steer < 0 ? 1 : -1; this.driftT = 0; this.driftSteer = 0; this.driftTurn = 0;
+      this.driftPhase = 1; this.driftDir = c.steer < 0 ? 1 : -1; this.driftT = 0; this.driftSteer = 0;
+      // the turn starts from what the car was already turning (a drift begun mid-corner does not straighten it first)
+      this.driftTurn = Math.max(0, this.yawRate * this.driftDir);
     }
     const arcade = this.driftPhase > 0;
     const handbrake = c.handbrake || (!!c.drift && !arcade && (!!s.single || this.forwardSpeed < A.minSpeed));
@@ -498,6 +524,9 @@ export class Vehicle {
     const slideBrake = c.trail && c.brake > 0 && !c.reverse && !s.single ? smoothstep(TRAIL.slideLo, TRAIL.slideHi, Math.abs(this.bodySlip)) : 0;
     const absFront = 0.95 - Math.max((0.95 - TRAIL.front) * trailFront, (0.95 - TRAIL.slideFront) * slideBrake);
     const absRear = 0.62 - (0.62 - TRAIL.rear) * Math.max(trailRear, slideBrake);
+    // the player's Space with the throttle down on a car the rears drive: they spin, not lock (`HBGAS`)
+    const hbGas = !!c.trail && c.handbrake && !s.single && !c.reverse && c.throttle > HBGAS.gas && s.engine.frontShare < 1;
+    const hbFast = smoothstep(HBGAS.fastFrom, HBGAS.fastTo, this.speed);
     // the player backing with the wheel turned (`BACKING`)
     let driveF = drive;
     if (c.trail && c.reverse && !s.single) {
@@ -533,11 +562,11 @@ export class Vehicle {
       const gx = _g.dot(_wf), gy = _g.dot(_wl);
       const grip = Math.max(0.5, 1 - tire.loadSensitivity * (load / this.staticLoad[i] - 1));
       const fxMax = tire.muLong * load * grip * this.tune.grip;
-      const fyMax = tire.muLat * load * grip * this.tune.grip * (m.front ? 1 : tire.rearGrip);
+      const fyMax = tire.muLat * load * grip * this.tune.grip * (m.front ? 1 : tire.rearGrip * (hbGas ? HBGAS.grip : 1));
       const driven = m.front ? s.engine.frontShare > 0 : s.engine.frontShare < 1;
       const share = driven ? (m.front ? s.engine.frontShare : 1 - s.engine.frontShare) / 2 : 0;
       const brakeCap = s.brakes.force * c.brake * (m.front ? s.brakes.frontBias : 1 - s.brakes.frontBias) / 2;
-      const handLocked = handbrake && !m.front;
+      const handLocked = handbrake && !m.front && !hbGas;
       const mc = this.mCorner;
       let fx = 0, fy = 0;
       w.locked = false; w.spinning = false;
@@ -572,6 +601,7 @@ export class Vehicle {
           const bf = Math.min(brakeCap, fxMax * (m.front ? absFront : absRear), mc * Math.abs(vx) / dt);
           fx -= Math.sign(vx) * bf;
           fx -= Math.sign(vx) * Math.min(tire.rolling * load, mc * Math.abs(vx) / dt);
+          if (hbGas && !m.front) fx -= Math.sign(vx) * Math.min(HBGAS.drag * hbFast * fxMax, mc * Math.abs(vx) / dt);
         }
         if (share > 0 && !(c.burnout && !m.front)) {
           let want = driveF * share;
@@ -585,6 +615,7 @@ export class Vehicle {
             const neutral = tire.driftDriveCapNeutral + (tire.driftDriveCapNeutralFast - tire.driftDriveCapNeutral) * smoothstep(tire.driftCapFastFrom, tire.driftCapFastTo, this.speed);
             let slide = neutral + (tire.driftDriveCap - neutral) * into;
             if (donut && this.speed < dn.speedHi) slide = Math.max(slide, dn.cap);
+            if (hbGas && !m.front) slide = HBGAS.cap + (HBGAS.capFast - HBGAS.cap) * hbFast;
             const slideCap = fxMax * slide;
             const cap = tc * gripCap + (1 - tc) * slideCap;
             want = clamp(want, -cap, cap);
@@ -740,6 +771,15 @@ export class Vehicle {
         _t.copy(this.up).multiplyScalar((-this.bodySlip * K.k - this.yawRate * K.damp) * w * dt * I[1]);
         b.applyTorqueImpulse(_t, true);
       }
+    }
+    if (c.trail && c.handbrake && !s.single && !c.reverse && grounded >= 3 && this.forwardSpeed > HBTURN.vLo && st !== 0) {
+      const v = Math.hypot(this.vel.x, this.vel.z);
+      const w = Math.min(HBTURN.acc / v, HBTURN.rate) * Math.min(1, Math.abs(st)) * smoothstep(HBTURN.vLo, HBTURN.vHi, v);
+      // steer + is right, where the travel's heading atan2(x, z) goes down
+      const psi = Math.atan2(this.vel.x, this.vel.z) - Math.sign(st) * w * dt;
+      _t.set(Math.sin(psi) * v - this.vel.x, 0, Math.cos(psi) * v - this.vel.z).multiplyScalar(b.mass());
+      b.applyImpulse(_t, true);
+      this.impulse.add(_t);
     }
     if (mine && grounded >= 3 && !handbrake && this.speed > 5) {
       const b0 = this.bodySlip, limit = SLIDE.angle + (SLIDE.angleIn - SLIDE.angle) * clamp01(-st * Math.sign(b0));

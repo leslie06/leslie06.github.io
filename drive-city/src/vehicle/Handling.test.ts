@@ -582,6 +582,48 @@ describe('taxi handling', () => {
     }
   });
 
+  it('W + a direction + Space keeps the car moving: a power slide, a donut from rest', async () => {
+    // 2026-11-27, 「电脑同时按方向键和空格键，车就不动了」: the locked rears stopped the (rear-driven) taxi in 2-3 s, and from
+    // rest it sat there turning 20° in 3 s.
+    for (const kmh of [0, 60]) {
+      const rig = await Rig.create(); rig.settle(0.8); if (kmh) rig.launch(kmh / KMH);
+      let turned = 0, last = headingOf(rig), slow = 0;
+      for (let i = 0; i < 300; i++) {
+        rig.stepInput(input({ forward: 1, steer: 1, handbrake: true, trail: true }));
+        const h = headingOf(rig); turned += Math.atan2(Math.sin(h - last), Math.cos(h - last)); last = h;
+        if (i >= 120 && rig.car.speed * KMH < 3) slow++;
+      }
+      report[`hbgas.${kmh} km/h 5 s turned deg`] = Math.abs(deg(turned));
+      report[`hbgas.${kmh} km/h end km/h`] = rig.car.speed * KMH;
+      expect(Math.abs(deg(turned))).toBeGreaterThan(200);
+      expect(slow).toBeLessThan(60);   // under 3 km/h for less than a second of the last three
+    }
+    // Space alone still holds a stopped car
+    const still = await Rig.create(); still.settle(0.8);
+    for (let i = 0; i < 120; i++) still.stepInput(input({ steer: 1, handbrake: true, trail: true }));
+    expect(still.car.speed).toBeLessThan(0.3);
+  });
+
+  it('the handbrake turns a fast corner tighter than the wheel alone', async () => {
+    // 2026-11-27, 「车速起来的时候，前面要右拐弯…根据惯性往前面甩」: a 90° right turn at 60 km/h, W held, took 35 m with Space
+    // held 1.5 s and 36 m on the wheel alone.
+    const run = async (hb: boolean) => {
+      const rig = await Rig.create(); rig.settle(0.6); rig.launch(60 / KMH);
+      for (let i = 0; i < 20; i++) rig.stepInput(input({ forward: 1, trail: true }));
+      const z0 = rig.car.pos.z, h0 = Math.atan2(rig.car.vel.x, rig.car.vel.z); let tv = h0;
+      for (let i = 0; i < 360; i++) {
+        rig.stepInput(input({ forward: 1, steer: 1, handbrake: hb && i < 90, trail: true }));
+        const a = Math.atan2(rig.car.vel.x, rig.car.vel.z); tv += Math.atan2(Math.sin(a - tv), Math.cos(a - tv));
+        if (h0 - tv >= Math.PI / 2) return rig.car.pos.z - z0;
+      }
+      return Infinity;
+    };
+    const wheel = await run(false), hb = await run(true);
+    Object.assign(report, { 'hbturn.60 km/h 90° wheel m': wheel, 'hbturn.60 km/h 90° handbrake m': hb });
+    expect(hb).toBeLessThan(24);
+    expect(hb).toBeLessThan(wheel * 0.7);
+  });
+
   it('nervous key taps at 120 km/h keep the car on its line', async () => {
     // Critic probe P5: alternating 67 ms taps at 6 Hz for 4 s at a held 120 km/h; lateral
     // peak-to-peak between 1 and 4 s (the net offset from the tap phase is not the point).
