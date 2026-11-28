@@ -258,7 +258,7 @@ export function stencil(text: string, color = '#f1efe6', w = 512, h = 160): THRE
 }
 
 /** Red gate sign with gold characters. */
-export function gateSign(): THREE.CanvasTexture {
+export function gateSign(text = '京城驾校 · 训练场'): THREE.CanvasTexture {
   const [c, g] = make(1024, 160);
   const grad = g.createLinearGradient(0, 0, 0, 160);
   grad.addColorStop(0, '#c3281f'); grad.addColorStop(1, '#8f1812');
@@ -267,7 +267,7 @@ export function gateSign(): THREE.CanvasTexture {
   g.fillStyle = '#ffd772';
   g.font = `800 96px ${CJK}`;
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText('京城驾校 · 训练场', 512, 84);
+  g.fillText(text, 512, 84);
   return toTex(c, true);
 }
 

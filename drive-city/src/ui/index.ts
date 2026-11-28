@@ -8,6 +8,7 @@ import { PathPilot, figureEight } from '../vehicle/Autopilot';
 import { FIGURE8 } from '../world/Layout';
 import { Hud } from './Hud';
 import { TOUCH, TouchControls, touchPrefs } from './Touch';
+import { L } from './lang';
 import { Menu, type MenuState } from './Menu';
 import { Minimap } from './Minimap';
 import { MapScreen } from './MapScreen';
@@ -112,6 +113,14 @@ export async function install(engine: Engine, container: HTMLElement): Promise<v
   // How many are playing (online/Presence.ts), on the title and pause screens.
   const presence = engine.get<PresenceApi>('presence');
   if (presence) presence.onChange = (n, d) => menu.setOnline(n, d);
+  // 漂移练习场 (driftpark/, 2026-11-28): a page of its own, `?world=drift`; from there back to Beijing
+  {
+    const here = new URLSearchParams(location.search).get('world') ?? 'city';
+    if (here === 'city' || here === 'drift') {
+      menu.setWorldLabel(L(here === 'city' ? 'dp.enter' : 'dp.toCity'));
+      menu.onWorld = () => { const u = new URL(location.href); if (here === 'city') u.searchParams.set('world', 'drift'); else u.searchParams.delete('world'); location.href = u.toString(); };
+    }
+  }
   engine.add(hud);
   // Radar and full-screen map (city only; before `api` so the map's Esc/Tab handling runs first).
   // `dc-radar` tells the HUD that the top-left corner is taken (the yard has no nav, no radar).

@@ -8,6 +8,7 @@ import { registerPoses } from './debug/ShotPoses';
 import * as render from './render';
 import * as weather from './weather';
 import * as world from './world';
+import * as driftpark from './driftpark';
 import * as city from './city';
 import * as mountain from './mountain';
 import * as airport from './airport';
@@ -142,7 +143,7 @@ async function boot() {
   await weather.install(engine);
   // Central Beijing from OSM by default; ?world=yard is the M0 driving-school yard (handling sandbox).
   const worldName = new URLSearchParams(location.search).get('world') ?? 'city';
-  if (worldName === 'city') await city.install(engine); else { await readyBodies(); await world.install(engine); }
+  if (worldName === 'city') await city.install(engine); else if (worldName === 'drift') { await readyBodies(); await driftpark.install(engine); } else { await readyBodies(); await world.install(engine); }
   // the roads and hills west of the city (mountain/): fetched when the camera comes near them
   if (worldName === 'city') mountain.install(engine);
   // 首都机场（airport/）：跑道上的漆等，开近了才取 airfield.json
@@ -189,9 +190,11 @@ async function boot() {
   if (worldName === 'city') chat.install(engine);
   if (worldName === 'city') daily.install(engine);
   await ui.install(engine, container);
+  // 漂移练习场's panel, menu and readings: after ui, whose state it follows
+  if (worldName === 'drift') driftpark.installPlay(engine, container);
   // things to do together in a room (online/RoomPlay.ts): after ui, whose HUD its button sits in
   if (worldName === 'city' && engine.get('mp')) { roomPlay.install(engine); roomRide.install(engine); roomFeats.install(engine); }
-  if (worldName === 'city') { registerCityPoses(); registerTrafficPoses(); registerPeoplePoses(); registerCharacterPoses(); registerNavPoses(); registerPolicePoses(); registerVehiclePoses(); registerMissionPoses(); registerRacePoses(); registerParkPoses(); registerHomePoses(); registerTitlePose(); } else registerPoses();
+  if (worldName === 'city') { registerCityPoses(); registerTrafficPoses(); registerPeoplePoses(); registerCharacterPoses(); registerNavPoses(); registerPolicePoses(); registerVehiclePoses(); registerMissionPoses(); registerRacePoses(); registerParkPoses(); registerHomePoses(); registerTitlePose(); } else if (worldName !== 'drift') registerPoses();
   engine.resize();
   (window as unknown as { drivecity?: Engine }).drivecity = engine;
   engine.add(new Diagnostics(engine, container));

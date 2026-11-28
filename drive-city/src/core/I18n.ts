@@ -30,6 +30,7 @@ import { REC_EN, REC_ZH } from './i18n/records';
 import { STREET_EN, STREET_ZH } from './i18n/street';
 import { RUNWAY_EN, RUNWAY_ZH } from './i18n/runway';
 import { AIRJOBS_EN, AIRJOBS_ZH } from './i18n/airjobs';
+import { DRIFTPARK_EN, DRIFTPARK_ZH } from './i18n/driftpark';
 
 const STORE_KEY = 'drivecity.lang.v1';
 
@@ -44,6 +45,7 @@ const EN = {
   ...STREET_EN,
   ...RUNWAY_EN,
   ...AIRJOBS_EN,
+  ...DRIFTPARK_EN,
   'title.name': 'B CITY CHASE',
   'title.tag': 'OPEN WORLD',
   'title.sub': 'From Tiananmen to Guomao',
@@ -816,6 +818,7 @@ const ZH: Record<TKey, string> = {
   ...STREET_ZH,
   ...RUNWAY_ZH,
   ...AIRJOBS_ZH,
+  ...DRIFTPARK_ZH,
   'title.name': 'b城追车',
   'title.tag': '开放世界',
   'title.sub': '从天安门到国贸',

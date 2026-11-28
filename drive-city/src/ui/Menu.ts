@@ -105,6 +105,9 @@ export class Menu {
   /** The 意见反馈 button (title and pause); unset, it stays hidden. */
   onFeedback: (() => void) | null = null;
   onFriends: (() => void) | null = null;
+  /** 漂移练习场 from Beijing, 回北京 from there (title and pause); unset (the yard), hidden. */
+  onWorld: (() => void) | null = null;
+  private worldBtn: HTMLButtonElement;
   /** 快速前往 (pause only): the map open on its card; unset (no travel/), hidden. */
   onTravel: (() => void) | null = null;
   private travelBtn: HTMLButtonElement;
@@ -151,6 +154,9 @@ export class Menu {
     daily.appendChild(L('dly.button'));
     this.dailyBadge = el('span', 'badge', daily); this.dailyBadge.hidden = true;
     daily.addEventListener('click', () => this.onDaily?.());
+    const wb = this.worldBtn = el('button', 'ghost', row);
+    wb.id = 'world';
+    wb.addEventListener('click', () => this.onWorld?.());
     const boards = this.boardsBtn = el('button', 'ghost', row);
     boards.appendChild(L('lb.title'));
     boards.addEventListener('click', () => this.onBoards?.());
@@ -256,6 +262,9 @@ export class Menu {
     this.set('title');
   }
 
+  /** The world button's label (漂移练习场 / 回北京). */
+  setWorldLabel(text: Text): void { this.worldBtn.replaceChildren(text); }
+
   /** How many are playing now and today (online/Presence.ts). */
   setOnline(n: number, d: number): void {
     this.onlineN = [n, d];
@@ -288,6 +297,7 @@ export class Menu {
   set(state: MenuState): void {
     this.root.hidden = state === 'playing' || state === 'overlay';
     this.boardsBtn.hidden = !this.onBoards;
+    this.worldBtn.hidden = !this.onWorld;
     this.feedbackBtn.hidden = !this.onFeedback;
     this.friendsBtn.hidden = !this.onFriends;
     this.accountBtn.hidden = !this.onAccount;

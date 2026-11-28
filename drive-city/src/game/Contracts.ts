@@ -125,6 +125,8 @@ export interface WorldApi extends System {
   readonly landmarkAreas?: readonly { id: string; rings: readonly number[][]; height: number }[];
   /** The underpasses' open trenches as rings [x, z, ...] (holes in the ground): the city only. */
   readonly trenches?: readonly number[][];
+  /** R pressed in the car: a world that puts the car somewhere of its own (the drift park's 练习点) does it and says true. */
+  respawn?(): boolean;
 }
 
 /** Cars other than the player's: traffic and cars left parked. Implemented by traffic/. */

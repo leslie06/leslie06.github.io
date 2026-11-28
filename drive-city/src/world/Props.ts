@@ -55,7 +55,7 @@ export function jerseyGeometry(): THREE.BufferGeometry {
   return g;
 }
 
-interface Dyn { body: RAPIER_NS.RigidBody; slot: number; set: THREE.InstancedMesh }
+interface Dyn { body: RAPIER_NS.RigidBody; slot: number; set: THREE.InstancedMesh; x: number; z: number; q: THREE.Quaternion }
 
 /**
  * Loose props the car can knock about. Each kind is one InstancedMesh; each prop a small dynamic
@@ -97,7 +97,7 @@ export class Props implements System {
     body.setAdditionalMassProperties(mass, { x: 0, y: total > 1 ? 0.2 : 0.3, z: 0 }, { x: mass * 0.06, y: mass * 0.05, z: mass * 0.06 }, { x: 0, y: 0, z: 0, w: 1 }, true);
     body.sleep();
     const slot = set.count++;
-    this.dyn.push({ body, slot, set });
+    this.dyn.push({ body, slot, set, x, z, q });
     this._m.compose(this._p.set(x, 0, z), q, this._s);
     set.setMatrixAt(slot, this._m);
     set.instanceMatrix.needsUpdate = true;
@@ -111,6 +111,18 @@ export class Props implements System {
   tyreStack(x: number, z: number): void {
     const R = this.physics.R;
     this.add(this.tyres, x, z, 45, [R.ColliderDesc.cylinder(0.37, 0.35).setTranslation(0, 0.37, 0)]);
+  }
+
+  /** Everything back where it was placed, standing (the drift park's 重来, driftpark/Play.ts). */
+  reset(): void {
+    for (const d of this.dyn) {
+      d.body.setTranslation({ x: d.x, y: 0.002, z: d.z }, false);
+      d.body.setRotation({ x: d.q.x, y: d.q.y, z: d.q.z, w: d.q.w }, false);
+      d.body.setLinvel({ x: 0, y: 0, z: 0 }, false); d.body.setAngvel({ x: 0, y: 0, z: 0 }, false);
+      d.body.sleep();
+      d.set.setMatrixAt(d.slot, this._m.compose(this._p.set(d.x, 0, d.z), d.q, this._s));
+      d.set.instanceMatrix.needsUpdate = true;
+    }
   }
 
   update(): void {

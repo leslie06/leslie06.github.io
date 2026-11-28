@@ -23,7 +23,7 @@ import { TAXI } from '../vehicle/Spec';
  * Multiply a material's albedo by `macro`, sampled in world XZ over `size` metres. The tile texture
  * repeats every 9 m; this one does not repeat at all, which is what hides the tiling.
  */
-function withMacro(mat: THREE.MeshStandardMaterial, macro: THREE.Texture, size: number): void {
+export function withMacro(mat: THREE.MeshStandardMaterial, macro: THREE.Texture, size: number): void {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uMacro = { value: macro };
     sh.uniforms.uMacroSize = { value: size };

@@ -222,7 +222,7 @@ export async function install(engine: Engine): Promise<void> {
     update(dt, alpha) {
       const inp = engine.input.state;
       engine.timeScale = performance.now() < Math.max(hitStopUntil, engine.hitStopUntil) ? 0.25 : api.slowMo;
-      if (api.inputEnabled && api.occupied && inp.resetPressed) { const b = backOnRoad(); if (b) api.reset(b.pos, b.yaw); else api.reset(); }
+      if (api.inputEnabled && api.occupied && inp.resetPressed && !world.respawn?.()) { const b = backOnRoad(); if (b) api.reset(b.pos, b.yaw); else api.reset(); }
       renderPos.lerpVectors(prevPos, curPos, alpha);
       renderQuat.slerpQuaternions(prevQuat, curQuat, alpha);
       model.root.position.copy(renderPos);
