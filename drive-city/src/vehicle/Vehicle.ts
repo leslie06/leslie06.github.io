@@ -54,8 +54,8 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
  * The player's drift key (2026-10-23, 「现在开车几乎不能漂移，开车手感很差，做成qq飞车这样的操作」): QQ飞车's drift, not the
  * tyres'. Held with a direction above `minSpeed`, the car swings its tail out to `angle` and carves a steady arc while
  * the tyre forces are set aside: the path and the body's angle are steered straight (an impulse on the velocity, a
- * torque on the yaw), so a drift starts on any car at any speed and never spins. Steering into the drift tightens the
- * arc and the angle, against it widens them. Let go and the travel turns to where the nose points (that is what the
+ * torque on the yaw), so a drift starts on any car at any speed and never spins. The key bends the arc: into the drift
+ * it closes it and opens the angle, let go the car slides on angled and nearly straight (a drift begun before the corner). Let go and the travel turns to where the nose points (that is what the
  * drift was for), then the tyres take over again; a drift held `kickAfter` s ends in a short push (小喷), and it fills
  * a fitted nitro bottle. Below `minSpeed`, and on two-wheelers, the key is the handbrake it was.
  */
@@ -73,19 +73,26 @@ export const ARCADE = {
   /** Body angle to the travel, rad: neutral, steering into the drift, steering against it. */
   angle: 0.44, angleIn: 0.56, angleOut: 0.28,
   /**
-   * How fast the travel turns, rad/s (the same three), at most `latMax` m/s² sideways (fast, the arc opens). As a turn
-   * rate (2026-10-23, 「漂移成功不了，比如我右转，车子一直向左偏」): the first version set a sideways pull of 9 m/s², and
-   * with half of it reaching the path each step a drift at 60 km/h turned the travel 15°/s - the nose swung right at
-   * once and the car slid on nearly straight, off the road on the left.
+   * How fast the travel turns, rad/s (neutral, the key into the drift, against it), at most `latMax` m/s² sideways (fast,
+   * the arc opens). As a turn rate (2026-10-23, 「漂移成功不了，比如我右转，车子一直向左偏」): the first version set a sideways
+   * pull of 9 m/s², and with half of it reaching the path each step a drift at 60 km/h turned the travel 15°/s - the nose
+   * swung right at once and the car slid on nearly straight, off the road on the left.
+   * 2026-11-28 (「漂移应该做成在路口提前开始漂，等到路口的时候就能漂过去了，而不是走到路口才开始漂」): neutral turned 1.0 rad/s
+   * (and against 0.35), so a drift begun before the corner turned 65° in a second, 10 m into the buildings before it. The
+   * arc now follows the key itself (not `steerTau`): let go and the car slides on angled and nearly straight (a second's
+   * slide at 60 km/h: 14°, 3 m aside), press into it at the corner and it comes round in 13 m. A key held all through turns
+   * a 90° corner in 19 / 26 / 36 m at 60 / 80 / 100 km/h, as 11-27 left it. .scratch/feel/predrift.test.ts, corner.test.ts
    */
-  turn: 1.0, turnIn: 1.3, turnOut: 0.35, latMax: 28,
+  turn: 0.06, turnIn: 1.5, turnOut: 0, latMax: 32,
   /**
    * Lag of the turn behind its target, s (0 = at once). 2026-11-27 (「车速起来的时候，前面要右拐弯…根据惯性往前面甩，不能
    * 稳定的转向」): 0.3 with turn 0.8 / turnIn 1.0 / latMax 24 carried the car on its line - a 90° right turn needed 26 / 35 /
-   * 45 m at 60 / 80 / 100 km/h (37 m at 100 before 11-26); now 19 / 25 / 35, and the turn starts from what the car was
+   * 45 m at 60 / 80 / 100 km/h (37 m at 100 before 11-26); then 19 / 25 / 35, and the turn starts from what the car was
    * already turning. The body's angle and its swing (`yawK`, `yawMax*`) are as 11-26 left them. .scratch/feel/corner.test.ts
    */
-  turnTau: 0.1,
+  turnTau: 0.12,
+  /** The key's pull on the arc grows over the drift's first `arcIn` s: the tail swings out first, the press barely turns it. */
+  arcIn: 0.3,
   /** Speed lost per second: coasting, extra when steering in, extra on the brake; the throttle gives back `gas`. */
   loss: 1.2, lossIn: 1.5, brakeLoss: 9, gas: 1,
   /**
@@ -164,6 +171,22 @@ export const CATCH = { k: 6, damp: 2.5, gasCut: 0.5, lo: 0.1, hi: 0.25, vLo: 5, 
 export const HBTURN = { acc: 9, rate: 0.8, vLo: 5, vHi: 9 };
 
 export const HBGAS = { gas: 0.3, cap: 0.95, capFast: 0.5, drag: 0.45, fastFrom: 8, fastTo: 16, grip: 0.55 };
+
+/**
+ * A slide held on Space with the throttle (2026-11-28, 「漂移应该做成在路口提前开始漂，等到路口的时候就能漂过去了，而不是走到路口
+ * 才开始漂」, both phone and keys, the key to bend the arc): flicked out with Space and a direction, then the key let go,
+ * the car straightened in a moment (1-3° left) and pressed again at 90 km/h it spun. The player's car, Space and the
+ * throttle (past `HBGAS.gas`) held, past `lo`..`hi` rad of slip and `vLo`..`vHi` m/s: as the phone's drift, the travel
+ * turns `turn` rad/s with the key let go, `turnIn` into the slide, `turnOut` against it (at most `latMax` m/s², lagging by
+ * `tau` s), and the body is held at `angle` / `angleIn` / `angleOut` rad to it (`yawK` rad/s per rad, at most `yawMax`,
+ * `gain` of the yaw-rate error each step). The speed is the tyres' and the engine's. Space without the throttle is the
+ * handbrake as it was: held with a key it still spins the car round.
+ */
+export const HOLD = {
+  keyIn: 0.25, gasOff: 0.1, vLo: 8, vHi: 12,
+  turn: 0.06, turnIn: 1.5, turnOut: 0, latMax: 32, tau: 0.12, arcIn: 0.3,
+  angle: 0.4, angleIn: 0.52, angleOut: 0.25, yawK: 3.5, yawMax: 1.5, yawMaxIn: 2, entryT: 0.35, gain: 0.35,
+};
 
 /**
  * Keys only (2026-11-25, 「从第 1 项开始」: a gentle bend could only be held by tapping, and at 90 km/h the taps swung the
@@ -256,6 +279,10 @@ export class Vehicle {
   private driftSteer = 0;
   /** The arcade drift's turn of the travel, rad/s, lagging its target by `ARCADE.turnTau`. */
   private driftTurn = 0;
+  /** The slide held on Space (`HOLD`): 0 none, +1 left, -1 right; seconds into it; its turn of the travel, rad/s. */
+  holdDir = 0;
+  private holdT = 0;
+  private holdTurn = 0;
   /** The steering a slide feels (`SLIDE.tau`). */
   private slideSteer = 0;
   private readonly velBefore = new THREE.Vector3();
@@ -698,7 +725,11 @@ export class Vehicle {
         this.driftSteer += (clamp(-c.steer * dir, -1, 1) - this.driftSteer) * (1 - Math.exp(-dt / A.steerTau));
         const u = this.driftSteer;
         const ang = u >= 0 ? A.angle + (A.angleIn - A.angle) * u : A.angle + (A.angle - A.angleOut) * u;
-        const turn = u >= 0 ? A.turn + (A.turnIn - A.turn) * u : A.turn + (A.turn - A.turnOut) * u;
+        // the arc follows the key itself, not the body's lag: let go and the car slides on, angled, nearly straight;
+        // press into the drift where the corner is and the arc closes (`turn*`, 2026-11-28)
+        // the first `arcIn` s the tail swings out before the key bends the line: the press that starts it barely turns it
+        const k = clamp(-c.steer * dir, -1, 1);
+        const turn = k >= 0 ? A.turn + (A.turnIn - A.turn) * k * smoothstep(0, A.arcIn, this.driftT) : A.turn + (A.turn - A.turnOut) * k;
         // the turn builds through a lag (`turnTau`): the car carries its line a moment before the drift bends it
         this.driftTurn += (Math.min(turn, A.latMax / Math.max(v, 1)) - this.driftTurn) * (1 - Math.exp(-dt / A.turnTau));
         const omega = dir * this.driftTurn;
@@ -791,6 +822,35 @@ export class Vehicle {
         _t.copy(this.up).multiplyScalar(acc * w * dt * I[1]);
         b.applyTorqueImpulse(_t, true);
       }
+    }
+    // --- the player's slide held on Space with the throttle: the key bends the arc, let go it slides on (`HOLD`) ----
+    const holding = mine && c.handbrake && !c.reverse && grounded >= 3 && this.up.y > 0.8;
+    if (this.holdDir !== 0 && (!holding || c.throttle < HOLD.gasOff || this.speed < HOLD.vLo * 0.75 || this.impact > ARCADE.crash)) this.holdDir = 0;
+    if (this.holdDir === 0 && holding && c.throttle > HBGAS.gas && this.forwardSpeed > HOLD.vLo && Math.abs(c.steer) > HOLD.keyIn) {
+      // steer - is left: a left slide, the travel right of the nose (bodySlip +)
+      this.holdDir = c.steer < 0 ? 1 : -1; this.holdT = 0;
+      this.holdTurn = Math.max(0, this.yawRate * this.holdDir);
+    }
+    if (this.holdDir !== 0) {
+      const H = HOLD, side = this.holdDir;
+      this.holdT += dt;
+      const w = smoothstep(H.vLo * 0.75, H.vHi, this.speed);
+      // the arc follows the key itself, its pull growing over the first `arcIn` s; the angle follows the slide's lag
+      const k = clamp(-c.steer * side, -1, 1), u = clamp(-st * side, -1, 1);
+      const want = k >= 0 ? H.turn + (H.turnIn - H.turn) * k * smoothstep(0, H.arcIn, this.holdT) : H.turn + (H.turn - H.turnOut) * k;
+      const lv = b.linvel(), v = Math.hypot(lv.x, lv.z);
+      this.holdTurn += (Math.min(want, H.latMax / Math.max(v, 1)) - this.holdTurn) * (1 - Math.exp(-dt / H.tau));
+      // the travel's heading atan2(x, z) goes up turning left
+      const omega = side * this.holdTurn;
+      const psi = Math.atan2(this.velBefore.x, this.velBefore.z) + omega * dt;
+      _t.set(Math.sin(psi) * v - lv.x, 0, Math.cos(psi) * v - lv.z).multiplyScalar(b.mass() * w);
+      b.applyImpulse(_t, true);
+      this.impulse.add(_t);
+      const ang = u >= 0 ? H.angle + (H.angleIn - H.angle) * u : H.angle + (H.angle - H.angleOut) * u;
+      const yawMax = this.holdT < H.entryT ? H.yawMaxIn : H.yawMax;
+      const yawCmd = omega + clamp((side * ang - this.bodySlip) * H.yawK, -yawMax, yawMax);
+      _t.copy(this.up).multiplyScalar((yawCmd - this.yawRate) * H.gain * w * I[1]);
+      b.applyTorqueImpulse(_t, true);
     }
     // Sliding with the wheel near centre: bleed the rotation so a straightened slide straightens.
     if (grounded >= 3 && !handbrake && !arcade && this.tcOff <= 0 && this.speed > 4) {

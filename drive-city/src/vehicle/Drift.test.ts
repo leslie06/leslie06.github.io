@@ -58,14 +58,25 @@ describe('arcade drift', () => {
     expect(d.minUp).toBeGreaterThan(0.95);
   });
 
-  it('takes a city corner: the travel turns with the nose, not past it', async () => {
-    // 2026-10-23, 「漂移成功不了，比如我右转，车子一直向左偏」: a right drift at 60 km/h, the key held, no steering after the
-    // first 0.3 s. The first version turned the travel 15°/s while the nose swung 35° right at once: it slid on straight.
-    const d = await drift(60, 1, 1.5, { into: 0 });
-    report['corner60.travel turned deg'] = deg(d.went);
-    report['corner60.nose turned deg'] = deg(d.turned);
-    expect(deg(d.went)).toBeLessThan(-50);                 // most of a 90° corner in 1.5 s
-    expect(deg(d.turned - d.went)).toBeLessThan(-15);      // the nose ahead of the travel (a drift, right is -)
+  it('begun before the corner: slides on angled and nearly straight, then the key takes the corner', async () => {
+    // 2026-10-23, 「漂移成功不了，比如我右转，车子一直向左偏」: the nose must lead the travel (the first version swung it 35°
+    // right at once and slid on straight, off the road on the left). 2026-11-28, 「漂移应该做成在路口提前开始漂，等到路口的
+    // 时候就能漂过去了，而不是走到路口才开始漂」: a right drift at 60 km/h, the key let go after 0.3 s, held 1 s more - it
+    // used to turn 65° and 10 m aside in that second, into the buildings before the corner. Then the key held right.
+    const d = await drift(60, 1, 1.3, { into: 0 });
+    report['predrift60.travel turned deg'] = deg(d.went);
+    report['predrift60.nose ahead deg'] = deg(d.went - d.turned);
+    expect(deg(d.went)).toBeGreaterThan(-25);              // nearly straight on (right is -)
+    expect(deg(d.turned - d.went)).toBeLessThan(-15);      // but angled, the nose ahead of the travel: a drift
+    const tv0 = travel(d.rig), p0 = d.rig.car.pos.clone(); let tv = tv0, ahead = Infinity;
+    for (let i = 0; i < 180 && ahead === Infinity; i++) {
+      d.rig.stepInput(input({ steer: 1, drift: true }));
+      tv = unwrap(travel(d.rig), tv);
+      if (tv0 - tv >= Math.PI / 2) ahead = (d.rig.car.pos.x - p0.x) * Math.sin(tv0) + (d.rig.car.pos.z - p0.z) * Math.cos(tv0);
+    }
+    report['predrift60.then 90° in m'] = ahead;
+    expect(ahead).toBeLessThan(18);                        // the corner taken from there (13 m)
+    expect(d.rig.car.driftPhase).toBe(1);
   });
 
   it('a fast right turn: the drift bends the line instead of carrying it on', async () => {
